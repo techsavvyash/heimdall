@@ -1,6 +1,6 @@
 {
-  "name": "@heimdall/sdk",
-  "version": "1.0.0",
+  "name": "@techsavvyash/heimdall-sdk",
+  "version": "0.0.1",
   "description": "Official Node.js SDK for Heimdall Authentication Service",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -32,7 +32,7 @@
     "fusionauth",
     "rbac"
   ],
-  "author": "Heimdall Team",
+  "author": "Yash Mittal (techsavvyash)",
   "license": "MIT",
   "repository": {
     "type": "git",
