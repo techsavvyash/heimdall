@@ -1,0 +1,128 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database - Using local PostgreSQL instead
+  # If you want to use Docker PostgreSQL, uncomment this service
+  # postgres:
+  #   image: postgres:14-alpine
+  #   container_name: heimdall-postgres
+  #   environment:
+  #     POSTGRES_USER: heimdall
+  #     POSTGRES_PASSWORD: heimdall_password
+  #     POSTGRES_DB: heimdall
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U heimdall"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - heimdall-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: heimdall-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - heimdall-network
+
+  # FusionAuth Database (separate from Heimdall DB)
+  fusionauth-db:
+    image: postgres:14-alpine
+    container_name: fusionauth-postgres
+    environment:
+      POSTGRES_USER: fusionauth
+      POSTGRES_PASSWORD: fusionauth_password
+      POSTGRES_DB: fusionauth
+    volumes:
+      - fusionauth_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fusionauth"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - heimdall-network
+
+  # FusionAuth
+  fusionauth:
+    image: fusionauth/fusionauth-app:latest
+    container_name: fusionauth-app
+    depends_on:
+      fusionauth-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: jdbc:postgresql://fusionauth-db:5432/fusionauth
+      DATABASE_ROOT_USERNAME: fusionauth
+      DATABASE_ROOT_PASSWORD: fusionauth_password
+      DATABASE_USERNAME: fusionauth
+      DATABASE_PASSWORD: fusionauth_password
+      FUSIONAUTH_APP_MEMORY: 512M
+      FUSIONAUTH_APP_RUNTIME_MODE: development
+      FUSIONAUTH_APP_URL: http://localhost:9011
+      SEARCH_TYPE: database
+    ports:
+      - "9011:9011"
+    volumes:
+      - fusionauth_config:/usr/local/fusionauth/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9011/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - heimdall-network
+
+  # Adminer (Database Management Tool - Optional)
+  adminer:
+    image: adminer:latest
+    container_name: heimdall-adminer
+    ports:
+      - "8081:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    networks:
+      - heimdall-network
+    profiles:
+      - tools
+
+  # Redis Commander (Redis Management Tool - Optional)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: heimdall-redis-commander
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8082:8081"
+    networks:
+      - heimdall-network
+    profiles:
+      - tools
+
+volumes:
+  # postgres_data:  # Not needed when using local PostgreSQL
+  #   driver: local
+  redis_data:
+    driver: local
+  fusionauth_db_data:
+    driver: local
+  fusionauth_config:
+    driver: local
+
+networks:
+  heimdall-network:
+    driver: bridge

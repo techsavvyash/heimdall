@@ -1,0 +1,202 @@
+name: End-to-End Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  e2e-tests:
+    name: Run E2E Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: heimdall
+          POSTGRES_PASSWORD: heimdall_password
+          POSTGRES_DB: heimdall
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      fusionauth:
+        image: fusionauth/fusionauth-app:latest
+        env:
+          DATABASE_URL: jdbc:postgresql://postgres:5432/fusionauth
+          DATABASE_ROOT_USERNAME: heimdall
+          DATABASE_ROOT_PASSWORD: heimdall_password
+          DATABASE_USERNAME: heimdall
+          DATABASE_PASSWORD: heimdall_password
+          FUSIONAUTH_APP_MEMORY: 512M
+          FUSIONAUTH_APP_RUNTIME_MODE: development
+          SEARCH_TYPE: database
+        ports:
+          - 9011:9011
+        options: >-
+          --health-cmd "curl -f http://localhost:9011/api/status || exit 1"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 10
+          --health-start-period 60s
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+
+    - name: Generate RSA keys
+      run: |
+        mkdir -p keys
+        openssl genrsa -out keys/private.pem 2048
+        openssl rsa -in keys/private.pem -pubout -out keys/public.pem
+
+    - name: Build Heimdall server
+      run: make build
+
+    - name: Set up test environment
+      run: |
+        cat > .env.test <<EOF
+        PORT=8080
+        ENVIRONMENT=test
+        ALLOWED_ORIGINS=http://localhost:4000
+        RATE_LIMIT_PER_MIN=1000
+
+        DB_HOST=localhost
+        DB_PORT=5432
+        DB_USER=heimdall
+        DB_PASSWORD=heimdall_password
+        DB_NAME=heimdall
+        DB_SSLMODE=disable
+        DB_MAX_CONNS=25
+        DB_MAX_IDLE=5
+
+        REDIS_HOST=localhost
+        REDIS_PORT=6379
+        REDIS_PASSWORD=
+        REDIS_DB=0
+
+        JWT_PRIVATE_KEY_PATH=./keys/private.pem
+        JWT_PUBLIC_KEY_PATH=./keys/public.pem
+        JWT_ACCESS_EXPIRY_MIN=15
+        JWT_REFRESH_EXPIRY_DAYS=7
+        JWT_ISSUER=heimdall
+
+        FUSIONAUTH_URL=http://localhost:9011
+        FUSIONAUTH_API_KEY=test-api-key
+        FUSIONAUTH_TENANT_ID=test-tenant-id
+        FUSIONAUTH_APPLICATION_ID=test-app-id
+        OAUTH_REDIRECT_URL=http://localhost:8080/v1/auth/oauth/callback
+        EOF
+
+    - name: Wait for services
+      run: |
+        echo "Waiting for PostgreSQL..."
+        timeout 30 bash -c 'until pg_isready -h localhost -p 5432; do sleep 1; done'
+
+        echo "Waiting for Redis..."
+        timeout 30 bash -c 'until redis-cli -h localhost ping; do sleep 1; done'
+
+        echo "Waiting for FusionAuth..."
+        timeout 120 bash -c 'until curl -f http://localhost:9011/api/status 2>/dev/null; do sleep 2; done'
+
+    - name: Start Heimdall server
+      run: |
+        ./bin/server &
+        HEIMDALL_PID=$!
+        echo "HEIMDALL_PID=$HEIMDALL_PID" >> $GITHUB_ENV
+
+        # Wait for server to be ready
+        timeout 30 bash -c 'until curl -f http://localhost:8080/health 2>/dev/null; do sleep 1; done'
+
+    - name: Install sample app dependencies
+      working-directory: ./examples/sample-app
+      run: npm ci
+
+    - name: Start sample app
+      working-directory: ./examples/sample-app
+      run: |
+        npm start &
+        SAMPLE_APP_PID=$!
+        echo "SAMPLE_APP_PID=$SAMPLE_APP_PID" >> $GITHUB_ENV
+
+        # Wait for sample app to be ready
+        timeout 30 bash -c 'until curl -f http://localhost:4000 2>/dev/null; do sleep 1; done'
+
+    - name: Run API health check
+      run: |
+        response=$(curl -s http://localhost:8080/health)
+        echo "Health check response: $response"
+        if ! echo "$response" | grep -q "healthy"; then
+          echo "Health check failed"
+          exit 1
+        fi
+
+    - name: Test API endpoints
+      run: |
+        # Test registration
+        echo "Testing registration..."
+        response=$(curl -s -X POST http://localhost:8080/v1/auth/register \
+          -H "Content-Type: application/json" \
+          -d '{
+            "email": "test@e2e.local",
+            "password": "TestPassword123!",
+            "firstName": "E2E",
+            "lastName": "Test"
+          }')
+        echo "Registration response: $response"
+
+        # Extract token
+        access_token=$(echo $response | grep -o '"accessToken":"[^"]*' | cut -d'"' -f4)
+
+        if [ -z "$access_token" ]; then
+          echo "Registration failed - no access token"
+          exit 1
+        fi
+
+        echo "ACCESS_TOKEN=$access_token" >> $GITHUB_ENV
+
+        # Test profile retrieval
+        echo "Testing profile retrieval..."
+        profile=$(curl -s http://localhost:8080/v1/users/me \
+          -H "Authorization: Bearer $access_token")
+        echo "Profile response: $profile"
+
+        if ! echo "$profile" | grep -q "test@e2e.local"; then
+          echo "Profile retrieval failed"
+          exit 1
+        fi
+
+    - name: Cleanup
+      if: always()
+      run: |
+        [ ! -z "$HEIMDALL_PID" ] && kill $HEIMDALL_PID || true
+        [ ! -z "$SAMPLE_APP_PID" ] && kill $SAMPLE_APP_PID || true

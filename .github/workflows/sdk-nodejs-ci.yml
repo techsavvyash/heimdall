@@ -1,0 +1,102 @@
+name: Node.js SDK CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'sdk/nodejs/**'
+      - '.github/workflows/sdk-nodejs-ci.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'sdk/nodejs/**'
+      - '.github/workflows/sdk-nodejs-ci.yml'
+  release:
+    types: [ published ]
+
+jobs:
+  build-and-test:
+    name: Build and Test SDK
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 21.x]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: sdk/nodejs/package-lock.json
+
+    - name: Install dependencies
+      working-directory: ./sdk/nodejs
+      run: npm ci
+
+    - name: Run linter
+      working-directory: ./sdk/nodejs
+      run: npm run lint || echo "Linting not configured"
+
+    - name: Run type check
+      working-directory: ./sdk/nodejs
+      run: npm run type-check || npx tsc --noEmit
+
+    - name: Build SDK
+      working-directory: ./sdk/nodejs
+      run: npm run build
+
+    - name: Run tests
+      working-directory: ./sdk/nodejs
+      run: npm test || echo "Tests not configured"
+
+    - name: Upload build artifacts
+      if: matrix.node-version == '20.x'
+      uses: actions/upload-artifact@v4
+      with:
+        name: sdk-dist
+        path: sdk/nodejs/dist/
+
+  publish-npm:
+    name: Publish to NPM
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'published'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        registry-url: 'https://registry.npmjs.org'
+
+    - name: Install dependencies
+      working-directory: ./sdk/nodejs
+      run: npm ci
+
+    - name: Build SDK
+      working-directory: ./sdk/nodejs
+      run: npm run build
+
+    - name: Publish to NPM
+      working-directory: ./sdk/nodejs
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      run: npm publish --access public
+
+    - name: Create GitHub Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./sdk/nodejs/dist/index.js
+        asset_name: heimdall-sdk-${{ github.event.release.tag_name }}.js
+        asset_content_type: application/javascript

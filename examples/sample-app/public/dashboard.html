@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Heimdall Sample App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            padding: 3rem;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 1rem;
+        }
+        .user-card {
+            background: #f7fafc;
+            padding: 2rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+        .user-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .info-item {
+            padding: 1rem;
+            background: white;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+        }
+        .info-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }
+        .info-value {
+            font-size: 16px;
+            color: #333;
+            font-weight: 600;
+        }
+        button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-right: 1rem;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-danger {
+            background: #e53e3e;
+            color: white;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #666;
+        }
+        .error {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 1rem;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="loading" class="loading">
+            <h2>Loading...</h2>
+        </div>
+
+        <div id="error-container" style="display: none;">
+            <div class="error" id="error-message"></div>
+            <button class="btn-primary" onclick="location.href='/login'">Go to Login</button>
+        </div>
+
+        <div id="dashboard-content" style="display: none;">
+            <h1>Welcome to your Dashboard!</h1>
+
+            <div class="user-card">
+                <h2>Your Profile</h2>
+                <div class="user-info">
+                    <div class="info-item">
+                        <div class="info-label">Email</div>
+                        <div class="info-value" id="user-email">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">User ID</div>
+                        <div class="info-value" id="user-id">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">First Name</div>
+                        <div class="info-value" id="user-firstName">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Last Name</div>
+                        <div class="info-value" id="user-lastName">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Login Count</div>
+                        <div class="info-value" id="user-loginCount">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Member Since</div>
+                        <div class="info-value" id="user-createdAt">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <button class="btn-primary" onclick="location.href='/'">Home</button>
+                <button class="btn-danger" id="logout-btn">Logout</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/heimdall-client.js"></script>
+    <script>
+        const heimdall = new HeimdallClient({
+            apiUrl: 'http://localhost:8080'
+        });
+
+        const loading = document.getElementById('loading');
+        const errorContainer = document.getElementById('error-container');
+        const errorMessage = document.getElementById('error-message');
+        const dashboardContent = document.getElementById('dashboard-content');
+        const logoutBtn = document.getElementById('logout-btn');
+
+        async function loadDashboard() {
+            try {
+                // Check if user is authenticated
+                const isAuth = await heimdall.isAuthenticated();
+
+                if (!isAuth) {
+                    throw new Error('Not authenticated');
+                }
+
+                // Get user profile
+                const user = await heimdall.user.getProfile();
+
+                // Display user information
+                document.getElementById('user-email').textContent = user.email || '-';
+                document.getElementById('user-id').textContent = user.id || '-';
+                document.getElementById('user-firstName').textContent = user.firstName || '-';
+                document.getElementById('user-lastName').textContent = user.lastName || '-';
+                document.getElementById('user-loginCount').textContent = user.loginCount || '0';
+
+                if (user.createdAt) {
+                    const date = new Date(user.createdAt);
+                    document.getElementById('user-createdAt').textContent = date.toLocaleDateString();
+                }
+
+                // Show dashboard
+                loading.style.display = 'none';
+                dashboardContent.style.display = 'block';
+
+            } catch (error) {
+                console.error('Dashboard error:', error);
+                loading.style.display = 'none';
+                errorMessage.textContent = 'Please login to access the dashboard.';
+                errorContainer.style.display = 'block';
+            }
+        }
+
+        // Logout handler
+        logoutBtn.addEventListener('click', async () => {
+            logoutBtn.disabled = true;
+            logoutBtn.textContent = 'Logging out...';
+
+            try {
+                await heimdall.auth.logout();
+                window.location.href = '/login';
+            } catch (error) {
+                console.error('Logout error:', error);
+                logoutBtn.disabled = false;
+                logoutBtn.textContent = 'Logout';
+            }
+        });
+
+        // Load dashboard on page load
+        loadDashboard();
+    </script>
+</body>
+</html>

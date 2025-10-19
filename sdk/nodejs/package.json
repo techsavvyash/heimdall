@@ -1,0 +1,62 @@
+{
+  "name": "@heimdall/sdk",
+  "version": "1.0.0",
+  "description": "Official Node.js SDK for Heimdall Authentication Service",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "clean": "rm -rf dist",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "heimdall",
+    "authentication",
+    "auth",
+    "jwt",
+    "oauth",
+    "sdk",
+    "typescript",
+    "fusionauth",
+    "rbac"
+  ],
+  "author": "Heimdall Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/techsavvyash/heimdall.git",
+    "directory": "sdk/nodejs"
+  },
+  "bugs": {
+    "url": "https://github.com/techsavvyash/heimdall/issues"
+  },
+  "homepage": "https://github.com/techsavvyash/heimdall#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.50.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.0.0"
+  }
+}
