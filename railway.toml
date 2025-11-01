@@ -1,0 +1,39 @@
+# Railway.app Configuration for Heimdall Authentication Service
+# https://docs.railway.app/reference/config-as-code
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "/app/server"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[[services]]
+name = "heimdall-api"
+
+# Service configuration
+[services.heimdall-api]
+source = "."
+
+# Environment variables (set these in Railway dashboard)
+# Required:
+# - PORT (Railway provides automatically)
+# - DATABASE_URL or individual DB vars (from Railway PostgreSQL plugin)
+# - REDIS_URL or individual Redis vars (from Railway Redis plugin)
+# - FUSIONAUTH_URL (your FusionAuth instance URL)
+# - FUSIONAUTH_API_KEY
+# - FUSIONAUTH_TENANT_ID
+# - FUSIONAUTH_APPLICATION_ID
+# - JWT_PRIVATE_KEY_PATH=/app/keys/private.pem
+# - JWT_PUBLIC_KEY_PATH=/app/keys/public.pem
+
+# Health check configuration
+healthcheck = { path = "/health", timeout = 30 }
+
+# Service will listen on $PORT (Railway provides this)
+# Default: 8080 (but Railway will override with their PORT)
+

@@ -15,6 +15,7 @@ import (
 	"github.com/techsavvyash/heimdall/internal/config"
 	"github.com/techsavvyash/heimdall/internal/database"
 	"github.com/techsavvyash/heimdall/internal/middleware"
+	"github.com/techsavvyash/heimdall/internal/openapi"
 	"github.com/techsavvyash/heimdall/internal/service"
 )
 
@@ -67,6 +68,13 @@ func main() {
 	tenantHandler := api.NewTenantHandler(tenantService)
 	log.Println("✅ Handlers initialized")
 
+	// Initialize OpenAPI handler
+	openapiHandler := openapi.NewHandler()
+	if err := openapiHandler.Initialize(); err != nil {
+		log.Fatalf("Failed to initialize OpenAPI handler: %v", err)
+	}
+	log.Println("✅ OpenAPI specification generated")
+
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
 		AppName: "Heimdall v1.0.0",
@@ -107,6 +115,10 @@ func main() {
 	api.SetupRoutes(app, authHandler, userHandler, passwordHandler, tenantHandler, jwtService)
 	log.Println("✅ Routes configured")
 
+	// Setup OpenAPI/Swagger routes
+	openapiHandler.RegisterRoutes(app)
+	log.Println("✅ Swagger UI configured")
+
 	// Get port from configuration
 	port := cfg.Server.Port
 
@@ -131,6 +143,8 @@ func main() {
 	log.Printf("📡 Environment: %s", cfg.Server.Environment)
 	log.Printf("🔗 API endpoint: http://localhost:%s/v1", port)
 	log.Printf("❤️  Health check: http://localhost:%s/health", port)
+	log.Printf("📚 Swagger UI: http://localhost:%s/swagger/", port)
+	log.Printf("📄 OpenAPI spec: http://localhost:%s/swagger/spec", port)
 
 	if err := app.Listen(":" + port); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to start server: %v\n", err)

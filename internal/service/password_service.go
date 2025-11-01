@@ -21,9 +21,9 @@ func NewPasswordService(fusionAuth *auth.FusionAuthClient) *PasswordService {
 
 // ChangePasswordRequest represents a password change request
 type ChangePasswordRequest struct {
-	CurrentPassword string `json:"currentPassword" validate:"required"`
-	NewPassword     string `json:"newPassword" validate:"required,min=8"`
-	ConfirmPassword string `json:"confirmPassword" validate:"required"`
+	CurrentPassword string `json:"currentPassword" validate:"required" example:"OldPassword123!"`
+	NewPassword     string `json:"newPassword" validate:"required,min=8" example:"NewSecurePassword456!"`
+	ConfirmPassword string `json:"confirmPassword" validate:"required" example:"NewSecurePassword456!"`
 }
 
 // ChangePassword changes a user's password
