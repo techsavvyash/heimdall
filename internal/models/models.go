@@ -12,6 +12,11 @@ func AllModels() []interface{} {
 		&UserRole{},
 		&RolePermission{},
 		&AuditLog{},
+		&Policy{},
+		&PolicyVersion{},
+		&PolicyBundle{},
+		&BundleDeployment{},
+		&BundlePolicy{},
 	}
 }
 

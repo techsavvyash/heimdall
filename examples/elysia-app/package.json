@@ -1,0 +1,22 @@
+{
+  "name": "heimdall-elysia-example",
+  "version": "1.0.0",
+  "description": "ElysiaJS backend server using Heimdall SDK for authentication",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts"
+  },
+  "keywords": ["heimdall", "auth", "elysia", "bun", "backend"],
+  "author": "Yash Mittal (techsavvyash)",
+  "license": "ISC",
+  "dependencies": {
+    "elysia": "0.8.17",
+    "@elysiajs/cors": "0.8.0",
+    "@elysiajs/bearer": "0.8.0",
+    "@techsavvyash/heimdall-sdk": "file:../../sdk/nodejs"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  }
+}

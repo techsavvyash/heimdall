@@ -225,3 +225,23 @@ func (r *RedisClient) GetRateLimitCount(ctx context.Context, key string) (int64,
 	}
 	return count, err
 }
+
+// DeletePattern deletes all keys matching a pattern
+func (r *RedisClient) DeletePattern(ctx context.Context, pattern string) error {
+	iter := r.client.Scan(ctx, 0, pattern, 0).Iterator()
+
+	var keys []string
+	for iter.Next(ctx) {
+		keys = append(keys, iter.Val())
+	}
+
+	if err := iter.Err(); err != nil {
+		return fmt.Errorf("failed to scan keys: %w", err)
+	}
+
+	if len(keys) > 0 {
+		return r.Del(ctx, keys...)
+	}
+
+	return nil
+}
