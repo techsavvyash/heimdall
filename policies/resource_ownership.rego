@@ -7,20 +7,20 @@ import data.heimdall.helpers
 default allow = false
 
 # Users can always read their own resources
-allow {
+allow if {
     helpers.is_owner
     input.action == "read"
 }
 
 # Users can update their own resources
-allow {
+allow if {
     helpers.is_owner
     input.action == "update"
     helpers.in_tenant
 }
 
 # Users can delete their own resources (unless restricted)
-allow {
+allow if {
     helpers.is_owner
     input.action == "delete"
     helpers.in_tenant
@@ -28,25 +28,25 @@ allow {
 }
 
 # Some resources cannot be deleted by owners
-is_deletion_restricted {
+is_deletion_restricted if {
     input.resource.type == "users"
     input.resource.attributes.isSystem == true
 }
 
-is_deletion_restricted {
+is_deletion_restricted if {
     input.resource.type == "roles"
     input.resource.attributes.isSystem == true
 }
 
 # Owner can share their resources
-allow {
+allow if {
     helpers.is_owner
     input.action == "share"
     helpers.in_tenant
 }
 
 # Owner can transfer ownership
-allow {
+allow if {
     helpers.is_owner
     input.action == "transfer_ownership"
     helpers.in_tenant
@@ -55,7 +55,7 @@ allow {
 # Shared resource access
 
 # Users can access resources shared with them
-allow {
+allow if {
     shared_with := input.resource.attributes.shared_with[_]
     shared_with.user_id == input.user.id
     input.action == shared_with.permission
@@ -63,7 +63,7 @@ allow {
 }
 
 # Users can access resources shared with their team
-allow {
+allow if {
     shared_with := input.resource.attributes.shared_with[_]
     shared_with.team_id == input.user.metadata.team_id
     input.action == shared_with.permission
@@ -71,7 +71,7 @@ allow {
 }
 
 # Users can access resources shared with their department
-allow {
+allow if {
     shared_with := input.resource.attributes.shared_with[_]
     shared_with.department == input.user.metadata.department
     input.action == shared_with.permission
@@ -81,7 +81,7 @@ allow {
 # Manager access to subordinate resources
 
 # Managers can read resources owned by their team members
-allow {
+allow if {
     helpers.has_role("manager")
     owner_team := input.resource.attributes.owner_team
     owner_team == input.user.metadata.team_id
@@ -90,7 +90,7 @@ allow {
 }
 
 # Managers can update team member resources
-allow {
+allow if {
     helpers.has_role("manager")
     owner_team := input.resource.attributes.owner_team
     owner_team == input.user.metadata.team_id
@@ -101,7 +101,7 @@ allow {
 # Hierarchical ownership
 
 # Users can access resources owned by their subordinates
-allow {
+allow if {
     subordinate_ids := input.user.metadata.subordinate_ids
     input.resource.ownerId == subordinate_ids[_]
     input.action == "read"
@@ -109,7 +109,7 @@ allow {
 }
 
 # Department heads can access all department resources
-allow {
+allow if {
     helpers.has_role("department_head")
     resource_dept := input.resource.attributes.department
     user_dept := input.user.metadata.department
@@ -120,7 +120,7 @@ allow {
 # Collaborative resources
 
 # Users can contribute to collaborative resources
-allow {
+allow if {
     input.resource.attributes.collaborative == true
     collaborators := input.resource.attributes.collaborators[_]
     collaborators.user_id == input.user.id
@@ -131,7 +131,7 @@ allow {
 # Project-based ownership
 
 # Project members can access project resources
-allow {
+allow if {
     project_id := input.resource.attributes.project_id
     user_projects := input.user.metadata.projects[_]
     user_projects.project_id == project_id
@@ -140,7 +140,7 @@ allow {
 }
 
 # Project owners have full access to project resources
-allow {
+allow if {
     project_id := input.resource.attributes.project_id
     user_projects := input.user.metadata.projects[_]
     user_projects.project_id == project_id
@@ -151,14 +151,14 @@ allow {
 # Public resources
 
 # Public resources can be read by anyone in the tenant
-allow {
+allow if {
     input.resource.attributes.visibility == "public"
     input.action == "read"
     helpers.in_tenant
 }
 
 # Organization-wide resources can be read by all org members
-allow {
+allow if {
     input.resource.attributes.visibility == "organization"
     input.action == "read"
     helpers.in_tenant
@@ -167,20 +167,20 @@ allow {
 # Admin override
 
 # Admins can access any resource in their tenant
-allow {
+allow if {
     helpers.is_admin
     helpers.in_tenant
 }
 
 # Super admins can access any resource
-allow {
+allow if {
     helpers.is_super_admin
 }
 
 # Audit and compliance
 
 # Auditors can read all resources for compliance
-allow {
+allow if {
     helpers.has_role("auditor")
     input.action == "read"
     helpers.in_tenant
@@ -189,27 +189,27 @@ allow {
 # Deny rules
 
 # Cannot access deleted resources (soft delete)
-deny {
+deny if {
     input.resource.attributes.deleted_at != null
     not helpers.is_admin
 }
 
 # Cannot access archived resources unless you're the owner or admin
-deny {
+deny if {
     input.resource.attributes.status == "archived"
     not helpers.is_owner
     not helpers.is_admin
 }
 
 # Cannot transfer ownership to different tenant
-deny {
+deny if {
     input.action == "transfer_ownership"
     target_tenant := input.resource.attributes.target_tenant_id
     target_tenant != input.user.tenantId
 }
 
 # Cannot delete resources that have dependencies
-deny {
+deny if {
     input.action == "delete"
     count(input.resource.attributes.dependencies) > 0
     not helpers.is_admin
@@ -218,14 +218,14 @@ deny {
 # Self-access restrictions
 
 # Users cannot delete themselves
-deny {
+deny if {
     input.resource.type == "users"
     input.action == "delete"
     helpers.is_self_access
 }
 
 # Users cannot change their own roles
-deny {
+deny if {
     input.resource.type == "users"
     input.action == "update"
     helpers.is_self_access
@@ -234,7 +234,7 @@ deny {
 }
 
 # Users cannot deactivate themselves
-deny {
+deny if {
     input.resource.type == "users"
     input.action == "update"
     helpers.is_self_access
@@ -245,20 +245,20 @@ deny {
 # Final decision
 default decision = false
 
-decision {
+decision if {
     allow
     not deny
 }
 
 # Helper to check if user is in the owner's team
-in_owner_team {
+in_owner_team if {
     owner_team := input.resource.attributes.owner_team
     user_team := input.user.metadata.team_id
     owner_team == user_team
 }
 
 # Helper to check if user manages the owner
-manages_owner {
+manages_owner if {
     subordinate_ids := input.user.metadata.subordinate_ids
     input.resource.ownerId == subordinate_ids[_]
 }

@@ -14,7 +14,7 @@ import data.heimdall.helpers
 default allow = false
 
 # Main decision logic: allow if ANY policy allows AND tenant isolation is satisfied
-allow {
+allow if {
     # Tenant isolation is the most critical check
     tenant_isolation.decision
 
@@ -23,58 +23,58 @@ allow {
 }
 
 # Check if any policy allows the action
-any_policy_allows {
+any_policy_allows if {
     rbac.decision
 }
 
-any_policy_allows {
+any_policy_allows if {
     abac.decision
 }
 
-any_policy_allows {
+any_policy_allows if {
     ownership.decision
 }
 
-any_policy_allows {
+any_policy_allows if {
     time_based.decision
 }
 
 # Explicit global denials (these override everything)
-deny {
+deny if {
     global_deny
 }
 
 # Global deny conditions
-global_deny {
+global_deny if {
     # User account is locked
     input.user.metadata.locked == true
 }
 
-global_deny {
+global_deny if {
     # User account is deleted
     input.user.metadata.deleted == true
 }
 
-global_deny {
+global_deny if {
     # IP is blacklisted
     is_blacklisted_ip
 }
 
-global_deny {
+global_deny if {
     # Tenant is suspended
     input.tenant.settings.suspended == true
     not helpers.is_super_admin
 }
 
 # System-level protections
-global_deny {
+global_deny if {
     # Cannot delete system resources
     input.action == "delete"
     input.resource.attributes.isSystem == true
     not helpers.is_super_admin
 }
 
-global_deny {
+global_deny if {
     # Cannot modify super admin role
     input.resource.type == "roles"
     input.resource.attributes.name == "super_admin"
@@ -83,7 +83,7 @@ global_deny {
 }
 
 # Helper to check if IP is blacklisted
-is_blacklisted_ip {
+is_blacklisted_ip if {
     blacklist := input.tenant.settings.ip_blacklist
     blacklist != null
     input.context.ipAddress == blacklist[_]
@@ -108,7 +108,7 @@ evaluation_context := {
 }
 
 # Final authorization decision
-decision {
+decision if {
     allow
     not deny
 }
@@ -121,7 +121,7 @@ decision_details := {
     "context": evaluation_context
 }
 
-reason := "access_granted" {
+reason := "access_granted" if {
     decision
 } else := "access_denied"
 
@@ -151,31 +151,31 @@ policies_evaluated := {
 # Permission check helpers for common operations
 
 # Can user create resource?
-can_create {
+can_create if {
     decision
     input.action == "create"
 }
 
 # Can user read resource?
-can_read {
+can_read if {
     decision
     input.action == "read"
 }
 
 # Can user update resource?
-can_update {
+can_update if {
     decision
     input.action == "update"
 }
 
 # Can user delete resource?
-can_delete {
+can_delete if {
     decision
     input.action == "delete"
 }
 
 # Batch permission check (for checking multiple resources at once)
-batch_check[resource_id] = allowed {
+batch_check[resource_id] = allowed if {
     resource_id := input.batch_resources[_].id
     allowed := decision
 }

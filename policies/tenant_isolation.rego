@@ -7,31 +7,31 @@ import data.heimdall.helpers
 default allow = false
 
 # Core tenant isolation rule: users can only access resources in their tenant
-allow {
+allow if {
     helpers.in_tenant
     helpers.same_tenant
 }
 
 # Super admins can cross tenant boundaries
-allow {
+allow if {
     helpers.is_super_admin
 }
 
 # Explicit deny for cross-tenant access
-deny {
+deny if {
     not helpers.same_tenant
     not helpers.is_super_admin
     input.resource.tenantId != null
 }
 
 # Deny if user has no tenant
-deny {
+deny if {
     input.user.tenantId == ""
     not helpers.is_super_admin
 }
 
 # Deny if resource belongs to different tenant
-deny {
+deny if {
     input.user.tenantId != ""
     input.resource.tenantId != ""
     input.user.tenantId != input.resource.tenantId
@@ -41,14 +41,14 @@ deny {
 # Tenant admin permissions
 
 # Tenant admins have full access within their tenant
-allow {
+allow if {
     helpers.has_role("tenant_admin")
     helpers.in_tenant
     helpers.same_tenant
 }
 
 # Tenant admins can manage tenant settings
-allow {
+allow if {
     helpers.has_role("tenant_admin")
     input.resource.type == "tenants"
     input.resource.id == input.user.tenantId
@@ -57,7 +57,7 @@ allow {
 # Cross-tenant sharing (controlled)
 
 # Allow access to resources explicitly shared across tenants
-allow {
+allow if {
     shared_tenants := input.resource.attributes.shared_with_tenants
     shared_tenants != null
     tenant_share := shared_tenants[_]
@@ -68,7 +68,7 @@ allow {
 # Partner tenant access (B2B scenarios)
 
 # Allow access from partner tenants
-allow {
+allow if {
     partner_tenants := input.tenant.settings.partner_tenants
     partner_tenants != null
     user_tenant := input.user.tenantId
@@ -81,7 +81,7 @@ allow {
 # Tenant hierarchy (parent-child relationships)
 
 # Parent tenant users can access child tenant resources
-allow {
+allow if {
     parent_tenant := input.tenant.settings.parent_tenant_id
     parent_tenant != null
     input.user.tenantId == parent_tenant
@@ -89,7 +89,7 @@ allow {
 }
 
 # Child tenant admins cannot access parent tenant
-deny {
+deny if {
     child_tenants := input.tenant.settings.child_tenant_ids
     child_tenants != null
     user_tenant := input.user.tenantId
@@ -101,20 +101,20 @@ deny {
 # Multi-tenant resource access
 
 # Global resources (not tenant-specific) can be accessed by all
-allow {
+allow if {
     input.resource.attributes.scope == "global"
     input.action == "read"
 }
 
 # Tenant-scoped resources must match user's tenant
-deny {
+deny if {
     input.resource.attributes.scope == "tenant"
     not helpers.same_tenant
     not helpers.is_super_admin
 }
 
 # User-scoped resources bypass tenant check if user is owner
-allow {
+allow if {
     input.resource.attributes.scope == "user"
     helpers.is_owner
 }
@@ -122,12 +122,12 @@ allow {
 # Tenant quota and limits
 
 # Deny if tenant has exceeded quotas
-deny {
+deny if {
     exceeds_tenant_quota
     not helpers.is_super_admin
 }
 
-exceeds_tenant_quota {
+exceeds_tenant_quota if {
     input.resource.type == "users"
     input.action == "create"
     current_users := input.tenant.settings.current_user_count
@@ -136,7 +136,7 @@ exceeds_tenant_quota {
     current_users >= max_users
 }
 
-exceeds_tenant_quota {
+exceeds_tenant_quota if {
     input.resource.type == "roles"
     input.action == "create"
     current_roles := input.tenant.settings.current_role_count
@@ -148,26 +148,26 @@ exceeds_tenant_quota {
 # Tenant status checks
 
 # Deny access if tenant is suspended
-deny {
+deny if {
     input.tenant.settings.status == "suspended"
     not helpers.is_super_admin
 }
 
 # Deny access if tenant is inactive
-deny {
+deny if {
     input.tenant.settings.status == "inactive"
     not helpers.is_super_admin
 }
 
 # Allow read-only access if tenant is in trial
-allow {
+allow if {
     input.tenant.settings.status == "trial"
     input.action == "read"
     helpers.in_tenant
 }
 
 # Deny write access for expired trial tenants
-deny {
+deny if {
     input.tenant.settings.status == "trial"
     trial_expiry := input.tenant.settings.trial_expiry
     current_time := input.time.timestamp
@@ -179,7 +179,7 @@ deny {
 # Tenant data residency
 
 # Ensure data stays within specified regions
-deny {
+deny if {
     data_residency := input.tenant.settings.data_residency
     data_residency != null
     resource_region := input.resource.attributes.region
@@ -191,7 +191,7 @@ deny {
 # Tenant isolation for audit logs
 
 # Users can only read audit logs from their own tenant
-allow {
+allow if {
     input.resource.type == "audit"
     input.action == "read"
     helpers.has_permission("audit.read")
@@ -202,20 +202,20 @@ allow {
 # Cross-tenant operations (explicit allowlist)
 
 # Platform administrators can perform cross-tenant operations
-allow {
+allow if {
     helpers.has_role("platform_admin")
     input.resource.type == "tenants"
 }
 
 # Support staff can read across tenants (but not modify)
-allow {
+allow if {
     helpers.has_role("support")
     input.action == "read"
     helpers.has_permission("support.cross_tenant_read")
 }
 
 # Billing admins can access billing across tenants
-allow {
+allow if {
     helpers.has_role("billing_admin")
     input.resource.type == "billing"
     helpers.has_permission("billing.manage")
@@ -224,7 +224,7 @@ allow {
 # Tenant branding and customization
 
 # Only tenant admins can modify tenant branding
-allow {
+allow if {
     input.resource.type == "tenant_branding"
     helpers.has_role("tenant_admin")
     input.resource.tenantId == input.user.tenantId
@@ -233,7 +233,7 @@ allow {
 # Tenant-specific policies
 
 # Respect tenant-specific policy overrides
-allow {
+allow if {
     tenant_policy := input.tenant.settings.custom_policies[_]
     tenant_policy.resource == input.resource.type
     tenant_policy.action == input.action
@@ -244,7 +244,7 @@ allow {
 # Managed service provider access
 
 # MSP users can access managed tenants
-allow {
+allow if {
     msp_access := input.user.metadata.msp_access
     msp_access != null
     managed_tenant := msp_access.managed_tenants[_]
@@ -254,13 +254,13 @@ allow {
 }
 
 # Deny MSP access to non-managed tenants
-deny {
+deny if {
     helpers.has_role("msp_user")
     not is_managed_tenant
     not helpers.in_tenant
 }
 
-is_managed_tenant {
+is_managed_tenant if {
     msp_access := input.user.metadata.msp_access
     msp_access != null
     managed_tenant := msp_access.managed_tenants[_]
@@ -271,7 +271,7 @@ is_managed_tenant {
 # Final decision
 default decision = false
 
-decision {
+decision if {
     allow
     not deny
 }
