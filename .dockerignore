@@ -29,6 +29,7 @@ docs/
 .env
 .env.local
 .env.*.local
+.env.production
 
 # Node.js
 node_modules/

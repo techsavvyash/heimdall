@@ -65,6 +65,20 @@ func SeedDefaultData(db *gorm.DB) error {
 
 		// Audit log permissions
 		{Name: "audit.read", Resource: "audit", Action: "read", Scope: "tenant", IsSystem: true, Description: "Read audit logs"},
+
+		// Policy permissions
+		{Name: "policies.create", Resource: "policies", Action: "create", Scope: "tenant", IsSystem: true, Description: "Create policies"},
+		{Name: "policies.read", Resource: "policies", Action: "read", Scope: "tenant", IsSystem: true, Description: "Read policies"},
+		{Name: "policies.update", Resource: "policies", Action: "update", Scope: "tenant", IsSystem: true, Description: "Update policies"},
+		{Name: "policies.delete", Resource: "policies", Action: "delete", Scope: "tenant", IsSystem: true, Description: "Delete policies"},
+		{Name: "policies.publish", Resource: "policies", Action: "publish", Scope: "tenant", IsSystem: true, Description: "Publish policies"},
+		{Name: "policies.test", Resource: "policies", Action: "test", Scope: "tenant", IsSystem: true, Description: "Test policies"},
+
+		// Policy bundle permissions
+		{Name: "bundles.create", Resource: "bundles", Action: "create", Scope: "tenant", IsSystem: true, Description: "Create policy bundles"},
+		{Name: "bundles.read", Resource: "bundles", Action: "read", Scope: "tenant", IsSystem: true, Description: "Read policy bundles"},
+		{Name: "bundles.activate", Resource: "bundles", Action: "activate", Scope: "tenant", IsSystem: true, Description: "Activate policy bundles"},
+		{Name: "bundles.deploy", Resource: "bundles", Action: "deploy", Scope: "tenant", IsSystem: true, Description: "Deploy policy bundles"},
 	}
 
 	// Create permissions in transaction

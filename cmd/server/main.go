@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -15,7 +16,7 @@ import (
 	"github.com/techsavvyash/heimdall/internal/config"
 	"github.com/techsavvyash/heimdall/internal/database"
 	"github.com/techsavvyash/heimdall/internal/middleware"
-	"github.com/techsavvyash/heimdall/internal/openapi"
+	"github.com/techsavvyash/heimdall/internal/opa"
 	"github.com/techsavvyash/heimdall/internal/service"
 )
 
@@ -52,13 +53,41 @@ func main() {
 	fusionAuthClient := auth.NewFusionAuthClient(&cfg.Auth)
 	log.Println("✅ FusionAuth client initialized")
 
-	// Initialize services
+	// Get database and redis clients
 	db := database.GetDB()
 	redis := database.GetRedis()
+
+	// Initialize OPA client and evaluator
+	opaClient := opa.NewClient(&cfg.OPA)
+	opaEvaluator := opa.NewEvaluator(opaClient, redis, cfg.OPA.EnableCache)
+	log.Println("✅ OPA client initialized")
+
+	// Verify OPA is healthy
+	if err := opaClient.HealthCheck(context.Background()); err != nil {
+		log.Printf("⚠️  OPA health check failed: %v (policies may not be enforced properly)", err)
+	} else {
+		log.Println("✅ OPA is healthy")
+	}
+
+	// Initialize services
 	authService := service.NewAuthService(db, fusionAuthClient, jwtService, redis)
 	userService := service.NewUserService(db, fusionAuthClient)
 	passwordService := service.NewPasswordService(fusionAuthClient)
 	tenantService := service.NewTenantService(db)
+
+	// Initialize policy and bundle services
+	policyService := service.NewPolicyService(db)
+	bundleService, err := service.NewBundleService(db, &cfg.MinIO)
+	if err != nil {
+		log.Printf("⚠️  Failed to initialize bundle service: %v (bundle management will not work)", err)
+	} else {
+		// Ensure MinIO bucket exists
+		if err := bundleService.EnsureBucket(context.Background()); err != nil {
+			log.Printf("⚠️  Failed to ensure MinIO bucket: %v", err)
+		} else {
+			log.Println("✅ MinIO bucket ready")
+		}
+	}
 	log.Println("✅ Services initialized")
 
 	// Initialize handlers
@@ -66,14 +95,8 @@ func main() {
 	userHandler := api.NewUserHandler(userService)
 	passwordHandler := api.NewPasswordHandler(passwordService)
 	tenantHandler := api.NewTenantHandler(tenantService)
+	policyHandler := api.NewPolicyHandler(policyService, bundleService)
 	log.Println("✅ Handlers initialized")
-
-	// Initialize OpenAPI handler
-	openapiHandler := openapi.NewHandler()
-	if err := openapiHandler.Initialize(); err != nil {
-		log.Fatalf("Failed to initialize OpenAPI handler: %v", err)
-	}
-	log.Println("✅ OpenAPI specification generated")
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
@@ -112,12 +135,8 @@ func main() {
 	})
 
 	// Setup API routes
-	api.SetupRoutes(app, authHandler, userHandler, passwordHandler, tenantHandler, jwtService)
+	api.SetupRoutes(app, authHandler, userHandler, passwordHandler, tenantHandler, policyHandler, jwtService, opaEvaluator)
 	log.Println("✅ Routes configured")
-
-	// Setup OpenAPI/Swagger routes
-	openapiHandler.RegisterRoutes(app)
-	log.Println("✅ Swagger UI configured")
 
 	// Get port from configuration
 	port := cfg.Server.Port
@@ -143,8 +162,6 @@ func main() {
 	log.Printf("📡 Environment: %s", cfg.Server.Environment)
 	log.Printf("🔗 API endpoint: http://localhost:%s/v1", port)
 	log.Printf("❤️  Health check: http://localhost:%s/health", port)
-	log.Printf("📚 Swagger UI: http://localhost:%s/swagger/", port)
-	log.Printf("📄 OpenAPI spec: http://localhost:%s/swagger/spec", port)
 
 	if err := app.Listen(":" + port); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to start server: %v\n", err)

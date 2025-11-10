@@ -90,8 +90,14 @@ test-unit: ## Run unit tests only
 
 test-integration: ## Run integration tests only
 	@echo "🧪 Running integration tests..."
-	@go test -v -race ./internal/api
+	@./test/run-integration-tests.sh
 	@echo "✅ Integration tests complete"
+
+test-auth: ## Run authentication integration tests only
+	@echo "🧪 Running authentication tests..."
+	@export HEIMDALL_API_URL=http://localhost:8080 && \
+		go test -v ./test/integration -run TestUser -timeout 5m
+	@echo "✅ Authentication tests complete"
 
 test-coverage: test ## Run tests with coverage report
 	@go tool cover -html=coverage.out -o coverage.html
