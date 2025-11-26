@@ -76,7 +76,7 @@ func main() {
 	tenantService := service.NewTenantService(db)
 
 	// Initialize policy and bundle services
-	policyService := service.NewPolicyService(db)
+	policyService := service.NewPolicyService(db, opaClient)
 	bundleService, err := service.NewBundleService(db, &cfg.MinIO)
 	if err != nil {
 		log.Printf("⚠️  Failed to initialize bundle service: %v (bundle management will not work)", err)

@@ -283,8 +283,10 @@ func isBusinessHours(t time.Time) bool {
 func BuildSimpleInput(userID, tenantID, action, resourceType, resourceID string) map[string]interface{} {
 	builder := NewContextBuilder()
 	builder.WithUser(userID, "", []string{})
+	builder.input.User.TenantID = tenantID
 	builder.WithAction(action)
 	builder.WithResource(resourceType, resourceID)
+	builder.WithResourceTenant(tenantID) // Set resource tenant for tenant isolation policy
 	builder.WithTenant(tenantID, "", nil)
 
 	return builder.Build()
@@ -294,8 +296,10 @@ func BuildSimpleInput(userID, tenantID, action, resourceType, resourceID string)
 func BuildPermissionCheckInput(userID, tenantID string, roles []string, resource, action string) map[string]interface{} {
 	builder := NewContextBuilder()
 	builder.WithUser(userID, "", roles)
+	builder.input.User.TenantID = tenantID
 	builder.WithAction(action)
 	builder.WithResource(resource, "")
+	builder.WithResourceTenant(tenantID) // Set resource tenant for tenant isolation policy
 	builder.WithTenant(tenantID, "", nil)
 
 	return builder.Build()

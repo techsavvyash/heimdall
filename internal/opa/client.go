@@ -265,3 +265,55 @@ func (c *Client) DeleteData(ctx context.Context, path string) error {
 
 	return nil
 }
+
+// UpsertPolicy uploads or updates a policy in OPA
+func (c *Client) UpsertPolicy(ctx context.Context, path string, content string) error {
+	url := fmt.Sprintf("%s/v1/policies/%s", c.baseURL, path)
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBufferString(content))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "text/plain")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("OPA returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// DeletePolicy deletes a policy from OPA
+func (c *Client) DeletePolicy(ctx context.Context, path string) error {
+	url := fmt.Sprintf("%s/v1/policies/%s", c.baseURL, path)
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("OPA returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}

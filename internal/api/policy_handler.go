@@ -36,6 +36,17 @@ func (h *PolicyHandler) CreatePolicy(c *fiber.Ctx) error {
 		})
 	}
 
+	tenantID := middleware.GetTenantID(c)
+	if tenantID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"error": fiber.Map{
+				"message": "Tenant context is required",
+				"code":    "TENANT_REQUIRED",
+			},
+		})
+	}
+
 	var req service.CreatePolicyRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -57,6 +68,20 @@ func (h *PolicyHandler) CreatePolicy(c *fiber.Ctx) error {
 			},
 		})
 	}
+
+	tenantUUID, err := uuid.Parse(tenantID)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"error": fiber.Map{
+				"message": "Invalid tenant ID",
+				"code":    "INVALID_TENANT_ID",
+			},
+		})
+	}
+
+	// Set tenant ID from authenticated user's context
+	req.TenantID = tenantUUID
 
 	policy, err := h.policyService.CreatePolicy(c.Context(), userUUID, &req)
 	if err != nil {

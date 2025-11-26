@@ -8,29 +8,32 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/techsavvyash/heimdall/internal/models"
+	"github.com/techsavvyash/heimdall/internal/opa"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
 // PolicyService handles policy-related business logic
 type PolicyService struct {
-	db *gorm.DB
+	db        *gorm.DB
+	opaClient *opa.Client
 }
 
 // NewPolicyService creates a new policy service
-func NewPolicyService(db *gorm.DB) *PolicyService {
+func NewPolicyService(db *gorm.DB, opaClient *opa.Client) *PolicyService {
 	return &PolicyService{
-		db: db,
+		db:        db,
+		opaClient: opaClient,
 	}
 }
 
 // CreatePolicyRequest represents a request to create a policy
 type CreatePolicyRequest struct {
-	TenantID    uuid.UUID              `json:"tenantId" validate:"required"`
+	TenantID    uuid.UUID              `json:"-"` // Set from authenticated user's context, not from request body
 	Name        string                 `json:"name" validate:"required,min=3,max=200"`
 	Description string                 `json:"description"`
-	Path        string                 `json:"path" validate:"required"`
-	Type        models.PolicyType      `json:"type" validate:"required,oneof=rego json wasm"`
+	Path        string                 `json:"path"`
+	Type        models.PolicyType      `json:"type" validate:"omitempty,oneof=rego json wasm"`
 	Content     string                 `json:"content" validate:"required"`
 	Tags        []string               `json:"tags"`
 	Metadata    map[string]interface{} `json:"metadata"`
@@ -68,13 +71,25 @@ func (s *PolicyService) CreatePolicy(ctx context.Context, userID uuid.UUID, req 
 		return nil, fmt.Errorf("failed to convert test cases: %w", err)
 	}
 
+	// Set default path if not provided
+	path := req.Path
+	if path == "" {
+		path = fmt.Sprintf("policies/%s", req.Name)
+	}
+
+	// Set default type if not provided
+	policyType := req.Type
+	if policyType == "" {
+		policyType = models.PolicyTypeRego
+	}
+
 	policy := &models.Policy{
 		TenantID:    req.TenantID,
 		Name:        req.Name,
 		Description: req.Description,
 		Version:     1,
-		Path:        req.Path,
-		Type:        req.Type,
+		Path:        path,
+		Type:        policyType,
 		Content:     req.Content,
 		Status:      models.PolicyStatusDraft,
 		IsValid:     false,
@@ -204,12 +219,40 @@ func (s *PolicyService) ValidatePolicy(ctx context.Context, policyID uuid.UUID) 
 		return err
 	}
 
-	// TODO: Implement actual Rego validation using OPA
-	// For now, just basic checks
+	// Basic checks
 	if policy.Content == "" {
 		policy.ValidationError = "Policy content is empty"
 		policy.IsValid = false
+		if err := s.db.WithContext(ctx).Save(policy).Error; err != nil {
+			return fmt.Errorf("failed to save validation result: %w", err)
+		}
+		return nil
+	}
+
+	// Only validate Rego policies
+	if policy.Type != models.PolicyTypeRego {
+		policy.ValidationError = ""
+		policy.IsValid = true
+		now := time.Now()
+		policy.ValidatedAt = &now
+		if err := s.db.WithContext(ctx).Save(policy).Error; err != nil {
+			return fmt.Errorf("failed to save validation result: %w", err)
+		}
+		return nil
+	}
+
+	// Validate Rego syntax by uploading to OPA
+	// Use a temporary path for validation
+	tempPath := fmt.Sprintf("temp/validation/%s", policyID.String())
+
+	// Try to upload the policy to OPA - this will validate syntax
+	if err := s.opaClient.UpsertPolicy(ctx, tempPath, policy.Content); err != nil {
+		policy.ValidationError = fmt.Sprintf("Rego syntax error: %v", err)
+		policy.IsValid = false
 	} else {
+		// Policy is valid, clean up the temporary policy
+		_ = s.opaClient.DeletePolicy(ctx, tempPath)
+
 		policy.ValidationError = ""
 		policy.IsValid = true
 		now := time.Now()
@@ -349,17 +392,182 @@ func (s *PolicyService) TestPolicy(ctx context.Context, policyID uuid.UUID) ([]P
 		}
 	}
 
-	// TODO: Implement actual policy testing using OPA
+	// If no test cases, return empty results
+	if len(testCases) == 0 {
+		return []PolicyTestResult{}, nil
+	}
+
+	// Only test Rego policies
+	if policy.Type != models.PolicyTypeRego {
+		return nil, fmt.Errorf("testing is only supported for Rego policies")
+	}
+
+	// Upload policy to OPA temporarily for testing
+	tempPath := fmt.Sprintf("temp/testing/%s", policyID.String())
+	if err := s.opaClient.UpsertPolicy(ctx, tempPath, policy.Content); err != nil {
+		return nil, fmt.Errorf("failed to upload policy for testing: %w", err)
+	}
+
+	// Clean up after testing
+	defer func() {
+		_ = s.opaClient.DeletePolicy(ctx, tempPath)
+	}()
+
+	// Run each test case
 	results := make([]PolicyTestResult, len(testCases))
 	for i, tc := range testCases {
-		results[i] = PolicyTestResult{
+		result := PolicyTestResult{
 			TestName: tc.Name,
-			Passed:   true, // Placeholder
-			Message:  "Test not implemented yet",
 		}
+
+		// Evaluate the policy with the test input
+		decision, err := s.opaClient.EvaluatePolicy(ctx, tempPath, tc.Input)
+		if err != nil {
+			result.Passed = false
+			result.Message = fmt.Sprintf("Failed to evaluate policy: %v", err)
+			results[i] = result
+			continue
+		}
+
+		// Compare the result with expected output
+		passed, message := compareResults(decision.Result, tc.Expected)
+		result.Passed = passed
+		result.Message = message
+
+		if tc.Note != "" && result.Passed {
+			result.Message = tc.Note
+		}
+
+		results[i] = result
 	}
 
 	return results, nil
+}
+
+// compareResults compares the actual result with the expected result
+func compareResults(actual interface{}, expected map[string]interface{}) (bool, string) {
+	// Convert actual to map for comparison
+	actualMap, ok := actual.(map[string]interface{})
+	if !ok {
+		// If the actual result is not a map, check if expected has a single key
+		if len(expected) == 1 {
+			for key, expectedValue := range expected {
+				if compareValues(actual, expectedValue) {
+					return true, "Test passed"
+				}
+				return false, fmt.Sprintf("Expected %s=%v, got %v", key, expectedValue, actual)
+			}
+		}
+		return false, fmt.Sprintf("Expected map result, got %T", actual)
+	}
+
+	// Compare each expected key-value pair
+	for key, expectedValue := range expected {
+		actualValue, exists := actualMap[key]
+		if !exists {
+			return false, fmt.Sprintf("Expected key '%s' not found in result", key)
+		}
+
+		if !compareValues(actualValue, expectedValue) {
+			return false, fmt.Sprintf("Mismatch for key '%s': expected %v, got %v", key, expectedValue, actualValue)
+		}
+	}
+
+	return true, "Test passed"
+}
+
+// compareValues compares two values for equality, handling different types
+func compareValues(actual, expected interface{}) bool {
+	// Handle nil cases
+	if actual == nil && expected == nil {
+		return true
+	}
+	if actual == nil || expected == nil {
+		return false
+	}
+
+	// Direct comparison for simple types
+	if actual == expected {
+		return true
+	}
+
+	// Handle boolean comparison
+	actualBool, actualIsBool := actual.(bool)
+	expectedBool, expectedIsBool := expected.(bool)
+	if actualIsBool && expectedIsBool {
+		return actualBool == expectedBool
+	}
+
+	// Handle numeric comparison (handle float64 and int conversion)
+	actualFloat, actualIsFloat := toFloat64(actual)
+	expectedFloat, expectedIsFloat := toFloat64(expected)
+	if actualIsFloat && expectedIsFloat {
+		return actualFloat == expectedFloat
+	}
+
+	// Handle string comparison
+	actualStr, actualIsStr := actual.(string)
+	expectedStr, expectedIsStr := expected.(string)
+	if actualIsStr && expectedIsStr {
+		return actualStr == expectedStr
+	}
+
+	// Handle map comparison
+	actualMap, actualIsMap := actual.(map[string]interface{})
+	expectedMap, expectedIsMap := expected.(map[string]interface{})
+	if actualIsMap && expectedIsMap {
+		if len(actualMap) != len(expectedMap) {
+			return false
+		}
+		for key, expectedValue := range expectedMap {
+			actualValue, exists := actualMap[key]
+			if !exists || !compareValues(actualValue, expectedValue) {
+				return false
+			}
+		}
+		return true
+	}
+
+	// Handle slice comparison
+	actualSlice, actualIsSlice := actual.([]interface{})
+	expectedSlice, expectedIsSlice := expected.([]interface{})
+	if actualIsSlice && expectedIsSlice {
+		if len(actualSlice) != len(expectedSlice) {
+			return false
+		}
+		for i := range expectedSlice {
+			if !compareValues(actualSlice[i], expectedSlice[i]) {
+				return false
+			}
+		}
+		return true
+	}
+
+	return false
+}
+
+// toFloat64 converts numeric types to float64
+func toFloat64(v interface{}) (float64, bool) {
+	switch val := v.(type) {
+	case float64:
+		return val, true
+	case float32:
+		return float64(val), true
+	case int:
+		return float64(val), true
+	case int32:
+		return float64(val), true
+	case int64:
+		return float64(val), true
+	case uint:
+		return float64(val), true
+	case uint32:
+		return float64(val), true
+	case uint64:
+		return float64(val), true
+	default:
+		return 0, false
+	}
 }
 
 // PolicyTestResult represents the result of a policy test
