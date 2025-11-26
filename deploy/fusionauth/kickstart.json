@@ -1,0 +1,78 @@
+{
+  "variables": {
+    "adminEmail": "admin@heimdall.local",
+    "adminPassword": "#{FUSIONAUTH_ADMIN_PASSWORD}",
+    "apiKey": "#{FUSIONAUTH_API_KEY}",
+    "applicationId": "85a03867-dccf-4882-adde-1a79aeec50df",
+    "tenantId": "30dd2256-38bd-4f81-1a17-22a0d17df2ed"
+  },
+  "apiKeys": [
+    {
+      "key": "#{apiKey}",
+      "description": "Heimdall API Key"
+    }
+  ],
+  "requests": [
+    {
+      "method": "POST",
+      "url": "/api/user/registration",
+      "tenantId": "#{tenantId}",
+      "body": {
+        "user": {
+          "email": "#{adminEmail}",
+          "password": "#{adminPassword}"
+        },
+        "registration": {
+          "applicationId": "#{applicationId}",
+          "roles": ["admin"]
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/application/#{applicationId}",
+      "tenantId": "#{tenantId}",
+      "body": {
+        "application": {
+          "name": "Heimdall",
+          "roles": [
+            {
+              "name": "admin",
+              "description": "Administrator role with full access",
+              "isDefault": false,
+              "isSuperRole": true
+            },
+            {
+              "name": "user",
+              "description": "Regular user role",
+              "isDefault": true,
+              "isSuperRole": false
+            }
+          ],
+          "oauthConfiguration": {
+            "authorizedRedirectURLs": [
+              "http://localhost:3000/callback",
+              "http://localhost:8080/callback"
+            ],
+            "clientSecret": "super-secret-client-secret",
+            "enabledGrants": [
+              "authorization_code",
+              "refresh_token"
+            ],
+            "logoutURL": "http://localhost:3000/logout",
+            "generateRefreshTokens": true
+          },
+          "jwtConfiguration": {
+            "enabled": true,
+            "timeToLiveInSeconds": 3600,
+            "refreshTokenTimeToLiveInMinutes": 43200
+          },
+          "registrationConfiguration": {
+            "enabled": true,
+            "type": "basic"
+          }
+        }
+      }
+    }
+  ]
+}
