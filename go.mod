@@ -12,7 +12,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/minio/minio-go/v7 v7.0.95
-	github.com/redis/go-redis/v9 v9.14.1
+	github.com/redis/go-redis/v9 v9.17.1
 	github.com/swaggest/swgui v1.8.5
 	gorm.io/datatypes v1.2.7
 	gorm.io/driver/postgres v1.6.0
