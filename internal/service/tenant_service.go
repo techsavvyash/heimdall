@@ -28,32 +28,32 @@ func NewTenantService(db *gorm.DB) *TenantService {
 
 // CreateTenantRequest represents a tenant creation request
 type CreateTenantRequest struct {
-	Name     string                 `json:"name" validate:"required,min=2,max=255"`
-	Slug     string                 `json:"slug" validate:"required,min=2,max=255"`
+	Name     string                 `json:"name" validate:"required,min=2,max=255" example:"Acme Corporation"`
+	Slug     string                 `json:"slug" validate:"required,min=2,max=255" example:"acme-corp"`
 	Settings map[string]interface{} `json:"settings,omitempty"`
-	MaxUsers int                    `json:"maxUsers,omitempty"`
-	MaxRoles int                    `json:"maxRoles,omitempty"`
+	MaxUsers int                    `json:"maxUsers,omitempty" example:"1000"`
+	MaxRoles int                    `json:"maxRoles,omitempty" example:"50"`
 }
 
 // UpdateTenantRequest represents a tenant update request
 type UpdateTenantRequest struct {
-	Name     *string                `json:"name,omitempty" validate:"omitempty,min=2,max=255"`
+	Name     *string                `json:"name,omitempty" validate:"omitempty,min=2,max=255" example:"Acme Inc."`
 	Settings map[string]interface{} `json:"settings,omitempty"`
-	MaxUsers *int                   `json:"maxUsers,omitempty"`
-	MaxRoles *int                   `json:"maxRoles,omitempty"`
+	MaxUsers *int                   `json:"maxUsers,omitempty" example:"2000"`
+	MaxRoles *int                   `json:"maxRoles,omitempty" example:"100"`
 }
 
 // TenantResponse represents a tenant response
 type TenantResponse struct {
-	ID        string                 `json:"id"`
-	Name      string                 `json:"name"`
-	Slug      string                 `json:"slug"`
+	ID        string                 `json:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Name      string                 `json:"name" example:"Acme Corporation"`
+	Slug      string                 `json:"slug" example:"acme-corp"`
 	Settings  map[string]interface{} `json:"settings,omitempty"`
-	MaxUsers  int                    `json:"maxUsers"`
-	MaxRoles  int                    `json:"maxRoles"`
-	Status    string                 `json:"status"`
-	CreatedAt string                 `json:"createdAt"`
-	UpdatedAt string                 `json:"updatedAt"`
+	MaxUsers  int                    `json:"maxUsers" example:"1000"`
+	MaxRoles  int                    `json:"maxRoles" example:"50"`
+	Status    string                 `json:"status" example:"active"`
+	CreatedAt string                 `json:"createdAt" example:"2024-01-15T10:30:00Z"`
+	UpdatedAt string                 `json:"updatedAt" example:"2024-01-20T14:45:00Z"`
 	Stats     map[string]interface{} `json:"stats,omitempty"`
 }
 

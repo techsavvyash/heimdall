@@ -1,429 +1,370 @@
-# Railway Deployment Guide for Heimdall
+# Deploying Heimdall to Railway.app
 
-This guide will walk you through deploying Heimdall on [Railway](https://railway.app/), a modern platform for deploying applications with ease.
-
-## Table of Contents
-
-- [Prerequisites](#prerequisites)
-- [Architecture Overview](#architecture-overview)
-- [Deployment Steps](#deployment-steps)
-  - [1. Create a New Project](#1-create-a-new-project)
-  - [2. Deploy PostgreSQL](#2-deploy-postgresql)
-  - [3. Deploy Redis](#3-deploy-redis)
-  - [4. Deploy FusionAuth](#4-deploy-fusionauth)
-  - [5. Deploy Heimdall](#5-deploy-heimdall)
-- [Environment Variables](#environment-variables)
-- [Post-Deployment Configuration](#post-deployment-configuration)
-- [Monitoring and Logs](#monitoring-and-logs)
-- [Troubleshooting](#troubleshooting)
-- [Cost Estimation](#cost-estimation)
-
----
+This guide walks you through deploying the Heimdall authentication service to Railway.app.
 
 ## Prerequisites
 
-1. A [Railway account](https://railway.app/) (free tier available)
-2. Railway CLI installed (optional, but recommended):
-   ```bash
-   npm install -g @railway/cli
-   # or
-   brew install railway
-   ```
-3. Git repository with your Heimdall code
+1. **Railway Account**: Sign up at [railway.app](https://railway.app)
+2. **Railway CLI** (optional): `npm i -g @railway/cli`
+3. **GitHub Account**: For connecting your repository
+4. **FusionAuth Instance**: Either Railway-hosted or FusionAuth Cloud
 
 ---
 
-## Architecture Overview
-
-Heimdall deployment on Railway consists of 4 services:
+## Deployment Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Railway Project                       │
-│                                                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │  PostgreSQL  │  │    Redis     │  │  FusionAuth  │  │
-│  │   Database   │  │    Cache     │  │  Auth Engine │  │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  │
-│         │                 │                  │          │
-│         └─────────────────┼──────────────────┘          │
-│                           │                             │
-│                   ┌───────▼────────┐                    │
-│                   │   Heimdall     │                    │
-│                   │   API Gateway  │                    │
-│                   └───────┬────────┘                    │
-│                           │                             │
-└───────────────────────────┼─────────────────────────────┘
-                            │
-                      Public Internet
+┌─────────────────────────────────────────┐
+│           Railway Project               │
+├─────────────────────────────────────────┤
+│                                         │
+│  ┌────────────────┐  ┌──────────────┐  │
+│  │ Heimdall API   │  │ PostgreSQL   │  │
+│  │ (Go/Fiber)     │──│ (Plugin)     │  │
+│  └────────────────┘  └──────────────┘  │
+│         │                               │
+│         │            ┌──────────────┐   │
+│         └────────────│ Redis        │   │
+│                      │ (Plugin)     │   │
+│                      └──────────────┘   │
+│                                         │
+│         │                               │
+│         └──────────────────────────────►│
+│                                FusionAuth│
+│                           (External/Cloud)
+└─────────────────────────────────────────┘
 ```
 
 ---
 
-## Deployment Steps
+## Step 1: Set Up FusionAuth
 
-### 1. Create a New Project
+### Option A: FusionAuth Cloud (Recommended)
 
-**Option A: Using Railway Dashboard**
-1. Go to [Railway Dashboard](https://railway.app/dashboard)
-2. Click **"New Project"**
-3. Select **"Empty Project"**
-4. Name your project (e.g., "heimdall-production")
-
-**Option B: Using Railway CLI**
-```bash
-railway login
-railway init
-```
-
----
-
-### 2. Deploy PostgreSQL
-
-#### Using Railway Dashboard:
-
-1. In your project, click **"+ New"**
-2. Select **"Database"** → **"Add PostgreSQL"**
-3. Railway will automatically provision a PostgreSQL database
-4. Note the connection details (available in the service's **Variables** tab)
-
-#### Connection String Format:
-```
-postgresql://postgres:[password]@[host]:[port]/railway
-```
-
-#### Create Heimdall Database:
-
-Connect to your PostgreSQL instance and create the Heimdall database:
-
-```bash
-# Using Railway CLI
-railway run psql $DATABASE_URL
-
-# Then run:
-CREATE DATABASE heimdall;
-```
-
-Or use a PostgreSQL client like TablePlus, DBeaver, or pgAdmin.
-
----
-
-### 3. Deploy Redis
-
-#### Using Railway Dashboard:
-
-1. Click **"+ New"**
-2. Select **"Database"** → **"Add Redis"**
-3. Railway will automatically provision a Redis instance
-4. Connection details are available in the **Variables** tab
-
-#### Connection String Format:
-```
-redis://default:[password]@[host]:[port]
-```
-
----
-
-### 4. Deploy FusionAuth
-
-FusionAuth requires its own PostgreSQL database.
-
-#### Step 1: Create FusionAuth PostgreSQL Database
-
-1. In your project, click **"+ New"**
-2. Select **"Database"** → **"Add PostgreSQL"**
-3. Rename this service to "fusionauth-db" (for clarity)
-4. Note the connection details
-
-#### Step 2: Deploy FusionAuth Service
-
-1. Click **"+ New"** → **"Empty Service"**
-2. In the service settings:
-   - **Name**: `fusionauth`
-   - **Source**: Select **"Docker Image"**
-   - **Image**: `fusionauth/fusionauth-app:latest`
-
-#### Step 3: Configure FusionAuth Environment Variables
-
-Add the following environment variables to the FusionAuth service:
-
-```bash
-DATABASE_URL=jdbc:postgresql://[fusionauth-db-host]:[port]/railway
-DATABASE_ROOT_USERNAME=postgres
-DATABASE_ROOT_PASSWORD=[fusionauth-db-password]
-DATABASE_USERNAME=postgres
-DATABASE_PASSWORD=[fusionauth-db-password]
-FUSIONAUTH_APP_MEMORY=512M
-FUSIONAUTH_APP_RUNTIME_MODE=production
-FUSIONAUTH_APP_URL=${{RAILWAY_PUBLIC_DOMAIN}}
-SEARCH_TYPE=database
-```
-
-#### Step 4: Enable FusionAuth Public Networking
-
-1. Go to FusionAuth service → **Settings**
-2. Scroll to **Networking**
-3. Click **"Generate Domain"** to create a public URL
-4. Note this URL (you'll need it for Heimdall configuration)
-
-#### Step 5: Configure FusionAuth
-
-1. Access FusionAuth at the generated domain
-2. Complete the initial setup wizard
-3. Create an API key
-4. Create a tenant (or use the default)
-5. Create an application for Heimdall
-6. Note down:
+1. Sign up at [fusionauth.io/pricing](https://fusionauth.io/pricing)
+2. Create a new application
+3. Note your:
+   - API URL (e.g., `https://your-instance.fusionauth.io`)
    - API Key
    - Tenant ID
    - Application ID
 
+### Option B: Self-Hosted FusionAuth on Railway
+
+1. Create a new Railway service for FusionAuth
+2. Use Docker image: `fusionauth/fusionauth-app:latest`
+3. Add PostgreSQL database for FusionAuth
+4. Configure environment variables (see FusionAuth docs)
+5. Note the internal/public URL
+
 ---
 
-### 5. Deploy Heimdall
+## Step 2: Create Railway Project
 
-#### Step 1: Deploy from GitHub
+### Via Railway Dashboard
 
-1. Click **"+ New"** → **"GitHub Repo"**
-2. Connect your GitHub account and select your Heimdall repository
-3. Railway will auto-detect the Dockerfile
+1. Go to [railway.app/new](https://railway.app/new)
+2. Click **"Deploy from GitHub repo"**
+3. Select your Heimdall repository
+4. Railway will auto-detect the Dockerfile
 
-**Or using Railway CLI:**
+### Via Railway CLI
+
 ```bash
-railway up
+# Login to Railway
+railway login
+
+# Initialize project in your repo
+cd /path/to/heimdall
+railway init
+
+# Link to your project
+railway link
 ```
 
-#### Step 2: Configure Environment Variables
+---
 
-In the Heimdall service, go to **Variables** and add:
+## Step 3: Add Database Services
+
+### Add PostgreSQL
+
+1. In Railway dashboard, click **"+ New"**
+2. Select **"Database" → "PostgreSQL"**
+3. Railway will automatically create `DATABASE_URL` variable
+
+### Add Redis
+
+1. Click **"+ New"**
+2. Select **"Database" → "Redis"**
+3. Railway will automatically create `REDIS_URL` variable
+
+---
+
+## Step 4: Configure Environment Variables
+
+In Railway dashboard, go to your Heimdall service → **Variables** tab:
+
+### Required Variables
 
 ```bash
 # Server Configuration
-PORT=8080
 ENVIRONMENT=production
-ALLOWED_ORIGINS=https://your-frontend-domain.com,https://your-app.com
-RATE_LIMIT_PER_MIN=100
+PORT=${{PORT}}  # Railway provides this automatically
+ALLOWED_ORIGINS=https://your-frontend.com
 
-# Database Configuration
-DB_HOST=${{Postgres.PGHOST}}
-DB_PORT=${{Postgres.PGPORT}}
-DB_USER=${{Postgres.PGUSER}}
-DB_PASSWORD=${{Postgres.PGPASSWORD}}
-DB_NAME=heimdall
+# Database (Auto-configured by Railway PostgreSQL plugin)
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+# OR manually:
+# DB_HOST=${{Postgres.PGHOST}}
+# DB_PORT=${{Postgres.PGPORT}}
+# DB_USER=${{Postgres.PGUSER}}
+# DB_PASSWORD=${{Postgres.PGPASSWORD}}
+# DB_NAME=${{Postgres.PGDATABASE}}
 DB_SSLMODE=require
 DB_MAX_CONNS=25
 DB_MAX_IDLE=5
 
-# Redis Configuration
-REDIS_HOST=${{Redis.REDIS_HOST}}
-REDIS_PORT=${{Redis.REDIS_PORT}}
-REDIS_PASSWORD=${{Redis.REDIS_PASSWORD}}
+# Redis (Auto-configured by Railway Redis plugin)
+REDIS_URL=${{Redis.REDIS_URL}}
+# OR manually:
+# REDIS_HOST=${{Redis.REDISHOST}}
+# REDIS_PORT=${{Redis.REDISPORT}}
+# REDIS_PASSWORD=${{Redis.REDISPASSWORD}}
 REDIS_DB=0
 
-# JWT Configuration
+# JWT Configuration (keys are generated in Dockerfile)
+JWT_PRIVATE_KEY_PATH=/app/keys/private.pem
+JWT_PUBLIC_KEY_PATH=/app/keys/public.pem
 JWT_ACCESS_EXPIRY_MIN=15
 JWT_REFRESH_EXPIRY_DAYS=7
 JWT_ISSUER=heimdall
 
 # FusionAuth Configuration
-FUSIONAUTH_URL=${{fusionauth.RAILWAY_PUBLIC_DOMAIN}}
-FUSIONAUTH_API_KEY=[your-fusionauth-api-key]
-FUSIONAUTH_TENANT_ID=[your-tenant-id]
-FUSIONAUTH_APPLICATION_ID=[your-application-id]
-OAUTH_REDIRECT_URL=${{RAILWAY_PUBLIC_DOMAIN}}/v1/auth/oauth/callback
+FUSIONAUTH_URL=https://your-instance.fusionauth.io
+FUSIONAUTH_API_KEY=your-api-key-here
+FUSIONAUTH_TENANT_ID=your-tenant-id-here
+FUSIONAUTH_APPLICATION_ID=your-application-id-here
+OAUTH_REDIRECT_URL=https://your-heimdall-app.railway.app/v1/auth/oauth/callback
 
-# SMTP Configuration (optional - for emails)
-SMTP_HOST=[your-smtp-host]
+# SMTP (Optional - for email features)
+SMTP_HOST=smtp.sendgrid.net
 SMTP_PORT=587
-SMTP_USERNAME=[your-smtp-username]
-SMTP_PASSWORD=[your-smtp-password]
+SMTP_USERNAME=apikey
+SMTP_PASSWORD=your-sendgrid-api-key
 SMTP_FROM=noreply@yourdomain.com
 
-# OAuth Providers (optional)
-GOOGLE_CLIENT_ID=[your-google-client-id]
-GOOGLE_CLIENT_SECRET=[your-google-client-secret]
-GITHUB_CLIENT_ID=[your-github-client-id]
-GITHUB_CLIENT_SECRET=[your-github-client-secret]
+# Rate Limiting
+RATE_LIMIT_PER_MIN=100
 ```
 
-**Note**: Railway automatically provides service references like `${{Postgres.PGHOST}}`. These will be substituted with actual values at runtime.
-
-#### Step 3: Enable Public Networking
-
-1. Go to Heimdall service → **Settings**
-2. Scroll to **Networking**
-3. Click **"Generate Domain"** to create a public URL
-4. Your Heimdall API will be available at: `https://[generated-domain].railway.app`
-
-#### Step 4: Deploy
-
-Railway will automatically deploy on every push to your repository. You can also trigger manual deployments from the dashboard.
-
----
-
-## Environment Variables
-
-### Required Variables
-
-These are the minimum required environment variables for Heimdall to run:
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `DB_HOST` | PostgreSQL host | `postgres.railway.internal` |
-| `DB_PORT` | PostgreSQL port | `5432` |
-| `DB_USER` | Database user | `postgres` |
-| `DB_PASSWORD` | Database password | `secret123` |
-| `DB_NAME` | Database name | `heimdall` |
-| `REDIS_HOST` | Redis host | `redis.railway.internal` |
-| `REDIS_PORT` | Redis port | `6379` |
-| `FUSIONAUTH_URL` | FusionAuth URL | `https://fusionauth.railway.app` |
-| `FUSIONAUTH_API_KEY` | FusionAuth API key | `your-api-key` |
-| `FUSIONAUTH_TENANT_ID` | FusionAuth tenant ID | `tenant-uuid` |
-| `FUSIONAUTH_APPLICATION_ID` | FusionAuth app ID | `app-uuid` |
-
-### Optional Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | Server port | `8080` |
-| `ENVIRONMENT` | Environment mode | `production` |
-| `ALLOWED_ORIGINS` | CORS origins | `*` |
-| `RATE_LIMIT_PER_MIN` | Rate limiting | `100` |
-| `JWT_ACCESS_EXPIRY_MIN` | JWT access token expiry | `15` |
-| `JWT_REFRESH_EXPIRY_DAYS` | JWT refresh token expiry | `7` |
-
----
-
-## Post-Deployment Configuration
-
-### 1. Verify Deployment
-
-Check that all services are running:
+### Using Railway CLI
 
 ```bash
+# Set individual variables
+railway variables set ENVIRONMENT=production
+railway variables set FUSIONAUTH_URL=https://your-instance.fusionauth.io
+railway variables set FUSIONAUTH_API_KEY=your-api-key
+
+# Or set from .env file
+railway variables set --from-file .env.railway
+```
+
+---
+
+## Step 5: Deploy
+
+### Auto-Deploy (Recommended)
+
+Railway automatically deploys when you push to your GitHub repository.
+
+```bash
+git add .
+git commit -m "Configure for Railway deployment"
+git push origin main
+```
+
+### Manual Deploy via CLI
+
+```bash
+railway up
+```
+
+### Check Deployment Status
+
+```bash
+# View logs
+railway logs
+
+# Check service status
 railway status
+
+# Open in browser
+railway open
 ```
 
-### 2. Run Migrations
+---
 
-Migrations run automatically on startup via the entrypoint script. To manually trigger:
+## Step 6: Run Database Migrations
+
+After first deployment, run migrations:
+
+### Option 1: Via Railway CLI
 
 ```bash
-railway run ./migrate up
+# Connect to your Railway project
+railway run go run cmd/migrate/main.go up
 ```
 
-### 3. Seed Default Data (Optional)
+### Option 2: Add Migration Service
+
+Create a one-time job service:
+1. Add new service in Railway
+2. Use same repo
+3. Override start command: `go run cmd/migrate/main.go up`
+4. Run once, then delete
+
+### Option 3: Manual Connection
 
 ```bash
-railway run ./migrate seed
+# Get database connection string
+railway variables get DATABASE_URL
+
+# Run migrations locally against Railway DB
+DATABASE_URL="postgres://..." go run cmd/migrate/main.go up
 ```
 
-### 4. Test the API
+---
+
+## Step 7: Verify Deployment
+
+### Check Health Endpoint
 
 ```bash
-curl https://your-heimdall-domain.railway.app/health
+curl https://your-app.railway.app/health
 ```
 
 Expected response:
 ```json
 {
+  "service": "heimdall",
   "status": "healthy",
-  "timestamp": "2025-10-20T12:00:00Z"
+  "version": "1.0.0"
 }
 ```
 
-### 5. Configure FusionAuth Redirect URLs
+### Test OpenAPI Documentation
 
-In FusionAuth dashboard:
-1. Go to **Applications** → **Your Application**
-2. Under **OAuth**, add:
-   - Authorized redirect URLs: `https://your-heimdall-domain.railway.app/v1/auth/oauth/callback`
-   - Authorized request origin URLs: `https://your-frontend-domain.com`
+Visit: `https://your-app.railway.app/swagger/`
+
+### Test Registration
+
+```bash
+curl -X POST https://your-app.railway.app/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com",
+    "password": "TestPassword123!",
+    "firstName": "Test",
+    "lastName": "User"
+  }'
+```
 
 ---
 
-## Monitoring and Logs
+## Step 8: Set Up Custom Domain (Optional)
+
+1. In Railway dashboard, go to Settings
+2. Click **"Generate Domain"** for a free Railway domain
+3. Or add your **Custom Domain**:
+   - Add domain in settings
+   - Update DNS records as instructed
+   - Railway provides automatic SSL
+
+---
+
+## Monitoring & Maintenance
 
 ### View Logs
 
-**Using Dashboard:**
-1. Go to your service
-2. Click on **"Logs"** tab
-
-**Using CLI:**
 ```bash
-railway logs
+# Real-time logs
+railway logs --follow
+
+# Filter by service
+railway logs --service heimdall-api
 ```
 
 ### Metrics
 
-Railway provides built-in metrics:
+Railway dashboard provides:
 - CPU usage
 - Memory usage
 - Network traffic
-- Request volume
+- Response times
 
-Access these in the service's **Metrics** tab.
+### Scaling
 
-### Health Checks
+Railway automatically scales based on load. Configure in dashboard:
+- **Settings → Resources**
+- Adjust CPU/Memory limits
 
-Heimdall includes a built-in health endpoint:
-```
-GET /health
-```
+### Backups
 
-Railway automatically monitors this endpoint.
+PostgreSQL and Redis plugins include automatic backups.
+Configure in plugin settings.
 
 ---
 
 ## Troubleshooting
 
-### Common Issues
+### Build Fails
 
-#### 1. Database Connection Failed
-
-**Symptom**: `Failed to connect to database`
+**Issue**: Docker build fails
 
 **Solutions**:
-- Verify `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` are correct
-- Ensure `DB_SSLMODE=require` for Railway PostgreSQL
-- Check PostgreSQL service is running
+1. Check Dockerfile syntax
+2. Verify Go version compatibility
+3. Check build logs in Railway dashboard
 
-#### 2. FusionAuth Connection Failed
+### Connection Issues
 
-**Symptom**: `FusionAuth API error`
-
-**Solutions**:
-- Verify `FUSIONAUTH_URL` is accessible
-- Check `FUSIONAUTH_API_KEY` is valid
-- Ensure FusionAuth service is fully started (takes ~60s)
-
-#### 3. Migrations Failed
-
-**Symptom**: `Migration failed: connection refused`
+**Issue**: Can't connect to PostgreSQL/Redis
 
 **Solutions**:
-- Wait for database to be fully ready
-- Check database credentials
-- Manually run migrations: `railway run ./migrate up`
+1. Verify plugin is added and healthy
+2. Check environment variable references
+3. Ensure services are in same project
+4. Use internal connection strings (provided automatically)
 
-#### 4. Out of Memory
+### FusionAuth Connection Failed
 
-**Symptom**: Service crashes with OOM error
+**Issue**: "connection refused" to FusionAuth
 
 **Solutions**:
-- Upgrade Railway plan for more memory
-- Reduce `DB_MAX_CONNS` and `DB_MAX_IDLE`
-- Optimize FusionAuth memory: `FUSIONAUTH_APP_MEMORY=512M`
+1. Verify `FUSIONAUTH_URL` is correct
+2. Check FusionAuth instance is running
+3. Verify API key is valid
+4. Check network access/firewall rules
 
-### Debug Mode
+### Health Check Failures
 
-Enable detailed logging:
+**Issue**: Railway shows service as unhealthy
 
-```bash
-ENVIRONMENT=development
-LOG_LEVEL=debug
-```
+**Solutions**:
+1. Check `/health` endpoint responds
+2. Increase `healthcheckTimeout` in railway.toml
+3. Check application logs for startup errors
+4. Verify all required env vars are set
+
+### High Memory Usage
+
+**Issue**: Service using too much memory
+
+**Solutions**:
+1. Reduce `DB_MAX_CONNS` 
+2. Optimize Redis usage
+3. Check for memory leaks in logs
+4. Increase memory allocation in Railway settings
 
 ---
 
@@ -431,84 +372,94 @@ LOG_LEVEL=debug
 
 Railway pricing (as of 2025):
 
-### Free Tier (Hobby)
-- $5 credit per month
-- Suitable for development/testing
-- All services sleep after inactivity
+- **Hobby Plan**: $5/month
+  - Includes $5 credit
+  - Pay per usage after credit
 
-### Paid Plans (Developer/Team)
-- **Starter**: $20/month (included credits)
-- **Developer**: $20/month + usage
-- **Team**: $99/month + usage
+- **Pro Plan**: $20/month
+  - Includes $20 credit
+  - Priority support
 
-### Estimated Monthly Cost
-
-For a production deployment with:
-- 1 Heimdall instance
-- 1 PostgreSQL database
-- 1 Redis instance
-- 1 FusionAuth instance
-
-**Estimated cost**: $20-40/month (depending on traffic)
-
-**Resource usage**:
-- Heimdall: ~100MB RAM, minimal CPU
-- PostgreSQL: ~200MB RAM
-- Redis: ~50MB RAM
-- FusionAuth: ~512MB RAM
-
----
-
-## Alternative: Docker Compose on Railway
-
-If you prefer deploying with docker-compose:
-
-1. Use the provided `docker-compose.yml`
-2. Railway doesn't directly support docker-compose, but you can:
-   - Deploy services individually
-   - Use Railway's internal networking to connect services
-   - Reference services using `${{ServiceName.VARIABLE}}`
+**Estimated Monthly Costs**:
+- Heimdall API: ~$3-5 (small app)
+- PostgreSQL: ~$2-3
+- Redis: ~$1-2
+- **Total**: ~$6-10/month (within Hobby plan)
 
 ---
 
 ## Production Checklist
 
-Before going live, ensure:
+Before going to production:
 
-- [ ] All environment variables are set
-- [ ] SSL/TLS is enabled (Railway does this by default)
-- [ ] Database backups are configured
-- [ ] FusionAuth is properly configured with redirect URLs
-- [ ] Rate limiting is configured appropriately
-- [ ] Monitoring and alerts are set up
-- [ ] CORS origins are restricted to your domains
-- [ ] SMTP is configured for email notifications
-- [ ] OAuth providers are configured (if needed)
-- [ ] API keys are secure and not exposed
-- [ ] Health checks are passing
+- [ ] FusionAuth configured and tested
+- [ ] PostgreSQL plugin added and migrated
+- [ ] Redis plugin added and configured
+- [ ] All environment variables set
+- [ ] Health checks passing
+- [ ] Custom domain configured (if needed)
+- [ ] SSL/TLS enabled (automatic with custom domain)
+- [ ] CORS configured for your frontend
+- [ ] Rate limiting configured
+- [ ] Monitoring set up
+- [ ] Backup strategy confirmed
+- [ ] Test authentication flow end-to-end
+- [ ] Load testing performed
+- [ ] Error tracking configured (optional: Sentry)
 
 ---
 
-## Support
+## Useful Commands
 
-For Railway-specific issues:
-- [Railway Documentation](https://docs.railway.app/)
-- [Railway Discord](https://discord.gg/railway)
-- [Railway Support](https://railway.app/help)
+```bash
+# Link to existing project
+railway link
 
-For Heimdall issues:
-- [GitHub Issues](https://github.com/techsavvyash/heimdall/issues)
-- [Documentation](./docs/)
+# View service info
+railway status
+
+# Open Railway dashboard
+railway open
+
+# Connect to PostgreSQL
+railway connect postgres
+
+# Connect to Redis
+railway connect redis
+
+# View environment variables
+railway variables
+
+# Restart service
+railway restart
+
+# Delete service (careful!)
+railway down
+```
+
+---
+
+## Support & Resources
+
+- **Railway Docs**: [docs.railway.app](https://docs.railway.app)
+- **Railway Discord**: [discord.gg/railway](https://discord.gg/railway)
+- **FusionAuth Docs**: [fusionauth.io/docs](https://fusionauth.io/docs)
+- **Heimdall Issues**: [github.com/techsavvyash/heimdall/issues](https://github.com/techsavvyash/heimdall/issues)
 
 ---
 
 ## Next Steps
 
-1. ✅ Deploy on Railway using this guide
-2. 📚 Review [API Documentation](./docs/API.md)
-3. 🔌 Integrate with your application using [SDKs](./docs/SDK.md)
-4. 🎯 Check out [Examples](./examples/)
+After deployment:
+
+1. **Set up monitoring**: Add Sentry or similar
+2. **Configure alerts**: Set up uptime monitoring
+3. **Performance tuning**: Optimize based on metrics
+4. **Security hardening**: Review security best practices
+5. **Documentation**: Document your specific configuration
+6. **CI/CD**: Set up automated testing before deploy
 
 ---
 
-**Happy Deploying!** 🚀
+**Happy Deploying! 🚀**
+

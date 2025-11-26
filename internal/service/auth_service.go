@@ -40,36 +40,36 @@ func NewAuthService(
 
 // RegisterRequest represents registration data
 type RegisterRequest struct {
-	Email     string `json:"email" validate:"required,email"`
-	Password  string `json:"password" validate:"required,min=8"`
-	FirstName string `json:"firstName" validate:"required"`
-	LastName  string `json:"lastName" validate:"required"`
-	TenantID  string `json:"tenantId,omitempty"`
+	Email     string `json:"email" validate:"required,email" example:"user@example.com"`
+	Password  string `json:"password" validate:"required,min=8" example:"SecurePassword123!"`
+	FirstName string `json:"firstName" validate:"required" example:"John"`
+	LastName  string `json:"lastName" validate:"required" example:"Doe"`
+	TenantID  string `json:"tenantId,omitempty" example:"550e8400-e29b-41d4-a716-446655440000"`
 }
 
 // LoginRequest represents login credentials
 type LoginRequest struct {
-	Email      string `json:"email" validate:"required,email"`
-	Password   string `json:"password" validate:"required"`
-	RememberMe bool   `json:"rememberMe"`
+	Email      string `json:"email" validate:"required,email" example:"user@example.com"`
+	Password   string `json:"password" validate:"required" example:"SecurePassword123!"`
+	RememberMe bool   `json:"rememberMe" example:"false"`
 }
 
 // AuthResponse represents authentication response
 type AuthResponse struct {
-	AccessToken  string      `json:"accessToken"`
-	RefreshToken string      `json:"refreshToken"`
-	TokenType    string      `json:"tokenType"`
-	ExpiresIn    int64       `json:"expiresIn"`
-	User         *UserInfo   `json:"user"`
+	AccessToken  string    `json:"accessToken" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
+	RefreshToken string    `json:"refreshToken" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
+	TokenType    string    `json:"tokenType" example:"Bearer"`
+	ExpiresIn    int64     `json:"expiresIn" example:"900"`
+	User         *UserInfo `json:"user"`
 }
 
 // UserInfo represents basic user information
 type UserInfo struct {
-	ID        string `json:"id"`
-	Email     string `json:"email"`
-	FirstName string `json:"firstName,omitempty"`
-	LastName  string `json:"lastName,omitempty"`
-	TenantID  string `json:"tenantId"`
+	ID        string `json:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Email     string `json:"email" example:"user@example.com"`
+	FirstName string `json:"firstName,omitempty" example:"John"`
+	LastName  string `json:"lastName,omitempty" example:"Doe"`
+	TenantID  string `json:"tenantId" example:"550e8400-e29b-41d4-a716-446655440000"`
 }
 
 // Register creates a new user account

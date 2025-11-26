@@ -28,21 +28,21 @@ func NewUserService(db *gorm.DB, fusionAuth *auth.FusionAuthClient) *UserService
 
 // UserProfile represents a user profile
 type UserProfile struct {
-	ID         string                 `json:"id"`
-	Email      string                 `json:"email"`
-	FirstName  string                 `json:"firstName,omitempty"`
-	LastName   string                 `json:"lastName,omitempty"`
-	TenantID   string                 `json:"tenantId"`
+	ID         string                 `json:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Email      string                 `json:"email" example:"user@example.com"`
+	FirstName  string                 `json:"firstName,omitempty" example:"John"`
+	LastName   string                 `json:"lastName,omitempty" example:"Doe"`
+	TenantID   string                 `json:"tenantId" example:"550e8400-e29b-41d4-a716-446655440000"`
 	Metadata   map[string]interface{} `json:"metadata,omitempty"`
-	Roles      []string               `json:"roles,omitempty"`
-	LoginCount int                    `json:"loginCount"`
-	CreatedAt  string                 `json:"createdAt"`
+	Roles      []string               `json:"roles,omitempty" example:"[\"user\",\"admin\"]"`
+	LoginCount int                    `json:"loginCount" example:"42"`
+	CreatedAt  string                 `json:"createdAt" example:"2024-01-15T10:30:00Z"`
 }
 
 // UpdateProfileRequest represents a profile update request
 type UpdateProfileRequest struct {
-	FirstName *string                `json:"firstName,omitempty"`
-	LastName  *string                `json:"lastName,omitempty"`
+	FirstName *string                `json:"firstName,omitempty" example:"Jane"`
+	LastName  *string                `json:"lastName,omitempty" example:"Smith"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 

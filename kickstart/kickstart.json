@@ -1,0 +1,55 @@
+{
+  "variables": {
+    "apiKey": "test-api-key-12345678901234567890123456789012",
+    "defaultTenantId": "30663132-6464-6665-3032-326466613939",
+    "heimdallApplicationId": "85a03867-dccf-4882-adde-1a79aeec50df"
+  },
+  "apiKeys": [
+    {
+      "key": "#{apiKey}",
+      "description": "Heimdall API Key"
+    }
+  ],
+  "requests": [
+    {
+      "method": "PATCH",
+      "url": "/api/tenant/#{defaultTenantId}",
+      "body": {
+        "tenant": {
+          "name": "Default"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/application/#{heimdallApplicationId}",
+      "body": {
+        "application": {
+          "name": "Heimdall",
+          "oauthConfiguration": {
+            "authorizedRedirectURLs": [
+              "http://localhost:8080/v1/auth/oauth/callback"
+            ],
+            "logoutURL": "http://localhost:8080/v1/auth/logout",
+            "enabledGrants": [
+              "authorization_code",
+              "refresh_token",
+              "password"
+            ],
+            "generateRefreshTokens": true,
+            "requireRegistration": true
+          },
+          "registrationConfiguration": {
+            "enabled": true,
+            "type": "basic"
+          },
+          "loginConfiguration": {
+            "allowTokenRefresh": true,
+            "generateRefreshTokens": true,
+            "requireAuthentication": true
+          }
+        }
+      }
+    }
+  ]
+}

@@ -73,11 +73,13 @@ services:
       FUSIONAUTH_APP_MEMORY: 512M
       FUSIONAUTH_APP_RUNTIME_MODE: development
       FUSIONAUTH_APP_URL: http://localhost:9011
+      FUSIONAUTH_APP_KICKSTART_FILE: /usr/local/fusionauth/kickstart/kickstart.json
       SEARCH_TYPE: database
     ports:
       - "9011:9011"
     volumes:
       - fusionauth_config:/usr/local/fusionauth/config
+      - ./kickstart:/usr/local/fusionauth/kickstart
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9011/api/status"]
       interval: 30s
