@@ -17,6 +17,8 @@ type Config struct {
 	JWT      JWTConfig
 	Auth     AuthConfig
 	SMTP     SMTPConfig
+	OPA      OPAConfig
+	MinIO    MinIOConfig
 }
 
 // ServerConfig holds server-related configuration
@@ -74,6 +76,23 @@ type SMTPConfig struct {
 	From     string
 }
 
+// OPAConfig holds Open Policy Agent configuration
+type OPAConfig struct {
+	URL         string
+	PolicyPath  string
+	Timeout     time.Duration
+	EnableCache bool
+}
+
+// MinIOConfig holds MinIO configuration
+type MinIOConfig struct {
+	Endpoint  string
+	AccessKey string
+	SecretKey string
+	Bucket    string
+	UseSSL    bool
+}
+
 // Load loads configuration from environment variables
 func Load() (*Config, error) {
 	// Load .env file if it exists (ignore error if not found)
@@ -122,6 +141,19 @@ func Load() (*Config, error) {
 			Username: getEnv("SMTP_USERNAME", ""),
 			Password: getEnv("SMTP_PASSWORD", ""),
 			From:     getEnv("SMTP_FROM", "noreply@heimdall.local"),
+		},
+		OPA: OPAConfig{
+			URL:         getEnv("OPA_URL", "http://localhost:8181"),
+			PolicyPath:  getEnv("OPA_POLICY_PATH", "heimdall/authz"),
+			Timeout:     time.Duration(getEnvAsInt("OPA_TIMEOUT_SECONDS", 5)) * time.Second,
+			EnableCache: getEnv("OPA_ENABLE_CACHE", "true") == "true",
+		},
+		MinIO: MinIOConfig{
+			Endpoint:  getEnv("MINIO_ENDPOINT", "localhost:9000"),
+			AccessKey: getEnv("MINIO_ACCESS_KEY", "minioadmin"),
+			SecretKey: getEnv("MINIO_SECRET_KEY", "minioadmin"),
+			Bucket:    getEnv("MINIO_BUCKET", "bundles"),
+			UseSSL:    getEnv("MINIO_USE_SSL", "false") == "true",
 		},
 	}
 

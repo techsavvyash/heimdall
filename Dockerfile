@@ -18,14 +18,15 @@ RUN mkdir -p keys && \
     openssl genrsa -out keys/private.pem 2048 && \
     openssl rsa -in keys/private.pem -pubout -out keys/public.pem
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server ./cmd/server
+# Build the application and migration tool
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server ./cmd/server && \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o migrate ./cmd/migrate
 
 # Runtime stage
 FROM alpine:latest
 
 # Install runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata wget bash
 
 # Create non-root user
 RUN addgroup -g 1000 heimdall && \
@@ -33,12 +34,17 @@ RUN addgroup -g 1000 heimdall && \
 
 WORKDIR /app
 
-# Copy binary and keys from builder
+# Copy binaries and keys from builder
 COPY --from=builder /build/server /app/
+COPY --from=builder /build/migrate /app/
 COPY --from=builder /build/keys /app/keys
 
 # Copy .env.example as template
 COPY .env.example /app/.env.example
+
+# Copy entrypoint script
+COPY docker-entrypoint.sh /app/
+RUN chmod +x /app/docker-entrypoint.sh
 
 # Set ownership
 RUN chown -R heimdall:heimdall /app
@@ -53,5 +59,6 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
-# Run the application
+# Run the entrypoint script
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["/app/server"]

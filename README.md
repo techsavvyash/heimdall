@@ -18,6 +18,7 @@ Heimdall is a high-performance authentication proxy built with Go that wraps Fus
 - [Documentation](#documentation)
 - [Architecture](#architecture)
 - [SDKs](#sdks)
+- [Examples](#examples)
 - [Deployment](#deployment)
 - [Contributing](#contributing)
 - [License](#license)
@@ -296,7 +297,70 @@ For complete SDK documentation, see [SDK.md](./docs/SDK.md).
 
 ---
 
+## Examples
+
+The `examples/` directory contains sample applications demonstrating Heimdall integration:
+
+### ElysiaJS Backend (Bun)
+
+Modern TypeScript backend built with ElysiaJS and Bun runtime, showcasing:
+- Authentication endpoints using Heimdall SDK
+- Protected routes with bearer token authentication
+- CORS configuration for frontend integration
+- Session management
+- Complete CRUD operations
+
+**Location**: `examples/elysia-app/`
+
+**Quick Start**:
+```bash
+cd examples/elysia-app
+bun install
+bun run dev
+# Open http://localhost:5000 in your browser
+```
+
+**Features**:
+- ⚡ Ultra-fast Bun runtime
+- 🎯 Full TypeScript support
+- 🔐 Complete auth flow (register, login, logout)
+- 🛡️ Protected API endpoints
+- 🌐 Built-in demo frontend (no separate server needed!)
+- 📦 Everything runs on one port (5000)
+
+[View ElysiaJS Example README](./examples/elysia-app/README.md) | [Quick Start Guide](./examples/elysia-app/QUICKSTART.md)
+
+### Express.js Sample App
+
+Traditional Node.js application using Express demonstrating basic Heimdall SDK usage.
+
+**Location**: `examples/sample-app/`
+
+**Quick Start**:
+```bash
+cd examples/sample-app
+npm install
+npm start
+```
+
+---
+
 ## Deployment
+
+### Railway (Recommended for Quick Deployment)
+
+Deploy Heimdall to Railway with just a few clicks:
+
+```bash
+# Install Railway CLI
+npm install -g @railway/cli
+
+# Login and deploy
+railway login
+railway up
+```
+
+For detailed Railway deployment instructions, see **[RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md)**.
 
 ### Docker
 
@@ -320,6 +384,7 @@ kubectl apply -f k8s/
 
 ### Cloud Platforms
 
+- **Railway**: One-click deployment with auto-scaling (see [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md))
 - **AWS EKS**: Full support with RDS and ElastiCache
 - **Google Cloud GKE**: Support with Cloud SQL and Memorystore
 - **Azure AKS**: Support with Azure Database and Azure Cache

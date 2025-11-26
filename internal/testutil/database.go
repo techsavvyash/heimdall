@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -84,15 +85,16 @@ func TruncateTables(t *testing.T, db *gorm.DB) {
 func CreateTestTenant(t *testing.T, db *gorm.DB, name, slug string) *models.Tenant {
 	t.Helper()
 
+	settingsJSON, _ := json.Marshal(map[string]interface{}{
+		"test": true,
+	})
 	tenant := &models.Tenant{
 		Name:     name,
 		Slug:     slug,
 		Status:   "active",
 		MaxUsers: 1000,
 		MaxRoles: 50,
-		Settings: map[string]interface{}{
-			"test": true,
-		},
+		Settings: settingsJSON,
 	}
 
 	if err := db.Create(tenant).Error; err != nil {
@@ -106,13 +108,14 @@ func CreateTestTenant(t *testing.T, db *gorm.DB, name, slug string) *models.Tena
 func CreateTestUser(t *testing.T, db *gorm.DB, tenant *models.Tenant, email string) *models.User {
 	t.Helper()
 
+	metadataJSON, _ := json.Marshal(map[string]interface{}{
+		"firstName": "Test",
+		"lastName":  "User",
+	})
 	user := &models.User{
 		TenantID: tenant.ID,
 		Email:    email,
-		Metadata: map[string]interface{}{
-			"firstName": "Test",
-			"lastName":  "User",
-		},
+		Metadata: metadataJSON,
 	}
 
 	if err := db.Create(user).Error; err != nil {

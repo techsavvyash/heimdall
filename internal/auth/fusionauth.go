@@ -132,13 +132,14 @@ func (c *FusionAuthClient) GetUser(userID string) (*FusionAuthUser, error) {
 	return result.User, nil
 }
 
-// UpdateUser updates a user's information
+// UpdateUser updates a user's information using PATCH for partial updates
 func (c *FusionAuthClient) UpdateUser(userID string, updates map[string]interface{}) (*FusionAuthUser, error) {
 	payload := map[string]interface{}{
 		"user": updates,
 	}
 
-	resp, err := c.doRequest("PUT", fmt.Sprintf("/api/user/%s", userID), payload)
+	// Use PATCH for partial updates (PUT requires email/username)
+	resp, err := c.doRequest("PATCH", fmt.Sprintf("/api/user/%s", userID), payload)
 	if err != nil {
 		return nil, err
 	}

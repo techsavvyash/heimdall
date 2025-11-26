@@ -1,0 +1,237 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database for Heimdall
+  postgres:
+    image: postgres:14-alpine
+    container_name: heimdall-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-heimdall}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-heimdall_password}
+      POSTGRES_DB: ${DB_NAME:-heimdall}
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-heimdall}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - heimdall-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: heimdall-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass $REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - heimdall-network
+
+  # FusionAuth Database
+  fusionauth-db:
+    image: postgres:14-alpine
+    container_name: fusionauth-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${FUSIONAUTH_DB_USER:-fusionauth}
+      POSTGRES_PASSWORD: ${FUSIONAUTH_DB_PASSWORD:-fusionauth_password}
+      POSTGRES_DB: ${FUSIONAUTH_DB_NAME:-fusionauth}
+    volumes:
+      - fusionauth_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${FUSIONAUTH_DB_USER:-fusionauth}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - heimdall-network
+
+  # FusionAuth
+  fusionauth:
+    image: fusionauth/fusionauth-app:latest
+    container_name: fusionauth-app
+    restart: unless-stopped
+    depends_on:
+      fusionauth-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: jdbc:postgresql://fusionauth-db:5432/${FUSIONAUTH_DB_NAME:-fusionauth}
+      DATABASE_ROOT_USERNAME: ${FUSIONAUTH_DB_USER:-fusionauth}
+      DATABASE_ROOT_PASSWORD: ${FUSIONAUTH_DB_PASSWORD:-fusionauth_password}
+      DATABASE_USERNAME: ${FUSIONAUTH_DB_USER:-fusionauth}
+      DATABASE_PASSWORD: ${FUSIONAUTH_DB_PASSWORD:-fusionauth_password}
+      FUSIONAUTH_APP_MEMORY: ${FUSIONAUTH_MEMORY:-512M}
+      FUSIONAUTH_APP_RUNTIME_MODE: ${ENVIRONMENT:-production}
+      FUSIONAUTH_APP_URL: ${FUSIONAUTH_URL:-http://localhost:9011}
+      SEARCH_TYPE: database
+    ports:
+      - "${FUSIONAUTH_PORT:-9011}:9011"
+    volumes:
+      - fusionauth_config:/usr/local/fusionauth/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9011/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - heimdall-network
+
+  # MinIO - Object Storage for OPA Bundles
+  minio:
+    image: minio/minio:latest
+    container_name: heimdall-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - heimdall-network
+
+  # OPA - Open Policy Agent for Authorization
+  opa:
+    image: openpolicyagent/opa:latest
+    container_name: heimdall-opa
+    restart: unless-stopped
+    depends_on:
+      minio:
+        condition: service_healthy
+    command:
+      - "run"
+      - "--server"
+      - "--addr=0.0.0.0:8181"
+      - "--log-level=info"
+      - "--log-format=json"
+      - "--set=decision_logs.console=true"
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      AWS_REGION: us-east-1
+    ports:
+      - "${OPA_PORT:-8181}:8181"
+    networks:
+      - heimdall-network
+
+  # Heimdall API Gateway
+  heimdall:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: heimdall-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      fusionauth:
+        condition: service_healthy
+      opa:
+        condition: service_started
+      minio:
+        condition: service_healthy
+    environment:
+      # Server Configuration
+      PORT: ${PORT:-8080}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8080}
+      RATE_LIMIT_PER_MIN: ${RATE_LIMIT_PER_MIN:-100}
+
+      # Database Configuration
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-heimdall}
+      DB_PASSWORD: ${DB_PASSWORD:-heimdall_password}
+      DB_NAME: ${DB_NAME:-heimdall}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+      DB_MAX_CONNS: ${DB_MAX_CONNS:-25}
+      DB_MAX_IDLE: ${DB_MAX_IDLE:-5}
+
+      # Redis Configuration
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
+
+      # OPA Configuration
+      OPA_URL: http://opa:8181
+      OPA_POLICY_PATH: ${OPA_POLICY_PATH:-heimdall/authz}
+      OPA_TIMEOUT_SECONDS: ${OPA_TIMEOUT_SECONDS:-5}
+
+      # MinIO Configuration
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-bundles}
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+
+      # JWT Configuration
+      JWT_PRIVATE_KEY_PATH: ${JWT_PRIVATE_KEY_PATH:-./keys/private.pem}
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-./keys/public.pem}
+      JWT_ACCESS_EXPIRY_MIN: ${JWT_ACCESS_EXPIRY_MIN:-15}
+      JWT_REFRESH_EXPIRY_DAYS: ${JWT_REFRESH_EXPIRY_DAYS:-7}
+      JWT_ISSUER: ${JWT_ISSUER:-heimdall}
+
+      # FusionAuth Configuration
+      FUSIONAUTH_URL: http://fusionauth:9011
+      FUSIONAUTH_API_KEY: ${FUSIONAUTH_API_KEY}
+      FUSIONAUTH_TENANT_ID: ${FUSIONAUTH_TENANT_ID}
+      FUSIONAUTH_APPLICATION_ID: ${FUSIONAUTH_APPLICATION_ID}
+      OAUTH_REDIRECT_URL: ${OAUTH_REDIRECT_URL:-http://localhost:8080/v1/auth/oauth/callback}
+
+      # SMTP Configuration
+      SMTP_HOST: ${SMTP_HOST:-localhost}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@heimdall.local}
+
+      # OAuth Providers
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+    ports:
+      - "${PORT:-8080}:8080"
+    networks:
+      - heimdall-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  fusionauth_db_data:
+    driver: local
+  fusionauth_config:
+    driver: local
+  minio_data:
+    driver: local
+
+networks:
+  heimdall-network:
+    driver: bridge
