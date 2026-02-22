@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Getting Started — Heimdall Docs</title>
+  <link rel="stylesheet" href="https://unpkg.com/@knadh/oat/oat.min.css" />
+  <link rel="stylesheet" href="_shared.css" />
+</head>
+<body data-sidebar-layout>
+
+  <nav data-topnav>
+    <button data-sidebar-toggle aria-label="Toggle menu" class="outline">☰</button>
+    <a href="index.html" class="brand">⚡ Heimdall</a>
+    <div class="nav-spacer"></div>
+    <a href="https://github.com/techsavvyash/heimdall" class="button small" target="_blank" rel="noopener">GitHub</a>
+  </nav>
+
+  <aside data-sidebar>
+    <header style="padding: var(--space-4) var(--space-2) var(--space-2);">
+      <span style="font-weight: 700; font-size: 0.95rem;">⚡ Heimdall Docs</span>
+    </header>
+    <nav>
+      <div class="sidebar-section-label">Start Here</div>
+      <ul>
+        <li><a href="index.html">Introduction</a></li>
+        <li><a href="getting-started.html" aria-current="page">Getting Started</a></li>
+      </ul>
+      <div class="divider"></div>
+      <div class="sidebar-section-label">Guides</div>
+      <ul>
+        <li>
+          <details>
+            <summary>Features</summary>
+            <ul>
+              <li><a href="features.html#authentication">Authentication</a></li>
+              <li><a href="features.html#multi-tenancy">Multi-Tenancy</a></li>
+              <li><a href="features.html#rbac">RBAC</a></li>
+              <li><a href="features.html#audit-logging">Audit Logging</a></li>
+              <li><a href="features.html#tokens">Token Management</a></li>
+            </ul>
+          </details>
+        </li>
+        <li><a href="authentication.html">Authentication Guide</a></li>
+        <li><a href="authorization.html">Authorization (OPA)</a></li>
+      </ul>
+      <div class="divider"></div>
+      <div class="sidebar-section-label">Reference</div>
+      <ul>
+        <li><a href="api.html">API Reference</a></li>
+        <li>
+          <details>
+            <summary>SDK</summary>
+            <ul>
+              <li><a href="sdk.html#js">JavaScript / TypeScript</a></li>
+              <li><a href="sdk.html#go">Go (Planned)</a></li>
+            </ul>
+          </details>
+        </li>
+        <li>
+          <details>
+            <summary>Deployment</summary>
+            <ul>
+              <li><a href="deployment.html#docker">Docker Compose</a></li>
+              <li><a href="deployment.html#railway">Railway</a></li>
+              <li><a href="deployment.html#kubernetes">Kubernetes</a></li>
+            </ul>
+          </details>
+        </li>
+      </ul>
+    </nav>
+    <footer>
+      <small style="color: var(--muted-foreground); font-size: 0.75rem;">v1.0.0 · MIT License</small>
+    </footer>
+  </aside>
+
+  <main>
+    <div class="page-content">
+      <div class="page-header">
+        <p class="eyebrow">Getting Started</p>
+        <h1>Quick Start Guide</h1>
+        <p>Get Heimdall running locally in under 10 minutes. Follow these steps to spin up the full stack and make your first authenticated API call.</p>
+      </div>
+
+      <!-- Prerequisites -->
+      <div class="doc-section" id="prerequisites">
+        <h2>Prerequisites</h2>
+        <p>Before you begin, make sure you have the following installed:</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Tool</th>
+              <th>Version</th>
+              <th>Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Go</strong></td>
+              <td>1.21+</td>
+              <td>Run the Heimdall server</td>
+            </tr>
+            <tr>
+              <td><strong>Docker</strong></td>
+              <td>24+</td>
+              <td>Run PostgreSQL, Redis, FusionAuth, OPA</td>
+            </tr>
+            <tr>
+              <td><strong>Docker Compose</strong></td>
+              <td>v2+</td>
+              <td>Orchestrate local services</td>
+            </tr>
+            <tr>
+              <td><strong>Make</strong></td>
+              <td>Any</td>
+              <td>Run Makefile targets</td>
+            </tr>
+            <tr>
+              <td><strong>Node.js</strong> (optional)</td>
+              <td>18+</td>
+              <td>For using the JS/TS SDK</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div role="alert" data-variant="warning" style="margin-top: var(--space-4);">
+          <strong>FusionAuth License</strong> — Heimdall requires a running FusionAuth instance. The Community Edition is free. Docker Compose handles this automatically.
+        </div>
+      </div>
+
+      <!-- Installation -->
+      <div class="doc-section" id="installation">
+        <h2>Installation</h2>
+
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h3>Clone the repository</h3>
+            <div class="code-header"><span>bash</span></div>
+            <pre class="code-block"><code>git clone https://github.com/techsavvyash/heimdall.git
+cd heimdall</code></pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h3>Start all services with Docker Compose</h3>
+            <p>This starts PostgreSQL, Redis, FusionAuth, MinIO, and OPA.</p>
+            <div class="code-header"><span>bash</span></div>
+            <pre class="code-block"><code>docker compose up -d</code></pre>
+            <p>Verify all containers are healthy:</p>
+            <div class="code-header"><span>bash</span></div>
+            <pre class="code-block"><code>docker ps --format "table {{.Names}}\t{{.Status}}"</code></pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h3>Generate JWT signing keys</h3>
+            <div class="code-header"><span>bash</span></div>
+            <pre class="code-block"><code>make keys</code></pre>
+            <p>This generates RSA key pairs in the <code>keys/</code> directory used to sign and verify JWT tokens.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <h3>Configure environment variables</h3>
+            <p>Copy the example env file and update values:</p>
+            <div class="code-header"><span>bash</span></div>
+            <pre class="code-block"><code>cp .env.example .env</code></pre>
+            <p>Key variables to configure:</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Variable</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>PORT</code></td>
+                  <td><code>8080</code></td>
+                  <td>Server listen port</td>
+                </tr>
+                <tr>
+                  <td><code>DB_HOST</code></td>
+                  <td><code>localhost</code></td>
+                  <td>PostgreSQL host</td>
+                </tr>
+                <tr>
+                  <td><code>DB_PORT</code></td>
+                  <td><code>5433</code></td>
+                  <td>PostgreSQL port</td>
+                </tr>
+                <tr>
+                  <td><code>REDIS_HOST</code></td>
+                  <td><code>localhost</code></td>
+                  <td>Redis host</td>
+                </tr>
+                <tr>
+                  <td><code>FUSIONAUTH_URL</code></td>
+                  <td><code>http://localhost:9011</code></td>
+                  <td>FusionAuth base URL</td>
+                </tr>
+                <tr>
+                  <td><code>FUSIONAUTH_API_KEY</code></td>
+                  <td>—</td>
+                  <td>FusionAuth API key (from kickstart)</td>
+                </tr>
+                <tr>
+                  <td><code>JWT_PRIVATE_KEY_PATH</code></td>
+                  <td><code>keys/private.pem</code></td>
+                  <td>RSA private key for signing</td>
+                </tr>
+                <tr>
+                  <td><code>OPA_URL</code></td>
+                  <td><code>http://localhost:8181</code></td>
+                  <td>OPA server URL</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">5</div>
+          <div class="step-content">
+            <h3>Run database migrations</h3>
+            <div class="code-header"><span>bash</span></div>
+            <pre class="code-block"><code>make migrate</code></pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">6</div>
+          <div class="step-content">
+            <h3>Start the Heimdall server</h3>
+            <div class="code-header"><span>bash</span></div>
+            <pre class="code-block"><code>make run</code></pre>
+            <p>You should see output like:</p>
+            <div class="code-header"><span>output</span></div>
+            <pre class="code-block"><code>⚡ Heimdall starting on :8080
+✓ Connected to PostgreSQL
+✓ Connected to Redis
+✓ Connected to FusionAuth
+✓ OPA client initialized
+🚀 Server ready at http://localhost:8080</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- First API Call -->
+      <div class="doc-section" id="first-call">
+        <h2>Your First API Call</h2>
+
+        <h3>Create a tenant</h3>
+        <div class="code-header"><span>bash</span></div>
+        <pre class="code-block"><code>curl -X POST http://localhost:8080/api/v1/tenants \
+  -H "Content-Type: application/json" \
+  -H "X-Admin-Key: your-admin-key" \
+  -d '{
+    "name": "My App",
+    "slug": "my-app"
+  }'</code></pre>
+
+        <h3>Register a user</h3>
+        <div class="code-header"><span>bash</span></div>
+        <pre class="code-block"><code>curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: your-tenant-id" \
+  -d '{
+    "email": "jane@example.com",
+    "password": "SecurePass123!",
+    "firstName": "Jane",
+    "lastName": "Doe"
+  }'</code></pre>
+
+        <h3>Login and get tokens</h3>
+        <div class="code-header"><span>bash</span></div>
+        <pre class="code-block"><code>curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: your-tenant-id" \
+  -d '{
+    "email": "jane@example.com",
+    "password": "SecurePass123!"
+  }'</code></pre>
+
+        <p>A successful response looks like:</p>
+        <div class="code-header"><span>json</span></div>
+        <pre class="code-block"><code>{
+  "success": true,
+  "data": {
+    "user": {
+      "id": "uuid",
+      "email": "jane@example.com",
+      "firstName": "Jane",
+      "lastName": "Doe"
+    },
+    "tokens": {
+      "accessToken": "eyJhbGci...",
+      "refreshToken": "dGhpcyBp...",
+      "expiresIn": 900
+    }
+  }
+}</code></pre>
+
+        <h3>Make an authenticated request</h3>
+        <div class="code-header"><span>bash</span></div>
+        <pre class="code-block"><code>curl http://localhost:8080/api/v1/users/me \
+  -H "Authorization: Bearer eyJhbGci..."</code></pre>
+      </div>
+
+      <!-- Architecture -->
+      <div class="doc-section" id="architecture">
+        <h2>Understanding the Architecture</h2>
+        <p>Heimdall is a layered proxy over FusionAuth. Every request passes through a middleware pipeline:</p>
+
+        <ol>
+          <li><strong>Rate Limiter</strong> — Redis-backed, per-IP and per-user limits</li>
+          <li><strong>JWT Middleware</strong> — Validates RS256-signed tokens from the <code>Authorization</code> header</li>
+          <li><strong>OPA Middleware</strong> — Evaluates authorization policies before handlers</li>
+          <li><strong>Auth Service</strong> — Calls FusionAuth for identity operations</li>
+          <li><strong>Repository Layer</strong> — Interacts with PostgreSQL for Heimdall-specific data</li>
+        </ol>
+
+        <p>
+          FusionAuth is the identity source of truth. Heimdall adds multi-tenancy, RBAC, OPA-based authorization,
+          audit logging, and a cleaner API surface on top of it.
+        </p>
+      </div>
+
+      <!-- What's Next -->
+      <div class="doc-section" id="next-steps">
+        <h2>What's Next?</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-4);">
+          <article class="card" style="padding: var(--space-4);">
+            <h3 style="margin-top: 0;">📖 Features</h3>
+            <p style="font-size: 0.9rem; color: var(--muted-foreground); margin-bottom: var(--space-3);">Explore all authentication methods, multi-tenancy, and RBAC.</p>
+            <a href="features.html" class="button outline small">Explore Features →</a>
+          </article>
+          <article class="card" style="padding: var(--space-4);">
+            <h3 style="margin-top: 0;">📡 API Reference</h3>
+            <p style="font-size: 0.9rem; color: var(--muted-foreground); margin-bottom: var(--space-3);">Full REST API documentation with request/response examples.</p>
+            <a href="api.html" class="button outline small">API Docs →</a>
+          </article>
+          <article class="card" style="padding: var(--space-4);">
+            <h3 style="margin-top: 0;">📦 SDK</h3>
+            <p style="font-size: 0.9rem; color: var(--muted-foreground); margin-bottom: var(--space-3);">Integrate Heimdall into your app with the JS/TS SDK.</p>
+            <a href="sdk.html" class="button outline small">SDK Docs →</a>
+          </article>
+          <article class="card" style="padding: var(--space-4);">
+            <h3 style="margin-top: 0;">🚀 Deploy</h3>
+            <p style="font-size: 0.9rem; color: var(--muted-foreground); margin-bottom: var(--space-3);">Go to production with Docker, Railway, or Kubernetes.</p>
+            <a href="deployment.html" class="button outline small">Deploy Now →</a>
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <footer class="page-footer">
+      Built with ❤️ using <a href="https://github.com/knadh/oat" target="_blank" rel="noopener">OAT UI</a> ·
+      <a href="https://github.com/techsavvyash/heimdall" target="_blank" rel="noopener">GitHub</a> ·
+      MIT License
+    </footer>
+  </main>
+
+  <script src="https://unpkg.com/@knadh/oat/oat.min.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API Reference — Heimdall Docs</title>
+  <link rel="stylesheet" href="https://unpkg.com/@knadh/oat/oat.min.css" />
+  <link rel="stylesheet" href="_shared.css" />
+  <style>
+    .endpoint-group {
+      margin-bottom: var(--space-8);
+      scroll-margin-top: 80px;
+    }
+    .endpoint-group h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted-foreground);
+      margin-bottom: var(--space-3);
+      padding-bottom: var(--space-2);
+      border-bottom: 1px solid var(--border);
+    }
+    .ep {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: var(--space-3);
+      overflow: hidden;
+    }
+    .ep-header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      cursor: pointer;
+      user-select: none;
+    }
+    .ep-header summary { list-style: none; display: flex; align-items: center; gap: var(--space-3); width: 100%; }
+    .ep-header summary::-webkit-details-marker { display: none; }
+    .ep-path {
+      font-family: monospace;
+      font-size: 0.9rem;
+      font-weight: 600;
+      flex: 1;
+    }
+    .ep-summary {
+      font-size: 0.85rem;
+      color: var(--muted-foreground);
+    }
+    .ep-body {
+      padding: var(--space-4);
+      border-top: 1px solid var(--border);
+      background: var(--faint);
+    }
+    .ep-body h4 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted-foreground);
+      margin-bottom: var(--space-2);
+      margin-top: var(--space-4);
+    }
+    .ep-body h4:first-child { margin-top: 0; }
+    .param-table { font-size: 0.875rem; }
+    .param-table td:first-child { font-family: monospace; }
+    .required { color: var(--danger); font-size: 0.75rem; }
+    .optional { color: var(--muted-foreground); font-size: 0.75rem; }
+  </style>
+</head>
+<body data-sidebar-layout>
+
+  <nav data-topnav>
+    <button data-sidebar-toggle aria-label="Toggle menu" class="outline">☰</button>
+    <a href="index.html" class="brand">⚡ Heimdall</a>
+    <div class="nav-spacer"></div>
+    <a href="https://github.com/techsavvyash/heimdall" class="button small" target="_blank" rel="noopener">GitHub</a>
+  </nav>
+
+  <aside data-sidebar>
+    <header style="padding: var(--space-4) var(--space-2) var(--space-2);">
+      <span style="font-weight: 700; font-size: 0.95rem;">⚡ Heimdall Docs</span>
+    </header>
+    <nav>
+      <div class="sidebar-section-label">Start Here</div>
+      <ul>
+        <li><a href="index.html">Introduction</a></li>
+        <li><a href="getting-started.html">Getting Started</a></li>
+      </ul>
+      <div class="divider"></div>
+      <div class="sidebar-section-label">Guides</div>
+      <ul>
+        <li>
+          <details>
+            <summary>Features</summary>
+            <ul>
+              <li><a href="features.html#authentication">Authentication</a></li>
+              <li><a href="features.html#multi-tenancy">Multi-Tenancy</a></li>
+              <li><a href="features.html#rbac">RBAC</a></li>
+              <li><a href="features.html#audit-logging">Audit Logging</a></li>
+              <li><a href="features.html#tokens">Token Management</a></li>
+            </ul>
+          </details>
+        </li>
+        <li><a href="authentication.html">Authentication Guide</a></li>
+        <li><a href="authorization.html">Authorization (OPA)</a></li>
+      </ul>
+      <div class="divider"></div>
+      <div class="sidebar-section-label">Reference</div>
+      <ul>
+        <li><a href="api.html" aria-current="page">API Reference</a></li>
+        <li>
+          <details>
+            <summary>SDK</summary>
+            <ul>
+              <li><a href="sdk.html#js">JavaScript / TypeScript</a></li>
+              <li><a href="sdk.html#go">Go (Planned)</a></li>
+            </ul>
+          </details>
+        </li>
+        <li>
+          <details>
+            <summary>Deployment</summary>
+            <ul>
+              <li><a href="deployment.html#docker">Docker Compose</a></li>
+              <li><a href="deployment.html#railway">Railway</a></li>
+              <li><a href="deployment.html#kubernetes">Kubernetes</a></li>
+            </ul>
+          </details>
+        </li>
+      </ul>
+    </nav>
+    <footer>
+      <small style="color: var(--muted-foreground); font-size: 0.75rem;">v1.0.0 · MIT License</small>
+    </footer>
+  </aside>
+
+  <main>
+    <div class="page-content">
+      <div class="page-header">
+        <p class="eyebrow">API Reference</p>
+        <h1>REST API</h1>
+        <p>Heimdall provides an OAuth 2.0 / OpenID Connect compliant REST API. All endpoints return JSON and use standard HTTP status codes.</p>
+      </div>
+
+      <!-- Conventions -->
+      <div class="doc-section" id="conventions">
+        <h2>Conventions</h2>
+
+        <h3>Base URL</h3>
+        <div class="code-header"><span>text</span></div>
+        <pre class="code-block"><code>https://api.heimdall.yourdomain.com/api/v1
+# Local development:
+http://localhost:8080/api/v1</code></pre>
+
+        <h3>Authentication Header</h3>
+        <div class="code-header"><span>http</span></div>
+        <pre class="code-block"><code>Authorization: Bearer &lt;access_token&gt;</code></pre>
+
+        <h3>Tenant Identification</h3>
+        <p>Identify the tenant using any of these methods (in priority order):</p>
+        <ol>
+          <li>Subdomain: <code>acme.api.heimdall.yourdomain.com</code></li>
+          <li>Header: <code>X-Tenant-ID: acme</code></li>
+          <li>JWT claim: <code>tenantId</code> in the access token</li>
+        </ol>
+
+        <h3>Response Format</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4);">
+          <div>
+            <p style="font-size: 0.85rem; font-weight: 600; margin-bottom: var(--space-2);">Success</p>
+            <div class="code-header"><span>json</span></div>
+            <pre class="code-block"><code>{
+  "success": true,
+  "data": { ... },
+  "meta": {
+    "requestId": "uuid",
+    "timestamp": "..."
+  }
+}</code></pre>
+          </div>
+          <div>
+            <p style="font-size: 0.85rem; font-weight: 600; margin-bottom: var(--space-2);">Error</p>
+            <div class="code-header"><span>json</span></div>
+            <pre class="code-block"><code>{
+  "success": false,
+  "error": {
+    "code": "INVALID_CREDENTIALS",
+    "message": "Email or password is incorrect",
+    "details": {}
+  },
+  "meta": { ... }
+}</code></pre>
+          </div>
+        </div>
+
+        <h3>HTTP Status Codes</h3>
+        <table>
+          <thead>
+            <tr><th>Code</th><th>Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="badge success">200</span></td><td>Success</td></tr>
+            <tr><td><span class="badge success">201</span></td><td>Resource created</td></tr>
+            <tr><td><span class="badge success">204</span></td><td>Success, no body</td></tr>
+            <tr><td><span class="badge warning">400</span></td><td>Bad request / validation error</td></tr>
+            <tr><td><span class="badge warning">401</span></td><td>Missing or invalid auth token</td></tr>
+            <tr><td><span class="badge warning">403</span></td><td>Insufficient permissions</td></tr>
+            <tr><td><span class="badge warning">404</span></td><td>Resource not found</td></tr>
+            <tr><td><span class="badge warning">409</span></td><td>Conflict (e.g. email already exists)</td></tr>
+            <tr><td><span class="badge danger">429</span></td><td>Rate limit exceeded</td></tr>
+            <tr><td><span class="badge danger">500</span></td><td>Internal server error</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Pagination</h3>
+        <div class="code-header"><span>http</span></div>
+        <pre class="code-block"><code>GET /api/v1/users?page=1&amp;limit=20&amp;sort=created_at:desc</code></pre>
+        <p>Paginated responses include a <code>meta.pagination</code> object:</p>
+        <div class="code-header"><span>json</span></div>
+        <pre class="code-block"><code>{
+  "meta": {
+    "pagination": {
+      "page": 1, "limit": 20,
+      "total": 143, "pages": 8
+    }
+  }
+}</code></pre>
+      </div>
+
+      <!-- Auth Endpoints -->
+      <div class="doc-section" id="auth-endpoints">
+        <h2>Authentication Endpoints</h2>
+
+        <div class="endpoint-group">
+          <h3>Registration &amp; Login</h3>
+
+          <details class="ep">
+            <summary class="ep-header">
+              <span class="method method-post">POST</span>
+              <span class="ep-path">/api/v1/auth/register</span>
+              <span class="ep-summary">Register a new user</span>
+            </summary>
+            <div class="ep-body">
+              <h4>Request Body</h4>
+              <table class="param-table">
+                <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                <tbody>
+                  <tr><td>email</td><td>string</td><td><span class="required">required</span></td><td>User's email address</td></tr>
+                  <tr><td>password</td><td>string</td><td><span class="required">required</span></td><td>Minimum 8 characters</td></tr>
+                  <tr><td>firstName</td><td>string</td><td><span class="required">required</span></td><td>First name</td></tr>
+                  <tr><td>lastName</td><td>string</td><td><span class="optional">optional</span></td><td>Last name</td></tr>
+                </tbody>
+              </table>
+              <h4>Example</h4>
+              <div class="code-header"><span>bash</span></div>
+              <pre class="code-block" style="margin-bottom:0"><code>curl -X POST /api/v1/auth/register \
+  -H "X-Tenant-ID: my-app" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"Pass123!","firstName":"Jane"}'</code></pre>
+            </div>
+          </details>
+
+          <details class="ep">
+            <summary class="ep-header">
+              <span class="method method-post">POST</span>
+              <span class="ep-path">/api/v1/auth/login</span>
+              <span class="ep-summary">Login with email and password</span>
+            </summary>
+            <div class="ep-body">
+              <h4>Request Body</h4>
+              <table class="param-table">
+                <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                <tbody>
+                  <tr><td>email</td><td>string</td><td><span class="required">required</span></td><td>User's email</td></tr>
+                  <tr><td>password</td><td>string</td><td><span class="required">required</span></td><td>User's password</td></tr>
+                </tbody>
+              </table>
+              <h4>Response</h4>
+              <div class="code-header"><span>json</span></div>
+              <pre class="code-block" style="margin-bottom:0"><code>{
+  "data": {
+    "user": { "id": "...", "email": "user@example.com", "firstName": "Jane" },
+    "tokens": {
+      "accessToken": "eyJhbGci...",
+      "refreshToken": "dGhpcyBp...",
+      "expiresIn": 900,
+      "tokenType": "Bearer"
+    }
+  }
+}</code></pre>
+            </div>
+          </details>
+
+          <details class="ep">
+            <summary class="ep-header">
+              <span class="method method-post">POST</span>
+              <span class="ep-path">/api/v1/auth/logout</span>
+              <span class="ep-summary">Revoke tokens and end session</span>
+            </summary>
+            <div class="ep-body">
+              <h4>Request Body</h4>
+              <table class="param-table">
+                <thead><tr><th>Field</th><th>Type</th><th>Required</th></tr></thead>
+                <tbody>
+                  <tr><td>refreshToken</td><td>string</td><td><span class="optional">optional</span></td></tr>
+                  <tr><td>everywhere</td><td>boolean</td><td><span class="optional">optional</span> — revoke all sessions</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </details>
+
+          <details class="ep">
+            <summary class="ep-header">
+              <span class="method method-post">POST</span>
+              <span class="ep-path">/api/v1/auth/refresh</span>
+              <span class="ep-summary">Exchange refresh token for new access token</span>
+            </summary>
+            <div class="ep-body">
+              <div class="code-header"><span>json — request</span></div>
+              <pre class="code-block" style="margin-bottom:0"><code>{ "refreshToken": "dGhpcyBp..." }</code></pre>
+            </div>
+          </details>
+        </div>
+
+        <div class="endpoint-group">
+          <h3>Passwordless</h3>
+
+          <details class="ep">
+            <summary class="ep-header">
+              <span class="method method-post">POST</span>
+              <span class="ep-path">/api/v1/auth/magic-link</span>
+              <span class="ep-summary">Send a magic link email</span>
+            </summary>
+            <div class="ep-body">
+              <div class="code-header"><span>json</span></div>
+              <pre class="code-block" style="margin-bottom:0"><code>{ "email": "user@example.com" }</code></pre>
+            </div>
+          </details>
+
+          <details class="ep">
+            <summary class="ep-header">
+              <span class="method method-get">GET</span>
+              <span class="ep-path">/api/v1/auth/magic-link/verify</span>
+              <span class="ep-summary">Verify magic link token and issue session</span>
+            </summary>
+            <div class="ep-body">
+              <h4>Query Parameters</h4>
+              <table class="param-table">
+                <tbody>
+                  <tr><td>token</td><td>string</td><td><span class="required">required</span></td><td>The token from the email link</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+
+        <div class="endpoint-group">
+          <h3>Password Management</h3>
+
+          <details class="ep">
+            <summary class="ep-header">
+              <span class="method method-post">POST</span>
+              <span class="ep-path">/api/v1/auth/forgot-password</span>
+              <span class="ep-summary">Send password reset email</span>
+            </summary>
+            <div class="ep-body">
+              <div class="code-header"><span>json</span></div>
+              <pre class="code-block" style="margin-bottom:0"><code>{ "email": "user@example.com" }</code></pre>
+            </div>
+          </details>
+
+          <details class="ep">
+            <summary class="ep-header">
+              <span class="method method-post">POST</span>
+              <span class="ep-path">/api/v1/auth/reset-password</span>
+              <span class="ep-summary">Reset password with token</span>
+            </summary>
+            <div class="ep-body">
+              <div class="code-header"><span>json</span></div>
+              <pre class="code-block" style="margin-bottom:0"><code>{
+  "token": "reset-token-from-email",
+  "newPassword": "NewSecurePass123!"
+}</code></pre>
+            </div>
+          </details>
+
+          <details class="ep">
+            <summary class="ep-header">
+              <span class="method method-post">POST</span>
+              <span class="ep-path">/api/v1/auth/change-password</span>
+              <span class="ep-summary">Change password (authenticated)</span>
+            </summary>
+            <div class="ep-body">
+              <div class="code-header"><span>json</span></div>
+              <pre class="code-block" style="margin-bottom:0"><code>{
+  "currentPassword": "OldPass123!",
+  "newPassword": "NewPass456!"
+}</code></pre>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- User Endpoints -->
+      <div class="doc-section" id="user-endpoints">
+        <h2>User Endpoints</h2>
+
+        <div class="endpoint-group">
+          <h3>Profile</h3>
+
+          <div class="ep" style="padding: var(--space-3) var(--space-4);">
+            <div style="display: flex; align-items: center; gap: var(--space-3);">
+              <span class="method method-get">GET</span>
+              <span class="ep-path">/api/v1/users/me</span>
+              <span class="ep-summary">Get current user profile</span>
+            </div>
+          </div>
+
+          <div class="ep" style="padding: var(--space-3) var(--space-4);">
+            <div style="display: flex; align-items: center; gap: var(--space-3);">
+              <span class="method method-patch">PATCH</span>
+              <span class="ep-path">/api/v1/users/me</span>
+              <span class="ep-summary">Update current user profile</span>
+            </div>
+          </div>
+
+          <div class="ep" style="padding: var(--space-3) var(--space-4);">
+            <div style="display: flex; align-items: center; gap: var(--space-3);">
+              <span class="method method-delete">DELETE</span>
+              <span class="ep-path">/api/v1/users/me</span>
+              <span class="ep-summary">Delete own account</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="endpoint-group">
+          <h3>Admin User Management</h3>
+          <p><em>Requires <code>tenant_admin</code> or <code>super_admin</code> role.</em></p>
+
+          <div class="ep" style="padding: var(--space-3) var(--space-4);">
+            <div style="display: flex; align-items: center; gap: var(--space-3);">
+              <span class="method method-get">GET</span>
+              <span class="ep-path">/api/v1/users</span>
+              <span class="ep-summary">List all users (paginated)</span>
+            </div>
+          </div>
+          <div class="ep" style="padding: var(--space-3) var(--space-4);">
+            <div style="display: flex; align-items: center; gap: var(--space-3);">
+              <span class="method method-get">GET</span>
+              <span class="ep-path">/api/v1/users/:id</span>
+              <span class="ep-summary">Get a specific user by ID</span>
+            </div>
+          </div>
+          <div class="ep" style="padding: var(--space-3) var(--space-4);">
+            <div style="display: flex; align-items: center; gap: var(--space-3);">
+              <span class="method method-patch">PATCH</span>
+              <span class="ep-path">/api/v1/users/:id</span>
+              <span class="ep-summary">Update a user</span>
+            </div>
+          </div>
+          <div class="ep" style="padding: var(--space-3) var(--space-4);">
+            <div style="display: flex; align-items: center; gap: var(--space-3);">
+              <span class="method method-delete">DELETE</span>
+              <span class="ep-path">/api/v1/users/:id</span>
+              <span class="ep-summary">Delete a user</span>
+            </div>
+          </div>
+          <div class="ep" style="padding: var(--space-3) var(--space-4);">
+            <div style="display: flex; align-items: center; gap: var(--space-3);">
+              <span class="method method-post">POST</span>
+              <span class="ep-path">/api/v1/users/:id/roles</span>
+              <span class="ep-summary">Assign role to user</span>
+            </div>
+          </div>
+          <div class="ep" style="padding: var(--space-3) var(--space-4);">
+            <div style="display: flex; align-items: center; gap: var(--space-3);">
+              <span class="method method-delete">DELETE</span>
+              <span class="ep-path">/api/v1/users/:id/roles/:roleId</span>
+              <span class="ep-summary">Remove role from user</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tenant Endpoints -->
+      <div class="doc-section" id="tenant-endpoints">
+        <h2>Tenant Endpoints</h2>
+        <p><em>Most endpoints require <code>super_admin</code> role.</em></p>
+
+        <div class="ep" style="padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2);">
+          <div style="display: flex; align-items: center; gap: var(--space-3);">
+            <span class="method method-post">POST</span>
+            <span class="ep-path">/api/v1/tenants</span>
+            <span class="ep-summary">Create a new tenant</span>
+          </div>
+        </div>
+        <div class="ep" style="padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2);">
+          <div style="display: flex; align-items: center; gap: var(--space-3);">
+            <span class="method method-get">GET</span>
+            <span class="ep-path">/api/v1/tenants</span>
+            <span class="ep-summary">List all tenants</span>
+          </div>
+        </div>
+        <div class="ep" style="padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2);">
+          <div style="display: flex; align-items: center; gap: var(--space-3);">
+            <span class="method method-get">GET</span>
+            <span class="ep-path">/api/v1/tenants/:id</span>
+            <span class="ep-summary">Get tenant details</span>
+          </div>
+        </div>
+        <div class="ep" style="padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2);">
+          <div style="display: flex; align-items: center; gap: var(--space-3);">
+            <span class="method method-patch">PATCH</span>
+            <span class="ep-path">/api/v1/tenants/:id</span>
+            <span class="ep-summary">Update tenant configuration</span>
+          </div>
+        </div>
+        <div class="ep" style="padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2);">
+          <div style="display: flex; align-items: center; gap: var(--space-3);">
+            <span class="method method-delete">DELETE</span>
+            <span class="ep-path">/api/v1/tenants/:id</span>
+            <span class="ep-summary">Delete a tenant</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Roles & Permissions -->
+      <div class="doc-section" id="rbac-endpoints">
+        <h2>Roles &amp; Permissions</h2>
+
+        <div class="ep" style="padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2);">
+          <div style="display: flex; align-items: center; gap: var(--space-3);">
+            <span class="method method-post">POST</span>
+            <span class="ep-path">/api/v1/roles</span>
+            <span class="ep-summary">Create a role</span>
+          </div>
+        </div>
+        <div class="ep" style="padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2);">
+          <div style="display: flex; align-items: center; gap: var(--space-3);">
+            <span class="method method-get">GET</span>
+            <span class="ep-path">/api/v1/roles</span>
+            <span class="ep-summary">List all roles</span>
+          </div>
+        </div>
+        <div class="ep" style="padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2);">
+          <div style="display: flex; align-items: center; gap: var(--space-3);">
+            <span class="method method-post">POST</span>
+            <span class="ep-path">/api/v1/permissions</span>
+            <span class="ep-summary">Create a permission</span>
+          </div>
+        </div>
+        <div class="ep" style="padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2);">
+          <div style="display: flex; align-items: center; gap: var(--space-3);">
+            <span class="method method-post">POST</span>
+            <span class="ep-path">/api/v1/roles/:id/permissions</span>
+            <span class="ep-summary">Assign permission to role</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Audit Logs -->
+      <div class="doc-section" id="audit-endpoints">
+        <h2>Audit Logs</h2>
+
+        <div class="ep" style="padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2);">
+          <div style="display: flex; align-items: center; gap: var(--space-3);">
+            <span class="method method-get">GET</span>
+            <span class="ep-path">/api/v1/audit-logs</span>
+            <span class="ep-summary">Query audit logs (paginated, filterable)</span>
+          </div>
+        </div>
+        <div class="ep" style="padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2);">
+          <div style="display: flex; align-items: center; gap: var(--space-3);">
+            <span class="method method-get">GET</span>
+            <span class="ep-path">/api/v1/audit-logs/:id</span>
+            <span class="ep-summary">Get a single audit log entry</span>
+          </div>
+        </div>
+
+        <h3>Query Parameters for <code>GET /audit-logs</code></h3>
+        <table>
+          <thead><tr><th>Parameter</th><th>Example</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>userId</code></td><td><code>user-uuid</code></td><td>Filter by user</td></tr>
+            <tr><td><code>event</code></td><td><code>auth.login.success</code></td><td>Filter by event type</td></tr>
+            <tr><td><code>from</code></td><td><code>2024-01-01T00:00:00Z</code></td><td>Start of date range</td></tr>
+            <tr><td><code>to</code></td><td><code>2024-01-31T23:59:59Z</code></td><td>End of date range</td></tr>
+            <tr><td><code>page</code></td><td><code>1</code></td><td>Page number</td></tr>
+            <tr><td><code>limit</code></td><td><code>50</code></td><td>Results per page (max 200)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Health -->
+      <div class="doc-section" id="health">
+        <h2>Health Check</h2>
+
+        <div class="ep" style="padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2);">
+          <div style="display: flex; align-items: center; gap: var(--space-3);">
+            <span class="method method-get">GET</span>
+            <span class="ep-path">/health</span>
+            <span class="ep-summary">Service health and dependency status</span>
+          </div>
+        </div>
+
+        <div class="code-header"><span>json — health response</span></div>
+        <pre class="code-block"><code>{
+  "status": "healthy",
+  "version": "1.0.0",
+  "dependencies": {
+    "postgres": "ok",
+    "redis": "ok",
+    "fusionauth": "ok",
+    "opa": "ok"
+  },
+  "timestamp": "2024-01-15T10:30:00Z"
+}</code></pre>
+      </div>
+    </div>
+
+    <footer class="page-footer">
+      Built with ❤️ using <a href="https://github.com/knadh/oat" target="_blank" rel="noopener">OAT UI</a> ·
+      <a href="https://github.com/techsavvyash/heimdall" target="_blank" rel="noopener">GitHub</a> ·
+      MIT License
+    </footer>
+  </main>
+
+  <script src="https://unpkg.com/@knadh/oat/oat.min.js" defer></script>
+</body>
+</html>

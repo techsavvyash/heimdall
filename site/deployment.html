@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deployment — Heimdall Docs</title>
+  <link rel="stylesheet" href="https://unpkg.com/@knadh/oat/oat.min.css" />
+  <link rel="stylesheet" href="_shared.css" />
+</head>
+<body data-sidebar-layout>
+
+  <nav data-topnav>
+    <button data-sidebar-toggle aria-label="Toggle menu" class="outline">☰</button>
+    <a href="index.html" class="brand">⚡ Heimdall</a>
+    <div class="nav-spacer"></div>
+    <a href="https://github.com/techsavvyash/heimdall" class="button small" target="_blank" rel="noopener">GitHub</a>
+  </nav>
+
+  <aside data-sidebar>
+    <header style="padding: var(--space-4) var(--space-2) var(--space-2);">
+      <span style="font-weight: 700; font-size: 0.95rem;">⚡ Heimdall Docs</span>
+    </header>
+    <nav>
+      <div class="sidebar-section-label">Start Here</div>
+      <ul>
+        <li><a href="index.html">Introduction</a></li>
+        <li><a href="getting-started.html">Getting Started</a></li>
+      </ul>
+      <div class="divider"></div>
+      <div class="sidebar-section-label">Guides</div>
+      <ul>
+        <li>
+          <details>
+            <summary>Features</summary>
+            <ul>
+              <li><a href="features.html#authentication">Authentication</a></li>
+              <li><a href="features.html#multi-tenancy">Multi-Tenancy</a></li>
+              <li><a href="features.html#rbac">RBAC</a></li>
+              <li><a href="features.html#audit-logging">Audit Logging</a></li>
+              <li><a href="features.html#tokens">Token Management</a></li>
+            </ul>
+          </details>
+        </li>
+        <li><a href="authentication.html">Authentication Guide</a></li>
+        <li><a href="authorization.html">Authorization (OPA)</a></li>
+      </ul>
+      <div class="divider"></div>
+      <div class="sidebar-section-label">Reference</div>
+      <ul>
+        <li><a href="api.html">API Reference</a></li>
+        <li>
+          <details>
+            <summary>SDK</summary>
+            <ul>
+              <li><a href="sdk.html#js">JavaScript / TypeScript</a></li>
+              <li><a href="sdk.html#go">Go (Planned)</a></li>
+            </ul>
+          </details>
+        </li>
+        <li>
+          <details open>
+            <summary>Deployment</summary>
+            <ul>
+              <li><a href="deployment.html#docker" aria-current="page">Docker Compose</a></li>
+              <li><a href="deployment.html#railway">Railway</a></li>
+              <li><a href="deployment.html#kubernetes">Kubernetes</a></li>
+            </ul>
+          </details>
+        </li>
+      </ul>
+    </nav>
+    <footer>
+      <small style="color: var(--muted-foreground); font-size: 0.75rem;">v1.0.0 · MIT License</small>
+    </footer>
+  </aside>
+
+  <main>
+    <div class="page-content">
+      <div class="page-header">
+        <p class="eyebrow">Deployment</p>
+        <h1>Deployment Guide</h1>
+        <p>Deploy Heimdall to production with Docker Compose, Railway (recommended), Kubernetes, or any cloud platform.</p>
+      </div>
+
+      <!-- System Requirements -->
+      <div class="doc-section" id="requirements">
+        <h2>System Requirements</h2>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-5);">
+          <article class="card" style="padding: var(--space-4);">
+            <h3 style="margin-top: 0;">Development</h3>
+            <table style="font-size: 0.875rem;">
+              <tbody>
+                <tr><td>CPU</td><td>2 cores</td></tr>
+                <tr><td>RAM</td><td>4 GB</td></tr>
+                <tr><td>Disk</td><td>20 GB</td></tr>
+              </tbody>
+            </table>
+          </article>
+          <article class="card" style="padding: var(--space-4);">
+            <h3 style="margin-top: 0;">Production</h3>
+            <table style="font-size: 0.875rem;">
+              <tbody>
+                <tr><td>CPU</td><td>4+ cores</td></tr>
+                <tr><td>RAM</td><td>8 GB+</td></tr>
+                <tr><td>Disk</td><td>100 GB+ SSD</td></tr>
+              </tbody>
+            </table>
+          </article>
+        </div>
+
+        <h3>Required Services</h3>
+        <table>
+          <thead>
+            <tr><th>Service</th><th>Version</th><th>Default Port</th><th>Purpose</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>PostgreSQL</td><td>14+</td><td>5432</td><td>Application data, audit logs</td></tr>
+            <tr><td>Redis</td><td>7+</td><td>6379</td><td>Token cache, sessions, rate limits</td></tr>
+            <tr><td>FusionAuth</td><td>Latest</td><td>9011</td><td>Identity provider</td></tr>
+            <tr><td>OPA</td><td>Latest</td><td>8181</td><td>Authorization policy engine</td></tr>
+            <tr><td>MinIO</td><td>Latest</td><td>9000</td><td>OPA policy bundle storage</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Docker -->
+      <div class="doc-section" id="docker">
+        <h2>Docker Compose</h2>
+
+        <div style="display: flex; gap: var(--space-2); margin-bottom: var(--space-4);">
+          <span class="badge success">Self-hosted</span>
+          <span class="badge">Full control</span>
+          <span class="badge secondary">Great for staging</span>
+        </div>
+
+        <h3>Production Compose</h3>
+        <p>The <code>docker-compose.yml</code> at the project root spins up all required services:</p>
+        <div class="code-header"><span>bash</span></div>
+        <pre class="code-block"><code># Start all services
+docker compose up -d
+
+# Check service health
+docker compose ps
+
+# View logs
+docker compose logs -f heimdall
+
+# Stop everything
+docker compose down</code></pre>
+
+        <h3>Services in the Stack</h3>
+        <div class="code-header"><span>yaml — docker-compose.yml (excerpt)</span></div>
+        <pre class="code-block"><code>services:
+  heimdall:
+    build: .
+    ports: ["8080:8080"]
+    depends_on: [postgres, redis, fusionauth, opa]
+    environment:
+      - DB_HOST=postgres
+      - REDIS_HOST=redis
+      - FUSIONAUTH_URL=http://fusionauth:9011
+      - OPA_URL=http://opa:8181
+
+  postgres:
+    image: postgres:16-alpine
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    environment:
+      POSTGRES_DB: heimdall
+      POSTGRES_USER: heimdall
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+
+  fusionauth:
+    image: fusionauth/fusionauth-app:latest
+    ports: ["9011:9011"]
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/fusionauth
+      FUSIONAUTH_APP_KICKSTART_FILE: /usr/local/fusionauth/kickstart/kickstart.json
+    volumes:
+      - ./kickstart:/usr/local/fusionauth/kickstart
+
+  opa:
+    image: openpolicyagent/opa:latest
+    command: run --server --addr=0.0.0.0:8181
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"</code></pre>
+
+        <h3>Development Compose</h3>
+        <p>For development with hot-reload and exposed ports:</p>
+        <div class="code-header"><span>bash</span></div>
+        <pre class="code-block"><code>docker compose -f docker-compose.dev.yml up -d</code></pre>
+      </div>
+
+      <!-- Railway -->
+      <div class="doc-section" id="railway">
+        <h2>Railway <span class="badge success" style="vertical-align: middle; margin-left: var(--space-2);">Recommended</span></h2>
+
+        <div style="display: flex; gap: var(--space-2); margin-bottom: var(--space-4);">
+          <span class="badge success">One-click deploy</span>
+          <span class="badge">Auto-scaling</span>
+          <span class="badge">Managed infrastructure</span>
+          <span class="badge secondary">Custom domains</span>
+        </div>
+
+        <div role="alert" data-variant="success">
+          <strong>Kickstart Included</strong> — Heimdall ships with a FusionAuth kickstart configuration optimized for Railway. All required FusionAuth settings are pre-configured.
+        </div>
+
+        <h3>Quick Deploy</h3>
+
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h3>Create a Railway project</h3>
+            <p>Log in to Railway and create a new project, or use the Heimdall template.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h3>Add services</h3>
+            <p>Add these services to your Railway project:</p>
+            <ul>
+              <li><strong>Heimdall</strong> — Connect your GitHub fork</li>
+              <li><strong>PostgreSQL</strong> — Railway plugin</li>
+              <li><strong>Redis</strong> — Railway plugin</li>
+              <li><strong>FusionAuth</strong> — Deploy from Dockerfile</li>
+              <li><strong>OPA</strong> — Docker image: <code>openpolicyagent/opa</code></li>
+              <li><strong>MinIO</strong> — Docker image: <code>minio/minio</code></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h3>Set environment variables</h3>
+            <div class="code-header"><span>env</span></div>
+            <pre class="code-block"><code># Heimdall service variables
+PORT=8080
+ENVIRONMENT=production
+
+# PostgreSQL (use Railway reference vars)
+DB_HOST=${{Postgres.PGHOST}}
+DB_PORT=${{Postgres.PGPORT}}
+DB_NAME=${{Postgres.PGDATABASE}}
+DB_USER=${{Postgres.PGUSER}}
+DB_PASSWORD=${{Postgres.PGPASSWORD}}
+
+# Redis
+REDIS_URL=${{Redis.REDIS_URL}}
+
+# FusionAuth
+FUSIONAUTH_URL=https://your-fusionauth.railway.app
+FUSIONAUTH_API_KEY=your-api-key
+
+# OPA
+OPA_URL=https://your-opa.railway.app
+
+# JWT
+JWT_PRIVATE_KEY_PATH=/app/keys/private.pem
+
+# MinIO / S3
+MINIO_ENDPOINT=your-minio.railway.app
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=miniopassword</code></pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <h3>Generate a domain</h3>
+            <p>In Railway, click <strong>Settings → Generate Domain</strong> on the Heimdall service. You can also attach a custom domain.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">5</div>
+          <div class="step-content">
+            <h3>Deploy</h3>
+            <p>Push to your main branch. Railway auto-builds and deploys using the <code>Dockerfile</code> and <code>railway.toml</code>.</p>
+            <div class="code-header"><span>bash</span></div>
+            <pre class="code-block"><code>git push origin main
+# Railway auto-deploys on push</code></pre>
+          </div>
+        </div>
+
+        <h3>Railway Config (<code>railway.toml</code>)</h3>
+        <div class="code-header"><span>toml</span></div>
+        <pre class="code-block"><code>[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3</code></pre>
+      </div>
+
+      <!-- Kubernetes -->
+      <div class="doc-section" id="kubernetes">
+        <h2>Kubernetes</h2>
+
+        <div style="display: flex; gap: var(--space-2); margin-bottom: var(--space-4);">
+          <span class="badge">Production scale</span>
+          <span class="badge">Horizontal scaling</span>
+          <span class="badge secondary">Advanced networking</span>
+        </div>
+
+        <div role="alert">
+          <strong>Helm Charts Coming Soon</strong> — Official Helm charts are planned. The following shows a basic manual deployment.
+        </div>
+
+        <h3>Deployment Manifest</h3>
+        <div class="code-header"><span>yaml — heimdall-deployment.yaml</span></div>
+        <pre class="code-block"><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: heimdall
+  namespace: auth
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: heimdall
+  template:
+    metadata:
+      labels:
+        app: heimdall
+    spec:
+      containers:
+      - name: heimdall
+        image: ghcr.io/techsavvyash/heimdall:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: heimdall-secrets
+              key: db-host
+        - name: REDIS_HOST
+          valueFrom:
+            secretKeyRef:
+              name: heimdall-secrets
+              key: redis-host
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: heimdall
+  namespace: auth
+spec:
+  selector:
+    app: heimdall
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: heimdall
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  rules:
+  - host: api.heimdall.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: heimdall
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - api.heimdall.yourdomain.com
+    secretName: heimdall-tls</code></pre>
+
+        <h3>Horizontal Pod Autoscaler</h3>
+        <div class="code-header"><span>yaml</span></div>
+        <pre class="code-block"><code>apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: heimdall-hpa
+  namespace: auth
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: heimdall
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80</code></pre>
+      </div>
+
+      <!-- Cloud Platforms -->
+      <div class="doc-section" id="cloud">
+        <h2>Cloud Platforms</h2>
+
+        <ot-tabs>
+          <div role="tablist">
+            <button role="tab">AWS</button>
+            <button role="tab">GCP</button>
+            <button role="tab">Azure</button>
+          </div>
+
+          <div role="tabpanel">
+            <h3>AWS EKS</h3>
+            <p>Recommended AWS stack for Heimdall:</p>
+            <table>
+              <thead><tr><th>Component</th><th>AWS Service</th></tr></thead>
+              <tbody>
+                <tr><td>Heimdall</td><td>EKS (Fargate or EC2 nodes)</td></tr>
+                <tr><td>PostgreSQL</td><td>RDS PostgreSQL (Multi-AZ)</td></tr>
+                <tr><td>Redis</td><td>ElastiCache for Redis</td></tr>
+                <tr><td>MinIO / S3</td><td>Amazon S3 (native)</td></tr>
+                <tr><td>TLS</td><td>ACM + ALB Ingress</td></tr>
+                <tr><td>Secrets</td><td>AWS Secrets Manager</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div role="tabpanel">
+            <h3>Google Cloud GKE</h3>
+            <table>
+              <thead><tr><th>Component</th><th>GCP Service</th></tr></thead>
+              <tbody>
+                <tr><td>Heimdall</td><td>GKE Autopilot</td></tr>
+                <tr><td>PostgreSQL</td><td>Cloud SQL for PostgreSQL (HA)</td></tr>
+                <tr><td>Redis</td><td>Memorystore for Redis</td></tr>
+                <tr><td>MinIO / S3</td><td>Google Cloud Storage</td></tr>
+                <tr><td>TLS</td><td>Google-managed certificates</td></tr>
+                <tr><td>Secrets</td><td>Secret Manager</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div role="tabpanel">
+            <h3>Azure AKS</h3>
+            <table>
+              <thead><tr><th>Component</th><th>Azure Service</th></tr></thead>
+              <tbody>
+                <tr><td>Heimdall</td><td>AKS</td></tr>
+                <tr><td>PostgreSQL</td><td>Azure Database for PostgreSQL (Flexible Server)</td></tr>
+                <tr><td>Redis</td><td>Azure Cache for Redis</td></tr>
+                <tr><td>MinIO / S3</td><td>Azure Blob Storage</td></tr>
+                <tr><td>TLS</td><td>App Gateway + cert-manager</td></tr>
+                <tr><td>Secrets</td><td>Azure Key Vault</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </ot-tabs>
+      </div>
+
+      <!-- Production Checklist -->
+      <div class="doc-section" id="checklist">
+        <h2>Production Checklist</h2>
+
+        <details>
+          <summary>Security</summary>
+          <ul>
+            <li>TLS/HTTPS enforced (redirect HTTP → HTTPS)</li>
+            <li>Secrets stored in a secrets manager, not in environment files</li>
+            <li>JWT private key protected with file system permissions</li>
+            <li>FusionAuth admin password changed from kickstart default</li>
+            <li>Redis password set and Redis not exposed publicly</li>
+            <li>PostgreSQL not exposed publicly</li>
+            <li>CORS origins restricted to known domains</li>
+            <li>Rate limiting configured for auth endpoints</li>
+          </ul>
+        </details>
+
+        <details>
+          <summary>Reliability</summary>
+          <ul>
+            <li>Health check endpoint responding at <code>/health</code></li>
+            <li>Liveness and readiness probes configured</li>
+            <li>At least 2 replicas (no single point of failure)</li>
+            <li>Database connection pooling configured</li>
+            <li>Redis connection with retry on failure</li>
+            <li>Graceful shutdown with 30s drain period</li>
+          </ul>
+        </details>
+
+        <details>
+          <summary>Observability</summary>
+          <ul>
+            <li>Structured logging (JSON format) to stdout</li>
+            <li>Log aggregation configured (CloudWatch, Stackdriver, Loki)</li>
+            <li>Alerts on failed auth rate spikes</li>
+            <li>Alerts on high error rates (5xx)</li>
+            <li>Latency P99 monitoring on auth endpoints</li>
+            <li>OPA policy evaluation latency monitored</li>
+          </ul>
+        </details>
+
+        <details>
+          <summary>Data</summary>
+          <ul>
+            <li>PostgreSQL automated backups enabled (daily minimum)</li>
+            <li>Point-in-time recovery configured</li>
+            <li>Redis persistence enabled (AOF or RDB snapshots)</li>
+            <li>Database migrations tested before production deploy</li>
+            <li>Backup restoration tested</li>
+          </ul>
+        </details>
+      </div>
+    </div>
+
+    <footer class="page-footer">
+      Built with ❤️ using <a href="https://github.com/knadh/oat" target="_blank" rel="noopener">OAT UI</a> ·
+      <a href="https://github.com/techsavvyash/heimdall" target="_blank" rel="noopener">GitHub</a> ·
+      MIT License
+    </footer>
+  </main>
+
+  <script src="https://unpkg.com/@knadh/oat/oat.min.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Authorization (OPA) — Heimdall Docs</title>
+  <link rel="stylesheet" href="https://unpkg.com/@knadh/oat/oat.min.css" />
+  <link rel="stylesheet" href="_shared.css" />
+</head>
+<body data-sidebar-layout>
+
+  <nav data-topnav>
+    <button data-sidebar-toggle aria-label="Toggle menu" class="outline">☰</button>
+    <a href="index.html" class="brand">⚡ Heimdall</a>
+    <div class="nav-spacer"></div>
+    <a href="https://github.com/techsavvyash/heimdall" class="button small" target="_blank" rel="noopener">GitHub</a>
+  </nav>
+
+  <aside data-sidebar>
+    <header style="padding: var(--space-4) var(--space-2) var(--space-2);">
+      <span style="font-weight: 700; font-size: 0.95rem;">⚡ Heimdall Docs</span>
+    </header>
+    <nav>
+      <div class="sidebar-section-label">Start Here</div>
+      <ul>
+        <li><a href="index.html">Introduction</a></li>
+        <li><a href="getting-started.html">Getting Started</a></li>
+      </ul>
+      <div class="divider"></div>
+      <div class="sidebar-section-label">Guides</div>
+      <ul>
+        <li>
+          <details>
+            <summary>Features</summary>
+            <ul>
+              <li><a href="features.html#authentication">Authentication</a></li>
+              <li><a href="features.html#multi-tenancy">Multi-Tenancy</a></li>
+              <li><a href="features.html#rbac">RBAC</a></li>
+              <li><a href="features.html#audit-logging">Audit Logging</a></li>
+              <li><a href="features.html#tokens">Token Management</a></li>
+            </ul>
+          </details>
+        </li>
+        <li><a href="authentication.html">Authentication Guide</a></li>
+        <li><a href="authorization.html" aria-current="page">Authorization (OPA)</a></li>
+      </ul>
+      <div class="divider"></div>
+      <div class="sidebar-section-label">Reference</div>
+      <ul>
+        <li><a href="api.html">API Reference</a></li>
+        <li>
+          <details>
+            <summary>SDK</summary>
+            <ul>
+              <li><a href="sdk.html#js">JavaScript / TypeScript</a></li>
+              <li><a href="sdk.html#go">Go (Planned)</a></li>
+            </ul>
+          </details>
+        </li>
+        <li>
+          <details>
+            <summary>Deployment</summary>
+            <ul>
+              <li><a href="deployment.html#docker">Docker Compose</a></li>
+              <li><a href="deployment.html#railway">Railway</a></li>
+              <li><a href="deployment.html#kubernetes">Kubernetes</a></li>
+            </ul>
+          </details>
+        </li>
+      </ul>
+    </nav>
+    <footer>
+      <small style="color: var(--muted-foreground); font-size: 0.75rem;">v1.0.0 · MIT License</small>
+    </footer>
+  </aside>
+
+  <main>
+    <div class="page-content">
+      <div class="page-header">
+        <p class="eyebrow">Authorization</p>
+        <h1>Authorization with OPA</h1>
+        <p>Heimdall uses Open Policy Agent (OPA) for fine-grained, policy-as-code authorization. Define your access rules in Rego — no code changes needed.</p>
+      </div>
+
+      <!-- Overview -->
+      <div class="doc-section" id="overview">
+        <h2>Overview</h2>
+        <p>
+          OPA (Open Policy Agent) is a general-purpose policy engine that decouples authorization logic from application code.
+          Policies are written in <strong>Rego</strong>, a declarative language designed for policy evaluation.
+        </p>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-5);">
+          <article class="card" style="padding: var(--space-4);">
+            <h3 style="margin-top: 0;">Policy as Code</h3>
+            <p style="font-size: 0.9rem; color: var(--muted-foreground);">Authorization rules are versioned, tested, and deployed like code. No magic constants buried in application logic.</p>
+          </article>
+          <article class="card" style="padding: var(--space-4);">
+            <h3 style="margin-top: 0;">Default Deny</h3>
+            <p style="font-size: 0.9rem; color: var(--muted-foreground);">All access is denied by default. Policies explicitly grant access — a missing policy means no access.</p>
+          </article>
+          <article class="card" style="padding: var(--space-4);">
+            <h3 style="margin-top: 0;">Composable Policies</h3>
+            <p style="font-size: 0.9rem; color: var(--muted-foreground);">Multiple policy files combine using logical OR. RBAC + ABAC + tenant isolation all work together.</p>
+          </article>
+          <article class="card" style="padding: var(--space-4);">
+            <h3 style="margin-top: 0;">23+ Test Scenarios</h3>
+            <p style="font-size: 0.9rem; color: var(--muted-foreground);">Heimdall ships with a comprehensive OPA test suite covering RBAC, isolation, ownership, and time-based policies.</p>
+          </article>
+        </div>
+
+        <h3>How It Works</h3>
+        <div class="code-header"><span>flow</span></div>
+        <pre class="code-block"><code>1. Request hits Heimdall's OPA middleware
+2. Middleware extracts:
+   - JWT claims (user ID, tenant, roles, permissions)
+   - Request context (method, path, resource, IP)
+3. Middleware sends input to OPA:
+   POST http://opa:8181/v1/data/authz/allow
+   { "input": { "user": {...}, "request": {...}, "resource": {...} } }
+4. OPA evaluates all loaded policies
+5. If result is { "allow": true } → request proceeds
+6. If result is { "allow": false } → 403 Forbidden</code></pre>
+      </div>
+
+      <!-- Policy Files -->
+      <div class="doc-section" id="policy-files">
+        <h2>Policy Files</h2>
+        <p>Heimdall ships with 7 Rego policy files in the <code>policies/</code> directory:</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Purpose</th>
+              <th>Model</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>authz.rego</code></td>
+              <td>Main orchestrator — default deny</td>
+              <td>Combinator</td>
+            </tr>
+            <tr>
+              <td><code>rbac.rego</code></td>
+              <td>Role-based access control</td>
+              <td>RBAC</td>
+            </tr>
+            <tr>
+              <td><code>abac.rego</code></td>
+              <td>Attribute-based access control</td>
+              <td>ABAC</td>
+            </tr>
+            <tr>
+              <td><code>tenant_isolation.rego</code></td>
+              <td>Enforce tenant data boundaries</td>
+              <td>Isolation</td>
+            </tr>
+            <tr>
+              <td><code>resource_ownership.rego</code></td>
+              <td>Resource owner can access their own data</td>
+              <td>Ownership</td>
+            </tr>
+            <tr>
+              <td><code>time_based.rego</code></td>
+              <td>Time-window restrictions</td>
+              <td>Temporal</td>
+            </tr>
+            <tr>
+              <td><code>helpers.rego</code></td>
+              <td>Shared utility functions</td>
+              <td>Library</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Writing Policies -->
+      <div class="doc-section" id="writing-policies">
+        <h2>Writing Policies</h2>
+
+        <h3>Main Orchestrator (<code>authz.rego</code>)</h3>
+        <p>The main policy combines all sub-policies. Access is allowed if <em>any</em> sub-policy grants it.</p>
+        <div class="code-header"><span>rego — authz.rego</span></div>
+        <pre class="code-block"><code>package authz
+
+import data.rbac
+import data.tenant_isolation
+import data.resource_ownership
+import data.time_based
+
+# Default deny — all access blocked unless a rule below grants it
+default allow = false
+
+# Allow if RBAC grants access AND tenant is correct AND time is OK
+allow {
+    rbac.allow
+    tenant_isolation.allow
+    time_based.allow
+}
+
+# Resource owners can always access their own data
+allow {
+    resource_ownership.allow
+    tenant_isolation.allow
+}</code></pre>
+
+        <h3>RBAC Policy (<code>rbac.rego</code>)</h3>
+        <div class="code-header"><span>rego — rbac.rego</span></div>
+        <pre class="code-block"><code>package rbac
+
+import future.keywords.in
+
+# Allow if the user has a role that grants the required permission
+default allow = false
+
+allow {
+    some role in input.user.roles
+    some permission in data.role_permissions[role]
+    permission == required_permission
+}
+
+# Resolve the required permission from the HTTP method + resource
+required_permission = p {
+    p := concat(":", [input.resource.type, method_action[input.request.method]])
+}
+
+method_action := {
+    "GET":    "read",
+    "POST":   "create",
+    "PUT":    "update",
+    "PATCH":  "update",
+    "DELETE": "delete",
+}
+
+# Super admins bypass all RBAC checks
+allow {
+    "super_admin" in input.user.roles
+}</code></pre>
+
+        <h3>Tenant Isolation (<code>tenant_isolation.rego</code>)</h3>
+        <div class="code-header"><span>rego — tenant_isolation.rego</span></div>
+        <pre class="code-block"><code>package tenant_isolation
+
+# Default deny cross-tenant access
+default allow = false
+
+# Allow if user's tenant matches the resource's tenant
+allow {
+    input.user.tenantId == input.resource.tenantId
+}
+
+# Super admins can access any tenant
+allow {
+    input.user.roles[_] == "super_admin"
+}</code></pre>
+
+        <h3>Time-Based Access (<code>time_based.rego</code>)</h3>
+        <div class="code-header"><span>rego — time_based.rego</span></div>
+        <pre class="code-block"><code>package time_based
+
+import future.keywords.in
+
+# Default allow — time restriction is opt-in
+default allow = true
+
+# Deny if access is outside allowed hours (UTC)
+allow = false {
+    some restriction in data.time_restrictions[input.user.roles[_]]
+    current_hour := time.clock(time.now_ns())[0]
+    current_hour < restriction.start_hour
+}
+
+allow = false {
+    some restriction in data.time_restrictions[input.user.roles[_]]
+    current_hour := time.clock(time.now_ns())[0]
+    current_hour >= restriction.end_hour
+}</code></pre>
+      </div>
+
+      <!-- Input Schema -->
+      <div class="doc-section" id="input-schema">
+        <h2>OPA Input Schema</h2>
+        <p>The OPA middleware sends the following input to every policy evaluation:</p>
+        <div class="code-header"><span>json — OPA input object</span></div>
+        <pre class="code-block"><code>{
+  "input": {
+    "user": {
+      "id": "user-uuid",
+      "email": "user@example.com",
+      "tenantId": "acme",
+      "roles": ["user", "content_editor"],
+      "permissions": ["content:read", "content:create"]
+    },
+    "request": {
+      "method": "POST",
+      "path": "/api/v1/content",
+      "ip": "203.0.113.42",
+      "timestamp": "2024-01-15T10:30:00Z"
+    },
+    "resource": {
+      "type": "content",
+      "tenantId": "acme",
+      "ownerId": "user-uuid"
+    }
+  }
+}</code></pre>
+      </div>
+
+      <!-- Policy Bundles -->
+      <div class="doc-section" id="policy-bundles">
+        <h2>Managing Policy Bundles</h2>
+        <p>
+          Policies are stored as OPA bundles in <strong>MinIO</strong> (S3-compatible object storage).
+          Heimdall loads and reloads bundles automatically.
+        </p>
+
+        <h3>Upload a Policy Bundle</h3>
+        <div class="code-header"><span>bash</span></div>
+        <pre class="code-block"><code># Package your policies into a bundle
+cd policies/
+opa build -b . -o bundle.tar.gz
+
+# Upload to MinIO (OPA bundle endpoint)
+curl -X PUT http://localhost:9000/opa-bundles/main/bundle.tar.gz \
+  --upload-file bundle.tar.gz \
+  -H "Authorization: AWS4-HMAC..."</code></pre>
+
+        <h3>Use the Makefile shortcut</h3>
+        <div class="code-header"><span>bash</span></div>
+        <pre class="code-block"><code>make load-policies    # Builds and uploads the OPA bundle</code></pre>
+
+        <h3>Test Your Policies</h3>
+        <div class="code-header"><span>bash</span></div>
+        <pre class="code-block"><code># Run OPA unit tests
+opa test policies/ -v
+
+# Expected output:
+# PASS: 23/23  (rbac, abac, tenant_isolation, resource_ownership, time_based)</code></pre>
+
+        <div role="alert" data-variant="success">
+          <strong>Test Before Deploy</strong> — Always run <code>opa test</code> before uploading a new bundle. Heimdall's CI pipeline runs the full 23-test suite automatically.
+        </div>
+      </div>
+
+      <!-- Direct OPA Query -->
+      <div class="doc-section" id="direct-query">
+        <h2>Direct Policy Evaluation</h2>
+        <p>You can call OPA directly to test policies without going through Heimdall:</p>
+        <div class="code-header"><span>bash</span></div>
+        <pre class="code-block"><code>curl -X POST http://localhost:8181/v1/data/authz/allow \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "user": {
+        "id": "user-123",
+        "tenantId": "acme",
+        "roles": ["content_editor"],
+        "permissions": ["content:create"]
+      },
+      "request": { "method": "POST", "path": "/api/v1/content" },
+      "resource": { "type": "content", "tenantId": "acme" }
+    }
+  }'
+
+# Response: { "result": true } or { "result": false }</code></pre>
+      </div>
+    </div>
+
+    <footer class="page-footer">
+      Built with ❤️ using <a href="https://github.com/knadh/oat" target="_blank" rel="noopener">OAT UI</a> ·
+      <a href="https://github.com/techsavvyash/heimdall" target="_blank" rel="noopener">GitHub</a> ·
+      MIT License
+    </footer>
+  </main>
+
+  <script src="https://unpkg.com/@knadh/oat/oat.min.js" defer></script>
+</body>
+</html>

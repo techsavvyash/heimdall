@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Features — Heimdall Docs</title>
+  <link rel="stylesheet" href="https://unpkg.com/@knadh/oat/oat.min.css" />
+  <link rel="stylesheet" href="_shared.css" />
+  <style>
+    .feature-list li {
+      margin-bottom: var(--space-2);
+      padding-left: var(--space-2);
+    }
+    .feature-list li::marker {
+      content: "✓  ";
+      color: var(--success);
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body data-sidebar-layout>
+
+  <nav data-topnav>
+    <button data-sidebar-toggle aria-label="Toggle menu" class="outline">☰</button>
+    <a href="index.html" class="brand">⚡ Heimdall</a>
+    <div class="nav-spacer"></div>
+    <a href="https://github.com/techsavvyash/heimdall" class="button small" target="_blank" rel="noopener">GitHub</a>
+  </nav>
+
+  <aside data-sidebar>
+    <header style="padding: var(--space-4) var(--space-2) var(--space-2);">
+      <span style="font-weight: 700; font-size: 0.95rem;">⚡ Heimdall Docs</span>
+    </header>
+    <nav>
+      <div class="sidebar-section-label">Start Here</div>
+      <ul>
+        <li><a href="index.html">Introduction</a></li>
+        <li><a href="getting-started.html">Getting Started</a></li>
+      </ul>
+      <div class="divider"></div>
+      <div class="sidebar-section-label">Guides</div>
+      <ul>
+        <li>
+          <details open>
+            <summary>Features</summary>
+            <ul>
+              <li><a href="features.html#authentication" aria-current="page">Authentication</a></li>
+              <li><a href="features.html#multi-tenancy">Multi-Tenancy</a></li>
+              <li><a href="features.html#rbac">RBAC</a></li>
+              <li><a href="features.html#audit-logging">Audit Logging</a></li>
+              <li><a href="features.html#tokens">Token Management</a></li>
+            </ul>
+          </details>
+        </li>
+        <li><a href="authentication.html">Authentication Guide</a></li>
+        <li><a href="authorization.html">Authorization (OPA)</a></li>
+      </ul>
+      <div class="divider"></div>
+      <div class="sidebar-section-label">Reference</div>
+      <ul>
+        <li><a href="api.html">API Reference</a></li>
+        <li>
+          <details>
+            <summary>SDK</summary>
+            <ul>
+              <li><a href="sdk.html#js">JavaScript / TypeScript</a></li>
+              <li><a href="sdk.html#go">Go (Planned)</a></li>
+            </ul>
+          </details>
+        </li>
+        <li>
+          <details>
+            <summary>Deployment</summary>
+            <ul>
+              <li><a href="deployment.html#docker">Docker Compose</a></li>
+              <li><a href="deployment.html#railway">Railway</a></li>
+              <li><a href="deployment.html#kubernetes">Kubernetes</a></li>
+            </ul>
+          </details>
+        </li>
+      </ul>
+    </nav>
+    <footer>
+      <small style="color: var(--muted-foreground); font-size: 0.75rem;">v1.0.0 · MIT License</small>
+    </footer>
+  </aside>
+
+  <main>
+    <div class="page-content">
+      <div class="page-header">
+        <p class="eyebrow">Features</p>
+        <h1>Everything Heimdall Can Do</h1>
+        <p>A complete authentication platform covering auth methods, multi-tenancy, authorization, audit logging, and more.</p>
+      </div>
+
+      <!-- Authentication -->
+      <div class="doc-section" id="authentication">
+        <h2>🔐 Authentication Methods</h2>
+        <p>Heimdall supports every major authentication pattern so you never have to build auth from scratch again.</p>
+
+        <ot-tabs>
+          <div role="tablist">
+            <button role="tab">Email / Password</button>
+            <button role="tab">Social OAuth</button>
+            <button role="tab">Passwordless</button>
+            <button role="tab">MFA</button>
+          </div>
+
+          <div role="tabpanel">
+            <h3>Email &amp; Password Authentication</h3>
+            <ul class="feature-list">
+              <li>User registration with email and password</li>
+              <li>Email verification workflow during signup</li>
+              <li>Secure login with configurable password policies</li>
+              <li>Self-service password reset via email</li>
+              <li>Account lockout after failed attempts (brute-force protection)</li>
+              <li>Password strength enforcement (min length, complexity, history)</li>
+            </ul>
+            <div class="code-header"><span>bash — Register a user</span></div>
+            <pre class="code-block"><code>curl -X POST /api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecurePass123!",
+    "firstName": "Jane",
+    "lastName": "Doe"
+  }'</code></pre>
+          </div>
+
+          <div role="tabpanel">
+            <h3>Social OAuth 2.0</h3>
+            <ul class="feature-list">
+              <li>Google OAuth 2.0 out of the box</li>
+              <li>GitHub OAuth out of the box</li>
+              <li>Extensible to Facebook, Microsoft, Twitter, and any OAuth 2.0 provider</li>
+              <li>Account linking — connect multiple providers to one account</li>
+              <li>Automatic profile sync from provider data</li>
+              <li>Configurable OAuth scopes per provider</li>
+            </ul>
+            <div class="code-header"><span>bash — Initiate OAuth flow</span></div>
+            <pre class="code-block"><code>GET /api/v1/auth/oauth/google?redirect_uri=https://yourapp.com/callback
+# Redirects user to Google's consent screen</code></pre>
+          </div>
+
+          <div role="tabpanel">
+            <h3>Passwordless / Magic Links</h3>
+            <ul class="feature-list">
+              <li>One-click login via email magic link</li>
+              <li>Configurable token expiration (default: 15 min)</li>
+              <li>Single-use links — each link works exactly once</li>
+              <li>Customizable email templates with your branding</li>
+              <li>Fallback to password auth on the same account</li>
+            </ul>
+            <div class="code-header"><span>bash — Send magic link</span></div>
+            <pre class="code-block"><code>curl -X POST /api/v1/auth/magic-link \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "user@example.com" }'
+
+# User clicks link → GET /api/v1/auth/magic-link/verify?token=...
+# Returns access + refresh tokens</code></pre>
+          </div>
+
+          <div role="tabpanel">
+            <h3>Multi-Factor Authentication</h3>
+            <ul class="feature-list">
+              <li>TOTP via authenticator apps (Google Authenticator, Authy, 1Password)</li>
+              <li>SMS-based OTP codes</li>
+              <li>Email-based OTP codes</li>
+              <li>Backup codes for account recovery (one-time use)</li>
+              <li>Per-tenant or per-role MFA enforcement</li>
+              <li>Device trust — remember a device for N days</li>
+            </ul>
+            <div class="code-header"><span>bash — MFA login flow</span></div>
+            <pre class="code-block"><code># Step 1: Initial login returns mfaToken
+POST /api/v1/auth/login → { mfaToken: "...", mfaRequired: true }
+
+# Step 2: Submit OTP code
+POST /api/v1/auth/mfa/verify
+{ "mfaToken": "...", "code": "123456" }
+→ Returns access + refresh tokens</code></pre>
+          </div>
+        </ot-tabs>
+      </div>
+
+      <!-- Multi-Tenancy -->
+      <div class="doc-section" id="multi-tenancy">
+        <h2>🏢 Multi-Tenancy</h2>
+        <p>Heimdall is multi-tenant by design. Each tenant is fully isolated — users, roles, settings, and data never bleed between tenants.</p>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-5);">
+          <article class="card" style="padding: var(--space-4);">
+            <h3 style="margin-top: 0;">Data Isolation</h3>
+            <ul class="feature-list" style="margin: 0; padding-left: var(--space-4);">
+              <li>Row-level tenant separation</li>
+              <li>Separate FusionAuth application per tenant</li>
+              <li>Independent JWT signing (optional)</li>
+              <li>Tenant-scoped API keys</li>
+            </ul>
+          </article>
+          <article class="card" style="padding: var(--space-4);">
+            <h3 style="margin-top: 0;">Configuration</h3>
+            <ul class="feature-list" style="margin: 0; padding-left: var(--space-4);">
+              <li>Per-tenant auth method toggles</li>
+              <li>Custom OAuth providers per tenant</li>
+              <li>Branding and email templates</li>
+              <li>Resource quotas (users, API calls)</li>
+            </ul>
+          </article>
+          <article class="card" style="padding: var(--space-4);">
+            <h3 style="margin-top: 0;">Tenant Management</h3>
+            <ul class="feature-list" style="margin: 0; padding-left: var(--space-4);">
+              <li>Programmatic tenant creation</li>
+              <li>Designated tenant admin roles</li>
+              <li>Tenant usage metrics and analytics</li>
+              <li>Soft-delete with data retention</li>
+            </ul>
+          </article>
+          <article class="card" style="padding: var(--space-4);">
+            <h3 style="margin-top: 0;">Cross-Tenant Features</h3>
+            <ul class="feature-list" style="margin: 0; padding-left: var(--space-4);">
+              <li>Global super-admin role</li>
+              <li>Tenant switching for shared users</li>
+              <li>Centralized audit log view</li>
+              <li>Federated identity (optional)</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="code-header"><span>bash — Create a tenant</span></div>
+        <pre class="code-block"><code>curl -X POST /api/v1/tenants \
+  -H "Authorization: Bearer &lt;admin-token&gt;" \
+  -d '{
+    "name": "Acme Corp",
+    "slug": "acme",
+    "settings": {
+      "allowedAuthMethods": ["email", "google"],
+      "mfaRequired": false,
+      "maxUsers": 5000
+    }
+  }'</code></pre>
+      </div>
+
+      <!-- RBAC -->
+      <div class="doc-section" id="rbac">
+        <h2>🛡️ Role-Based Access Control</h2>
+        <p>Flexible RBAC with role hierarchies and granular permission scopes. Permissions are enforced at the API level and evaluated by OPA.</p>
+
+        <h3>Built-in Roles</h3>
+        <table>
+          <thead>
+            <tr><th>Role</th><th>Scope</th><th>Description</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="badge">super_admin</span></td>
+              <td>Global</td>
+              <td>Full access across all tenants</td>
+            </tr>
+            <tr>
+              <td><span class="badge secondary">tenant_admin</span></td>
+              <td>Tenant</td>
+              <td>Manage users, roles, and settings within a tenant</td>
+            </tr>
+            <tr>
+              <td><span class="badge outline">user</span></td>
+              <td>Tenant</td>
+              <td>Standard authenticated user</td>
+            </tr>
+            <tr>
+              <td><span class="badge secondary">guest</span></td>
+              <td>Tenant</td>
+              <td>Read-only access to public resources</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Custom Roles and Permissions</h3>
+        <div class="code-header"><span>bash — Create a custom role</span></div>
+        <pre class="code-block"><code>curl -X POST /api/v1/roles \
+  -H "Authorization: Bearer &lt;admin-token&gt;" \
+  -d '{
+    "name": "content_editor",
+    "displayName": "Content Editor",
+    "permissions": [
+      "content:read",
+      "content:create",
+      "content:update",
+      "users:read"
+    ]
+  }'</code></pre>
+
+        <div class="code-header"><span>bash — Assign a role to a user</span></div>
+        <pre class="code-block"><code>curl -X POST /api/v1/users/{userId}/roles \
+  -H "Authorization: Bearer &lt;admin-token&gt;" \
+  -d '{ "roleId": "content_editor" }'</code></pre>
+      </div>
+
+      <!-- Audit Logging -->
+      <div class="doc-section" id="audit-logging">
+        <h2>📋 Audit Logging</h2>
+        <p>Every security event is recorded with full context. Heimdall's audit logs are designed for compliance, forensics, and operational visibility.</p>
+
+        <h3>Captured Events</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-3); margin-bottom: var(--space-5);">
+          <div>
+            <strong style="display: block; margin-bottom: var(--space-2);">Authentication</strong>
+            <ul style="font-size: 0.9rem; color: var(--muted-foreground);">
+              <li>Login success / failure</li>
+              <li>Logout events</li>
+              <li>Password changes</li>
+              <li>MFA enable / disable</li>
+              <li>Token refresh / revoke</li>
+            </ul>
+          </div>
+          <div>
+            <strong style="display: block; margin-bottom: var(--space-2);">User Management</strong>
+            <ul style="font-size: 0.9rem; color: var(--muted-foreground);">
+              <li>User creation / deletion</li>
+              <li>Profile updates</li>
+              <li>Role assignments</li>
+              <li>Email verification</li>
+              <li>Account status changes</li>
+            </ul>
+          </div>
+          <div>
+            <strong style="display: block; margin-bottom: var(--space-2);">Admin Actions</strong>
+            <ul style="font-size: 0.9rem; color: var(--muted-foreground);">
+              <li>Tenant configuration changes</li>
+              <li>Policy uploads (OPA)</li>
+              <li>API key creation</li>
+              <li>Role / permission changes</li>
+              <li>Forced logouts</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>Log Structure</h3>
+        <div class="code-header"><span>json — Audit log entry</span></div>
+        <pre class="code-block"><code>{
+  "id": "uuid",
+  "tenantId": "acme",
+  "userId": "user-uuid",
+  "event": "auth.login.success",
+  "resource": "session",
+  "ip": "203.0.113.42",
+  "userAgent": "Mozilla/5.0...",
+  "metadata": {
+    "method": "email",
+    "mfaUsed": false
+  },
+  "timestamp": "2024-01-15T10:30:00Z"
+}</code></pre>
+
+        <div role="alert" data-variant="success">
+          <strong>Compliance Ready</strong> — Audit logs meet requirements for GDPR, SOC2 Type II, and HIPAA audit trail mandates.
+        </div>
+      </div>
+
+      <!-- Token Management -->
+      <div class="doc-section" id="tokens">
+        <h2>🔑 Token Management</h2>
+        <p>Heimdall issues OAuth 2.0-compliant JWT tokens with configurable TTL, automatic rotation, and instant revocation.</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Token Type</th>
+              <th>Default TTL</th>
+              <th>Algorithm</th>
+              <th>Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Access Token</strong></td>
+              <td>15 minutes</td>
+              <td>RS256</td>
+              <td>Authenticate API requests</td>
+            </tr>
+            <tr>
+              <td><strong>Refresh Token</strong></td>
+              <td>30 days</td>
+              <td>Opaque (stored in Redis)</td>
+              <td>Obtain new access tokens</td>
+            </tr>
+            <tr>
+              <td><strong>ID Token</strong></td>
+              <td>15 minutes</td>
+              <td>RS256</td>
+              <td>OpenID Connect identity</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Token Security Features</h3>
+        <ul class="feature-list">
+          <li>Refresh token rotation — each use invalidates the old token</li>
+          <li>Token revocation endpoint — immediately invalidate any token</li>
+          <li>Token introspection — validate and inspect claims</li>
+          <li>Token binding — optionally bind tokens to device fingerprints</li>
+          <li>Blacklist — revoked tokens checked on every request via Redis</li>
+        </ul>
+
+        <div class="code-header"><span>bash — Refresh an access token</span></div>
+        <pre class="code-block"><code>curl -X POST /api/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{ "refreshToken": "dGhpcyBp..." }'</code></pre>
+
+        <div class="code-header"><span>bash — Revoke a token</span></div>
+        <pre class="code-block"><code>curl -X POST /api/v1/auth/logout \
+  -H "Authorization: Bearer eyJhbGci..." \
+  -d '{ "refreshToken": "dGhpcyBp...", "everywhere": false }'</code></pre>
+      </div>
+
+      <!-- Security -->
+      <div class="doc-section" id="security">
+        <h2>🔒 Security Features</h2>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4);">
+          <article class="card" style="padding: var(--space-4);">
+            <h3 style="margin-top: 0;">Transport Security</h3>
+            <ul class="feature-list" style="margin: 0; padding-left: var(--space-4);">
+              <li>TLS 1.3 enforced in production</li>
+              <li>HSTS headers</li>
+              <li>CSP, X-Frame-Options headers</li>
+              <li>CORS configurable per tenant</li>
+            </ul>
+          </article>
+          <article class="card" style="padding: var(--space-4);">
+            <h3 style="margin-top: 0;">Rate Limiting</h3>
+            <ul class="feature-list" style="margin: 0; padding-left: var(--space-4);">
+              <li>Per-IP rate limiting (Redis-backed)</li>
+              <li>Per-user rate limiting</li>
+              <li>Per-tenant quotas</li>
+              <li>DDoS protection via exponential backoff</li>
+            </ul>
+          </article>
+          <article class="card" style="padding: var(--space-4);">
+            <h3 style="margin-top: 0;">Account Protection</h3>
+            <ul class="feature-list" style="margin: 0; padding-left: var(--space-4);">
+              <li>Brute-force lockout</li>
+              <li>Account takeover detection</li>
+              <li>Anomalous IP alerting</li>
+              <li>IP whitelisting (optional)</li>
+            </ul>
+          </article>
+          <article class="card" style="padding: var(--space-4);">
+            <h3 style="margin-top: 0;">Data Security</h3>
+            <ul class="feature-list" style="margin: 0; padding-left: var(--space-4);">
+              <li>Parameterized SQL (no injection)</li>
+              <li>Output encoding (XSS prevention)</li>
+              <li>Secrets in env vars only</li>
+              <li>Encryption at rest via PostgreSQL</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <footer class="page-footer">
+      Built with ❤️ using <a href="https://github.com/knadh/oat" target="_blank" rel="noopener">OAT UI</a> ·
+      <a href="https://github.com/techsavvyash/heimdall" target="_blank" rel="noopener">GitHub</a> ·
+      MIT License
+    </footer>
+  </main>
+
+  <script src="https://unpkg.com/@knadh/oat/oat.min.js" defer></script>
+</body>
+</html>
