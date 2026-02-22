@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SDK — Heimdall Docs</title>
+  <link rel="stylesheet" href="https://unpkg.com/@knadh/oat/oat.min.css" />
+  <link rel="stylesheet" href="_shared.css" />
+</head>
+<body data-sidebar-layout>
+
+  <nav data-topnav>
+    <button data-sidebar-toggle aria-label="Toggle menu" class="outline">☰</button>
+    <a href="index.html" class="brand">⚡ Heimdall</a>
+    <div class="nav-spacer"></div>
+    <a href="https://github.com/techsavvyash/heimdall" class="button small" target="_blank" rel="noopener">GitHub</a>
+  </nav>
+
+  <aside data-sidebar>
+    <header style="padding: var(--space-4) var(--space-2) var(--space-2);">
+      <span style="font-weight: 700; font-size: 0.95rem;">⚡ Heimdall Docs</span>
+    </header>
+    <nav>
+      <div class="sidebar-section-label">Start Here</div>
+      <ul>
+        <li><a href="index.html">Introduction</a></li>
+        <li><a href="getting-started.html">Getting Started</a></li>
+      </ul>
+      <div class="divider"></div>
+      <div class="sidebar-section-label">Guides</div>
+      <ul>
+        <li>
+          <details>
+            <summary>Features</summary>
+            <ul>
+              <li><a href="features.html#authentication">Authentication</a></li>
+              <li><a href="features.html#multi-tenancy">Multi-Tenancy</a></li>
+              <li><a href="features.html#rbac">RBAC</a></li>
+              <li><a href="features.html#audit-logging">Audit Logging</a></li>
+              <li><a href="features.html#tokens">Token Management</a></li>
+            </ul>
+          </details>
+        </li>
+        <li><a href="authentication.html">Authentication Guide</a></li>
+        <li><a href="authorization.html">Authorization (OPA)</a></li>
+      </ul>
+      <div class="divider"></div>
+      <div class="sidebar-section-label">Reference</div>
+      <ul>
+        <li><a href="api.html">API Reference</a></li>
+        <li>
+          <details open>
+            <summary>SDK</summary>
+            <ul>
+              <li><a href="sdk.html#js" aria-current="page">JavaScript / TypeScript</a></li>
+              <li><a href="sdk.html#go">Go (Planned)</a></li>
+            </ul>
+          </details>
+        </li>
+        <li>
+          <details>
+            <summary>Deployment</summary>
+            <ul>
+              <li><a href="deployment.html#docker">Docker Compose</a></li>
+              <li><a href="deployment.html#railway">Railway</a></li>
+              <li><a href="deployment.html#kubernetes">Kubernetes</a></li>
+            </ul>
+          </details>
+        </li>
+      </ul>
+    </nav>
+    <footer>
+      <small style="color: var(--muted-foreground); font-size: 0.75rem;">v1.0.0 · MIT License</small>
+    </footer>
+  </aside>
+
+  <main>
+    <div class="page-content">
+      <div class="page-header">
+        <p class="eyebrow">SDK</p>
+        <h1>Official SDKs</h1>
+        <p>Drop Heimdall into your project in minutes with the official JavaScript/TypeScript SDK. Auto token refresh, full type safety, and framework-agnostic.</p>
+      </div>
+
+      <!-- JS SDK -->
+      <div class="doc-section" id="js">
+        <h2>JavaScript / TypeScript SDK</h2>
+        <p>
+          The <code>@heimdall/sdk</code> package provides a complete client for interacting with the Heimdall API.
+          It handles token storage, automatic refresh, request interceptors, and provides a clean, typed API.
+        </p>
+
+        <div style="display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-5);">
+          <span class="badge success">TypeScript</span>
+          <span class="badge">Auto token refresh</span>
+          <span class="badge">SSR support</span>
+          <span class="badge">Framework-agnostic</span>
+          <span class="badge secondary">Tree-shakeable</span>
+        </div>
+
+        <h3>Installation</h3>
+        <ot-tabs>
+          <div role="tablist">
+            <button role="tab">npm</button>
+            <button role="tab">yarn</button>
+            <button role="tab">pnpm</button>
+            <button role="tab">bun</button>
+          </div>
+          <div role="tabpanel">
+            <div class="code-header"><span>bash</span></div>
+            <pre class="code-block"><code>npm install @heimdall/sdk</code></pre>
+          </div>
+          <div role="tabpanel">
+            <div class="code-header"><span>bash</span></div>
+            <pre class="code-block"><code>yarn add @heimdall/sdk</code></pre>
+          </div>
+          <div role="tabpanel">
+            <div class="code-header"><span>bash</span></div>
+            <pre class="code-block"><code>pnpm add @heimdall/sdk</code></pre>
+          </div>
+          <div role="tabpanel">
+            <div class="code-header"><span>bash</span></div>
+            <pre class="code-block"><code>bun add @heimdall/sdk</code></pre>
+          </div>
+        </ot-tabs>
+
+        <h3>Configuration</h3>
+        <div class="code-header"><span>typescript — client setup</span></div>
+        <pre class="code-block"><code>import { HeimdallClient } from '@heimdall/sdk';
+
+const heimdall = new HeimdallClient({
+  apiUrl: 'https://api.heimdall.yourdomain.com',
+  tenantId: 'your-tenant-id',
+
+  // Token storage — defaults to localStorage in browser, memory in Node
+  storage: localStorage,
+
+  // Automatically refresh access tokens before they expire
+  autoRefresh: true,
+
+  // Custom headers sent on every request
+  headers: {
+    'X-App-Version': '2.0.0',
+  },
+});</code></pre>
+
+        <h3>Authentication</h3>
+        <div class="code-header"><span>typescript — register &amp; login</span></div>
+        <pre class="code-block"><code>// Register a new user
+const { user } = await heimdall.auth.register({
+  email: 'jane@example.com',
+  password: 'SecurePass123!',
+  firstName: 'Jane',
+  lastName: 'Doe',
+});
+
+// Login with email/password
+const { user, tokens } = await heimdall.auth.login({
+  email: 'jane@example.com',
+  password: 'SecurePass123!',
+});
+
+console.log('Logged in as:', user.email);
+console.log('Access token expires in:', tokens.expiresIn, 'seconds');
+
+// Logout (revokes refresh token)
+await heimdall.auth.logout();</code></pre>
+
+        <div class="code-header"><span>typescript — magic link</span></div>
+        <pre class="code-block"><code>// Send magic link
+await heimdall.auth.sendMagicLink({ email: 'jane@example.com' });
+
+// Verify magic link (call this on your callback page)
+const { user, tokens } = await heimdall.auth.verifyMagicLink({ token: urlToken });</code></pre>
+
+        <div class="code-header"><span>typescript — OAuth</span></div>
+        <pre class="code-block"><code>// Get OAuth redirect URL (then redirect the user)
+const url = heimdall.auth.getOAuthUrl('google', {
+  redirectUri: 'https://yourapp.com/auth/callback',
+});
+window.location.href = url;
+
+// Handle OAuth callback
+const { user, tokens } = await heimdall.auth.handleOAuthCallback('google', {
+  code: urlSearchParams.get('code'),
+  redirectUri: 'https://yourapp.com/auth/callback',
+});</code></pre>
+
+        <h3>User Management</h3>
+        <div class="code-header"><span>typescript</span></div>
+        <pre class="code-block"><code>// Get current user
+const user = await heimdall.users.me();
+
+// Update profile
+await heimdall.users.update({
+  firstName: 'Jane',
+  lastName: 'Smith',
+  metadata: { theme: 'dark', language: 'en' },
+});
+
+// Change password
+await heimdall.users.changePassword({
+  currentPassword: 'OldPass123!',
+  newPassword: 'NewPass456!',
+});
+
+// Admin: list all users
+const { data: users, meta } = await heimdall.users.list({
+  page: 1,
+  limit: 20,
+  sort: 'created_at:desc',
+});</code></pre>
+
+        <h3>Token Management</h3>
+        <div class="code-header"><span>typescript</span></div>
+        <pre class="code-block"><code>// Get current access token (auto-refreshes if needed)
+const accessToken = await heimdall.auth.getAccessToken();
+
+// Check if user is authenticated
+const isLoggedIn = heimdall.auth.isAuthenticated();
+
+// Get current user from token (without API call)
+const user = heimdall.auth.getCurrentUser();
+
+// Manual token refresh
+await heimdall.auth.refreshTokens();
+
+// Revoke all sessions (logout everywhere)
+await heimdall.auth.logout({ everywhere: true });</code></pre>
+
+        <h3>Event Hooks</h3>
+        <div class="code-header"><span>typescript</span></div>
+        <pre class="code-block"><code>heimdall.on('auth:login', (user) => {
+  console.log('User logged in:', user.email);
+  analytics.track('login', { userId: user.id });
+});
+
+heimdall.on('auth:logout', () => {
+  console.log('User logged out');
+  // Clear any app state
+});
+
+heimdall.on('auth:token_refreshed', ({ accessToken }) => {
+  console.log('Token refreshed');
+});
+
+heimdall.on('auth:error', (error) => {
+  if (error.code === 'TOKEN_EXPIRED') {
+    window.location.href = '/login';
+  }
+});</code></pre>
+
+        <h3>Framework Integration</h3>
+
+        <ot-tabs>
+          <div role="tablist">
+            <button role="tab">React</button>
+            <button role="tab">Next.js</button>
+            <button role="tab">Vue 3</button>
+            <button role="tab">Express.js</button>
+          </div>
+
+          <div role="tabpanel">
+            <div class="code-header"><span>tsx — React hook</span></div>
+            <pre class="code-block"><code>// heimdall.ts
+import { HeimdallClient } from '@heimdall/sdk';
+export const heimdall = new HeimdallClient({ apiUrl: '...' });
+
+// useAuth.ts
+import { useState, useEffect } from 'react';
+import { heimdall } from './heimdall';
+
+export function useAuth() {
+  const [user, setUser] = useState(heimdall.auth.getCurrentUser());
+  const [loading, setLoading] = useState(false);
+
+  const login = async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      const { user } = await heimdall.auth.login({ email, password });
+      setUser(user);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    await heimdall.auth.logout();
+    setUser(null);
+  };
+
+  return { user, loading, login, logout };
+}</code></pre>
+          </div>
+
+          <div role="tabpanel">
+            <div class="code-header"><span>typescript — Next.js App Router</span></div>
+            <pre class="code-block"><code>// lib/heimdall.ts (server-side)
+import { HeimdallClient } from '@heimdall/sdk';
+
+export const heimdall = new HeimdallClient({
+  apiUrl: process.env.HEIMDALL_URL!,
+  tenantId: process.env.HEIMDALL_TENANT_ID!,
+  storage: 'memory', // Server-side — no localStorage
+});
+
+// app/api/auth/login/route.ts
+import { heimdall } from '@/lib/heimdall';
+import { NextResponse } from 'next/server';
+
+export async function POST(req: Request) {
+  const { email, password } = await req.json();
+  const { user, tokens } = await heimdall.auth.login({ email, password });
+
+  const response = NextResponse.json({ user });
+  response.cookies.set('refresh_token', tokens.refreshToken, {
+    httpOnly: true, secure: true, sameSite: 'lax', maxAge: 60 * 60 * 24 * 30,
+  });
+  return response;
+}</code></pre>
+          </div>
+
+          <div role="tabpanel">
+            <div class="code-header"><span>typescript — Vue 3 composable</span></div>
+            <pre class="code-block"><code>// composables/useAuth.ts
+import { ref, readonly } from 'vue';
+import { HeimdallClient } from '@heimdall/sdk';
+
+const heimdall = new HeimdallClient({ apiUrl: import.meta.env.VITE_HEIMDALL_URL });
+const user = ref(heimdall.auth.getCurrentUser());
+const loading = ref(false);
+
+export function useAuth() {
+  const login = async (email: string, password: string) => {
+    loading.value = true;
+    try {
+      const result = await heimdall.auth.login({ email, password });
+      user.value = result.user;
+    } finally {
+      loading.value = false;
+    }
+  };
+
+  return {
+    user: readonly(user),
+    loading: readonly(loading),
+    login,
+    logout: () => heimdall.auth.logout().then(() => { user.value = null; }),
+  };
+}</code></pre>
+          </div>
+
+          <div role="tabpanel">
+            <div class="code-header"><span>typescript — Express middleware</span></div>
+            <pre class="code-block"><code>import { HeimdallClient } from '@heimdall/sdk';
+import { Request, Response, NextFunction } from 'express';
+
+const heimdall = new HeimdallClient({ apiUrl: process.env.HEIMDALL_URL! });
+
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing auth token' });
+  }
+  try {
+    const token = authHeader.slice(7);
+    const user = await heimdall.auth.verifyToken(token);
+    req.user = user;
+    next();
+  } catch {
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
+
+// Usage
+app.get('/protected', requireAuth, (req, res) => {
+  res.json({ message: `Hello ${req.user.email}` });
+});</code></pre>
+          </div>
+        </ot-tabs>
+
+        <h3>Error Handling</h3>
+        <div class="code-header"><span>typescript</span></div>
+        <pre class="code-block"><code>import { HeimdallError } from '@heimdall/sdk';
+
+try {
+  await heimdall.auth.login({ email: 'wrong@example.com', password: 'wrong' });
+} catch (err) {
+  if (err instanceof HeimdallError) {
+    switch (err.code) {
+      case 'INVALID_CREDENTIALS':
+        showError('Email or password is incorrect');
+        break;
+      case 'ACCOUNT_LOCKED':
+        showError('Account locked — too many failed attempts');
+        break;
+      case 'EMAIL_NOT_VERIFIED':
+        redirectTo('/verify-email');
+        break;
+      case 'MFA_REQUIRED':
+        redirectTo('/mfa', { mfaToken: err.details.mfaToken });
+        break;
+      default:
+        showError(`Auth error: ${err.message}`);
+    }
+  }
+}</code></pre>
+      </div>
+
+      <!-- Go SDK -->
+      <div class="doc-section" id="go">
+        <h2>Go SDK <span class="badge warning" style="vertical-align: middle; margin-left: var(--space-2);">Planned</span></h2>
+
+        <div role="alert" data-variant="warning">
+          <strong>Coming Soon</strong> — The Go SDK is planned for a future release. In the meantime, you can use the REST API directly or use standard Go HTTP clients.
+        </div>
+
+        <h3>Planned Features</h3>
+        <ul>
+          <li>Idiomatic Go API following standard conventions</li>
+          <li><code>context.Context</code> support on all operations</li>
+          <li>Comprehensive error types with Go <code>errors.Is</code> / <code>errors.As</code> support</li>
+          <li>HTTP middleware for Gin, Echo, Chi, and net/http</li>
+          <li>Concurrent-safe token management</li>
+          <li>Configurable retry and timeout policies</li>
+        </ul>
+
+        <h3>Preview API (Subject to Change)</h3>
+        <div class="code-header"><span>go — planned interface</span></div>
+        <pre class="code-block"><code>package main
+
+import (
+    "context"
+    "fmt"
+    heimdall "github.com/techsavvyash/heimdall/sdk/go"
+)
+
+func main() {
+    client := heimdall.NewClient(heimdall.Config{
+        APIURL:   "https://api.heimdall.yourdomain.com",
+        TenantID: "my-tenant",
+    })
+
+    // Login
+    result, err := client.Auth.Login(context.Background(), heimdall.LoginInput{
+        Email:    "user@example.com",
+        Password: "SecurePass123!",
+    })
+    if err != nil {
+        var authErr *heimdall.AuthError
+        if errors.As(err, &authErr) {
+            fmt.Println("Auth failed:", authErr.Code)
+        }
+        return
+    }
+
+    fmt.Println("Logged in as:", result.User.Email)
+}
+
+// Gin middleware (planned)
+router.Use(heimdall.GinMiddleware(client))</code></pre>
+      </div>
+    </div>
+
+    <footer class="page-footer">
+      Built with ❤️ using <a href="https://github.com/knadh/oat" target="_blank" rel="noopener">OAT UI</a> ·
+      <a href="https://github.com/techsavvyash/heimdall" target="_blank" rel="noopener">GitHub</a> ·
+      MIT License
+    </footer>
+  </main>
+
+  <script src="https://unpkg.com/@knadh/oat/oat.min.js" defer></script>
+</body>
+</html>

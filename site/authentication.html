@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Authentication Guide — Heimdall Docs</title>
+  <link rel="stylesheet" href="https://unpkg.com/@knadh/oat/oat.min.css" />
+  <link rel="stylesheet" href="_shared.css" />
+  <style>
+    .flow-diagram {
+      background: var(--muted);
+      border-radius: 8px;
+      padding: var(--space-4);
+      font-family: monospace;
+      font-size: 0.85rem;
+      line-height: 1.8;
+      overflow-x: auto;
+      margin-bottom: var(--space-5);
+    }
+  </style>
+</head>
+<body data-sidebar-layout>
+
+  <nav data-topnav>
+    <button data-sidebar-toggle aria-label="Toggle menu" class="outline">☰</button>
+    <a href="index.html" class="brand">⚡ Heimdall</a>
+    <div class="nav-spacer"></div>
+    <a href="https://github.com/techsavvyash/heimdall" class="button small" target="_blank" rel="noopener">GitHub</a>
+  </nav>
+
+  <aside data-sidebar>
+    <header style="padding: var(--space-4) var(--space-2) var(--space-2);">
+      <span style="font-weight: 700; font-size: 0.95rem;">⚡ Heimdall Docs</span>
+    </header>
+    <nav>
+      <div class="sidebar-section-label">Start Here</div>
+      <ul>
+        <li><a href="index.html">Introduction</a></li>
+        <li><a href="getting-started.html">Getting Started</a></li>
+      </ul>
+      <div class="divider"></div>
+      <div class="sidebar-section-label">Guides</div>
+      <ul>
+        <li>
+          <details>
+            <summary>Features</summary>
+            <ul>
+              <li><a href="features.html#authentication">Authentication</a></li>
+              <li><a href="features.html#multi-tenancy">Multi-Tenancy</a></li>
+              <li><a href="features.html#rbac">RBAC</a></li>
+              <li><a href="features.html#audit-logging">Audit Logging</a></li>
+              <li><a href="features.html#tokens">Token Management</a></li>
+            </ul>
+          </details>
+        </li>
+        <li><a href="authentication.html" aria-current="page">Authentication Guide</a></li>
+        <li><a href="authorization.html">Authorization (OPA)</a></li>
+      </ul>
+      <div class="divider"></div>
+      <div class="sidebar-section-label">Reference</div>
+      <ul>
+        <li><a href="api.html">API Reference</a></li>
+        <li>
+          <details>
+            <summary>SDK</summary>
+            <ul>
+              <li><a href="sdk.html#js">JavaScript / TypeScript</a></li>
+              <li><a href="sdk.html#go">Go (Planned)</a></li>
+            </ul>
+          </details>
+        </li>
+        <li>
+          <details>
+            <summary>Deployment</summary>
+            <ul>
+              <li><a href="deployment.html#docker">Docker Compose</a></li>
+              <li><a href="deployment.html#railway">Railway</a></li>
+              <li><a href="deployment.html#kubernetes">Kubernetes</a></li>
+            </ul>
+          </details>
+        </li>
+      </ul>
+    </nav>
+    <footer>
+      <small style="color: var(--muted-foreground); font-size: 0.75rem;">v1.0.0 · MIT License</small>
+    </footer>
+  </aside>
+
+  <main>
+    <div class="page-content">
+      <div class="page-header">
+        <p class="eyebrow">Authentication Guide</p>
+        <h1>Authentication Flows</h1>
+        <p>In-depth guide to every authentication method Heimdall supports, with sequence diagrams and code examples.</p>
+      </div>
+
+      <!-- Architecture -->
+      <div class="doc-section" id="architecture">
+        <h2>Auth Pipeline</h2>
+        <p>Every request to Heimdall passes through a layered middleware pipeline before reaching a handler:</p>
+        <div class="flow-diagram"><pre>
+  Incoming Request
+        │
+        ▼
+  ┌─────────────┐
+  │ Rate Limiter │  ── 429 if limit exceeded
+  └──────┬──────┘
+         │
+         ▼
+  ┌──────────────┐
+  │ JWT Middleware│  ── 401 if token invalid/expired
+  └──────┬───────┘
+         │
+         ▼
+  ┌─────────────┐
+  │ OPA Authz   │  ── 403 if policy denies
+  └──────┬──────┘
+         │
+         ▼
+  ┌────────────────┐
+  │  Auth Handler  │  ── Calls FusionAuth + DB
+  └────────────────┘
+        </pre></div>
+
+        <h3>JWT Token Structure</h3>
+        <div class="code-header"><span>json — JWT payload</span></div>
+        <pre class="code-block"><code>{
+  "sub": "user-uuid",
+  "email": "user@example.com",
+  "tenantId": "acme",
+  "roles": ["user", "content_editor"],
+  "permissions": ["content:read", "content:create"],
+  "iat": 1705312200,
+  "exp": 1705313100,
+  "iss": "heimdall"
+}</code></pre>
+      </div>
+
+      <!-- Email/Password -->
+      <div class="doc-section" id="email-password">
+        <h2>Email &amp; Password Flow</h2>
+
+        <div class="flow-diagram"><pre>
+  Client                    Heimdall               FusionAuth          Redis
+    │                          │                       │                 │
+    │── POST /auth/login ──────▶│                       │                 │
+    │                          │── validate password ──▶│                 │
+    │                          │◀─ user object ─────────│                 │
+    │                          │── store refresh token ──────────────────▶│
+    │                          │── sign JWT ─────────── (RSA private key) │
+    │◀─ { accessToken,         │                       │                 │
+    │     refreshToken } ──────│                       │                 │
+        </pre></div>
+
+        <h3>Register</h3>
+        <div class="code-header"><span>typescript</span></div>
+        <pre class="code-block"><code>const response = await fetch('/api/v1/auth/register', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Tenant-ID': 'my-tenant',
+  },
+  body: JSON.stringify({
+    email: 'jane@example.com',
+    password: 'SecurePass123!',
+    firstName: 'Jane',
+    lastName: 'Doe',
+  }),
+});
+const { data } = await response.json();
+// data.user, data.tokens</code></pre>
+
+        <h3>Login</h3>
+        <div class="code-header"><span>typescript</span></div>
+        <pre class="code-block"><code>const response = await fetch('/api/v1/auth/login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': 'my-tenant' },
+  body: JSON.stringify({ email: 'jane@example.com', password: 'SecurePass123!' }),
+});
+const { data } = await response.json();
+// Store tokens
+localStorage.setItem('accessToken', data.tokens.accessToken);
+localStorage.setItem('refreshToken', data.tokens.refreshToken);</code></pre>
+
+        <h3>Password Reset Flow</h3>
+        <div class="flow-diagram"><pre>
+  1. Client          → POST /auth/forgot-password  { email }
+  2. Heimdall        → Generates secure reset token, stores in Redis (15-min TTL)
+  3. Heimdall        → Sends email with reset link
+  4. User clicks link
+  5. Client          → POST /auth/reset-password  { token, newPassword }
+  6. Heimdall        → Validates token, updates password in FusionAuth, invalidates token
+        </pre></div>
+      </div>
+
+      <!-- OAuth -->
+      <div class="doc-section" id="oauth">
+        <h2>OAuth 2.0 Social Login</h2>
+
+        <div class="flow-diagram"><pre>
+  Client              Heimdall           OAuth Provider         FusionAuth
+    │                    │                     │                    │
+    │── GET /auth/oauth  │                     │                    │
+    │   /google?redirect ▶│                     │                    │
+    │◀─ 302 → Google ───│                     │                    │
+    │                    │                     │                    │
+    │── (User consents) ──────────────────────▶│                    │
+    │◀─ 302 → /callback?code=... ─────────────│                    │
+    │                    │                     │                    │
+    │── GET /callback? ──▶│                     │                    │
+    │   code=...          │── exchange code ───▶│                    │
+    │                    │◀─ access_token ──────│                    │
+    │                    │── get user info ────▶│                    │
+    │                    │◀─ profile ───────────│                    │
+    │                    │── upsert user ───────────────────────────▶│
+    │◀─ { tokens } ──────│                     │                    │
+        </pre></div>
+
+        <h3>Initiate OAuth</h3>
+        <div class="code-header"><span>typescript</span></div>
+        <pre class="code-block"><code>// Redirect the user to the OAuth provider
+const redirectUri = encodeURIComponent('https://yourapp.com/auth/callback');
+window.location.href = `/api/v1/auth/oauth/google?redirect_uri=${redirectUri}`;</code></pre>
+
+        <h3>Handle callback</h3>
+        <div class="code-header"><span>typescript</span></div>
+        <pre class="code-block"><code>// On your callback page
+const params = new URLSearchParams(window.location.search);
+const code = params.get('code');
+
+const response = await fetch('/api/v1/auth/oauth/google/callback', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ code, redirectUri: 'https://yourapp.com/auth/callback' }),
+});
+const { data } = await response.json();
+// data.tokens — same token structure as email/password login</code></pre>
+
+        <h3>Supported Providers</h3>
+        <table>
+          <thead><tr><th>Provider</th><th>Endpoint</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>Google</td><td><code>/auth/oauth/google</code></td><td><span class="badge success">Available</span></td></tr>
+            <tr><td>GitHub</td><td><code>/auth/oauth/github</code></td><td><span class="badge success">Available</span></td></tr>
+            <tr><td>Facebook</td><td><code>/auth/oauth/facebook</code></td><td><span class="badge secondary">Extensible</span></td></tr>
+            <tr><td>Microsoft</td><td><code>/auth/oauth/microsoft</code></td><td><span class="badge secondary">Extensible</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Passwordless -->
+      <div class="doc-section" id="passwordless">
+        <h2>Passwordless (Magic Links)</h2>
+
+        <div class="flow-diagram"><pre>
+  1. Client    → POST /auth/magic-link  { email }
+  2. Heimdall  → Generates random token, stores in Redis with 15-min TTL
+  3. Heimdall  → Emails link: https://yourapp.com/auth/verify?token=abc123
+  4. User opens link
+  5. Client    → GET /auth/magic-link/verify?token=abc123
+  6. Heimdall  → Validates token from Redis, marks as used, issues JWT tokens
+  7. Client    ← { accessToken, refreshToken }
+        </pre></div>
+
+        <div role="alert">
+          <strong>Token Security</strong> — Magic link tokens are single-use. After one verification, the token is immediately deleted from Redis. If an attacker intercepts the link and uses it first, the legitimate user will receive a 401 and can request a new link.
+        </div>
+      </div>
+
+      <!-- MFA -->
+      <div class="doc-section" id="mfa">
+        <h2>Multi-Factor Authentication (MFA)</h2>
+
+        <h3>MFA Login Flow</h3>
+        <div class="flow-diagram"><pre>
+  Step 1 — Initial Login
+  ═══════════════════════
+  Client → POST /auth/login { email, password }
+  Server ← { mfaRequired: true, mfaToken: "temp-session-token", mfaMethods: ["totp"] }
+
+  Step 2 — MFA Verification
+  ══════════════════════════
+  Client → POST /auth/mfa/verify { mfaToken: "...", code: "123456" }
+  Server ← { accessToken, refreshToken }  ← full tokens issued only here
+        </pre></div>
+
+        <h3>Enable TOTP for a User</h3>
+        <div class="code-header"><span>typescript</span></div>
+        <pre class="code-block"><code>// 1. Request TOTP setup — returns QR code and secret
+const setup = await fetch('/api/v1/users/me/mfa/totp/setup', {
+  method: 'POST',
+  headers: { 'Authorization': `Bearer ${accessToken}` }
+});
+const { data } = await setup.json();
+// data.qrCodeUrl — display this QR to the user
+// data.secret    — backup secret key
+
+// 2. User scans QR in their authenticator app
+// 3. Confirm enrollment by submitting a TOTP code
+await fetch('/api/v1/users/me/mfa/totp/confirm', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ code: '123456' })
+});</code></pre>
+
+        <h3>Backup Codes</h3>
+        <div class="code-header"><span>typescript</span></div>
+        <pre class="code-block"><code>// Generate backup codes (10 single-use codes)
+const resp = await fetch('/api/v1/users/me/mfa/backup-codes', {
+  method: 'POST',
+  headers: { 'Authorization': `Bearer ${accessToken}` }
+});
+const { data } = await resp.json();
+// data.codes: ["abc1-def2", "ghi3-jkl4", ...] — show once, store safely</code></pre>
+      </div>
+
+      <!-- Token Handling -->
+      <div class="doc-section" id="tokens">
+        <h2>Token Handling Best Practices</h2>
+
+        <h3>Where to Store Tokens</h3>
+        <table>
+          <thead><tr><th>Storage</th><th>Access Token</th><th>Refresh Token</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Memory (JS)</td>
+              <td><span class="badge success">Recommended</span></td>
+              <td><span class="badge warning">Risky</span></td>
+              <td>Lost on page refresh; use for SPAs with refresh in cookie</td>
+            </tr>
+            <tr>
+              <td>HttpOnly Cookie</td>
+              <td><span class="badge secondary">OK</span></td>
+              <td><span class="badge success">Recommended</span></td>
+              <td>CSRF-protected; best for refresh tokens</td>
+            </tr>
+            <tr>
+              <td>localStorage</td>
+              <td><span class="badge warning">Risky</span></td>
+              <td><span class="badge danger">Not Recommended</span></td>
+              <td>Accessible to XSS; avoid for sensitive tokens</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Auto-Refresh Pattern</h3>
+        <div class="code-header"><span>typescript</span></div>
+        <pre class="code-block"><code>async function fetchWithAuth(url: string, options: RequestInit = {}) {
+  let token = getAccessToken(); // from memory
+
+  const response = await fetch(url, {
+    ...options,
+    headers: { ...options.headers, 'Authorization': `Bearer ${token}` }
+  });
+
+  if (response.status === 401) {
+    // Try to refresh
+    const refreshed = await refreshAccessToken();
+    if (!refreshed) {
+      // Redirect to login
+      window.location.href = '/login';
+      return;
+    }
+    token = getAccessToken();
+    return fetch(url, {
+      ...options,
+      headers: { ...options.headers, 'Authorization': `Bearer ${token}` }
+    });
+  }
+
+  return response;
+}</code></pre>
+
+        <div role="alert" data-variant="success">
+          <strong>SDK Handles This For You</strong> — The official <a href="sdk.html">Heimdall JS/TS SDK</a> implements auto-refresh, interceptors, and token storage automatically.
+        </div>
+      </div>
+    </div>
+
+    <footer class="page-footer">
+      Built with ❤️ using <a href="https://github.com/knadh/oat" target="_blank" rel="noopener">OAT UI</a> ·
+      <a href="https://github.com/techsavvyash/heimdall" target="_blank" rel="noopener">GitHub</a> ·
+      MIT License
+    </footer>
+  </main>
+
+  <script src="https://unpkg.com/@knadh/oat/oat.min.js" defer></script>
+</body>
+</html>

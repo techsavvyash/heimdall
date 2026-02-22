@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Heimdall — The Guardian of Your Authentication</title>
+  <link rel="stylesheet" href="https://unpkg.com/@knadh/oat/oat.min.css" />
+  <style>
+    :root {
+      --primary: #1a1a2e;
+      --primary-foreground: #fafafa;
+      --ring: #1a1a2e;
+    }
+    [data-topnav] {
+      gap: var(--space-3);
+    }
+    .brand {
+      font-weight: 700;
+      font-size: 1.1rem;
+      text-decoration: none;
+      color: inherit;
+      letter-spacing: -0.02em;
+    }
+    .hero {
+      padding: var(--space-10) var(--space-6) var(--space-8);
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, #f8f8ff 0%, #fff 60%);
+    }
+    .hero h1 {
+      font-size: 3.5rem;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      margin-bottom: var(--space-2);
+      line-height: 1.1;
+    }
+    .hero .tagline {
+      font-size: 1.25rem;
+      color: var(--muted-foreground);
+      margin-bottom: var(--space-4);
+    }
+    .hero .description {
+      max-width: 600px;
+      margin: 0 auto var(--space-6);
+      font-size: 1.05rem;
+      color: var(--muted-foreground);
+      line-height: 1.7;
+    }
+    .hero-actions {
+      display: flex;
+      gap: var(--space-3);
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: var(--space-8);
+    }
+    .stats-row {
+      display: flex;
+      gap: var(--space-4);
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: var(--space-4);
+    }
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: 0.9rem;
+      color: var(--muted-foreground);
+    }
+    .stat-item strong {
+      color: var(--foreground);
+    }
+    .section {
+      padding: var(--space-8) var(--space-6);
+    }
+    .section-header {
+      text-align: center;
+      margin-bottom: var(--space-8);
+    }
+    .section-header h2 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: var(--space-2);
+    }
+    .section-header p {
+      color: var(--muted-foreground);
+      max-width: 520px;
+      margin: 0 auto;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: var(--space-4);
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    .feature-card {
+      padding: var(--space-5);
+    }
+    .feature-card .icon {
+      font-size: 1.8rem;
+      margin-bottom: var(--space-3);
+    }
+    .feature-card h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: var(--space-2);
+    }
+    .feature-card p {
+      font-size: 0.9rem;
+      color: var(--muted-foreground);
+      line-height: 1.6;
+      margin: 0;
+    }
+    .arch-box {
+      background: var(--muted);
+      border-radius: 8px;
+      padding: var(--space-5);
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    .arch-box pre {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+    .quickstart-section {
+      background: var(--faint);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .code-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      padding: var(--space-2) var(--space-4);
+      border-radius: 8px 8px 0 0;
+      font-size: 0.8rem;
+      font-family: monospace;
+    }
+    .code-block {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      padding: var(--space-4);
+      border-radius: 0 0 8px 8px;
+      overflow-x: auto;
+      font-size: 0.875rem;
+      line-height: 1.6;
+      margin: 0;
+    }
+    .code-block code {
+      background: none;
+      color: inherit;
+      padding: 0;
+      font-size: inherit;
+    }
+    .cta-section {
+      text-align: center;
+      padding: var(--space-10) var(--space-6);
+    }
+    .cta-section h2 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: var(--space-3);
+    }
+    .cta-section p {
+      color: var(--muted-foreground);
+      margin-bottom: var(--space-6);
+      max-width: 480px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    nav[data-topnav] .nav-spacer {
+      flex: 1;
+    }
+    aside[data-sidebar] nav ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    aside[data-sidebar] nav ul li {
+      padding: 0;
+    }
+    aside[data-sidebar] nav ul li a {
+      display: block;
+      padding: var(--space-1) var(--space-2);
+      border-radius: 4px;
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+    aside[data-sidebar] nav ul li a:hover {
+      background: var(--accent);
+    }
+    aside[data-sidebar] nav ul li a[aria-current="page"] {
+      background: var(--accent);
+      font-weight: 600;
+    }
+    aside[data-sidebar] nav > ul > li > details > summary {
+      padding: var(--space-1) var(--space-2);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 4px;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    aside[data-sidebar] nav > ul > li > details > summary::after {
+      content: "›";
+      margin-left: auto;
+      transition: transform 0.2s;
+    }
+    aside[data-sidebar] nav > ul > li > details[open] > summary::after {
+      transform: rotate(90deg);
+    }
+    aside[data-sidebar] nav > ul > li > details > ul {
+      padding-left: var(--space-4);
+      margin-top: var(--space-1);
+    }
+    .sidebar-section-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted-foreground);
+      padding: var(--space-3) var(--space-2) var(--space-1);
+    }
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: var(--space-2) 0;
+    }
+    @media (max-width: 640px) {
+      .hero h1 { font-size: 2.2rem; }
+    }
+  </style>
+</head>
+<body data-sidebar-layout>
+
+  <nav data-topnav>
+    <button data-sidebar-toggle aria-label="Toggle menu" class="outline">☰</button>
+    <a href="index.html" class="brand">⚡ Heimdall</a>
+    <div class="nav-spacer"></div>
+    <a href="getting-started.html" class="button outline small">Docs</a>
+    <a href="https://github.com/techsavvyash/heimdall" class="button small" target="_blank" rel="noopener">GitHub</a>
+  </nav>
+
+  <aside data-sidebar>
+    <header style="padding: var(--space-4) var(--space-2) var(--space-2);">
+      <span style="font-weight: 700; font-size: 0.95rem;">⚡ Heimdall Docs</span>
+    </header>
+    <nav>
+      <div class="sidebar-section-label">Start Here</div>
+      <ul>
+        <li><a href="index.html" aria-current="page">Introduction</a></li>
+        <li><a href="getting-started.html">Getting Started</a></li>
+      </ul>
+      <div class="divider"></div>
+      <div class="sidebar-section-label">Guides</div>
+      <ul>
+        <li>
+          <details open>
+            <summary>Features</summary>
+            <ul>
+              <li><a href="features.html#authentication">Authentication</a></li>
+              <li><a href="features.html#multi-tenancy">Multi-Tenancy</a></li>
+              <li><a href="features.html#rbac">RBAC</a></li>
+              <li><a href="features.html#audit-logging">Audit Logging</a></li>
+              <li><a href="features.html#tokens">Token Management</a></li>
+            </ul>
+          </details>
+        </li>
+        <li><a href="authentication.html">Authentication Guide</a></li>
+        <li><a href="authorization.html">Authorization (OPA)</a></li>
+      </ul>
+      <div class="divider"></div>
+      <div class="sidebar-section-label">Reference</div>
+      <ul>
+        <li><a href="api.html">API Reference</a></li>
+        <li>
+          <details>
+            <summary>SDK</summary>
+            <ul>
+              <li><a href="sdk.html#js">JavaScript / TypeScript</a></li>
+              <li><a href="sdk.html#go">Go (Planned)</a></li>
+            </ul>
+          </details>
+        </li>
+        <li>
+          <details>
+            <summary>Deployment</summary>
+            <ul>
+              <li><a href="deployment.html#docker">Docker Compose</a></li>
+              <li><a href="deployment.html#railway">Railway</a></li>
+              <li><a href="deployment.html#kubernetes">Kubernetes</a></li>
+            </ul>
+          </details>
+        </li>
+      </ul>
+    </nav>
+    <footer>
+      <small style="color: var(--muted-foreground); font-size: 0.75rem;">v1.0.0 · MIT License</small>
+    </footer>
+  </aside>
+
+  <main>
+    <!-- Hero -->
+    <div class="hero">
+      <div>
+        <span class="badge success" style="margin-bottom: var(--space-3); display: inline-block;">OPA Integration Available</span>
+      </div>
+      <h1>Heimdall</h1>
+      <p class="tagline">The Guardian of Your Authentication</p>
+      <p class="description">
+        A high-performance authentication service built with Go that unifies auth across all your applications.
+        Multi-tenant, OPA-powered, OAuth 2.0 compliant — production-ready from day one.
+      </p>
+      <div class="hero-actions">
+        <a href="getting-started.html" class="button large">Get Started</a>
+        <a href="api.html" class="button outline large">API Reference</a>
+        <a href="https://github.com/techsavvyash/heimdall" class="button ghost large" target="_blank" rel="noopener">View on GitHub ↗</a>
+      </div>
+      <div class="stats-row">
+        <span class="stat-item"><strong>Go</strong> powered</span>
+        <span class="stat-item">·</span>
+        <span class="stat-item"><strong>Multi-tenant</strong> by design</span>
+        <span class="stat-item">·</span>
+        <span class="stat-item"><strong>OPA</strong> authorization</span>
+        <span class="stat-item">·</span>
+        <span class="stat-item"><strong>OAuth 2.0</strong> / <strong>OIDC</strong> compliant</span>
+        <span class="stat-item">·</span>
+        <span class="stat-item"><strong>MIT</strong> License</span>
+      </div>
+    </div>
+
+    <!-- Features Grid -->
+    <div class="section" id="features">
+      <div class="section-header">
+        <h2>Everything you need for auth</h2>
+        <p>Stop reimplementing authentication in every project. Heimdall handles it all.</p>
+      </div>
+      <div class="features-grid">
+        <article class="card feature-card">
+          <div class="icon">🔐</div>
+          <h3>Multiple Auth Methods</h3>
+          <p>Email/password, Google & GitHub OAuth, passwordless magic links, and full MFA with TOTP, SMS, and email OTP.</p>
+        </article>
+        <article class="card feature-card">
+          <div class="icon">🏢</div>
+          <h3>Multi-Tenancy</h3>
+          <p>Complete data isolation between tenants. Tenant-specific configs, custom domains, resource quotas, and independent admin roles.</p>
+        </article>
+        <article class="card feature-card">
+          <div class="icon">🛡️</div>
+          <h3>Fine-Grained Authorization</h3>
+          <p>Open Policy Agent integration with Rego policies. RBAC, ABAC, tenant isolation, resource ownership, and time-based access.</p>
+        </article>
+        <article class="card feature-card">
+          <div class="icon">📋</div>
+          <h3>Audit Logging</h3>
+          <p>Complete audit trail of every authentication event. GDPR, SOC2, and HIPAA-ready with structured, searchable JSON logs.</p>
+        </article>
+        <article class="card feature-card">
+          <div class="icon">🔑</div>
+          <h3>OAuth 2.0 / OIDC</h3>
+          <p>Full OAuth 2.0 compliance with PKCE, client credentials flow, refresh token rotation, and OpenID Connect ID tokens.</p>
+        </article>
+        <article class="card feature-card">
+          <div class="icon">⚡</div>
+          <h3>High Performance</h3>
+          <p>Stateless design with Redis caching. Horizontal scaling out of the box. Connection pooling, gzip compression, and indexed queries.</p>
+        </article>
+        <article class="card feature-card">
+          <div class="icon">📦</div>
+          <h3>Official SDKs</h3>
+          <p>JavaScript/TypeScript SDK with full type safety, auto token refresh, SSR support, and React/Vue/Angular compatibility.</p>
+        </article>
+        <article class="card feature-card">
+          <div class="icon">🚀</div>
+          <h3>Easy Deployment</h3>
+          <p>Deploy on Railway with one click, self-host with Docker Compose, or scale on Kubernetes. Railway-optimized with kickstart config.</p>
+        </article>
+        <article class="card feature-card">
+          <div class="icon">🔌</div>
+          <h3>FusionAuth Powered</h3>
+          <p>Built as a smart proxy over FusionAuth, adding multi-tenancy, OPA authz, audit logging, and a cleaner API surface.</p>
+        </article>
+      </div>
+    </div>
+
+    <!-- Architecture -->
+    <div class="section" style="background: var(--faint); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);" id="architecture">
+      <div class="section-header">
+        <h2>Architecture</h2>
+        <p>A layered, stateless design that puts security and scalability first.</p>
+      </div>
+      <div class="arch-box">
+        <pre>
+  Client Applications (Web · Mobile · Backend)
+               │
+               ▼
+  ┌────────────────────────────────────┐
+  │          Heimdall API              │
+  │  (Go · Gin · Rate Limiter · CORS) │
+  │  ├─ Auth Service                  │
+  │  ├─ User Management               │
+  │  ├─ RBAC Service                  │
+  │  ├─ Audit Logger                  │
+  │  ├─ Tenant Management             │
+  │  └─ OPA Middleware                │
+  └────────────────────────────────────┘
+     │           │           │          │
+     ▼           ▼           ▼          ▼
+FusionAuth  PostgreSQL    Redis    OPA + MinIO
+(Identity)  (App DB)    (Cache)  (Policies)
+        </pre>
+      </div>
+      <div style="text-align: center; margin-top: var(--space-5);">
+        <a href="getting-started.html#architecture" class="button outline">Deep Dive into Architecture →</a>
+      </div>
+    </div>
+
+    <!-- Quick Start -->
+    <div class="section quickstart-section" id="quickstart">
+      <div class="section-header">
+        <h2>Quick Start</h2>
+        <p>Up and running in minutes with Docker Compose.</p>
+      </div>
+
+      <div style="max-width: 700px; margin: 0 auto;">
+        <div style="margin-bottom: var(--space-5);">
+          <p style="font-weight: 600; margin-bottom: var(--space-2);">1. Clone and start services</p>
+          <div class="code-header"><span>bash</span></div>
+          <pre class="code-block"><code>git clone https://github.com/techsavvyash/heimdall.git
+cd heimdall
+docker compose up -d</code></pre>
+        </div>
+
+        <div style="margin-bottom: var(--space-5);">
+          <p style="font-weight: 600; margin-bottom: var(--space-2);">2. Run migrations and start the server</p>
+          <div class="code-header"><span>bash</span></div>
+          <pre class="code-block"><code>make migrate
+make run</code></pre>
+        </div>
+
+        <div style="margin-bottom: var(--space-5);">
+          <p style="font-weight: 600; margin-bottom: var(--space-2);">3. Register your first user</p>
+          <div class="code-header"><span>bash</span></div>
+          <pre class="code-block"><code>curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecurePass123!",
+    "firstName": "Jane",
+    "lastName": "Doe"
+  }'</code></pre>
+        </div>
+
+        <div>
+          <p style="font-weight: 600; margin-bottom: var(--space-2);">4. Install the JS SDK and authenticate</p>
+          <div class="code-header"><span>typescript</span></div>
+          <pre class="code-block"><code>import { HeimdallClient } from '@heimdall/sdk';
+
+const heimdall = new HeimdallClient({
+  apiUrl: 'http://localhost:8080',
+  tenantId: 'your-tenant-id',
+});
+
+const { user, tokens } = await heimdall.auth.login({
+  email: 'user@example.com',
+  password: 'SecurePass123!',
+});
+
+console.log('Logged in as:', user.email);</code></pre>
+        </div>
+
+        <div style="margin-top: var(--space-5); text-align: center;">
+          <a href="getting-started.html" class="button">Full Getting Started Guide →</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <div class="cta-section">
+      <h2>Ready to secure your apps?</h2>
+      <p>
+        Heimdall handles auth so you can focus on what matters — building your product.
+      </p>
+      <div style="display: flex; gap: var(--space-3); justify-content: center; flex-wrap: wrap;">
+        <a href="getting-started.html" class="button large">Get Started</a>
+        <a href="api.html" class="button outline large">API Docs</a>
+      </div>
+    </div>
+
+    <footer style="padding: var(--space-6); text-align: center; border-top: 1px solid var(--border); color: var(--muted-foreground); font-size: 0.85rem;">
+      Built with ❤️ using <a href="https://github.com/knadh/oat" target="_blank" rel="noopener">OAT UI</a> ·
+      <a href="https://github.com/techsavvyash/heimdall" target="_blank" rel="noopener">GitHub</a> ·
+      MIT License
+    </footer>
+  </main>
+
+  <script src="https://unpkg.com/@knadh/oat/oat.min.js" defer></script>
+</body>
+</html>
