@@ -5,6 +5,8 @@ date: 2026-11-07
 
 This is a proposed backlog derived from [[two-product-walkthrough]]. Checked items describe completed documentation work. Unchecked items require design decisions or implementation. Directory ownership is described in [[project-structure]].
 
+Execution is tracked in [[implementation-roadmap|the implementation roadmap]] and [GitHub issue #29](https://github.com/techsavvyash/heimdall/issues/29). Its 22 child tickets expand this backlog into PRDs, implementation plans, dependencies and acceptance criteria. Ticket creation does not approve unresolved design proposals.
+
 ## Completed design foundation
 
 - [x] Bootstrap the Quartz site and verify Mermaid rendering.
