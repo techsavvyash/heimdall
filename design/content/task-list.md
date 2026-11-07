@@ -8,6 +8,7 @@ This is a proposed backlog derived from [[two-product-walkthrough]]. Checked ite
 ## Completed design foundation
 
 - [x] Bootstrap the Quartz site and verify Mermaid rendering.
+- [x] Scaffold TypeScript and Go packages, workspace directories, formatter, linter, type checks, Knip, Git hooks and CI checks. See [[development-workspace]].
 - [x] Document direct SDK integration with ZITADEL and OpenFGA.
 - [x] Walk through Ledger and Support with Acme and Globex tenants.
 - [x] Describe developer wiring and SDK responsibilities.

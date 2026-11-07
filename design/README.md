@@ -27,6 +27,6 @@ Bootstrapped from Quartz 5 at commit `97a2d05f80c4c50534959b1d0d41cc4b3895625e`.
 
 ## Verification
 
-Validated on November 7, 2026 using Node 24.13.1. The production build succeeds, all 17 Markdown pages have resolving internal links, and all 45 Mermaid diagrams rendered as SVG in the browser. The npm dependency audit reports zero vulnerabilities.
+Validated on November 7, 2026 using Node 24.13.1. The production build succeeds, all 18 Markdown pages have resolving internal links, and all 45 Mermaid diagrams rendered as SVG in the browser. The npm dependency audit reports zero vulnerabilities.
 
 Dependency patches were applied after bootstrapping, including minimatch 11.0.5. The installed versions are pinned in `package-lock.json`.

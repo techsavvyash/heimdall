@@ -21,6 +21,7 @@ flowchart LR
 
 | Page | What we will decide |
 | --- | --- |
+| [[development-workspace]] | Local setup, agent checks, Git hooks and CI |
 | [[task-list]] | Implementation tasks, dependencies, and acceptance gates |
 | [[project-structure]] | Repository layout and where each responsibility lives |
 | [[two-product-walkthrough]] | Two products end to end, developer wiring, SDK responsibilities, and integration gaps |

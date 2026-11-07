@@ -8,6 +8,7 @@ The distinction between agreed constraints and proposed defaults keeps this desi
 | Status | Decision | Rationale |
 | --- | --- | --- |
 | Agreed | Deploy ZITADEL and OpenFGA with SDKs in product processes | Lean integration and direct service use |
+| Agreed | Use Rolldown, Oxlint, Oxfmt and Vitest for TypeScript | Requested tooling for fast agent feedback |
 | Agreed | Ship TypeScript and Go SDKs in the initial release | Both are required for initial product integrations |
 | Agreed | Publish installable packages per language | Product developers integrate through familiar tooling |
 | Agreed | Support multiple products and tenants per deployment | Reuse the auth deployment across products |

@@ -65,3 +65,17 @@ docker-volumes/
 
 # OS specific
 Thumbs.db
+
+# Workspace dependencies and generated outputs
+node_modules/
+coverage/
+.vitest/
+*.tsbuildinfo
+*.tgz
+
+# Local credentials and auth responses
+.env.*
+!.env.example
+*credentials*.txt
+token*.txt
+login-response.json

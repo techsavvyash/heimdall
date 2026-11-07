@@ -3,7 +3,7 @@ title: Project structure and ownership
 date: 2026-11-07
 ---
 
-This is the proposed repository layout. The Quartz site in `design/` exists today. SDKs, infrastructure, contracts and examples below are planned. TypeScript and Go are both agreed initial-release SDKs. Framework adapters remain open. Both packages implement the same versioned behavioral contract with idiomatic language APIs.
+The workspace now contains the Quartz site, TypeScript and Go package scaffolds, shared directory boundaries, and root feedback tooling. Runtime SDK modules, service deployment files, contracts and product examples shown below remain planned. See [[development-workspace]] for the installed tools and commands. TypeScript and Go are both agreed initial-release SDKs. Framework adapters remain open. Both packages implement the same versioned behavioral contract with idiomatic language APIs.
 
 ## Repository layout
 
