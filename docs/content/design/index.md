@@ -23,6 +23,7 @@ flowchart LR
 | --- | --- |
 | [[development-workspace]] | Local setup, agent checks, Git hooks and CI |
 | [[task-list]] | Implementation tasks, dependencies, and acceptance gates |
+| [[design/built-in-adapters]] | Selected adapter scope, ownership modes, recovery limits and footguns |
 | [[project-structure]] | Repository layout and where each responsibility lives |
 | [[two-product-walkthrough]] | Two products end to end, developer wiring, SDK responsibilities, and integration gaps |
 | [[architecture]] | Deployment boundary, trust, and component responsibilities |
@@ -40,7 +41,7 @@ flowchart LR
 
 ## Explorations
 
-The following alternatives are unapproved and tracked separately from the current contract proposal.
+The following page preserves earlier alternatives. The selected scope now lives in [[design/built-in-adapters]].
 
 - [[explorations/built-in-adapters|SDKs with built-in persistence adapters]] compares simpler sessions, workspace discovery and onboarding with the core SDK approach, including TypeScript and Go examples.
 

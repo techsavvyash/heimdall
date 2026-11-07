@@ -15,7 +15,10 @@ The distinction between agreed constraints and proposed defaults keeps this desi
 | Agreed | Design and dry-run before implementation | Validate the model and failure behavior together |
 | Proposed | One ZITADEL project and OpenFGA store per product and environment | Independent policy and configuration |
 | Proposed | Start with tenant-scoped RBAC | Short integration path for common role checks |
-| Proposed | Product database owns tenants and invitations | Product already owns workspace lifecycle and data |
+| Selected design | Optional PostgreSQL adapters in TS and Go; sessions-only or managed-workspace composition | Reduce wiring while preserving core interfaces; see [[design/built-in-adapters]] |
+| Selected design | Fetch handlers in TS and net/http in Go initially | Portable HTTP boundaries; framework wrappers follow concrete need |
+| Selected design | Core mode keeps product tenant ownership; managed mode owns minimal auth workspace state in product DB | Explicit opt-in; invitations and business data stay product-owned |
+| Selected design | Explicit migrations and reconcile; uncertain remote attempts block conflicting changes and managed access | No implicit workers or claim that a lease fences OpenFGA |
 | Proposed | Shared sign-in with independent product memberships | Explicit access boundaries between products |
 | Proposed | Trusted product backends under one operator | Fits direct SDK access to shared services |
 | Proposed | Versioned model and permission manifest | Predictable behavior across SDK languages and rollout |
@@ -35,7 +38,7 @@ flowchart TD
 ## Questions for the next design session
 
 1. Should a company manage one directory across products, or invite members independently in each product?
-2. Which TypeScript framework and Go HTTP adapter should define the initial integration experiences?
+2. Which server integration should demonstrate the selected TypeScript Fetch boundary? Go uses net/http. Framework-specific wrappers are deferred.
 3. Are all product backends trusted under the same operator? What per-store service credential restrictions are required?
 4. Do tenants need custom roles at runtime, or are product-defined roles sufficient initially?
 5. Is document or resource sharing required for the first product?
@@ -46,7 +49,7 @@ flowchart TD
 
 ## Gaps from the two-product walkthrough
 
-The [[two-product-walkthrough]] proposes explicit contracts for sessions, paginated workspace discovery, retryable onboarding, and tenant-specific SAML or OIDC setup. Each remains open pending framework selection and executable service verification. Shared organization mappings share login policy across products. Strict SSO enforcement must cover existing sessions and tenant switching.
+The [[design/built-in-adapters]] decision selects storage ownership, initial HTTP boundaries, pagination integration and conservative recovery scope. Executable service verification remains required. The [[two-product-walkthrough]] describes the core/product-owned path; managed mode supersedes its wiring and automatic-recovery assumptions where specified. Shared organization mappings share login policy across products. Strict SSO enforcement must cover existing sessions and tenant switching.
 
 SCIM user lifecycle and SIEM export are covered in the walkthrough. Open questions include the product worker that runs reconciliation, directory-to-workspace enrollment rules, unsupported SCIM group provisioning, audit event coverage, and durable export.
 

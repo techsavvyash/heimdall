@@ -4,7 +4,7 @@
 
 - Read `docs/content/design/decisions.md` and the relevant contract before implementing behavior.
 - TypeScript and Go are both initial-release SDKs. Share behavior through `contracts/fixtures/`.
-- `docs/content/design/explorations/` contains unapproved alternatives. Implement those only when selected by the user.
+- `docs/content/design/built-in-adapters.md` is the selected adapter scope. Its historical exploration is superseded; other explorations remain unapproved. Preserve the managed lifecycle gate and uncertain-write recovery limits.
 - Keep auth code inside SDK packages. Product examples own business data and integration code.
 - Add module directories when their implementation starts. Current empty directories mark agreed workspace boundaries.
 

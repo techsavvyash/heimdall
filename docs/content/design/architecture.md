@@ -41,8 +41,8 @@ flowchart TB
 | --- | --- | --- |
 | ZITADEL | Identities, authentication, identity federation, sessions | OIDC client and access-token validation |
 | OpenFGA | Authorization models and relationship tuples | SDK checks, role reads, and membership writes |
-| Heimdall SDK | Conventions, validation, policy mapping, error handling | In-process library with framework adapters |
-| Product | Tenant lifecycle, invitations, business data, audit storage | Calls SDK and scopes database operations |
+| Heimdall SDK | Core contracts plus optional session/managed-workspace persistence | In-process library; see [[design/built-in-adapters]] |
+| Product | Core tenant lifecycle or managed-mode business readiness, invitations, business data, audit delivery | Operates database/keys, schedules recovery, scopes business operations |
 | Setup tooling | Provisioning workflow and generated configuration | Operator command or CI job |
 
 ## Credential boundary

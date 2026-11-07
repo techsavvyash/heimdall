@@ -41,7 +41,7 @@ flowchart LR
 | --- | --- | --- |
 | Identity | ZITADEL | Verified issuer plus subject. Email changes must preserve identity |
 | Product configuration | Deployment config | Product and environment, issuer, audience, store ID, model ID, manifest version |
-| Tenant | Product database | Immutable tenant ID, lifecycle status, optional identity organization reference |
+| Tenant | Core: product tables; managed: SDK tables in product database | Immutable ID and auth lifecycle; product keeps business readiness and SSO mapping; see [[design/built-in-adapters]] |
 | Membership and role | OpenFGA | Principal, tenant object, relation |
 | Resource | Product database | Immutable ID and tenant ID, enforced in every query |
 | Invitation | Product database | Tenant, intended recipient, role, expiry, single-use acceptance state |

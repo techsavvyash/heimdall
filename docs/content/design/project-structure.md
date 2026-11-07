@@ -3,7 +3,7 @@ title: Project structure and ownership
 date: 2026-11-07
 ---
 
-The workspace now contains the Quartz site, TypeScript and Go package scaffolds, shared directory boundaries, and root feedback tooling. Runtime SDK modules, service deployment files, contracts and product examples shown below remain planned. See [[development-workspace]] for the installed tools and commands. TypeScript and Go are both agreed initial-release SDKs. Framework adapters remain open. Both packages implement the same versioned behavioral contract with idiomatic language APIs.
+The workspace now contains the Quartz site, TypeScript and Go package scaffolds, shared directory boundaries, and root feedback tooling. Runtime SDK modules, service deployment files, contracts and product examples shown below remain planned. See [[development-workspace]] for the installed tools and commands. TypeScript and Go are both agreed initial-release SDKs. Initial HTTP boundaries are TypeScript Fetch and Go net/http; optional PostgreSQL persistence and managed workspaces are scoped in [[design/built-in-adapters]]. Both packages implement the same versioned behavioral contract with idiomatic language APIs.
 
 ## Repository layout
 
@@ -59,6 +59,17 @@ heimdall/
 
 Create each directory when its first task starts. Build TypeScript and Go against the shared fixtures from the first implementation milestone. TypeScript publishes to npm and Go is distributed as a versioned Go module. Each package consumes the same versioned contracts and fixtures.
 
+## Adapter implementation locations
+
+- `contracts/persistence/`: shared schema versions, migration SQL/checksums and serialization formats.
+- `contracts/fixtures/adapters/`: TS/Go session, cursor, operation and migration vectors.
+- `sdk/typescript/src/adapters/postgres/` and `sdk/go/adapters/postgres/`: SQL persistence, atomic operations and compatibility checks.
+- `sdk/typescript/src/managed/` and `sdk/go/managed/`: lifecycle-gated facade, durable intents, membership index and bounded reconciliation.
+- `sdk/typescript/src/adapters/http/` and `sdk/go/adapters/http/`: Fetch/net/http translation.
+- `tests/integration/adapters/`: replica races, uncertain writes, restore and mixed-language validation.
+
+Create these directories with their implementation, not as empty scaffolding. One TypeScript operator CLI runs shared migrations; Go consumers use the same deployment step. Session-only migrations do not install managed-workspace tables.
+
 ## Module boundaries
 
 | Location | Responsibility | Executed by |
@@ -99,11 +110,11 @@ flowchart TB
 
 | Product-owned integration | Example location | Why it lives there |
 | --- | --- | --- |
-| Tenant records and lifecycle | Example product database module | Business schema and transactions belong to that product |
+| Tenant records and lifecycle | Core: product module; managed: SDK tables in product DB | Ownership mode is explicit; business readiness stays product-owned |
 | Resource tenant constraints | Invoice or ticket repository | Every business query needs tenant scope |
-| Session persistence | Product session store | Product controls storage, availability and expiry policy |
+| Session persistence | Product store or PostgreSQL adapter | Product operates database/keys; adapter implements storage semantics |
 | Invitation delivery | Product notification integration | Product owns recipients, content and communication provider |
-| Retry state and execution | Product job or scheduled task | Durable work needs product persistence and a running process |
+| Retry state and execution | Core: product workflow; managed: SDK journal/reconcile | Product schedules execution; uncertain writes require safe recovery |
 | Audit delivery | Product logging or outbox pipeline | Product selects durability, retention and SIEM destination |
 | Identity organization mapping | Product tenant settings | Customer login scope may span several product tenants |
 

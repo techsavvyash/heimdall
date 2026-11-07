@@ -45,7 +45,7 @@ scripts/                 Workspace checks and hook installation
 docs/                    Quartz site in the pnpm workspace
 ```
 
-See [the documentation index](docs/content/index.md), [shared SDK contract](docs/content/design/shared-sdk-contract.md), and [task list](docs/content/design/task-list.md). Built-in persistence adapters remain an exploration. Read [AGENTS.md](AGENTS.md) for the agent feedback loop.
+See [the documentation index](docs/content/index.md), [shared SDK contract](docs/content/design/shared-sdk-contract.md), and [task list](docs/content/design/task-list.md). Optional PostgreSQL adapters are scoped in [the adapter design](docs/content/design/built-in-adapters.md); implementation and failure validation remain pending. Read [AGENTS.md](AGENTS.md) for the agent feedback loop.
 
 ## Dependency policy
 

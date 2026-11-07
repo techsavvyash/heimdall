@@ -5,6 +5,10 @@ date: 2026-11-07
 
 Ledger and Support share a ZITADEL and OpenFGA deployment. Each product has Acme and Globex workspaces. Maya has different roles in each workspace. This walkthrough uses the proposed independent product membership default. APIs, manifests, and commands are illustrative contracts awaiting implementation.
 
+## Adapter update
+
+This walkthrough describes the core/product-owned integration. [[design/built-in-adapters]] now defines optional PostgreSQL sessions and managed workspace ownership, with Fetch/net/http boundaries. Managed mode replaces custom intent/index persistence with SDK tables and explicit reconcile. Its uncertain-write quarantine supersedes the earlier assumption that a lost response always completes automatically on retry. Billing, resource scoping, invitations, SSO mapping and durable audit delivery remain product responsibilities.
+
 ## Who wires up what
 
 | Step | Operator or product developer wires up | Heimdall SDK or setup tooling handles |

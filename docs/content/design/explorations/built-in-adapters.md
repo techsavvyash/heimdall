@@ -3,8 +3,8 @@ title: Exploration — SDKs with built-in persistence adapters
 date: 2026-11-07
 ---
 
-> [!warning] Exploration only
-> This page describes an unapproved alternative for discussion. APIs, database ownership, defaults and worker behavior are hypothetical. Adoption requires a separate decision. The current contract proposal is [[shared-sdk-contract]], and agreed constraints are recorded in [[decisions]].
+> [!info] Historical exploration — superseded
+> The adapter direction is now selected. [[design/built-in-adapters|The adapter scope and safety contract]] defines the supported design, ownership modes and conservative handling of uncertain writes. The examples below record earlier alternatives and are not the current API or recovery guarantee. No prototype results or runtime guarantees are implied.
 
 ## What we are exploring
 

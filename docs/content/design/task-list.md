@@ -5,7 +5,9 @@ date: 2026-11-07
 
 This is a proposed backlog derived from [[two-product-walkthrough]]. Checked items describe completed documentation work. Unchecked items require design decisions or implementation. Directory ownership is described in [[project-structure]].
 
-Execution is tracked in [[implementation-roadmap|the implementation roadmap]] and [GitHub issue #29](https://github.com/techsavvyash/heimdall/issues/29). Its 22 child tickets expand this backlog into PRDs, implementation plans, dependencies and acceptance criteria. Ticket creation does not approve unresolved design proposals.
+Execution is tracked in [[implementation-roadmap|the implementation roadmap]] and [GitHub issue #29](https://github.com/techsavvyash/heimdall/issues/29). Its 26 child tickets expand this backlog into PRDs, implementation plans, dependencies and acceptance criteria. Ticket creation does not approve unresolved design proposals.
+
+The adapter direction is selected in [[design/built-in-adapters]]. PostgreSQL sessions and opt-in managed workspaces are now in the implementation plan. Core interfaces remain supported. Adapter recovery intentionally quarantines uncertain remote writes; automated lost-response recovery is not promised without a proven quiescence protocol.
 
 ## Completed design foundation
 
@@ -22,7 +24,7 @@ The [[shared-sdk-contract]] now contains a v0.1 API proposal for review. Its sto
 ## 1. Settle the first implementation contract
 
 - [x] Select TypeScript and Go as the initial SDK languages.
-- [ ] Select the first TypeScript framework adapter and Go HTTP integration.
+- [x] Select TypeScript Fetch handlers and Go net/http as initial HTTP boundaries; framework-specific TS wrappers are deferred.
 - [ ] Confirm independent product membership and backend trust assumptions.
 - [ ] Define identity encoding, tenant IDs, error semantics and configuration schemas.
 - [ ] Define roles, delegation rules and first-owner bootstrap behavior.
@@ -134,7 +136,7 @@ flowchart LR
   Scope --> Languages[Additional language SDKs]
 ```
 
-Baseline release timing and enterprise feature priority are still open. The recommended next task is to select the TypeScript and Go adapters and settle the session, discovery and retry contracts together, then validate them against the pinned services.
+Baseline release timing and enterprise feature priority are still open. The next task is to encode the selected adapter contracts and validate them against pinned services. Uncertain-write recovery evidence remains a managed-mode release gate.
 
 ## Initial-release parity gate
 

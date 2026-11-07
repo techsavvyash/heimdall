@@ -3,9 +3,9 @@ title: Implementation roadmap
 date: 2026-11-08
 ---
 
-The [GitHub roadmap issue #29](https://github.com/techsavvyash/heimdall/issues/29) tracks delivery through 22 focused tickets. Each ticket includes a PRD, requirements, implementation details, dependencies, boundaries and acceptance criteria. GitHub issues are the source of execution status; this page is the navigation index.
+The [GitHub roadmap issue #29](https://github.com/techsavvyash/heimdall/issues/29) tracks delivery through 26 focused tickets. Each ticket includes a PRD, requirements, implementation details, dependencies, boundaries and acceptance criteria. GitHub issues are the source of execution status; this page is the navigation index.
 
-Start with the contract decision and service evidence. Creating implementation tickets does not approve the proposals in [[design/decisions]]. Both TypeScript and Go must satisfy the same behavioral contract before the initial release. Enterprise release scope is decided explicitly, and [[design/explorations/built-in-adapters|built-in persistence adapters]] remain an unapproved exploration.
+Start with the contract decision and service evidence. Creating implementation tickets does not approve the proposals in [[design/decisions]]. Both TypeScript and Go must satisfy the same behavioral contract before the initial release. Enterprise release scope is decided explicitly. [[design/built-in-adapters|Optional PostgreSQL adapters]] are selected scope; #51 closes the design decision while #52–#55 implement and validate it.
 
 ## Contract and service foundations
 
@@ -63,11 +63,22 @@ Start with the contract decision and service evidence. Creating implementation t
 | [#49 — Validate model upgrades, mixed SDK versions and rollback](https://github.com/techsavvyash/heimdall/issues/49) | [#38](https://github.com/techsavvyash/heimdall/issues/38), [#43](https://github.com/techsavvyash/heimdall/issues/43), [#46](https://github.com/techsavvyash/heimdall/issues/46) |
 | [#50 — Package, document and release the first TS and Go SDKs](https://github.com/techsavvyash/heimdall/issues/50) | [#43](https://github.com/techsavvyash/heimdall/issues/43), [#46](https://github.com/techsavvyash/heimdall/issues/46), [#49](https://github.com/techsavvyash/heimdall/issues/49) |
 
-## Unapproved exploration
+## Adapter design decision
 
 | Ticket | Prerequisites |
 | --- | --- |
-| [#51 — Explore built-in persistence adapters without changing the core design](https://github.com/techsavvyash/heimdall/issues/51) | Decision entry point |
+| [#51 — Scope built-in adapters and record the safety contract](https://github.com/techsavvyash/heimdall/issues/51) | Decision entry point |
+
+## Adapter implementation
+
+| Ticket | Prerequisites |
+| --- | --- |
+| [#52 — PostgreSQL storage and shared migrations](https://github.com/techsavvyash/heimdall/issues/52) | [#31](https://github.com/techsavvyash/heimdall/issues/31), [#51](https://github.com/techsavvyash/heimdall/issues/51) |
+| [#53 — Managed workspace lifecycle and conservative recovery](https://github.com/techsavvyash/heimdall/issues/53) | [#35](https://github.com/techsavvyash/heimdall/issues/35), [#39](https://github.com/techsavvyash/heimdall/issues/39), [#40](https://github.com/techsavvyash/heimdall/issues/40), [#51](https://github.com/techsavvyash/heimdall/issues/51), [#52](https://github.com/techsavvyash/heimdall/issues/52) |
+| [#54 — Managed discovery, drift repair and maintenance](https://github.com/techsavvyash/heimdall/issues/54) | [#37](https://github.com/techsavvyash/heimdall/issues/37), [#51](https://github.com/techsavvyash/heimdall/issues/51), [#52](https://github.com/techsavvyash/heimdall/issues/52), [#53](https://github.com/techsavvyash/heimdall/issues/53) |
+| [#55 — Adapter failure safety, interoperability and consumer wiring](https://github.com/techsavvyash/heimdall/issues/55) | [#43](https://github.com/techsavvyash/heimdall/issues/43), [#49](https://github.com/techsavvyash/heimdall/issues/49), [#51](https://github.com/techsavvyash/heimdall/issues/51), [#52](https://github.com/techsavvyash/heimdall/issues/52), [#53](https://github.com/techsavvyash/heimdall/issues/53), [#54](https://github.com/techsavvyash/heimdall/issues/54) |
+
+Examples #41/#42 additionally depend on #52–#54, migration validation #49 on #52, and release #50 on #55. The adapter design decision is complete; these implementation tickets remain open.
 
 ## Completion rules
 

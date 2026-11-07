@@ -5,6 +5,12 @@ date: 2026-11-07
 
 Contract v0.1 is a proposal for review. TypeScript and Go implement the same behavior with idiomatic APIs. Examples below describe interfaces to build. Live-service tests must validate the implementation before release. This page refines the illustrative APIs in [[two-product-walkthrough]] and [[sdk-contract]].
 
+## Adapter extension and precedence
+
+[[design/built-in-adapters]] adds selected PostgreSQL sessions and optional managed workspaces. The interfaces below remain the core/product-owned path. Managed mode owns its operation journal and workspace/index transactions, requires a lifecycle gate on every permission/role check, and supplies Fetch/net/http handlers. Explicit migrations and bounded reconcile are separate operations.
+
+The earlier onboarding example below illustrates desired-state reconciliation; it does not prove an uncertain attempt has stopped. In managed mode, an uncertain dispatched write remains pending/recovery_required and blocks conflicting changes and new access until verified quiescence. A reread or lease expiry alone cannot permit activation, inverse mutation or cleanup. This narrower safety rule supersedes any suggestion that every lost response automatically completes on retry.
+
 ## Common rules
 
 The client is bound to product, environment, trusted issuer, audience, OpenFGA store, model and manifest version. Callers cannot override these per request. A verified principal contains issuer and subject, principal kind, and available authentication evidence. Session helpers return this verified principal. Trusted internal workflows can resolve another principal through a separate privileged identity API.

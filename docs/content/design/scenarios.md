@@ -27,7 +27,7 @@ flowchart LR
 | Remove membership | Maya retains role tuple after removal | Fresh decision denies | Every permission intersects membership |
 | Rejoin workspace | Maya returns after prior removal | Only newly assigned roles apply | Cleanup completed before reactivation |
 | OpenFGA unavailable | Approval check times out | Availability error, no mutation | Backend requires a completed allow |
-| Partial onboarding | Owner write succeeds, product activation fails | Pending tenant recovered on retry | Durable operation and stable tenant ID |
+| Partial onboarding | Owner write succeeds, product activation fails | Durable confirmation permits local retry; uncertain attempts remain blocked until safe recovery | Stable intent plus verified quiescence; see [[design/built-in-adapters]] |
 | Repeated invitation | Same principal retries accepted invite | Same result without duplicate grant | Single-use state and idempotent reconciliation |
 | Stolen invitation | Different principal accepts link | Reject | Recipient binding |
 | Concurrent owner removal | Two owners remove each other | Preserve an owner through serialized workflow | Product coordination required |
