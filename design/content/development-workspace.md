@@ -41,4 +41,4 @@ The current SDKs contain empty entry points. Vitest temporarily permits an empty
 
 Rolldown bundles JavaScript. TypeScript emits declarations separately. The initial package output is ESM, while supported runtime and publication targets remain implementation decisions. The Go module has no external dependencies yet.
 
-The formatter and Knip target owned workspace code. Quartz's vendored engine and legacy root documents have separate scope. `AGENTS.md` records the commands and design boundaries for future agent tasks.
+The formatter and Knip target owned workspace code. Quartz's vendored engine has separate scope. `AGENTS.md` records the commands and design boundaries for future agent tasks.

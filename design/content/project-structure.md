@@ -106,9 +106,9 @@ flowchart TB
 
 SCIM reconciliation helpers can be added inside the SDK when that capability is implemented. Their scheduler, checkpoints and enrollment policy belong to the consuming product. SIEM helpers emit events through the product's audit integration. See [[two-product-walkthrough]].
 
-## Existing legacy material
+## Repository hygiene
 
-The root still contains old documentation, environment files, keys and other non-code artifacts from the previous implementation. Treat Quartz as the current design reference. Review and deliberately retire or archive legacy material during repository cleanup, keeping secrets outside tracked example configuration. The proposed layout describes the next implementation. See [[task-list]] for sequencing.
+Quartz is the current design reference. Legacy documentation, deployment environment files, test payloads, tokens, keys and screenshots have been removed from the working tree. Keep local secrets and debugging artifacts in ignored locations. Add new configuration examples alongside the implementation they configure. See [[task-list]] for sequencing.
 
 ## Initial language parity
 

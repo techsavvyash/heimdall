@@ -31,5 +31,5 @@ Quartz has an independent dependency tree under `design/`. Its vendored engine i
 - Vitest currently permits an empty test suite during scaffolding. Remove `passWithNoTests` when the first tests land.
 - Keep package scripts and Knip entries accurate. Do not suppress unused findings broadly.
 - Keep secret values, local environment files, generated output and dependencies out of commits.
-- Stage intended paths. Legacy root documentation and local artifacts still exist from the previous design.
+- Stage intended paths. Keep screenshots and local debugging artifacts out of the repository root.
 - Do not skip hooks to make a commit pass. Fix the failure and rerun the narrow check first.

@@ -106,7 +106,7 @@ The [[shared-sdk-contract]] now contains a v0.1 API proposal for review. Its sto
 - [ ] Run shared fixtures, model assertions and live-service tests in CI.
 - [ ] Verify package exports, clean install and the documented developer quickstart.
 - [ ] Test model migrations, mixed SDK versions and rollback compatibility.
-- [ ] Review and retire legacy documentation and repository artifacts deliberately.
+- [x] Retire legacy root documentation, environment files, credentials, keys, test payloads and screenshots.
 - [ ] Release the TypeScript npm package and versioned Go module when both pass the agreed initial scope.
 - [ ] Add further languages only when requested, using the shared conformance fixtures.
 - [ ] Design custom roles, service identities and resource sharing when their use cases are selected.

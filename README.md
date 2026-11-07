@@ -37,8 +37,8 @@ contracts/fixtures/       Shared language-independent behavior fixtures
 policies/tenant-rbac/     Authorization model and assertions
 sdk/typescript/          Rolldown, Oxlint, Oxfmt, Vitest and strict TypeScript
 sdk/go/                  Go module, gofmt, go vet and race-enabled tests
-examples/ledger/         Future TypeScript product integration
-examples/support/       Future Go product integration
+examples/ledger/          Future TypeScript product integration
+examples/support/         Future Go product integration
 tests/integration/       Cross-service scenarios
 deploy/local/            Future local auth deployment
 scripts/                 Workspace checks and hook installation
