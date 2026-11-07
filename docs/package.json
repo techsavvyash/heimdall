@@ -13,18 +13,17 @@
   },
   "scripts": {
     "quartz": "./quartz/bootstrap-cli.mjs",
-    "docs": "npx quartz build --serve -d docs",
-    "check": "tsc --noEmit && npx prettier . --check",
-    "format": "npx prettier . --write",
+    "docs": "node quartz/bootstrap-cli.mjs build --serve -d docs",
+    "check": "tsc --noEmit && prettier . --check",
+    "format": "prettier . --write",
     "test": "tsx --test",
     "profile": "0x -D prof ./quartz/bootstrap-cli.mjs build --concurrency=1",
-    "install-plugins": "npx tsx ./quartz/plugins/loader/install-plugins.ts",
-    "prebuild": "npm run install-plugins",
+    "install-plugins": "tsx ./quartz/plugins/loader/install-plugins.ts",
+    "prebuild": "pnpm run install-plugins",
     "build": "node quartz/bootstrap-cli.mjs build",
     "dev": "node quartz/bootstrap-cli.mjs build --serve"
   },
   "engines": {
-    "npm": ">=10.9.2",
     "node": ">=22"
   },
   "keywords": [
@@ -99,7 +98,7 @@
     "isomorphic-git": "^1.36.3",
     "lightningcss": "^1.31.1",
     "micromorph": "^0.4.5",
-    "minimatch": "^11.0.5",
+    "minimatch": "10.2.6",
     "preact": "^10.28.2",
     "preact-render-to-string": "^6.6.5",
     "pretty-bytes": "^7.1.0",

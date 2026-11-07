@@ -4,5 +4,5 @@
   "singleQuote": false,
   "trailingComma": "all",
   "printWidth": 100,
-  "ignorePatterns": ["**/dist/**", "**/node_modules/**", "**/package-lock.json", "design/**"]
+  "ignorePatterns": ["**/dist/**", "**/node_modules/**", "**/pnpm-lock.yaml", "docs/**"]
 }

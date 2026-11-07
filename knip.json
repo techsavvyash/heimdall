@@ -9,5 +9,6 @@
       "project": ["src/**/*.ts", "*.config.ts"]
     }
   },
-  "ignoreBinaries": ["go"]
+  "ignoreBinaries": ["go"],
+  "ignoreWorkspaces": ["docs"]
 }

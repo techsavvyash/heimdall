@@ -8,5 +8,5 @@
     "typescript/no-explicit-any": "error",
     "typescript/consistent-type-imports": "error"
   },
-  "ignorePatterns": ["**/dist/**", "**/node_modules/**", "design/**"]
+  "ignorePatterns": ["**/dist/**", "**/node_modules/**", "docs/**"]
 }

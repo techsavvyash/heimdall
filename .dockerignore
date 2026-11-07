@@ -1,0 +1,9 @@
+.git
+**/node_modules
+**/dist
+**/public
+**/.quartz-cache
+**/.quartz
+.env*
+keys
+secrets

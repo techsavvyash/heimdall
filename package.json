@@ -1,37 +1,34 @@
 {
   "name": "heimdall-workspace",
   "private": true,
-  "workspaces": [
-    "sdk/typescript"
-  ],
   "type": "module",
   "scripts": {
     "prepare": "node scripts/install-hooks.mjs",
-    "format": "oxfmt --write sdk/typescript scripts contracts policies examples tests package.json knip.json .oxlintrc.json .oxfmtrc.json .github README.md AGENTS.md",
-    "format:check": "oxfmt --check sdk/typescript scripts contracts policies examples tests package.json knip.json .oxlintrc.json .oxfmtrc.json .github README.md AGENTS.md",
+    "format": "oxfmt --write sdk/typescript scripts contracts policies examples tests package.json knip.json .oxlintrc.json .oxfmtrc.json .github README.md AGENTS.md pnpm-workspace.yaml",
+    "format:check": "oxfmt --check sdk/typescript scripts contracts policies examples tests package.json knip.json .oxlintrc.json .oxfmtrc.json .github README.md AGENTS.md pnpm-workspace.yaml",
     "lint": "oxlint --deny-warnings sdk/typescript scripts",
-    "typecheck": "npm run typecheck --workspace @heimdall/sdk",
+    "typecheck": "pnpm --filter @heimdall/sdk run typecheck",
     "knip": "knip",
-    "test": "npm run test --workspace @heimdall/sdk",
-    "test:watch": "npm run test:watch --workspace @heimdall/sdk",
-    "build": "npm run build --workspace @heimdall/sdk",
+    "test": "pnpm --filter @heimdall/sdk run test",
+    "test:watch": "pnpm --filter @heimdall/sdk run test:watch",
+    "build": "pnpm --filter @heimdall/sdk run build",
     "check:go": "sh scripts/check-go.sh",
     "test:go": "cd sdk/go && go test -race ./...",
-    "docs:install": "npm ci --prefix design",
-    "docs:build": "npm run build --prefix design",
-    "docs:dev": "npm run dev --prefix design",
-    "check:fast": "npm run format:check && npm run lint && npm run typecheck && npm run knip && npm run check:go",
-    "check": "npm run check:fast && npm test && npm run test:go && npm run build && npm run docs:build"
+    "docs:build": "pnpm --filter @jackyzha0/quartz run build",
+    "docs:dev": "pnpm --filter @jackyzha0/quartz run dev",
+    "check:fast": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run knip && pnpm run check:go",
+    "check": "pnpm run check:fast && pnpm test && pnpm run test:go && pnpm run build && pnpm run docs:build"
   },
   "devDependencies": {
-    "@types/node": "24.19.2",
-    "knip": "6.44.2",
-    "oxfmt": "0.77.0",
-    "oxlint": "1.92.0",
+    "@types/node": "24.19.1",
+    "knip": "6.40.0",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
     "typescript": "7.0.2"
   },
   "engines": {
     "node": ">=24 <25",
-    "npm": ">=10.9.2"
-  }
+    "pnpm": "12.10.1"
+  },
+  "packageManager": "pnpm@12.10.1"
 }

@@ -4,29 +4,28 @@ A shared authentication and authorization design built around ZITADEL, OpenFGA, 
 
 ## Start working
 
-Install Node 24 and Go 1.24 or newer, then run:
+Install Node 24, pnpm 12.10.1 and Go 1.24 or newer, then run:
 
 ```sh
 nvm use
-npm ci
-npm run docs:install
-npm run check
+pnpm install --frozen-lockfile
+pnpm run check
 ```
 
-`npm ci` installs the local pre-commit and pre-push hooks. Hook checks require Node 24 and Go on your shell's PATH. Use `nvm use` before committing or pushing.
+`pnpm install --frozen-lockfile` installs the local pre-commit and pre-push hooks. Hook checks require Node 24 and Go on your shell's PATH. Use `nvm use` before committing or pushing.
 
 ## Commands
 
-| Command              | Purpose                                                     |
-| -------------------- | ----------------------------------------------------------- |
-| `npm run check:fast` | Formatting, lint, types, unused code, Go formatting and vet |
-| `npm test`           | TypeScript tests with Vitest                                |
-| `npm run test:watch` | Vitest watch mode                                           |
-| `npm run test:go`    | Go tests with race detection                                |
-| `npm run build`      | Rolldown bundle and TypeScript declarations                 |
-| `npm run check`      | Full local, pre-push and CI gate, including Quartz build    |
-| `npm run format`     | Format owned workspace files with Oxfmt                     |
-| `npm run docs:dev`   | Preview Quartz at localhost:8080                            |
+| Command               | Purpose                                                     |
+| --------------------- | ----------------------------------------------------------- |
+| `pnpm run check:fast` | Formatting, lint, types, unused code, Go formatting and vet |
+| `pnpm test`           | TypeScript tests with Vitest                                |
+| `pnpm run test:watch` | Vitest watch mode                                           |
+| `pnpm run test:go`    | Go tests with race detection                                |
+| `pnpm run build`      | Rolldown bundle and TypeScript declarations                 |
+| `pnpm run check`      | Full local, pre-push and CI gate, including Quartz build    |
+| `pnpm run format`     | Format owned workspace files with Oxfmt                     |
+| `pnpm run docs:dev`   | Preview Quartz at localhost:8080                            |
 
 The SDK scaffold has no runtime behavior or test cases yet. Vitest allows an empty suite until the first contract tests are implemented. The TypeScript package is private during development and currently targets ESM. Runtime compatibility and publication scope will be decided with the SDK implementation.
 
@@ -43,7 +42,11 @@ tests/integration/       Cross-service scenarios
 deploy/local/            Future local auth deployment
 scripts/                 Workspace checks and hook installation
 .githooks/               Fast pre-commit and full pre-push checks
-design/                  Quartz site with an independent lockfile
+docs/                    Quartz site in the pnpm workspace
 ```
 
-See [the design index](design/content/index.md), [shared SDK contract](design/content/shared-sdk-contract.md), and [task list](design/content/task-list.md). Built-in persistence adapters remain an exploration. Read [AGENTS.md](AGENTS.md) for the agent feedback loop.
+See [the documentation index](docs/content/index.md), [shared SDK contract](docs/content/design/shared-sdk-contract.md), and [task list](docs/content/design/task-list.md). Built-in persistence adapters remain an exploration. Read [AGENTS.md](AGENTS.md) for the agent feedback loop.
+
+## Dependency policy
+
+`pnpm-workspace.yaml` includes the TypeScript SDK and Quartz. `minimumReleaseAge: 43200` requires releases to be at least 30 days old, including transitive dependencies. Strict mode rejects versions that cannot satisfy the age limit. Both projects share one frozen lockfile.

@@ -5,7 +5,9 @@ if (!process.env.CI) {
     encoding: "utf8",
   });
   if (result.error || (result.status !== 0 && result.status !== 1)) {
-    throw new Error("Cannot inspect Git hooks. Run npm ci inside the repository.");
+    throw new Error(
+      "Cannot inspect Git hooks. Run pnpm install --frozen-lockfile inside the repository.",
+    );
   }
   const existing = result.stdout.trim();
   if (existing && existing !== ".githooks") {

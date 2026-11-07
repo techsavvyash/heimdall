@@ -9,8 +9,11 @@ The workspace now contains the Quartz site, TypeScript and Go package scaffolds,
 
 ```text
 heimdall/
-├── design/                         Existing Quartz project
-│   ├── content/                    Architecture, flows, scenarios and roadmap
+├── docs/                         Existing Quartz project
+│   ├── content/
+│   │   ├── index.md                Documentation home
+│   │   ├── development-workspace.md Setup and feedback loop
+│   │   └── design/                 Architecture, flows, scenarios and roadmap
 │   ├── quartz/                     Vendored Quartz engine
 │   ├── quartz.config.yaml          Site configuration
 │   └── package.json                Documentation commands
