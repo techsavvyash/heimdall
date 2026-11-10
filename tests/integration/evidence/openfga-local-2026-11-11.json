@@ -1,0 +1,28 @@
+{
+  "suite": "openfga-capabilities-v1",
+  "runId": "d492db64-7aad-4301-820e-1eedd70d02ee",
+  "observedAt": "2026-11-10T22:59:05.026Z",
+  "observations": {
+    "unauthenticatedAndInvalidKey": "401",
+    "twoProductsFourWorkspaceObjects": "isolated relationship results",
+    "listing": "membership ListObjects and Read page_size=1 continuation verified",
+    "postRevocation": "immediate HIGHER_CONSISTENCY check denied",
+    "listingLimits": {
+      "writtenMemberships": 1001,
+      "maxTuplesPerAcceptedWrite": 100,
+      "oversizedWriteStatus": 400,
+      "rejectedWritePartiallyApplied": false,
+      "listObjectsCount": 1000,
+      "listObjectsContinuation": false,
+      "listObjectsElapsedMs": 3,
+      "readPageSize": 100,
+      "readPages": 11,
+      "readDistinctMemberships": 1001,
+      "readElapsedMs": 23,
+      "scope": "stable direct-user tuples; no concurrent writes or inherited membership"
+    },
+    "credentialBoundary": "preshared key has deployment-wide access to both stores; no per-store credential isolation"
+  },
+  "cleanedUpStores": ["01M73TZEHAAYXPKNG2KM77EN79", "01M73TZEHFK6ND7J5P947VZZ98"],
+  "localComposeProject": "heimdall-probe-08051a959662"
+}

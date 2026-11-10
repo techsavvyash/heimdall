@@ -240,6 +240,8 @@ flowchart TD
 - Dependency failure fails the page request. It must not silently filter failed checks as denials or advance a returned cursor past them.
 - This is a live traversal. Changes behind the cursor can appear on a fresh traversal. No snapshot guarantee is made. Every subsequent protected operation checks current access again.
 
+[[evidence/phase-2-openfga-limits]] confirms that the pinned ListObjects response truncates at 1,000 direct memberships without continuation. It cannot replace the candidate-source pagination contract or establish complete membership absence.
+
 An optimized OpenFGA-based or indexed candidate source must preserve these semantics before becoming a supported alternative. Both SDKs run the same fixture with sparse membership, deleted tenants, identical display names and concurrent changes.
 
 ## Tenant onboarding and retries

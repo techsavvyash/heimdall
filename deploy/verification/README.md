@@ -27,14 +27,17 @@ A cleanup failure fails the probe. Never run against an unrelated production sta
 
 The probe verifies missing/invalid authentication, two stores/four workspace objects,
 membership-gated checks, listing and pagination, immediate post-revocation checks
-with HIGHER_CONSISTENCY, and the actual service-credential boundary. It is not a
-load/limit benchmark, recovery proof, or test of the future Heimdall SDK runtime.
+with HIGHER_CONSISTENCY, and the actual service-credential boundary. It also writes 1,001 direct memberships to verify the pinned 1,000-result
+ListObjects cap, exhaustive stable Read pagination and 100-tuple write limit.
+It is not a load benchmark, concurrent scan/recovery proof or test of the future SDK runtime.
 
     docker compose -f deploy/verification/compose.yaml down
 
 Only for deliberate disposal of this test database, append --volumes to down.
-The current local Compose configuration is validated syntactically; live evidence
-is from Railway. Local execution remains to be verified.
+The tracked Compose setup and complete OpenFGA probe passed from a fresh isolated
+project on November 11, 2026; Railway and local evidence are recorded under
+tests/integration/evidence/openfga-{limits,local}-2026-11-11.json.
+This verifies OpenFGA/PostgreSQL reproduction, not local enterprise-stack setup.
 
 ## Railway reproduction
 

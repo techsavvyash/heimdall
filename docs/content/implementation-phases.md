@@ -82,3 +82,5 @@ Phase evidence lives under docs/content/evidence/ when its first record is writt
 - [[evidence/phase-2-federation-binding|Phase 2 federation binding checkpoint]]: tamper/replay rejection and signed downstream sid/auth_time binding for SAML and OIDC. A structured session-evidence contract amendment and TS/Go revalidation are required before Phase 3.
 
 - [[evidence/phase-2-enterprise-contract|Phase 2 enterprise evidence contract amendment]]: structured session evidence, selected provider binding and shared TS/Go target-policy gates. Runtime provenance and atomic persistence remain open.
+
+- [[evidence/phase-2-openfga-limits|Phase 2 OpenFGA limits]]: measured ListObjects truncation, write-batch rejection and complete stable direct-tuple pagination. Recovery/quiescence remains open.

@@ -140,6 +140,88 @@ try {
   });
   assert.equal(await check(ledger, ids[0], "acme", "can_approve"), false);
   observations.postRevocation = "immediate HIGHER_CONSISTENCY check denied";
+  // More than the pinned default ListObjects maximum; these are direct memberships.
+  // Keep the existing two-product checks independent of this larger fixture.
+  const many = Array.from({ length: 1001 }, (_, i) => ({
+    user: "user:listing-probe",
+    relation: "member",
+    object: `workspace:listing-${i}`,
+  }));
+  const tooLarge = await request(`/stores/${ledger}/write`, {
+    authorization_model_id: ids[0],
+    writes: { tuple_keys: many.slice(0, 101) },
+  });
+  assert.equal(tooLarge.status, 400, "Pinned deployment must reject 101-tuple writes");
+  const afterRejected = await ok(`/stores/${ledger}/read`, {
+    tuple_key: { user: "user:listing-probe", relation: "member", object: "workspace:" },
+    page_size: 100,
+    consistency: "HIGHER_CONSISTENCY",
+  });
+  assert.equal(afterRejected.tuples.length, 0, "Rejected oversized write must not partially apply");
+  for (let i = 0; i < many.length; i += 100) {
+    await ok(`/stores/${ledger}/write`, {
+      authorization_model_id: ids[0],
+      writes: { tuple_keys: many.slice(i, i + 100) },
+    });
+  }
+  const listStarted = performance.now();
+  const limited = await ok(`/stores/${ledger}/list-objects`, {
+    authorization_model_id: ids[0],
+    type: "workspace",
+    relation: "member",
+    user: "user:listing-probe",
+    consistency: "HIGHER_CONSISTENCY",
+  });
+  const listElapsedMs = Math.round(performance.now() - listStarted);
+  const expected = new Set(many.map((t) => t.object));
+  assert.equal(limited.objects.length, 1000, "Pinned default ListObjects cap changed");
+  assert.equal(new Set(limited.objects).size, 1000);
+  assert(limited.objects.every((object) => expected.has(object)));
+  assert(!limited.continuation_token, "Unexpected ListObjects pagination capability");
+  const seen = new Set();
+  const tokens = new Set();
+  let continuation;
+  let pages = 0;
+  const readStarted = performance.now();
+  do {
+    assert(pages < 20, "Tuple scan must terminate within bounded pages");
+    const result = await ok(`/stores/${ledger}/read`, {
+      tuple_key: { user: "user:listing-probe", relation: "member", object: "workspace:" },
+      page_size: 100,
+      consistency: "HIGHER_CONSISTENCY",
+      ...(continuation ? { continuation_token: continuation } : {}),
+    });
+    pages++;
+    assert(result.tuples.length <= 100);
+    for (const row of result.tuples) {
+      assert.equal(row.key.user, "user:listing-probe");
+      assert.equal(row.key.relation, "member");
+      assert(expected.has(row.key.object));
+      assert(!seen.has(row.key.object), "Repeated tuple in stable paginated scan");
+      seen.add(row.key.object);
+    }
+    continuation = result.continuation_token;
+    if (continuation) {
+      assert(!tokens.has(continuation), "Repeated continuation token");
+      tokens.add(continuation);
+    }
+  } while (continuation);
+  assert.deepEqual(seen, expected);
+  observations.listingLimits = {
+    writtenMemberships: many.length,
+    maxTuplesPerAcceptedWrite: 100,
+    oversizedWriteStatus: tooLarge.status,
+    rejectedWritePartiallyApplied: false,
+    listObjectsCount: limited.objects.length,
+    listObjectsContinuation: false,
+    listObjectsElapsedMs: listElapsedMs,
+    readPageSize: 100,
+    readPages: pages,
+    readDistinctMemberships: seen.size,
+    readElapsedMs: Math.round(performance.now() - readStarted),
+    scope: "stable direct-user tuples; no concurrent writes or inherited membership",
+  };
+
   assert.equal((await request(`/stores/${support}`)).status, 200);
   observations.credentialBoundary =
     "preshared key has deployment-wide access to both stores; no per-store credential isolation";
