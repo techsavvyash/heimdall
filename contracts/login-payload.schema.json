@@ -118,9 +118,39 @@
             },
             "strictSSO": {
               "type": "boolean"
+            },
+            "providerId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "protocol": {
+              "enum": ["saml", "oidc"]
             }
           },
-          "required": ["tenantId", "organizationId", "policyVersion", "strictSSO"]
+          "required": ["tenantId", "organizationId", "policyVersion", "strictSSO"],
+          "dependentRequired": {
+            "providerId": ["protocol"],
+            "protocol": ["providerId"]
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "strictSSO": {
+                    "const": true
+                  }
+                }
+              },
+              "then": {
+                "required": ["providerId", "protocol"],
+                "properties": {
+                  "providerId": {},
+                  "protocol": {}
+                }
+              }
+            }
+          ]
         }
       ]
     },

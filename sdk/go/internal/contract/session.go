@@ -3,6 +3,7 @@ package contract
 type SessionScope struct{ ProductID, Environment, Issuer, Subject, PolicyVersion string }
 type SessionRecord struct {
 	SessionScope
+	EnterpriseEvidence                                                                                     *EnterpriseEvidence
 	CreatedAt, LastActivityAt, AbsoluteExpiresAt, IdleExpiresAt, AccessTokenExpiresAt, IdentityValidatedAt int64
 	State, RefreshToken                                                                                    string
 	RefreshAttempt                                                                                         *struct {

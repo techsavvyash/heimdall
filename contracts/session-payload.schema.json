@@ -103,6 +103,9 @@
         }
       },
       "required": ["id", "expiresAt"]
+    },
+    "enterpriseEvidence": {
+      "$ref": "https://heimdall.dev/contracts/v1/enterprise-evidence.schema.json"
     }
   },
   "required": [

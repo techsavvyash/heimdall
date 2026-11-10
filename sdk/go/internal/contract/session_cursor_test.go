@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -14,9 +15,17 @@ func payloadSchema(t *testing.T, name string) *jsonschema.Schema {
 	doc := readJSON(t, "../../../../contracts/"+name+".schema.json")
 	c := jsonschema.NewCompiler()
 	id := doc.(map[string]any)["$id"].(string)
-	if err := c.AddResource(id, doc); err != nil {
+	files, err := filepath.Glob("../../../../contracts/*.schema.json")
+	if err != nil {
 		t.Fatal(err)
 	}
+	for _, file := range files {
+		resource := readJSON(t, file)
+		if err := c.AddResource(resource.(map[string]any)["$id"].(string), resource); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	s, err := c.Compile(id)
 	if err != nil {
 		t.Fatal(err)

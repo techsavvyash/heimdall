@@ -25,6 +25,7 @@ type CursorCase = {
 const sessions = read("fixtures/session-v1.json") as SessionCase[];
 const cursors = read("fixtures/cursor-v1.json") as CursorCase[];
 const ajv = new Ajv2020({ strict: true });
+ajv.addSchema(read("enterprise-evidence.schema.json") as object);
 const sessionSchema = ajv.compile(read("session-payload.schema.json") as object);
 const cursorSchema = ajv.compile(read("cursor-payload.schema.json") as object);
 

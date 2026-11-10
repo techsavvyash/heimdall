@@ -4,6 +4,7 @@ import "crypto/subtle"
 
 type LoginPolicy struct {
 	TenantID, OrganizationID, PolicyVersion string
+	ProviderID, Protocol                    string
 	StrictSSO                               bool
 }
 type LoginScope struct {

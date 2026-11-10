@@ -404,3 +404,43 @@ percent-encoding spelling remains part of the exact configured issuer identity.
 Tokens must match that configured issuer. Production and local development must
 use separate client/environment configuration; local cookies must not use __Host
 names or silently weaken a production application's cookie settings.
+
+## Enterprise evidence amendment (pre-release v1)
+
+Session payloads may now carry enterpriseEvidence, validated by the dedicated
+enterprise-evidence schema. Absence represents no enterprise authentication proof;
+a password session must reauthenticate before entering a strict workspace.
+Evidence binds product/environment, issuer/subject, client, tenant, organization,
+policy version, provider ID/protocol, upstream subject and provider session ID.
+It includes authTime and verifiedAt as integer Unix milliseconds. authTime is the
+signed downstream auth_time converted from seconds; it must equal verifiedAt
+rounded down to a whole second for the pinned intent/session flow.
+
+Evidence is created only after verifying the provider intent, linked subject and
+organization, provider session, signed downstream token and its exact sid/auth_time
+binding, and the locally claimed browser login transaction. This schema/helper
+cannot manufacture or verify that provenance. Never accept evidence from a browser,
+role claim, email match, account link or arbitrary metadata. Do not store assertions,
+intent tokens or provider credentials in evidence. Persist it inside the encrypted
+session record, atomically with local login completion.
+
+The internal validateEnterpriseEvidence / ValidateEnterpriseEvidence gate requires
+schema-validated authenticated evidence, current trusted target scope and an explicit
+positive maxAgeMs from policy. It rejects every scope mismatch, missing evidence,
+future verification, inconsistent signed/intent time and exact age expiry. It does
+not replace the session expiry/state, authoritative identity, membership or audit
+gates. Refresh must not advance authTime/verifiedAt; reauthentication is required
+to obtain new evidence. A single evidence object proves only its selected tenant;
+changing target tenant/provider/policy requires a new compliant login. Products may
+share an organization without sharing product sessions or membership.
+
+Strict login transactions now require providerId and protocol in tenantPolicy;
+non-strict transactions may omit both. The claim validator compares both to the
+current trusted policy before dispatch. Provider changes invalidate pending claims.
+
+This amends unreleased v1, not a rolling-compatible production format. Existing
+non-enterprise session vectors remain valid, but older additionalProperties:false
+readers reject records carrying new evidence. Older strict login payloads without
+provider selection are rejected. No persistent runtime has shipped: before runtime
+rollout, storage compatibility must advertise the finalized reader/writer contract.
+Do not deploy mixed old/new readers against these records or silently strip evidence.

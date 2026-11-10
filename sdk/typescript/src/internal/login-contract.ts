@@ -5,6 +5,8 @@ type Policy = {
   organizationId: string;
   policyVersion: string;
   strictSSO: boolean;
+  providerId?: string;
+  protocol?: "saml" | "oidc";
 };
 type Scope = {
   productId: string;
@@ -44,7 +46,9 @@ export function validateLoginClaim(record: Login, scope: Scope, now: number): vo
         policy.tenantId === expected.tenantId &&
         policy.organizationId === expected.organizationId &&
         policy.policyVersion === expected.policyVersion &&
-        policy.strictSSO === expected.strictSSO;
+        policy.strictSSO === expected.strictSSO &&
+        policy.providerId === expected.providerId &&
+        policy.protocol === expected.protocol;
   const binding = Buffer.from(record.browserBindingDigest, "utf8");
   const supplied = Buffer.from(scope.browserBindingDigest, "utf8");
   if (

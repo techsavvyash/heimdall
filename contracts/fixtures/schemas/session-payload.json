@@ -216,5 +216,81 @@
       }
     },
     "valid": false
+  },
+  {
+    "name": "structured-enterprise-evidence",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh",
+      "enterpriseEvidence": {
+        "schemaVersion": 1,
+        "productId": "ledger",
+        "environment": "production",
+        "issuer": "https://id.example.com",
+        "subject": "maya",
+        "clientId": "ledger-web",
+        "tenantId": "acme",
+        "organizationId": "org-acme",
+        "policyVersion": "policy-2",
+        "providerId": "idp-acme",
+        "upstreamSubject": "upstream-maya",
+        "providerSessionId": "session-1",
+        "protocol": "saml",
+        "authTime": 1000,
+        "verifiedAt": 1500
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "reject-password-enterprise-evidence",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh",
+      "enterpriseEvidence": {
+        "schemaVersion": 1,
+        "productId": "ledger",
+        "environment": "production",
+        "issuer": "https://id.example.com",
+        "subject": "maya",
+        "clientId": "ledger-web",
+        "tenantId": "acme",
+        "organizationId": "org-acme",
+        "policyVersion": "policy-2",
+        "providerId": "idp-acme",
+        "upstreamSubject": "upstream-maya",
+        "providerSessionId": "session-1",
+        "protocol": "password",
+        "authTime": 1000,
+        "verifiedAt": 1500
+      }
+    },
+    "valid": false
   }
 ]

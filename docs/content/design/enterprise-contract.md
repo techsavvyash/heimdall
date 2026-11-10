@@ -31,7 +31,7 @@ Strict enterprise mode is SSO-only: no password fallback, email-based automatic 
 
 Account linking requires verified identity ownership and authorized provider configuration; matching email alone cannot merge principals. Bind identities by issuer/subject. Provider-policy changes invalidate applicable policy evidence so existing sessions are re-evaluated. Users switching between Acme SAML and Globex OIDC cannot reuse noncompliant evidence just because they belong to both.
 
-Pinned-service progress: [[evidence/phase-2-federation-binding]] verifies an intent-to-session-to-token evidence chain for both SAML and OIDC. The implementation still needs strict target-policy and browser-transaction checks, plus a structured session-evidence schema amendment with shared fixtures before persistence. This is evidence of capability, not completed SDK enforcement.
+Pinned-service progress: [[evidence/phase-2-federation-binding]] verifies an intent-to-session-to-token evidence chain for both SAML and OIDC. The implementation still needs strict target-policy and browser-transaction checks, and atomic persistence. [[evidence/phase-2-enterprise-contract]] records the structured evidence schema and shared TS/Go policy-gate amendment; those internal validators do not verify provider provenance. This is evidence of capability, not completed SDK enforcement.
 
 ## SCIM users and lifecycle
 

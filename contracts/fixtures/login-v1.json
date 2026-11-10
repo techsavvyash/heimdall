@@ -516,7 +516,9 @@
         "tenantId": "ws-1",
         "organizationId": "org-1",
         "policyVersion": "v1",
-        "strictSSO": true
+        "strictSSO": true,
+        "providerId": "idp-acme",
+        "protocol": "saml"
       },
       "state": "pending"
     },
@@ -531,7 +533,9 @@
         "tenantId": "ws-1",
         "organizationId": "org-1",
         "policyVersion": "v1",
-        "strictSSO": true
+        "strictSSO": true,
+        "providerId": "idp-acme",
+        "protocol": "saml"
       },
       "browserBindingDigest": "abababababababababababababababababababababababababababababababab"
     },
@@ -556,7 +560,9 @@
         "tenantId": "ws-1",
         "organizationId": "org-1",
         "policyVersion": "v1",
-        "strictSSO": true
+        "strictSSO": true,
+        "providerId": "idp-acme",
+        "protocol": "saml"
       },
       "state": "pending"
     },
@@ -571,7 +577,9 @@
         "tenantId": "other",
         "organizationId": "org-1",
         "policyVersion": "v1",
-        "strictSSO": true
+        "strictSSO": true,
+        "providerId": "idp-acme",
+        "protocol": "saml"
       },
       "browserBindingDigest": "abababababababababababababababababababababababababababababababab"
     },
@@ -597,7 +605,9 @@
         "tenantId": "ws-1",
         "organizationId": "org-1",
         "policyVersion": "v1",
-        "strictSSO": true
+        "strictSSO": true,
+        "providerId": "idp-acme",
+        "protocol": "saml"
       },
       "state": "pending"
     },
@@ -612,7 +622,9 @@
         "tenantId": "ws-1",
         "organizationId": "other",
         "policyVersion": "v1",
-        "strictSSO": true
+        "strictSSO": true,
+        "providerId": "idp-acme",
+        "protocol": "saml"
       },
       "browserBindingDigest": "abababababababababababababababababababababababababababababababab"
     },
@@ -638,7 +650,9 @@
         "tenantId": "ws-1",
         "organizationId": "org-1",
         "policyVersion": "v1",
-        "strictSSO": true
+        "strictSSO": true,
+        "providerId": "idp-acme",
+        "protocol": "saml"
       },
       "state": "pending"
     },
@@ -653,7 +667,9 @@
         "tenantId": "ws-1",
         "organizationId": "org-1",
         "policyVersion": "other",
-        "strictSSO": true
+        "strictSSO": true,
+        "providerId": "idp-acme",
+        "protocol": "saml"
       },
       "browserBindingDigest": "abababababababababababababababababababababababababababababababab"
     },
@@ -679,7 +695,9 @@
         "tenantId": "ws-1",
         "organizationId": "org-1",
         "policyVersion": "v1",
-        "strictSSO": true
+        "strictSSO": true,
+        "providerId": "idp-acme",
+        "protocol": "saml"
       },
       "state": "pending"
     },
@@ -720,7 +738,9 @@
         "tenantId": "ws-1",
         "organizationId": "org-1",
         "policyVersion": "v1",
-        "strictSSO": true
+        "strictSSO": true,
+        "providerId": "idp-acme",
+        "protocol": "saml"
       },
       "state": "pending"
     },
@@ -766,7 +786,9 @@
         "tenantId": "ws-1",
         "organizationId": "org-1",
         "policyVersion": "v1",
-        "strictSSO": true
+        "strictSSO": true,
+        "providerId": "idp-acme",
+        "protocol": "saml"
       },
       "browserBindingDigest": "abababababababababababababababababababababababababababababababab"
     },
@@ -803,5 +825,139 @@
     },
     "now": 2000,
     "error": "unauthenticated"
+  },
+  {
+    "name": "changed-selected-providerId",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": {
+        "tenantId": "acme",
+        "organizationId": "org-acme",
+        "policyVersion": "policy-2",
+        "strictSSO": true,
+        "providerId": "idp-acme",
+        "protocol": "saml"
+      },
+      "state": "pending"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "tenantPolicy": {
+        "tenantId": "acme",
+        "organizationId": "org-acme",
+        "policyVersion": "policy-2",
+        "strictSSO": true,
+        "providerId": "idp-globex",
+        "protocol": "saml"
+      },
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab"
+    },
+    "now": 2000,
+    "error": "unauthenticated"
+  },
+  {
+    "name": "changed-selected-protocol",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": {
+        "tenantId": "acme",
+        "organizationId": "org-acme",
+        "policyVersion": "policy-2",
+        "strictSSO": true,
+        "providerId": "idp-acme",
+        "protocol": "saml"
+      },
+      "state": "pending"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "tenantPolicy": {
+        "tenantId": "acme",
+        "organizationId": "org-acme",
+        "policyVersion": "policy-2",
+        "strictSSO": true,
+        "providerId": "idp-acme",
+        "protocol": "oidc"
+      },
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab"
+    },
+    "now": 2000,
+    "error": "unauthenticated"
+  },
+  {
+    "name": "strict-selected-provider",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": {
+        "tenantId": "acme",
+        "organizationId": "org-acme",
+        "policyVersion": "policy-2",
+        "strictSSO": true,
+        "providerId": "idp-acme",
+        "protocol": "saml"
+      },
+      "state": "pending"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "tenantPolicy": {
+        "tenantId": "acme",
+        "organizationId": "org-acme",
+        "policyVersion": "policy-2",
+        "strictSSO": true,
+        "providerId": "idp-acme",
+        "protocol": "saml"
+      },
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab"
+    },
+    "now": 2000
   }
 ]

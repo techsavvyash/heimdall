@@ -1,3 +1,4 @@
+import type { validateEnterpriseEvidence } from "./enterprise-evidence.js";
 import { HeimdallError } from "./errors.js";
 
 type Scope = {
@@ -8,6 +9,7 @@ type Scope = {
   policyVersion: string;
 };
 type Record = Scope & {
+  enterpriseEvidence?: NonNullable<Parameters<typeof validateEnterpriseEvidence>[0]>;
   createdAt: number;
   lastActivityAt: number;
   absoluteExpiresAt: number;
