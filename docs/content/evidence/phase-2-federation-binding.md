@@ -78,3 +78,5 @@ sequenceDiagram
   SDK->>Z: Reuse consumed intent or code (probe only)
   Z-->>SDK: HTTP 400
 ```
+
+Follow-up validation: the full workspace gate passed again (765 Vitest tests and Go race tests, plus checks/builds). Source commit f6f476cea5c94f2882e990db69637e21ab7f90e5 passed GitHub Actions runs 42917964338 and 42917954200. Railway docs deployment 1c98ef9a-c20f-4b18-b21a-6e309fc6446a reached SUCCESS. The public page returned HTTP 200 with both new probe IDs, the follow-up section and Mermaid source. Phase 2 remains open.
