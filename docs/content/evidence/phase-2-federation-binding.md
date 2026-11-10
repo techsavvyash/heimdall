@@ -47,3 +47,7 @@ The eventual SDK must additionally bind that chain to its browser login transact
 Strict target-tenant switching, existing password-session rejection, policy-version invalidation, browser login binding, intent credential replay/expiry semantics, credential minimization, certificate rotation, alternate SAML bindings and SDK atomic persistence remain open. Recovery/quiescence and other Phase 2 service limits also remain open. No phase advancement or release certification follows from this checkpoint.
 
 Sources: [pinned OIDC token construction](https://github.com/zitadel/zitadel/blob/v4.19.4/internal/api/oidc/token.go), [session factors](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/session/v2/session.proto), [SAML response validation](https://github.com/zitadel/zitadel/blob/v4.19.4/internal/idp/providers/saml/session.go).
+
+## Validation and publication
+
+The full workspace gate passed: 765 Vitest tests, Go race tests, formatting/lint/types/Knip/vet, SDK build/declarations and Quartz. Source commit 84ec7033653879ffe195b543814e2510f7877c7f passed GitHub Actions runs 42916839153 and 42916821843. Railway docs deployment 245ac81a-2f22-4c42-ad97-62543ae7e413 reached SUCCESS and remained running. The public evidence page returned HTTP 200 with the current probe ID, required contract-refinement gate and Mermaid source. Phase 2 remains open.
