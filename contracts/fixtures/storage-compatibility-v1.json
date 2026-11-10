@@ -1,0 +1,954 @@
+[
+  {
+    "name": "current",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    }
+  },
+  {
+    "name": "bridge-after-additive",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 2,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    }
+  },
+  {
+    "name": "new-sdk-before-additive",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 2,
+      "writerVersion": 2,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    }
+  },
+  {
+    "name": "new-sdk-after-additive",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 2,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 2,
+      "writerVersion": 2,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    }
+  },
+  {
+    "name": "migration-in-progress",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "migrating",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "error": "unavailable"
+  },
+  {
+    "name": "unknown-future-schema",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 3,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        },
+        {
+          "version": 3,
+          "checksum": "54e23c9a5d496add1a6fd4ec3121bb824cdf21fcbf50a49a7cf49fa13d51695d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "error": "unavailable"
+  },
+  {
+    "name": "too-old-schema",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1,
+      "minDatabaseVersion": 2,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "error": "unavailable"
+  },
+  {
+    "name": "old-reader-removed",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 2,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "error": "unavailable"
+  },
+  {
+    "name": "old-writer-removed",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 2,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "error": "unavailable"
+  },
+  {
+    "name": "future-reader",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 3,
+      "writerVersion": 1,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "error": "unavailable"
+  },
+  {
+    "name": "future-writer",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 3,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "error": "unavailable"
+  },
+  {
+    "name": "reversed-readers",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 2,
+        "max": 1
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "error": "unavailable"
+  },
+  {
+    "name": "reversed-writers",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 2,
+        "max": 1
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "error": "unavailable"
+  },
+  {
+    "name": "incomplete-ledger",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 2,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "error": "unavailable"
+  },
+  {
+    "name": "extra-ledger-entry",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "error": "unavailable"
+  },
+  {
+    "name": "changed-checksum",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "error": "unavailable"
+  },
+  {
+    "name": "skipped-migration",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "error": "unavailable"
+  },
+  {
+    "name": "duplicate-migration",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 2,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "error": "unavailable"
+  },
+  {
+    "name": "invalid-reader",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 0,
+      "writerVersion": 1,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "error": "invalid_argument"
+  },
+  {
+    "name": "invalid-writer",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1001,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "error": "invalid_argument"
+  },
+  {
+    "name": "invalid-range",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1,
+      "minDatabaseVersion": 2,
+      "maxDatabaseVersion": 1,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "error": "invalid_argument"
+  },
+  {
+    "name": "incomplete-registry",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "error": "invalid_argument"
+  },
+  {
+    "name": "bad-registry-version",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        },
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "error": "invalid_argument"
+  },
+  {
+    "name": "bad-registry-checksum",
+    "metadata": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "policy": {
+      "readerVersion": 1,
+      "writerVersion": 1,
+      "minDatabaseVersion": 1,
+      "maxDatabaseVersion": 2,
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "bad"
+        },
+        {
+          "version": 2,
+          "checksum": "fc2f9eeda6644af824f4c461d7f9033009e13009f2075f4fab534169bdc0965c"
+        }
+      ]
+    },
+    "error": "invalid_argument"
+  }
+]

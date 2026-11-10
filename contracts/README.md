@@ -332,3 +332,44 @@ does not fence an in-flight request or justify clearing a mutation block. Revisi
 uniqueness, atomic transitions, suspension/resumption authorization and tombstone
 retention are persistence/runtime gates. Schema validation cannot prove randomness,
 immutability, name validation at creation or primary-database consistency.
+
+## Storage metadata and compatibility v1
+
+The storage-metadata schema describes one SDK database namespace, not a tenant's
+business data. Format schemaVersion is separate from databaseVersion and from SDK
+package versions. Reader/writer protocol versions are integer storage-behavior
+versions, not semver. All v1 version values are bounded to 1–1000; widening that
+limit requires a format revision. A metadata snapshot is read consistently from
+the primary database and is accepted only in ready state.
+
+Metadata contains the applied migration ledger, database version and inclusive
+reader/writer protocol ranges. The SDK bundles a trusted policy with its reader
+and writer versions, inclusive tested database range and complete ordered migration
+checksums through that range's maximum. Migrations are consecutive from 1, with
+no duplicates, gaps or altered history. The applied ledger must contain exactly
+databaseVersion entries and match the bundled checksums at every applied version.
+Migration checksums are lowercase SHA-256 of the exact shared UTF-8 SQL file bytes;
+commit files with LF endings and never rewrite an applied migration. Fixture
+checksums are synthetic contract data, not a runnable migration catalog.
+
+The read-only startup helper rejects malformed SDK policy as invalid_argument.
+A migrating database, incompatible reader/writer range, unsupported database
+version, corrupt ledger or changed checksum returns unavailable. A missing or
+invalid metadata document also fails startup in the eventual storage adapter;
+never infer an empty database is safe to initialize. No constructor migrates.
+
+Rolling upgrades need an explicitly tested bridge SDK that knows the current and
+next schema checksums and supports both database versions. Deploy the bridge,
+apply the additive migration, then deploy the next reader/writer protocol while
+both remain permitted. After draining old processes, separately remove their
+compatibility and schedule destructive cleanup. Unknown future migrations are
+not assumed safe just because their metadata declares compatibility. If no bridge
+exists, use a maintenance window; do not bypass the check.
+
+This helper cannot stop an already running old process. Deployment coordination
+must drain incompatible readers/writers and prevent in-flight writes before any
+incompatible migration. Transactional DDL and ready metadata/ledger updates must
+commit together; nontransactional or interrupted work stays migrating until
+explicit verified recovery. Exclusive migration locking, actual SQL, database
+privilege separation, backups/restoration and mixed-version runtime tests remain
+Phase 3/7 gates. PostgreSQL is the only selected first-release store adapter.

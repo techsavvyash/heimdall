@@ -167,6 +167,8 @@ No cascading foreign keys from business tables into SDK tables are supported ini
 
 Migrations run with a deployment credential and exclusive migration coordination, never on client construction. Runtime startup checks the supported schema range and fails closed on incompatibility. Apply additive migrations first, deploy compatible readers/writers, drain old versions, then separately schedule destructive cleanup. Do not promise rollback after destructive migration. SQL and serialization fixtures are shared across languages; no TS/Go-specific duplicate migration histories.
 
+The executable metadata/range/checksum contract is in contracts/README.md and [[evidence/phase-1-storage|the storage compatibility evidence]]. Rolling deployment requires a tested bridge SDK that recognizes both migration versions. Unknown future checksums fail startup even when database metadata declares broad compatibility. A startup check cannot stop an existing process; incompatible cleanup still requires draining old readers/writers and coordinating in-flight work.
+
 ## Session behavior and defaults
 
 Use eight-hour absolute and thirty-minute idle lifetimes as configurable defaults, with idle bounded by absolute expiry. Access-token expiry is enforced independently. Defaults are usability choices, not enterprise compliance guarantees. Cookie names include product/environment; use Secure, HttpOnly, SameSite=Lax, Path=/ and no Domain for __Host cookies. Local HTTP development requires an explicit loopback-only mode and a non-__Host cookie name. Never silently weaken production cookies.
