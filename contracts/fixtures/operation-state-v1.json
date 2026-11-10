@@ -1,0 +1,542 @@
+[
+  {
+    "name": "pending-dispatch",
+    "state": "pending",
+    "event": "dispatch",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "expected": "dispatching"
+  },
+  {
+    "name": "pending-pre_dispatch_failure",
+    "state": "pending",
+    "event": "pre_dispatch_failure",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "expected": "retryable"
+  },
+  {
+    "name": "pending-retry",
+    "state": "pending",
+    "event": "retry",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "pending-confirm",
+    "state": "pending",
+    "event": "confirm",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "pending-uncertain",
+    "state": "pending",
+    "event": "uncertain",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "pending-complete",
+    "state": "pending",
+    "event": "complete",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "pending-cancel",
+    "state": "pending",
+    "event": "cancel",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "expected": "cancelled"
+  },
+  {
+    "name": "pending-rejected",
+    "state": "pending",
+    "event": "rejected",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "retryable-dispatch",
+    "state": "retryable",
+    "event": "dispatch",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "retryable-pre_dispatch_failure",
+    "state": "retryable",
+    "event": "pre_dispatch_failure",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "retryable-retry",
+    "state": "retryable",
+    "event": "retry",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "expected": "pending"
+  },
+  {
+    "name": "retryable-confirm",
+    "state": "retryable",
+    "event": "confirm",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "retryable-uncertain",
+    "state": "retryable",
+    "event": "uncertain",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "retryable-complete",
+    "state": "retryable",
+    "event": "complete",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "retryable-cancel",
+    "state": "retryable",
+    "event": "cancel",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "expected": "cancelled"
+  },
+  {
+    "name": "retryable-rejected",
+    "state": "retryable",
+    "event": "rejected",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "dispatching-dispatch",
+    "state": "dispatching",
+    "event": "dispatch",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "dispatching-pre_dispatch_failure",
+    "state": "dispatching",
+    "event": "pre_dispatch_failure",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "dispatching-retry",
+    "state": "dispatching",
+    "event": "retry",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "dispatching-confirm",
+    "state": "dispatching",
+    "event": "confirm",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "expected": "confirmed"
+  },
+  {
+    "name": "dispatching-uncertain",
+    "state": "dispatching",
+    "event": "uncertain",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "expected": "uncertain"
+  },
+  {
+    "name": "dispatching-complete",
+    "state": "dispatching",
+    "event": "complete",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "dispatching-cancel",
+    "state": "dispatching",
+    "event": "cancel",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "dispatching-rejected",
+    "state": "dispatching",
+    "event": "rejected",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "expected": "retryable"
+  },
+  {
+    "name": "confirmed-dispatch",
+    "state": "confirmed",
+    "event": "dispatch",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "confirmed-pre_dispatch_failure",
+    "state": "confirmed",
+    "event": "pre_dispatch_failure",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "confirmed-retry",
+    "state": "confirmed",
+    "event": "retry",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "confirmed-confirm",
+    "state": "confirmed",
+    "event": "confirm",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "confirmed-uncertain",
+    "state": "confirmed",
+    "event": "uncertain",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "confirmed-complete",
+    "state": "confirmed",
+    "event": "complete",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "expected": "completed"
+  },
+  {
+    "name": "confirmed-cancel",
+    "state": "confirmed",
+    "event": "cancel",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "confirmed-rejected",
+    "state": "confirmed",
+    "event": "rejected",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "uncertain-dispatch",
+    "state": "uncertain",
+    "event": "dispatch",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "uncertain-pre_dispatch_failure",
+    "state": "uncertain",
+    "event": "pre_dispatch_failure",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "uncertain-retry",
+    "state": "uncertain",
+    "event": "retry",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "uncertain-confirm",
+    "state": "uncertain",
+    "event": "confirm",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "uncertain-uncertain",
+    "state": "uncertain",
+    "event": "uncertain",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "uncertain-complete",
+    "state": "uncertain",
+    "event": "complete",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "uncertain-cancel",
+    "state": "uncertain",
+    "event": "cancel",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "uncertain-rejected",
+    "state": "uncertain",
+    "event": "rejected",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "completed-dispatch",
+    "state": "completed",
+    "event": "dispatch",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "completed-pre_dispatch_failure",
+    "state": "completed",
+    "event": "pre_dispatch_failure",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "completed-retry",
+    "state": "completed",
+    "event": "retry",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "completed-confirm",
+    "state": "completed",
+    "event": "confirm",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "completed-uncertain",
+    "state": "completed",
+    "event": "uncertain",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "completed-complete",
+    "state": "completed",
+    "event": "complete",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "completed-cancel",
+    "state": "completed",
+    "event": "cancel",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "completed-rejected",
+    "state": "completed",
+    "event": "rejected",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "cancelled-dispatch",
+    "state": "cancelled",
+    "event": "dispatch",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "cancelled-pre_dispatch_failure",
+    "state": "cancelled",
+    "event": "pre_dispatch_failure",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "cancelled-retry",
+    "state": "cancelled",
+    "event": "retry",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "cancelled-confirm",
+    "state": "cancelled",
+    "event": "confirm",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "cancelled-uncertain",
+    "state": "cancelled",
+    "event": "uncertain",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "cancelled-complete",
+    "state": "cancelled",
+    "event": "complete",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "cancelled-cancel",
+    "state": "cancelled",
+    "event": "cancel",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "cancelled-rejected",
+    "state": "cancelled",
+    "event": "rejected",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "stale-worker-confirm",
+    "state": "dispatching",
+    "event": "confirm",
+    "dispatchCount": 1,
+    "generation": 5,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "no-cancel-after-dispatch",
+    "state": "retryable",
+    "event": "cancel",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "lease-expiry-not-recovery",
+    "state": "uncertain",
+    "event": "retry",
+    "dispatchCount": 1,
+    "generation": 100,
+    "expectedGeneration": 100,
+    "error": "conflict"
+  },
+  {
+    "name": "invalid-generation",
+    "state": "pending",
+    "event": "dispatch",
+    "dispatchCount": 0,
+    "generation": 0,
+    "expectedGeneration": 0,
+    "error": "invalid_argument"
+  }
+]

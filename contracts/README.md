@@ -169,3 +169,51 @@ References:
 - https://nodejs.org/docs/latest-v24.x/api/crypto.html
 - https://pkg.go.dev/crypto/cipher#NewGCMWithRandomNonce
 - https://pkg.go.dev/crypto/hmac#Equal
+
+## Operation intent, journal and retry contract v1
+
+The operation-intent schema covers create_workspace, add_member, remove_member,
+assign_roles and transfer_owner. The initiating actor and target use issuer/subject
+pairs. Creation requires target=actor, a nonblank display name, no role list, and an
+empty request workspaceId. The actual immutable workspace ID is allocated once in
+the journal transaction, outside the creation request fingerprint. Other operations
+require a workspace ID and empty name. Removal/transfer prohibit a role list.
+Product policy must separately validate roles and delegation before recording intent.
+
+Display names reject ASCII controls and ill-formed Unicode; blank Unicode
+whitespace (including BOM) is rejected for creation. Inputs are not normalized.
+Idempotency keys are nonempty Unicode strings bounded to 256 UTF-8 bytes. They
+are caller correlation keys, never authentication credentials.
+
+Fingerprint input is the compact canonical ASCII JSON array:
+[heimdall.intent.v1, productId, environment, kind, encodedActor, encodedTarget,
+workspaceId, name, sortedRoles, manifestVersion].
+String escaping follows identity v1. Roles are schema-validated ASCII identifiers,
+sorted without modifying the request. Fingerprints are lowercase SHA-256 hex.
+
+The idempotency digest uses:
+[heimdall.idempotency.v1, productId, environment, kind, encodedActor, rawKey].
+Thus changed payload conflicts within one scoped key; a different caller cannot
+use that key to inspect another actor's operation. Digests are checksums, not
+authorization or proof of remote execution.
+
+The journal schema stores immutable intent, both digests, allocated workspace ID,
+operation ID, generation, dispatch count, state and timestamps. Required storage
+invariants: recompute/verify fingerprints; bind non-create request workspace ID to
+journal workspace ID; createdAt <= updatedAt; never change intent/digests; preserve
+terminal keys/tombstones; atomically enforce unique idempotency scope. These
+cross-record/transaction invariants are persistence implementation gates.
+
+The internal transition function proposes a next state, never commits it. Storage
+must compare-and-swap the expected generation and persist the dispatch marker,
+incremented dispatch count and local workspace block before sending a mutation.
+A worker cannot progress a stale generation. Cancellation is allowed only before
+any dispatch. Confirm requires a definitive remote result and verified postconditions;
+complete requires durable confirmation and the local completion transaction.
+A definitive rejection can become retryable only when the adapter proves no
+mutation occurred. Transport failures do not qualify.
+
+Uncertain has no automatic outgoing transition. Lease expiry, a relationship read,
+or a stopped worker cannot clear it. Operator recovery must establish real
+quiescence and reconcile under the eventual verified recovery protocol. This pure
+state helper does not fence remote requests or provide a force-unblock API.

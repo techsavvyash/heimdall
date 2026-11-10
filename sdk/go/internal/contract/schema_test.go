@@ -34,8 +34,12 @@ func TestSharedSchemas(t *testing.T) {
 			c := jsonschema.NewCompiler()
 			doc := readJSON(t, file)
 			id := doc.(map[string]any)["$id"].(string)
-			if err := c.AddResource(id, doc); err != nil {
-				t.Fatal(err)
+			for _, resource := range files {
+				value := readJSON(t, resource)
+				resourceID := value.(map[string]any)["$id"].(string)
+				if err := c.AddResource(resourceID, value); err != nil {
+					t.Fatal(err)
+				}
 			}
 			schema, err := c.Compile(id)
 			if err != nil {

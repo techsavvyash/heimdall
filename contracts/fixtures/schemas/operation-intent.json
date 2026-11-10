@@ -1,0 +1,112 @@
+[
+  {
+    "name": "create",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "create_workspace",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "",
+      "name": "Acme",
+      "roles": [],
+      "manifestVersion": 1
+    },
+    "valid": true
+  },
+  {
+    "name": "bad-kind",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "delete_everything",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "",
+      "name": "Acme",
+      "roles": [],
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "bad-roles",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "create_workspace",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "",
+      "name": "Acme",
+      "roles": ["admin", "admin"],
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "bad-workspaceId",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "create_workspace",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "x\n",
+      "name": "Acme",
+      "roles": [],
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "bad-schemaVersion",
+    "value": {
+      "schemaVersion": 2,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "create_workspace",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "",
+      "name": "Acme",
+      "roles": [],
+      "manifestVersion": 1
+    },
+    "valid": false
+  }
+]

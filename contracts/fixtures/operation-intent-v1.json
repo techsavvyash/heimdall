@@ -1,0 +1,432 @@
+[
+  {
+    "name": "create",
+    "intent": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "create_workspace",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "",
+      "name": "Acme",
+      "roles": [],
+      "manifestVersion": 1
+    },
+    "idempotencyKey": "request-123",
+    "valid": true,
+    "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+    "keyDigest": "1b5890f896a76ded7859dc4708e890e4598ac3131ee93f3d476fe331633ee264"
+  },
+  {
+    "name": "unicode-name",
+    "intent": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "create_workspace",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "",
+      "name": "Acme \ud83d\ude00",
+      "roles": [],
+      "manifestVersion": 1
+    },
+    "idempotencyKey": "request-123",
+    "valid": true,
+    "fingerprint": "83b3b72b16fa2595a36e57612eee7cdab6dbb22f2e0200926a789087661a97ed",
+    "keyDigest": "1b5890f896a76ded7859dc4708e890e4598ac3131ee93f3d476fe331633ee264"
+  },
+  {
+    "name": "role-order-a",
+    "intent": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "assign_roles",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "other"
+      },
+      "workspaceId": "tenant-1",
+      "name": "",
+      "roles": ["viewer", "approver"],
+      "manifestVersion": 1
+    },
+    "idempotencyKey": "request-123",
+    "valid": true,
+    "fingerprint": "377f43ddd17727ccd94923c33db0043073af80c32256b89f8eec37fb2afb10fc",
+    "keyDigest": "129d2b68b63953efc97c984f1cfbb6942c1ad7d9e56a13524fd42c906fb22075"
+  },
+  {
+    "name": "role-order-b",
+    "intent": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "assign_roles",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "other"
+      },
+      "workspaceId": "tenant-1",
+      "name": "",
+      "roles": ["approver", "viewer"],
+      "manifestVersion": 1
+    },
+    "idempotencyKey": "request-123",
+    "valid": true,
+    "fingerprint": "377f43ddd17727ccd94923c33db0043073af80c32256b89f8eec37fb2afb10fc",
+    "keyDigest": "129d2b68b63953efc97c984f1cfbb6942c1ad7d9e56a13524fd42c906fb22075"
+  },
+  {
+    "name": "different-productId",
+    "intent": {
+      "schemaVersion": 1,
+      "productId": "support",
+      "environment": "production",
+      "kind": "create_workspace",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "",
+      "name": "Acme",
+      "roles": [],
+      "manifestVersion": 1
+    },
+    "idempotencyKey": "request-123",
+    "valid": true,
+    "fingerprint": "6f51db8a3a82bcc27c7e3530761e2b137faa8372085624e99ede17b3cf0c7a1c",
+    "keyDigest": "e17d74c858a54c263f079ddf8a9cd187e408f7a5d1ce8977346146d9e399191a"
+  },
+  {
+    "name": "different-environment",
+    "intent": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "staging",
+      "kind": "create_workspace",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "",
+      "name": "Acme",
+      "roles": [],
+      "manifestVersion": 1
+    },
+    "idempotencyKey": "request-123",
+    "valid": true,
+    "fingerprint": "58cea0595d5b803bb1313da261d4342b7ce69b1da7da6151e601c2b460a5e902",
+    "keyDigest": "2d30d0ebd3516a5842188229e6c9cccf89a385eaa2fcd85b72d996ef0c046a2e"
+  },
+  {
+    "name": "different-manifestVersion",
+    "intent": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "create_workspace",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "",
+      "name": "Acme",
+      "roles": [],
+      "manifestVersion": 2
+    },
+    "idempotencyKey": "request-123",
+    "valid": true,
+    "fingerprint": "78e08b9fc6273415d9b0c23f77abd3185bea07bb5d01529b86be7f9750c54465",
+    "keyDigest": "1b5890f896a76ded7859dc4708e890e4598ac3131ee93f3d476fe331633ee264"
+  },
+  {
+    "name": "different-actor",
+    "intent": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "create_workspace",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "different"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "different"
+      },
+      "workspaceId": "",
+      "name": "Acme",
+      "roles": [],
+      "manifestVersion": 1
+    },
+    "idempotencyKey": "request-123",
+    "valid": true,
+    "fingerprint": "e46c5c77f102238a54807261b7fc87727e54e702088bc9c253e657459607f7e1",
+    "keyDigest": "d2bb5b084f1f2ca4483b9790454a1fac8a3fafbb4d582cd71fb1698d14a47dba"
+  },
+  {
+    "name": "create-owner-mismatch",
+    "intent": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "create_workspace",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "other"
+      },
+      "workspaceId": "",
+      "name": "Acme",
+      "roles": [],
+      "manifestVersion": 1
+    },
+    "idempotencyKey": "request-123",
+    "valid": false
+  },
+  {
+    "name": "create-with-roles",
+    "intent": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "create_workspace",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "",
+      "name": "Acme",
+      "roles": ["owner"],
+      "manifestVersion": 1
+    },
+    "idempotencyKey": "request-123",
+    "valid": false
+  },
+  {
+    "name": "create-with-allocated-id",
+    "intent": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "create_workspace",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "new-id",
+      "name": "Acme",
+      "roles": [],
+      "manifestVersion": 1
+    },
+    "idempotencyKey": "request-123",
+    "valid": false
+  },
+  {
+    "name": "empty-create-name",
+    "intent": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "create_workspace",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "",
+      "name": "",
+      "roles": [],
+      "manifestVersion": 1
+    },
+    "idempotencyKey": "request-123",
+    "valid": false
+  },
+  {
+    "name": "remove-with-roles",
+    "intent": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "remove_member",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "tenant-1",
+      "name": "",
+      "roles": ["viewer"],
+      "manifestVersion": 1
+    },
+    "idempotencyKey": "request-123",
+    "valid": false
+  },
+  {
+    "name": "assign-without-tenant",
+    "intent": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "assign_roles",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "",
+      "name": "",
+      "roles": [],
+      "manifestVersion": 1
+    },
+    "idempotencyKey": "request-123",
+    "valid": false
+  },
+  {
+    "name": "empty-idempotency-key",
+    "intent": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "create_workspace",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "",
+      "name": "Acme",
+      "roles": [],
+      "manifestVersion": 1
+    },
+    "idempotencyKey": "",
+    "valid": false
+  },
+  {
+    "name": "invalid-name-bom",
+    "intent": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "create_workspace",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "",
+      "name": "\ufeff",
+      "roles": [],
+      "manifestVersion": 1
+    },
+    "idempotencyKey": "request-123",
+    "valid": false
+  },
+  {
+    "name": "invalid-name-nel",
+    "intent": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "create_workspace",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "",
+      "name": "\u0085",
+      "roles": [],
+      "manifestVersion": 1
+    },
+    "idempotencyKey": "request-123",
+    "valid": false
+  },
+  {
+    "name": "invalid-name-control",
+    "intent": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "create_workspace",
+      "actor": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "workspaceId": "",
+      "name": "Acme\n",
+      "roles": [],
+      "manifestVersion": 1
+    },
+    "idempotencyKey": "request-123",
+    "valid": false
+  }
+]

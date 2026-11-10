@@ -1,0 +1,410 @@
+[
+  {
+    "name": "pending",
+    "value": {
+      "schemaVersion": 1,
+      "operationId": "operation-1",
+      "workspaceId": "workspace-1",
+      "intent": {
+        "schemaVersion": 1,
+        "productId": "ledger",
+        "environment": "production",
+        "kind": "create_workspace",
+        "actor": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "target": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "workspaceId": "",
+        "name": "Acme",
+        "roles": [],
+        "manifestVersion": 1
+      },
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "keyDigest": "1b5890f896a76ded7859dc4708e890e4598ac3131ee93f3d476fe331633ee264",
+      "state": "pending",
+      "dispatchCount": 0,
+      "generation": 1,
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": true
+  },
+  {
+    "name": "dispatching-1",
+    "value": {
+      "schemaVersion": 1,
+      "operationId": "operation-1",
+      "workspaceId": "workspace-1",
+      "intent": {
+        "schemaVersion": 1,
+        "productId": "ledger",
+        "environment": "production",
+        "kind": "create_workspace",
+        "actor": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "target": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "workspaceId": "",
+        "name": "Acme",
+        "roles": [],
+        "manifestVersion": 1
+      },
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "keyDigest": "1b5890f896a76ded7859dc4708e890e4598ac3131ee93f3d476fe331633ee264",
+      "state": "dispatching",
+      "dispatchCount": 1,
+      "generation": 1,
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": true
+  },
+  {
+    "name": "uncertain-1",
+    "value": {
+      "schemaVersion": 1,
+      "operationId": "operation-1",
+      "workspaceId": "workspace-1",
+      "intent": {
+        "schemaVersion": 1,
+        "productId": "ledger",
+        "environment": "production",
+        "kind": "create_workspace",
+        "actor": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "target": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "workspaceId": "",
+        "name": "Acme",
+        "roles": [],
+        "manifestVersion": 1
+      },
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "keyDigest": "1b5890f896a76ded7859dc4708e890e4598ac3131ee93f3d476fe331633ee264",
+      "state": "uncertain",
+      "dispatchCount": 1,
+      "generation": 1,
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": true
+  },
+  {
+    "name": "confirmed-1",
+    "value": {
+      "schemaVersion": 1,
+      "operationId": "operation-1",
+      "workspaceId": "workspace-1",
+      "intent": {
+        "schemaVersion": 1,
+        "productId": "ledger",
+        "environment": "production",
+        "kind": "create_workspace",
+        "actor": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "target": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "workspaceId": "",
+        "name": "Acme",
+        "roles": [],
+        "manifestVersion": 1
+      },
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "keyDigest": "1b5890f896a76ded7859dc4708e890e4598ac3131ee93f3d476fe331633ee264",
+      "state": "confirmed",
+      "dispatchCount": 1,
+      "generation": 1,
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": true
+  },
+  {
+    "name": "completed-1",
+    "value": {
+      "schemaVersion": 1,
+      "operationId": "operation-1",
+      "workspaceId": "workspace-1",
+      "intent": {
+        "schemaVersion": 1,
+        "productId": "ledger",
+        "environment": "production",
+        "kind": "create_workspace",
+        "actor": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "target": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "workspaceId": "",
+        "name": "Acme",
+        "roles": [],
+        "manifestVersion": 1
+      },
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "keyDigest": "1b5890f896a76ded7859dc4708e890e4598ac3131ee93f3d476fe331633ee264",
+      "state": "completed",
+      "dispatchCount": 1,
+      "generation": 1,
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": true
+  },
+  {
+    "name": "cancelled-0",
+    "value": {
+      "schemaVersion": 1,
+      "operationId": "operation-1",
+      "workspaceId": "workspace-1",
+      "intent": {
+        "schemaVersion": 1,
+        "productId": "ledger",
+        "environment": "production",
+        "kind": "create_workspace",
+        "actor": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "target": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "workspaceId": "",
+        "name": "Acme",
+        "roles": [],
+        "manifestVersion": 1
+      },
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "keyDigest": "1b5890f896a76ded7859dc4708e890e4598ac3131ee93f3d476fe331633ee264",
+      "state": "cancelled",
+      "dispatchCount": 0,
+      "generation": 1,
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": true
+  },
+  {
+    "name": "cancelled-1",
+    "value": {
+      "schemaVersion": 1,
+      "operationId": "operation-1",
+      "workspaceId": "workspace-1",
+      "intent": {
+        "schemaVersion": 1,
+        "productId": "ledger",
+        "environment": "production",
+        "kind": "create_workspace",
+        "actor": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "target": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "workspaceId": "",
+        "name": "Acme",
+        "roles": [],
+        "manifestVersion": 1
+      },
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "keyDigest": "1b5890f896a76ded7859dc4708e890e4598ac3131ee93f3d476fe331633ee264",
+      "state": "cancelled",
+      "dispatchCount": 1,
+      "generation": 1,
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "dispatching-0",
+    "value": {
+      "schemaVersion": 1,
+      "operationId": "operation-1",
+      "workspaceId": "workspace-1",
+      "intent": {
+        "schemaVersion": 1,
+        "productId": "ledger",
+        "environment": "production",
+        "kind": "create_workspace",
+        "actor": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "target": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "workspaceId": "",
+        "name": "Acme",
+        "roles": [],
+        "manifestVersion": 1
+      },
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "keyDigest": "1b5890f896a76ded7859dc4708e890e4598ac3131ee93f3d476fe331633ee264",
+      "state": "dispatching",
+      "dispatchCount": 0,
+      "generation": 1,
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "uncertain-0",
+    "value": {
+      "schemaVersion": 1,
+      "operationId": "operation-1",
+      "workspaceId": "workspace-1",
+      "intent": {
+        "schemaVersion": 1,
+        "productId": "ledger",
+        "environment": "production",
+        "kind": "create_workspace",
+        "actor": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "target": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "workspaceId": "",
+        "name": "Acme",
+        "roles": [],
+        "manifestVersion": 1
+      },
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "keyDigest": "1b5890f896a76ded7859dc4708e890e4598ac3131ee93f3d476fe331633ee264",
+      "state": "uncertain",
+      "dispatchCount": 0,
+      "generation": 1,
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "bad-generation",
+    "value": {
+      "schemaVersion": 1,
+      "operationId": "operation-1",
+      "workspaceId": "workspace-1",
+      "intent": {
+        "schemaVersion": 1,
+        "productId": "ledger",
+        "environment": "production",
+        "kind": "create_workspace",
+        "actor": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "target": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "workspaceId": "",
+        "name": "Acme",
+        "roles": [],
+        "manifestVersion": 1
+      },
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "keyDigest": "1b5890f896a76ded7859dc4708e890e4598ac3131ee93f3d476fe331633ee264",
+      "state": "pending",
+      "dispatchCount": 0,
+      "generation": 0,
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "bad-fingerprint",
+    "value": {
+      "schemaVersion": 1,
+      "operationId": "operation-1",
+      "workspaceId": "workspace-1",
+      "intent": {
+        "schemaVersion": 1,
+        "productId": "ledger",
+        "environment": "production",
+        "kind": "create_workspace",
+        "actor": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "target": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "workspaceId": "",
+        "name": "Acme",
+        "roles": [],
+        "manifestVersion": 1
+      },
+      "fingerprint": "not-a-digest",
+      "keyDigest": "1b5890f896a76ded7859dc4708e890e4598ac3131ee93f3d476fe331633ee264",
+      "state": "pending",
+      "dispatchCount": 0,
+      "generation": 1,
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "bad-state",
+    "value": {
+      "schemaVersion": 1,
+      "operationId": "operation-1",
+      "workspaceId": "workspace-1",
+      "intent": {
+        "schemaVersion": 1,
+        "productId": "ledger",
+        "environment": "production",
+        "kind": "create_workspace",
+        "actor": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "target": {
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "workspaceId": "",
+        "name": "Acme",
+        "roles": [],
+        "manifestVersion": 1
+      },
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "keyDigest": "1b5890f896a76ded7859dc4708e890e4598ac3131ee93f3d476fe331633ee264",
+      "state": "force_unblocked",
+      "dispatchCount": 0,
+      "generation": 1,
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  }
+]

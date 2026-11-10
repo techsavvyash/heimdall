@@ -13,7 +13,8 @@ describe("portable JSON schemas", () => {
   describe.each(files)("%s", (file) => {
     const name = file.replace(".schema.json", "");
     const ajv = new Ajv2020({ strict: true, allErrors: true });
-    const validate = ajv.compile(readJSON(file) as object);
+    for (const resource of files) ajv.addSchema(readJSON(resource) as object);
+    const validate = ajv.getSchema((readJSON(file) as { $id: string }).$id)!;
     const cases = readJSON("fixtures/schemas/" + name + ".json") as SchemaCase[];
 
     it("has positive and negative fixtures", () => {
