@@ -54,3 +54,7 @@ SCIM accepts a later activation after a deactivation. It does not supply the pro
 The credential used here is an instance-owner bootstrap PAT. A 404 for a mismatched resource path is not least-privilege credential evidence. Dedicated SCIM credentials, their organization boundary, provisioning-domain behavior, strict SSO, human tokens, user-API freshness under faults, session/token revocation, and SDK lifecycle reconciliation remain release gates. No group provisioning claim is added.
 
 Sources: [pinned SCIM guide](https://github.com/zitadel/zitadel/blob/v4.19.4/apps/docs/content/guides/manage/user/scim2.mdx), [SCIM API](https://zitadel.com/docs/apis/scim2), [pinned user API](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/user/v2/user_service.proto).
+
+## Repository validation and publication
+
+The full workspace gate passed: 765 Vitest tests, Go race tests, formatting/lint/types/Knip/vet, SDK build/declarations and Quartz. Source commit 8a07ed6b5ea87c1b5e09539aeaad879ed4351ad0 passed GitHub Actions runs 42910721051 and 42910706864. Railway docs deployment 3443b72e-aaa9-4d28-8d5b-cacb194cdf97 reached SUCCESS and remained running. The published evidence page returned HTTP 200 with the current probe run ID, Mermaid source and explicit credential limitations. Phase 2 remains open.
