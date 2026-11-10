@@ -66,3 +66,7 @@ A candidate strict integration can verify the selected provider/organization and
 Existing-session reuse, tenant switching, provider-policy changes, same-email accounts, SAML, downstream OIDC claims, SDK persistence and fault behavior are not yet covered. The successful upstream OIDC flow does not certify first-release strict SSO.
 
 Sources: [pinned intent API](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/user/v2/user_service.proto), [intent response fields](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/user/v2/idp.proto), [session factors](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/session/v2/session.proto), [AMR conversion](https://github.com/zitadel/zitadel/blob/v4.19.4/internal/api/oidc/amr.go), [Keycloak release](https://github.com/keycloak/keycloak/releases/tag/26.8.2).
+
+## Validation and publication
+
+The full workspace gate passed: 765 Vitest tests, Go race tests, formatting/lint/types/Knip/vet, SDK build/declarations and Quartz. Source commit 5675c48a4af0bc8290c336769c6302dd1ac86389 passed GitHub Actions runs 42914504275 and 42914492192. Railway docs deployment cca10c51-6940-4c62-975d-49d4c84d9aff reached SUCCESS and remained running. The public evidence page returned HTTP 200 with the current probe ID, fixture runtime deployment and Mermaid source. Phase 2 remains open.
