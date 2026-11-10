@@ -1,0 +1,28 @@
+{
+  "suite": "upstream-oidc-intent-v1",
+  "runId": "d5157d09-7179-49d9-be4f-5e9e2da1088b",
+  "observedAt": "2026-11-10T22:33:15.045Z",
+  "issuer": "https://capability-zitadel-verification.up.railway.app",
+  "fixture": "https://capability-enterprise-idp-verification.up.railway.app",
+  "observations": [
+    {
+      "protocol": "upstream OIDC",
+      "providerIdVerified": true,
+      "upstreamSubjectVerified": true,
+      "linkedZitadelSubjectVerified": true,
+      "organizationVerified": true,
+      "sessionIntentVerified": true,
+      "sessionIntentFields": ["verifiedAt"],
+      "passwordFallbackUsed": false,
+      "invalidIntentTokenStatus": 403,
+      "mismatchedUserStatus": 400
+    }
+  ],
+  "cleanup": "owned organization, realm and sessions deleted",
+  "limitations": [
+    "protocol fixture form automation; not browser UI validation",
+    "downstream token/policy binding and strict tenant switching still unverified",
+    "SDK strict policy lifecycle not implemented",
+    "intent evidence requires Login client API access; integration scope still under verification"
+  ]
+}

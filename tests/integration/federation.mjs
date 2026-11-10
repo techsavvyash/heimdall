@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { randomUUID, randomBytes } from "node:crypto";
 
+const protocol = process.env.HEIMDALL_PROBE_FEDERATION_PROTOCOL ?? "oidc";
+assert(["oidc", "saml"].includes(protocol));
 const z = process.env.HEIMDALL_PROBE_ZITADEL_ISSUER;
 const k = process.env.HEIMDALL_PROBE_IDP_URL;
 const pat = process.env.HEIMDALL_PROBE_ZITADEL_PAT;
@@ -40,6 +42,19 @@ async function api(origin, method, path, body, token, extra = {}) {
 const za = (method, path, body, token = pat, extra) => api(z, method, path, body, token, extra);
 const ka = (method, path, body) => api(k, method, path, body, adminToken);
 const observations = [];
+function htmlAttribute(value) {
+  return value
+    .replace(/&#(x[0-9a-f]+|[0-9]+);/gi, (_, n) =>
+      String.fromCodePoint(
+        n[0].toLowerCase() === "x" ? Number.parseInt(n.slice(1), 16) : Number(n),
+      ),
+    )
+    .replaceAll("&quot;", '"')
+    .replaceAll("&apos;", "'")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&");
+}
 try {
   const login = await fetch(`${k}/realms/master/protocol/openid-connect/token`, {
     method: "POST",
@@ -64,16 +79,17 @@ try {
     resetPasswordAllowed: false,
   });
   realmCreated = true;
-  await ka("POST", `/admin/realms/${realm}/clients`, {
-    clientId: "heimdall-zitadel",
-    enabled: true,
-    protocol: "openid-connect",
-    publicClient: false,
-    secret: clientSecret,
-    standardFlowEnabled: true,
-    directAccessGrantsEnabled: false,
-    redirectUris: [`${z}/idps/callback`],
-  });
+  if (protocol === "oidc")
+    await ka("POST", `/admin/realms/${realm}/clients`, {
+      clientId: "heimdall-zitadel",
+      enabled: true,
+      protocol: "openid-connect",
+      publicClient: false,
+      secret: clientSecret,
+      standardFlowEnabled: true,
+      directAccessGrantsEnabled: false,
+      redirectUris: [`${z}/idps/callback`],
+    });
   await ka("POST", `/admin/realms/${realm}/users`, {
     username: "federation-user",
     firstName: "Federation",
@@ -92,27 +108,85 @@ try {
   const org = await za("POST", "/v2/organizations", { name: `heimdall-federation-${runId}` });
   orgId = org.organizationId;
   assert(orgId);
+  const providerOptions = {
+    isLinkingAllowed: false,
+    isCreationAllowed: false,
+    isAutoCreation: false,
+    isAutoUpdate: false,
+  };
   const provider = await za(
     "POST",
-    "/management/v1/idps/generic_oidc",
-    {
-      name: `fixture-oidc-${runId}`,
-      issuer: `${k}/realms/${realm}`,
-      clientId: "heimdall-zitadel",
-      clientSecret,
-      scopes: ["openid", "profile", "email"],
-      usePkce: true,
-      providerOptions: {
-        isLinkingAllowed: false,
-        isCreationAllowed: false,
-        isAutoCreation: false,
-        isAutoUpdate: false,
-      },
-    },
+    `/management/v1/idps/${protocol === "oidc" ? "generic_oidc" : "saml"}`,
+    protocol === "oidc"
+      ? {
+          name: `fixture-oidc-${runId}`,
+          issuer: `${k}/realms/${realm}`,
+          clientId: "heimdall-zitadel",
+          clientSecret,
+          scopes: ["openid", "profile", "email"],
+          usePkce: true,
+          providerOptions,
+        }
+      : {
+          name: `fixture-saml-${runId}`,
+          metadataUrl: `${k}/realms/${realm}/protocol/saml/descriptor`,
+          binding: "SAML_BINDING_REDIRECT",
+          withSignedRequest: true,
+          signatureAlgorithm: "SAML_SIGNATURE_RSA_SHA256",
+          nameIdFormat: "SAML_NAME_ID_FORMAT_PERSISTENT",
+          providerOptions,
+        },
     pat,
     { "x-zitadel-orgid": orgId },
   );
   assert(provider.id);
+  let samlAcs;
+  if (protocol === "saml") {
+    const metadataResponse = await fetch(`${z}/idps/${provider.id}/saml/metadata`, {
+      redirect: "error",
+      signal: AbortSignal.timeout(15000),
+    });
+    assert(metadataResponse.status === 200);
+    const metadata = await metadataResponse.text();
+    const entityId = metadata.match(/entityID="([^"]+)"/)?.[1];
+    const acsTag = metadata.match(/<(?:\w+:)?AssertionConsumerService\b[^>]+>/)?.[0];
+    samlAcs = acsTag?.match(/Location="([^"]+)"/)?.[1];
+    const cert = metadata
+      .match(/<(?:\w+:)?X509Certificate\b[^>]*>([^<]+)</)?.[1]
+      .replace(/\s/g, "");
+    assert(entityId && samlAcs && cert && new URL(samlAcs).origin === z, "SP metadata incomplete");
+    await ka("POST", `/admin/realms/${realm}/clients`, {
+      clientId: entityId,
+      enabled: true,
+      protocol: "saml",
+      redirectUris: [samlAcs],
+      attributes: {
+        "saml.assertion.consumer.url.post": samlAcs,
+        "saml.force.post.binding": "true",
+        "saml.server.signature": "true",
+        "saml.assertion.signature": "true",
+        "saml.client.signature": "true",
+        "saml.signing.certificate": cert,
+        "saml.signature.algorithm": "RSA_SHA256",
+        saml_name_id_format: "persistent",
+        "saml.authnstatement": "true",
+      },
+    });
+    const profile = await ka("GET", `/admin/realms/${realm}/users/profile`);
+    await ka("PUT", `/admin/realms/${realm}/users/profile`, {
+      ...profile,
+      unmanagedAttributePolicy: "ADMIN_EDIT",
+    });
+    await ka("PUT", `/admin/realms/${realm}/users/${upstreamUser}`, {
+      ...upstreamUsers[0],
+      attributes: { [`saml.persistent.name.id.for.${entityId}`]: [upstreamUser] },
+    });
+    const configuredUser = await ka("GET", `/admin/realms/${realm}/users/${upstreamUser}`);
+    assert(
+      configuredUser.attributes?.[`saml.persistent.name.id.for.${entityId}`]?.[0] === upstreamUser,
+      "Persistent NameID fixture mapping not stored",
+    );
+  }
   const user = await za("POST", "/v2/users/new", {
     organizationId: orgId,
     username: `federated-${runId}`,
@@ -135,8 +209,13 @@ try {
   );
   const upstreamAuthorization = new URL(intent.authUrl);
   assert(upstreamAuthorization.origin === k);
-  assert(upstreamAuthorization.searchParams.get("code_challenge_method") === "S256");
-  assert(upstreamAuthorization.searchParams.get("code_challenge"));
+  if (protocol === "oidc") {
+    assert(upstreamAuthorization.searchParams.get("code_challenge_method") === "S256");
+    assert(upstreamAuthorization.searchParams.get("code_challenge"));
+  } else {
+    assert(upstreamAuthorization.searchParams.get("SAMLRequest"));
+    assert(upstreamAuthorization.searchParams.get("Signature"), "SAML request must be signed");
+  }
   const cookies = new Map();
   async function page(url, body) {
     const origin = new URL(url).origin;
@@ -171,14 +250,34 @@ try {
       continue;
     }
     assert(
-      response.status === 200 && target.origin === k && !passwordSubmitted,
+      response.status === 200 && target.origin === k,
       `Unexpected fixture login response: ${response.status}`,
     );
     const html = await response.text();
+    if (protocol === "saml" && passwordSubmitted) {
+      const action = html.match(/<form\b[^>]*\baction="([^"]+)"/)?.[1];
+      assert(action && htmlAttribute(action) === samlAcs, "Unexpected SAML POST destination");
+      const fields = {};
+      for (const input of html.matchAll(/<input\b[^>]+>/g)) {
+        const name = input[0].match(/\bname="([^"]+)"/)?.[1];
+        const value = input[0].match(/\bvalue="([^"]*)"/)?.[1];
+        if (name && value !== undefined) fields[name] = htmlAttribute(value);
+      }
+      assert(fields.SAMLResponse && fields.RelayState, "SAML response fields missing");
+      const samlXml = Buffer.from(fields.SAMLResponse, "base64").toString("utf8");
+      assert(
+        [...samlXml.matchAll(/<(?:\w+:)?Signature\b/g)].length === 2,
+        "Fixture must sign both SAML response and assertion",
+      );
+      target = new URL(samlAcs);
+      response = await page(target.href, fields);
+      continue;
+    }
+    assert(!passwordSubmitted, "Fixture password login did not complete");
     // This parser handles only the pinned fixture's login form, never product input.
     const action = html.match(/<form\b[^>]*\bid="kc-form-login"[^>]*\baction="([^"]+)"/);
     assert(action, "Pinned Keycloak login form missing");
-    target = new URL(action[1].replaceAll("&amp;", "&"), target);
+    target = new URL(htmlAttribute(action[1]), target);
     assert(target.origin === k, "Password destination must be the fixture IdP");
     response = await page(target.href, { username: "federation-user", password, credentialId: "" });
     passwordSubmitted = true;
@@ -250,7 +349,7 @@ try {
   );
   assert(!read.session.factors.password, "Federated session must not have local password evidence");
   observations.push({
-    protocol: "upstream OIDC",
+    protocol: `upstream ${protocol.toUpperCase()}`,
     providerIdVerified: true,
     upstreamSubjectVerified: true,
     linkedZitadelSubjectVerified: true,
@@ -275,7 +374,7 @@ try {
 console.log(
   JSON.stringify(
     {
-      suite: "upstream-oidc-intent-v1",
+      suite: `upstream-${protocol}-intent-v1`,
       runId,
       observedAt: new Date().toISOString(),
       issuer: z,
@@ -284,7 +383,7 @@ console.log(
       cleanup: "owned organization, realm and sessions deleted",
       limitations: [
         "protocol fixture form automation; not browser UI validation",
-        "SAML and downstream token/policy binding still unverified",
+        "downstream token/policy binding and strict tenant switching still unverified",
         "SDK strict policy lifecycle not implemented",
         "intent evidence requires Login client API access; integration scope still under verification",
       ],

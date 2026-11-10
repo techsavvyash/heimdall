@@ -76,3 +76,5 @@ Phase evidence lives under docs/content/evidence/ when its first record is writt
 - [[evidence/phase-2-oidc|Phase 2 human OIDC checkpoint]]: two-product code/PKCE flow, refresh, deactivation and explicit revocation. Provider-session deletion alone allowed refresh; strict enterprise SSO remains open.
 
 - [[evidence/phase-2-federation-oidc|Phase 2 upstream OIDC checkpoint]]: real provider intent and subject binding, negative cases and a test-only enterprise IdP fixture. Strict SSO remains incomplete.
+
+- [[evidence/phase-2-federation-saml|Phase 2 upstream SAML checkpoint]]: signed flow, persistent-subject intent binding, negative identity checks and OIDC regression. Full strict SSO remains open.

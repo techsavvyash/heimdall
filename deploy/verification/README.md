@@ -67,5 +67,6 @@ Sources:
 
 [Enterprise IdP setup](enterprise-idp.md) describes the test-only upstream Keycloak
 service used to exercise customer federation. It is not a Heimdall runtime dependency.
-The live upstream OIDC intent probe is `pnpm run probe:federation`; SAML and complete
-strict SSO acceptance remain pending.
+Run `pnpm run probe:federation` for upstream OIDC or set
+HEIMDALL_PROBE_FEDERATION_PROTOCOL=saml for SAML. Complete strict SSO acceptance
+remains pending.

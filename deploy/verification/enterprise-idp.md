@@ -61,10 +61,34 @@ its own realm, organization and sessions. For unknown creates or process termina
 inspect the run ID printed before writes before manually cleaning up. Passwords,
 client secrets, upstream tokens and intent credentials are not logged or committed.
 
-The current probe covers upstream OIDC intent evidence. SAML, downstream token binding,
+The probe covers upstream OIDC and SAML intent evidence. Downstream token binding,
 strict tenant switching and production SDK integration remain separate acceptance work.
 
 Sources: [Keycloak containers](https://www.keycloak.org/server/containers),
 [reverse proxy](https://www.keycloak.org/server/reverseproxy),
 [pinned release](https://github.com/keycloak/keycloak/releases/tag/26.8.2),
 [ZITADEL intent API](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/user/v2/user_service.proto).
+
+## SAML mode
+
+Set HEIMDALL_PROBE_FEDERATION_PROTOCOL=saml before `pnpm run probe:federation`.
+The default remains oidc. SAML mode creates an organization-scoped SAML provider
+using the fixture realm's metadata, requests persistent NameID, and enables signed
+HTTP-Redirect authentication requests with RSA-SHA256. It reads ZITADEL's generated
+SP metadata to configure the fixture client with the exact entity ID, POST ACS and
+public request-signing certificate. The fixture requires signed requests and signs
+both its response and assertion.
+
+The disposable realm permits administrator-only editing of unmanaged attributes to
+set a deterministic, client-specific persistent NameID. The probe preserves the
+user's profile during that update and reads the mapping back before login. This is
+a test-fixture setting, not a recommendation to change a customer's user profile
+policy. Explicit provider-plus-NameID linkage supplies identity; email matching is
+not used for linking.
+
+The fixture-only HTML parser decodes attribute entities and verifies the exact ACS
+before forwarding the response. ZITADEL performs SAML validation. A successful flow
+is followed by verified intent retrieval, session identity/organization assertions,
+invalid-intent-token rejection and mismatched-linked-user rejection. The probe is
+not an XML signature implementation and does not yet cover tampered assertions,
+replay, certificate rotation, alternate bindings or provider logout.
