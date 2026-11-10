@@ -49,3 +49,7 @@ The proof distinguishes work still outside the old server from work already insi
 This requires deployment-wide maintenance under one trusted operator. The test has one API replica, one preshared credential path and an isolated database, with no independent writers. A real runbook must inventory and stop every writer/replica, prevent replacements, retire every credential path and verify the database boundary. Rolling restarts or stopping only a product worker are insufficient.
 
 The SDK's durable operation journal, quarantine gate, authorized recovery action, generation checks and atomic completion remain unimplemented. Railway controls and multi-replica deployment handling remain unverified. Until those checks pass, this local result cannot be used to clear a managed workspace in production or close Phase 2.
+
+## Validation and publication
+
+The complete local fault probe passed and removed its owned resources. The full workspace gate also passed: 841 Vitest tests, Go race tests, formatting/lint/types/Knip/vet, SDK build/declarations and Quartz. Source commit 6c510bb5d9b0fd579465fa2fb4d2eb15b802f13e passed GitHub Actions runs 42920470829 and 42920459099. Railway docs deployment 1365d5e6-e74f-4e68-b15b-3765df7a455d reached SUCCESS. The public page returned HTTP 200 with the fault-run ID, phase status and Mermaid source. This is publication on Railway of a local fault proof, not a Railway runtime recovery test.
