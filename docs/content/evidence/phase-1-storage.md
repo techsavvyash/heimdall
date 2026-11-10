@@ -29,4 +29,4 @@ The fixtures contain synthetic checksums and do not constitute SQL migrations. N
 
 ## Deployment proof
 
-Pending verification for this checkpoint.
+Source commit d24a2b11cf75c5656f2e3de51c56b5fc7780a5a0 passed GitHub Actions run 42903933907. Railway docs deployment 97e21687-11c3-4b09-aeb2-06d2926930c6 reached SUCCESS. The public evidence page returned HTTP 200 with the expected 706-test result and Mermaid flow source. This is a documentation deployment, not live migration evidence.
