@@ -46,3 +46,7 @@ Source: [pinned OpenFGA configuration defaults](https://github.com/openfga/openf
 A unique Compose project (heimdall-probe-08051a959662) started from the tracked deploy/verification/compose.yaml with freshly generated credentials kept only in process memory. PostgreSQL reached health, the one-shot OpenFGA migration passed, and the API reached health before the same expanded probe ran. No custom images were built.
 
 Run d492db64-7aad-4301-820e-1eedd70d02ee reproduced all assertions, including the 1,000-result cap and complete 11-page traversal. Local timings were 3 ms for ListObjects and 23 ms for Read traversal; these are also single-run observations. Sanitized output is in tests/integration/evidence/openfga-local-2026-11-11.json. The probe deleted its stores, then Compose down --volumes removed this unique project's containers and volume. Follow-up label-filtered container and volume listings were empty. This validates fresh local OpenFGA setup only; it does not claim local ZITADEL or full enterprise-stack reproduction.
+
+## Validation and publication
+
+The full workspace gate passed: 841 Vitest tests, Go race tests, formatting/lint/types/Knip/vet, SDK build/declarations and Quartz. Source commit b9af3c5076688ea22d5f51a1f94cd46dced51a3e passed GitHub Actions runs 42919580471 and 42919566238. Railway docs deployment f1e14636-5eb8-4b79-939a-3b5e2e85bc2a reached SUCCESS. The public page returned HTTP 200 with both probe run IDs, phase status and Mermaid source. Phase 2 remains open.
