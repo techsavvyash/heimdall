@@ -44,10 +44,37 @@ The eventual SDK must additionally bind that chain to its browser login transact
 
 ## Remaining acceptance work
 
-Strict target-tenant switching, existing password-session rejection, policy-version invalidation, browser login binding, intent credential replay/expiry semantics, credential minimization, certificate rotation, alternate SAML bindings and SDK atomic persistence remain open. Recovery/quiescence and other Phase 2 service limits also remain open. No phase advancement or release certification follows from this checkpoint.
+Strict target-tenant switching, existing password-session rejection, policy-version invalidation, browser login binding, intent expiry semantics, credential minimization, certificate rotation, alternate SAML bindings and SDK atomic persistence remain open. Recovery/quiescence and other Phase 2 service limits also remain open. No phase advancement or release certification follows from this checkpoint.
 
 Sources: [pinned OIDC token construction](https://github.com/zitadel/zitadel/blob/v4.19.4/internal/api/oidc/token.go), [session factors](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/session/v2/session.proto), [SAML response validation](https://github.com/zitadel/zitadel/blob/v4.19.4/internal/idp/providers/saml/session.go).
 
 ## Validation and publication
 
 The full workspace gate passed: 765 Vitest tests, Go race tests, formatting/lint/types/Knip/vet, SDK build/declarations and Quartz. Source commit 84ec7033653879ffe195b543814e2510f7877c7f passed GitHub Actions runs 42916839153 and 42916821843. Railway docs deployment 245ac81a-2f22-4c42-ad97-62543ae7e413 reached SUCCESS and remained running. The public evidence page returned HTTP 200 with the current probe ID, required contract-refinement gate and Mermaid source. Phase 2 remains open.
+
+## Verified-intent and code reuse follow-up
+
+A further run used the same verified provider intent and token to attempt a second session creation after the first had succeeded. Both protocols rejected that attempt with HTTP 400. Repeating the exact downstream code redemption also returned HTTP 400 with invalid_request. The probe now requires intent reuse rejection and rejects any successful code replay; it permits either invalid_request or invalid_grant as the code failure category.
+
+| Protocol | Run | Sanitized evidence |
+| --- | --- | --- |
+| SAML | 50042ecc-b085-483a-9629-86f7d214098a | federation-saml-reuse-2026-11-11.json |
+| OIDC | 2e61948a-6477-4b91-a45a-c6e9e476be7f | federation-oidc-reuse-2026-11-11.json |
+
+These runs used the same pinned deployments listed above and deleted their owned sessions, organizations and fixture realms. They establish sequential consumed-intent and code replay rejection for this configuration, not concurrent SDK callback safety or intent expiry. The SDK still needs an atomic local transaction claim: an upstream request can succeed while its response is lost, and an already-created provider session can exist independently of the local completion record. Upstream replay rejection must not cause retries to invent successful local evidence.
+
+```mermaid
+sequenceDiagram
+  participant SDK as Future SDK callback handler
+  participant DB as Product transaction store
+  participant Z as ZITADEL
+  SDK->>DB: Atomically claim pending login transaction
+  SDK->>Z: Create session using verified provider intent
+  Z-->>SDK: Verified session
+  SDK->>Z: Redeem downstream authorization code
+  Z-->>SDK: Signed product tokens
+  SDK->>DB: Atomically persist evidence and finish transaction
+  Note over SDK,DB: Local claim and persistence remain implementation gates
+  SDK->>Z: Reuse consumed intent or code (probe only)
+  Z-->>SDK: HTTP 400
+```

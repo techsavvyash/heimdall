@@ -376,6 +376,30 @@ try {
   );
   sessions.push(session.sessionId);
   const read = await za("GET", `/v2/sessions/${session.sessionId}`, undefined, loginPat);
+  const reusedIntent = await fetch(`${z}/v2/sessions`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${loginPat}` },
+    body: JSON.stringify({
+      checks: {
+        user: { userId: user.id },
+        idpIntent: { idpIntentId: intentId, idpIntentToken: intentToken },
+      },
+      lifetime: "3600s",
+    }),
+    redirect: "error",
+    signal: AbortSignal.timeout(15000),
+  });
+  const reuseBody = await reusedIntent.json();
+  if (reusedIntent.status < 300 && reuseBody.sessionId) sessions.push(reuseBody.sessionId);
+  assert.equal(
+    reusedIntent.status,
+    400,
+    "Consumed provider intent must not create another session",
+  );
+  observations.push({
+    verifiedIntentReuse: { status: reusedIntent.status, createdSecondVerifiedSession: false },
+  });
+
   assert(read.session.factors.intent.verifiedAt, "Session intent verification missing");
   assert(
     read.session.factors.user.id === user.id && read.session.factors.user.organizationId === orgId,
@@ -491,6 +515,30 @@ try {
   const idClaims = verifiedClaims(tokens.id_token, client.clientId);
   verifiedClaims(tokens.access_token, project.projectId);
   assert(idClaims.nonce === nonce, "Downstream nonce mismatch");
+  const codeReplay = await fetch(`${z}/oauth/v2/token`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      authorization: `Basic ${Buffer.from(`${client.clientId}:${client.clientSecret}`).toString("base64")}`,
+    },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectUri,
+      code_verifier: verifier,
+    }),
+    redirect: "error",
+    signal: AbortSignal.timeout(15000),
+  });
+  const replayError = await codeReplay.json();
+  assert(
+    codeReplay.status === 400 && ["invalid_grant", "invalid_request"].includes(replayError.error),
+    `Consumed downstream code must not be redeemable again: HTTP ${codeReplay.status}, ${replayError.error ?? "no OAuth error"}`,
+  );
+  observations.push({
+    downstreamCodeReplay: { status: codeReplay.status, error: replayError.error },
+  });
+
   assert(
     idClaims.sid === session.sessionId,
     "Signed token session must match verified provider session",
