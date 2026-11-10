@@ -34,4 +34,4 @@ Receipt digest canonicalization and atomic idempotent append remain pending. A J
 
 ## Deployment proof
 
-Pending verification for this checkpoint.
+Source commit 11bd11bcbfcb4f1052319a5ced797e259adc3c1f passed GitHub Actions. Railway deployment 757560d2-5dd8-4ed4-92fd-1d10870bb620 reached SUCCESS. The public audit evidence page returned HTTP 200 with the expected 473-test result. This verifies the documentation checkpoint, not durable audit or SIEM delivery.
