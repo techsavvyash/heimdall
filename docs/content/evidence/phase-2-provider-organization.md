@@ -42,3 +42,7 @@ The remaining tenant-switching spike must validate the supported account topolog
 The enterprise evidence field organizationId denotes the trusted target provider-organization mapping. The probe now verifies provider ownership through the API; a user-home organization or browser org hint alone is not that proof. Runtime must also validate the actual authenticated subject and current target policy, and preserve the selected no-automatic-linking rule.
 
 Strict SSO remains mandatory. These results add a concrete account-topology acceptance requirement; they do not weaken first-release scope or advance Phase 2.
+
+## Validation and publication
+
+Both live protocol runs passed, including negative cross-organization cases and successful same-organization regressions. The full workspace gate passed: 841 Vitest tests, Go race tests, formatting/lint/types/Knip/vet, SDK build/declarations and Quartz. Source commit e7b09fc91240a96f6f9b2dc077dfd173518f7478 passed GitHub Actions runs 42922849444 and 42922836026. Railway docs deployment cf555348-4e99-455a-975b-6f0ac6156619 reached SUCCESS. The public page returned HTTP 200 with both run IDs, phase status and Mermaid source. Phase 2 remains open.
