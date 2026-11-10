@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://heimdall.dev/contracts/v1/config.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "productId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z]",
+      "not": {
+        "pattern": "[^a-z0-9_-]"
+      }
+    },
+    "environment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z]",
+      "not": {
+        "pattern": "[^a-z0-9_-]"
+      }
+    },
+    "issuer": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^https://[^/?#@\\s]+(?:/[^?#\\s]*)?$",
+      "not": {
+        "pattern": "[\\s?#@]"
+      }
+    },
+    "audience": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "clientId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "zitadelProjectId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "openfga": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "pattern": "^https://[^/?#@\\s]+(?:/[^?#\\s]*)?$",
+          "not": {
+            "pattern": "[\\s?#@]"
+          }
+        },
+        "storeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "not": {
+            "pattern": "[^A-Za-z0-9_-]"
+          }
+        },
+        "modelId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "not": {
+            "pattern": "[^A-Za-z0-9_-]"
+          }
+        }
+      },
+      "required": ["url", "storeId", "modelId"]
+    },
+    "manifestVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "productId",
+    "environment",
+    "issuer",
+    "audience",
+    "clientId",
+    "zitadelProjectId",
+    "openfga",
+    "manifestVersion"
+  ]
+}

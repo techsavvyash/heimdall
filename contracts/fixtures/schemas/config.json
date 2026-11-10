@@ -1,0 +1,306 @@
+[
+  {
+    "name": "valid-production",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1
+    },
+    "valid": true
+  },
+  {
+    "name": "invalid-schemaVersion-1",
+    "value": {
+      "schemaVersion": 2,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-manifestVersion-2",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 0
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-manifestVersion-3",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": "1"
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-issuer-4",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "http://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-issuer-5",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://user:secret@id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-issuer-6",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com#fragment",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-productId-7",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger/support",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-environment-8",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-audience-9",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-audience",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "reject-embedded-secret",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1,
+      "clientSecret": "do-not-store"
+    },
+    "valid": false
+  },
+  {
+    "name": "unpinned-model",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": ""
+      },
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "trailing-10",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "abc\n",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "trailing-13",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "abc\r",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "trailing-8232",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "abc\u2028",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1
+    },
+    "valid": false
+  }
+]

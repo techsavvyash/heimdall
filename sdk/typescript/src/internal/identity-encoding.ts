@@ -1,3 +1,5 @@
+import { HeimdallError } from "./errors.js";
+
 // Contract encoding only. This does not authenticate an identity.
 export function encodeIdentity(issuer: string, subject: string): string {
   for (const [value, maxBytes] of [
@@ -10,7 +12,7 @@ export function encodeIdentity(issuer: string, subject: string): string {
       !value.isWellFormed() ||
       Buffer.byteLength(value, "utf8") > maxBytes
     ) {
-      throw new Error("invalid_argument");
+      throw new HeimdallError("invalid_argument");
     }
   }
   const canonical = JSON.stringify([issuer, subject]).replace(

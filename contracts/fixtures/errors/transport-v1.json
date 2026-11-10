@@ -1,0 +1,62 @@
+[
+  {
+    "name": "dependency-before-dispatch",
+    "reason": "dependency",
+    "mutationMayExecute": false,
+    "operationId": "op-123",
+    "expected": {
+      "code": "unavailable",
+      "operationId": "op-123"
+    }
+  },
+  {
+    "name": "dependency-dispatched",
+    "reason": "dependency",
+    "mutationMayExecute": true,
+    "operationId": "op-123",
+    "expected": {
+      "code": "outcome_unknown",
+      "operationId": "op-123"
+    }
+  },
+  {
+    "name": "deadline-before-dispatch",
+    "reason": "deadline",
+    "mutationMayExecute": false,
+    "operationId": "op-123",
+    "expected": {
+      "code": "deadline_exceeded",
+      "operationId": "op-123"
+    }
+  },
+  {
+    "name": "deadline-dispatched",
+    "reason": "deadline",
+    "mutationMayExecute": true,
+    "operationId": "op-123",
+    "expected": {
+      "code": "outcome_unknown",
+      "operationId": "op-123"
+    }
+  },
+  {
+    "name": "cancelled-before-dispatch",
+    "reason": "cancelled",
+    "mutationMayExecute": false,
+    "operationId": "op-123",
+    "expected": {
+      "code": "cancelled",
+      "operationId": "op-123"
+    }
+  },
+  {
+    "name": "cancelled-dispatched",
+    "reason": "cancelled",
+    "mutationMayExecute": true,
+    "operationId": "op-123",
+    "expected": {
+      "code": "outcome_unknown",
+      "operationId": "op-123"
+    }
+  }
+]

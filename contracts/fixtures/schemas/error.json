@@ -1,0 +1,135 @@
+[
+  {
+    "name": "unauthenticated",
+    "value": {
+      "code": "unauthenticated"
+    },
+    "valid": true
+  },
+  {
+    "name": "forbidden",
+    "value": {
+      "code": "forbidden"
+    },
+    "valid": true
+  },
+  {
+    "name": "invalid_argument",
+    "value": {
+      "code": "invalid_argument"
+    },
+    "valid": true
+  },
+  {
+    "name": "not_found",
+    "value": {
+      "code": "not_found"
+    },
+    "valid": true
+  },
+  {
+    "name": "conflict",
+    "value": {
+      "code": "conflict"
+    },
+    "valid": true
+  },
+  {
+    "name": "unavailable",
+    "value": {
+      "code": "unavailable"
+    },
+    "valid": true
+  },
+  {
+    "name": "deadline_exceeded",
+    "value": {
+      "code": "deadline_exceeded"
+    },
+    "valid": true
+  },
+  {
+    "name": "cancelled",
+    "value": {
+      "code": "cancelled"
+    },
+    "valid": true
+  },
+  {
+    "name": "audit_unavailable",
+    "value": {
+      "code": "audit_unavailable"
+    },
+    "valid": true
+  },
+  {
+    "name": "outcome_unknown",
+    "value": {
+      "code": "outcome_unknown"
+    },
+    "valid": true
+  },
+  {
+    "name": "operation-id",
+    "value": {
+      "code": "outcome_unknown",
+      "operationId": "op-123"
+    },
+    "valid": true
+  },
+  {
+    "name": "unknown-code",
+    "value": {
+      "code": "retry_whatever"
+    },
+    "valid": false
+  },
+  {
+    "name": "raw-cause",
+    "value": {
+      "code": "unavailable",
+      "cause": "token"
+    },
+    "valid": false
+  },
+  {
+    "name": "unsafe-operation",
+    "value": {
+      "code": "outcome_unknown",
+      "operationId": "Bearer token"
+    },
+    "valid": false
+  },
+  {
+    "name": "empty-operation",
+    "value": {
+      "code": "outcome_unknown",
+      "operationId": ""
+    },
+    "valid": false
+  },
+  {
+    "name": "trailing-10",
+    "value": {
+      "code": "unauthenticated",
+      "operationId": "abc\n"
+    },
+    "valid": false
+  },
+  {
+    "name": "trailing-13",
+    "value": {
+      "code": "unauthenticated",
+      "operationId": "abc\r"
+    },
+    "valid": false
+  },
+  {
+    "name": "trailing-8232",
+    "value": {
+      "code": "unauthenticated",
+      "operationId": "abc\u2028"
+    },
+    "valid": false
+  }
+]

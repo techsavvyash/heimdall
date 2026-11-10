@@ -23,3 +23,43 @@ invalid Go UTF-8. Neither runtime silently repairs malformed input.
 
 Changing encoding, scope interpretation or error meanings requires a new contract
 version and migration review. Additive changes preserve existing vectors.
+
+## Errors and cancellation v1
+
+The error schema and code corpus are shared by both runners. Errors serialize
+only a known code and optional opaque operationId; SDK-generated messages use the
+code and never retain upstream exception text or arbitrary abort reasons.
+An empty operation ID means absent in internal constructors; wire objects omit it.
+Nonempty operation IDs use 1–128 ASCII letters, digits, hyphens or underscores.
+
+Transport classification applies only when no definitive remote outcome is
+available. Before mutation dispatch, dependency failure, deadline and cancellation
+remain distinct. Once a mutation may execute, all three classify as outcome_unknown
+and retain its operation ID for recovery. This classification does not implement
+the journal or prove that a write has stopped. A confirmed service rejection is
+mapped separately in the future integration.
+
+A successful denied permission check returns false, not an unavailable error.
+Actual permission evaluation and audit persistence are later runtime work; no
+permission-check stub is introduced to manufacture evidence now.
+
+## Schema conformance
+
+The test runners automatically compile every root *.schema.json and require a
+matching positive/negative corpus in fixtures/schemas/. They use JSON Schema
+2020-12 with no coercion or inserted defaults. Ajv 8.20.0 (released April 24, 2026) and Go jsonschema/v6 v6.0.2 (released May 23, 2025) satisfy the minimum
+dependency age. Both are test dependencies at this stage.
+
+Configuration v1 defines the production binding shape: product/environment,
+issuer, audience, client/project, OpenFGA endpoint/store/model and manifest
+version. It contains no inline secrets or per-request overrides. This schema is
+structural validation, not proof of issuer trust, URL reachability, service ID
+existence or manifest compatibility. The URL pattern rejects insecure endpoints,
+userinfo, whitespace, query and fragment; complete endpoint parsing and verified
+service bindings remain runtime validation work. An explicit loopback development
+profile remains to be specified before local runtime configuration ships.
+
+Specification references:
+
+- https://ajv.js.org/json-schema.html
+- https://github.com/santhosh-tekuri/jsonschema/tree/v6.0.2

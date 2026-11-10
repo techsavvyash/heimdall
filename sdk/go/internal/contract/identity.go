@@ -3,14 +3,11 @@ package contract
 
 import (
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
 )
-
-var ErrInvalidArgument = errors.New("invalid_argument")
 
 // EncodeIdentity preserves the exact issuer/subject pair without verifying it.
 func EncodeIdentity(issuer, subject string) (string, error) {
