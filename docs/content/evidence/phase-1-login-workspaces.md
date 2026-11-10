@@ -32,4 +32,4 @@ No callback endpoint, durable claim, token exchange or database lifecycle transi
 
 ## Deployment proof
 
-Pending verification for this checkpoint.
+Source commit c72c9c4e430745b50a38ef3a27b07499e4e5652e passed GitHub Actions run 42903112786. Railway docs deployment 959d8446-f3f6-4eaa-ac97-9874531c40ae reached SUCCESS. The public evidence page returned HTTP 200 with the expected 642-test result and Mermaid flow source. This verifies the documentation checkpoint, not a live login or authorization implementation.
