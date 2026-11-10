@@ -88,3 +88,5 @@ Phase evidence lives under docs/content/evidence/ when its first record is writt
 - [[evidence/phase-2-openfga-recovery|Phase 2 local recovery faults]]: committed-response loss and blocked database writes exercised through stop/drain/credential retirement. Railway control and SDK workflow proof remain open.
 
 - [[evidence/phase-2-railway-recovery|Phase 2 Railway recovery controls]]: removed deployment, drained database paths, retired credentials and reconciled both fault outcomes; post-recovery capability regression passed. SDK journal integration remains open.
+
+- [[evidence/phase-2-provider-organization|Phase 2 provider organization boundary]]: cross-organization user-link APIs reject both SAML and OIDC; same-organization federation regressions pass. Cross-tenant account topology remains a strict-SSO acceptance gate.

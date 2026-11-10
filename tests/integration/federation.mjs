@@ -3,6 +3,7 @@ import { randomUUID, randomBytes, createHash, createPublicKey, verify } from "no
 
 const protocol = process.env.HEIMDALL_PROBE_FEDERATION_PROTOCOL ?? "oidc";
 assert(["oidc", "saml"].includes(protocol));
+const testCrossOrgLink = process.env.HEIMDALL_PROBE_CROSS_ORG_LINK === "true";
 const z = process.env.HEIMDALL_PROBE_ZITADEL_ISSUER;
 const k = process.env.HEIMDALL_PROBE_IDP_URL;
 const pat = process.env.HEIMDALL_PROBE_ZITADEL_PAT;
@@ -21,6 +22,7 @@ const clientSecret = randomBytes(32).toString("hex");
 console.error(`Federation probe run: ${runId}`);
 let adminToken;
 let orgId;
+let homeOrgId;
 let realmCreated = false;
 const sessions = [];
 async function api(origin, method, path, body, token, extra = {}) {
@@ -108,6 +110,13 @@ try {
   const org = await za("POST", "/v2/organizations", { name: `heimdall-federation-${runId}` });
   orgId = org.organizationId;
   assert(orgId);
+  homeOrgId = orgId;
+  if (testCrossOrgLink) {
+    const home = await za("POST", "/v2/organizations", { name: `heimdall-home-${runId}` });
+    homeOrgId = home.organizationId;
+    assert(homeOrgId && homeOrgId !== orgId);
+  }
+
   const providerOptions = {
     isLinkingAllowed: false,
     isCreationAllowed: false,
@@ -140,6 +149,18 @@ try {
     { "x-zitadel-orgid": orgId },
   );
   assert(provider.id);
+  const providerRead = await za("GET", `/v2/idps/${provider.id}`);
+  assert.equal(providerRead.idp.id, provider.id);
+  assert.equal(providerRead.idp.details.resourceOwner, orgId, "Provider organization mismatch");
+  assert.equal(providerRead.idp.state, "IDP_STATE_ACTIVE");
+  assert.equal(providerRead.idp.type, protocol === "oidc" ? "IDP_TYPE_OIDC" : "IDP_TYPE_SAML");
+  observations.push({
+    providerConfiguration: {
+      ownerMatchesTargetOrganization: true,
+      active: true,
+      protocolMatches: true,
+    },
+  });
   let samlAcs;
   if (protocol === "saml") {
     const metadataResponse = await fetch(`${z}/idps/${provider.id}/saml/metadata`, {
@@ -186,6 +207,44 @@ try {
       configuredUser.attributes?.[`saml.persistent.name.id.for.${entityId}`]?.[0] === upstreamUser,
       "Persistent NameID fixture mapping not stored",
     );
+  }
+  if (testCrossOrgLink) {
+    const crossLink = { idpId: provider.id, userId: upstreamUser, userName: "federation-user" };
+    const crossUserInput = {
+      organizationId: homeOrgId,
+      username: `cross-home-${runId}`,
+      human: {
+        profile: { givenName: "Cross", familyName: "Home" },
+        email: { email: `cross-home-${runId}@example.invalid`, isVerified: true },
+        idpLinks: [crossLink],
+      },
+    };
+    async function rejectCrossLink(path, body) {
+      const response = await fetch(z + path, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${pat}` },
+        body: JSON.stringify(body),
+        redirect: "error",
+        signal: AbortSignal.timeout(15000),
+      });
+      const error = await response.json();
+      assert.equal(response.status, 400, "Cross-organization provider link behavior changed");
+      assert.equal(error.code, 9, "Expected provider precondition rejection");
+      return { status: response.status, code: error.code };
+    }
+    const createWithLink = await rejectCrossLink("/v2/users/new", crossUserInput);
+    delete crossUserInput.human.idpLinks;
+    const crossUser = await za("POST", "/v2/users/new", crossUserInput);
+    const addLink = await rejectCrossLink(`/v2/users/${crossUser.id}/links`, {
+      idpLink: crossLink,
+    });
+    observations.push({
+      crossOrganizationProviderLink: {
+        createWithLink,
+        addLink,
+        credential: "bootstrap administrator; not a narrow-role permission test",
+      },
+    });
   }
   const user = await za("POST", "/v2/users/new", {
     organizationId: orgId,
@@ -581,6 +640,10 @@ try {
     upstreamSubjectVerified: true,
     linkedZitadelSubjectVerified: true,
     organizationVerified: true,
+    crossOrganizationLinkRejectionTested: testCrossOrgLink,
+    successfulUserHomeMatchesProviderOrganization: true,
+    sessionOrganizationMatchesProviderOrganization:
+      read.session.factors.user.organizationId === orgId,
     sessionIntentVerified: true,
     sessionIntentFields: Object.keys(read.session.factors.intent),
     passwordFallbackUsed: false,
@@ -591,6 +654,7 @@ try {
   const results = await Promise.allSettled([
     ...sessions.map((id) => za("DELETE", `/v2/sessions/${id}`, undefined, loginPat)),
     ...(orgId ? [za("DELETE", `/v2/organizations/${orgId}`)] : []),
+    ...(homeOrgId && homeOrgId !== orgId ? [za("DELETE", `/v2/organizations/${homeOrgId}`)] : []),
     ...(realmCreated ? [ka("DELETE", `/admin/realms/${realm}`)] : []),
   ]);
   assert(
@@ -607,7 +671,7 @@ console.log(
       issuer: z,
       fixture: k,
       observations,
-      cleanup: "owned organization, realm and sessions deleted",
+      cleanup: "owned organizations, realm and sessions deleted",
       limitations: [
         "protocol fixture form automation; not browser UI validation",
         "strict tenant switching, policy-version invalidation and browser binding still unverified",

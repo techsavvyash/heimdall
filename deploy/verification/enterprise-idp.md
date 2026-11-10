@@ -95,3 +95,12 @@ not an XML signature implementation. SAML mode also changes a signed NameID in a
 fresh response and checks rejection, then replays an accepted response and checks
 rejection. Both modes complete downstream OIDC and verify signed session/time binding.
 Certificate rotation, alternate bindings and provider logout remain unverified.
+
+## Cross-organization link boundary
+
+Set HEIMDALL_PROBE_CROSS_ORG_LINK=true to add a distinct user-home organization.
+The probe requires creation-with-link and explicit AddIDPLink to reject that
+organization-scoped provider with HTTP 400/code 9, then performs the successful
+same-organization federation regression. Both modes also read the selected provider
+and check its active state, protocol and resource owner. This is not a proof of
+stable-subject switching across independently owned enterprise providers.

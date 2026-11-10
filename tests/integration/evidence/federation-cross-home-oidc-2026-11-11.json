@@ -1,0 +1,72 @@
+{
+  "suite": "upstream-oidc-intent-v1",
+  "runId": "0009c699-7f26-4ba8-91c1-c889d61ecfe8",
+  "observedAt": "2026-11-10T23:20:05.236Z",
+  "issuer": "https://capability-zitadel-verification.up.railway.app",
+  "fixture": "https://capability-enterprise-idp-verification.up.railway.app",
+  "observations": [
+    {
+      "providerConfiguration": {
+        "ownerMatchesTargetOrganization": true,
+        "active": true,
+        "protocolMatches": true
+      }
+    },
+    {
+      "crossOrganizationProviderLink": {
+        "createWithLink": {
+          "status": 400,
+          "code": 9
+        },
+        "addLink": {
+          "status": 400,
+          "code": 9
+        },
+        "credential": "bootstrap administrator; not a narrow-role permission test"
+      }
+    },
+    {
+      "verifiedIntentReuse": {
+        "status": 400,
+        "createdSecondVerifiedSession": false
+      }
+    },
+    {
+      "downstreamCodeReplay": {
+        "status": 400,
+        "error": "invalid_request"
+      }
+    },
+    {
+      "downstreamOidc": {
+        "signatureIssuerSubjectAudienceNonce": "verified",
+        "organizationScopedRequest": true,
+        "amr": null,
+        "tokenSessionMatchesProviderSession": true,
+        "authTimeMatchesIntent": true
+      }
+    },
+    {
+      "protocol": "upstream OIDC",
+      "providerIdVerified": true,
+      "upstreamSubjectVerified": true,
+      "linkedZitadelSubjectVerified": true,
+      "organizationVerified": true,
+      "crossOrganizationLinkRejectionTested": true,
+      "successfulUserHomeMatchesProviderOrganization": true,
+      "sessionOrganizationMatchesProviderOrganization": true,
+      "sessionIntentVerified": true,
+      "sessionIntentFields": ["verifiedAt"],
+      "passwordFallbackUsed": false,
+      "invalidIntentTokenStatus": 403,
+      "mismatchedUserStatus": 400
+    }
+  ],
+  "cleanup": "owned organizations, realm and sessions deleted",
+  "limitations": [
+    "protocol fixture form automation; not browser UI validation",
+    "strict tenant switching, policy-version invalidation and browser binding still unverified",
+    "SDK strict policy lifecycle not implemented",
+    "intent evidence requires Login client API access; integration scope still under verification"
+  ]
+}
