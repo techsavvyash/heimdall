@@ -18,3 +18,7 @@ The full workspace gate passed with 341 Vitest tests, Go race tests, lint/types/
 ## Remaining evidence
 
 Database uniqueness, atomic generation CAS, durable dispatch markers, immutable records and timestamp/fingerprint consistency remain persistence gates. This function cannot fence an external write. Definitive rejection needs service-specific proof; lost responses stay uncertain. Operator recovery requires live quiescence evidence and remains a release blocker until demonstrated.
+
+## Deployment proof
+
+Source commit ef23516d6b6d571123469fdc28b121f97083d9fa passed GitHub Actions. Railway docs deployment 17a2898a-52da-4ca1-9b5b-b8e33c5b1db7 reached SUCCESS. The public operation evidence page returned HTTP 200 with the expected 341-test result. This verifies the documentation checkpoint; durable workers and live recovery remain unimplemented.
