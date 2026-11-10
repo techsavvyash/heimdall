@@ -45,3 +45,7 @@ This result supports separate tenant-owned accounts authenticating to one produc
 If a compliant reauthentication produces another subject, the runtime must evaluate that subject's membership and permissions, invalidate old identity-bound context, and handle session replacement atomically. An equal email, existing browser cookie or membership of the previous account cannot supply the new account's authority. Actual HTTP/session switching, membership enforcement, recovery and audit integration still require later runtime tests.
 
 Run pnpm run probe:federation-tenants with the protected federation environment described in deploy/verification/enterprise-idp.md. The shared client secret is passed only through the child process environment; the parent deletes the product organization in its cleanup path.
+
+## Validation and publication
+
+The live shared-product probe passed. Both subject-check mutations failed the intended previous-account fixtures; restored implementations passed. The full workspace gate passed with 863 Vitest tests, Go race tests, formatting/lint/types/Knip/vet, SDK build/declarations and Quartz. Source commit ae5d0f4616f64821e7232d44357fd48d7294ae6a passed GitHub Actions runs 42923806305 and 42923793327. Railway docs deployment 5f25f934-4587-405d-88f9-f6b837f22fdb reached SUCCESS. The public page returned HTTP 200 with the shared-product run ID, phase status and Mermaid source. Phase 2 remains open.
