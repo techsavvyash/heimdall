@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://heimdall.dev/contracts/v1/login-payload.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "productId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "environment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "issuer": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "clientId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "redirectUri": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "returnToKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "createdAt": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "expiresAt": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "nonce": {
+      "type": "string",
+      "minLength": 43,
+      "maxLength": 128,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "pkceVerifier": {
+      "type": "string",
+      "minLength": 43,
+      "maxLength": 128,
+      "not": {
+        "pattern": "[^A-Za-z0-9._~-]"
+      }
+    },
+    "browserBindingDigest": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "not": {
+        "pattern": "[^a-f0-9]"
+      }
+    },
+    "tenantPolicy": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tenantId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "not": {
+                "pattern": "[^A-Za-z0-9_-]"
+              }
+            },
+            "organizationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "not": {
+                "pattern": "[^A-Za-z0-9_-]"
+              }
+            },
+            "policyVersion": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "not": {
+                "pattern": "[^A-Za-z0-9_-]"
+              }
+            },
+            "strictSSO": {
+              "type": "boolean"
+            }
+          },
+          "required": ["tenantId", "organizationId", "policyVersion", "strictSSO"]
+        }
+      ]
+    },
+    "state": {
+      "enum": ["pending", "claimed"]
+    },
+    "claimedAt": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "productId",
+    "environment",
+    "issuer",
+    "clientId",
+    "redirectUri",
+    "returnToKey",
+    "createdAt",
+    "expiresAt",
+    "nonce",
+    "pkceVerifier",
+    "browserBindingDigest",
+    "tenantPolicy",
+    "state"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "claimed"
+          }
+        }
+      },
+      "then": {
+        "required": ["claimedAt"],
+        "properties": {
+          "claimedAt": {}
+        }
+      },
+      "else": {
+        "properties": {
+          "claimedAt": false
+        }
+      }
+    }
+  ]
+}

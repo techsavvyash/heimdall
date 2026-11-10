@@ -1,0 +1,281 @@
+[
+  {
+    "name": "valid",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": true
+  },
+  {
+    "name": "missing-schemaVersion",
+    "value": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-productId",
+    "value": {
+      "schemaVersion": 1,
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-environment",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-workspaceId",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-name",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-lifecycle",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-mutationBlocked",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-revision",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-createdAt",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-updatedAt",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-schemaVersion",
+    "value": {
+      "schemaVersion": 2,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-productId",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger\n",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-createdAt",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": -1,
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-extra",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000,
+      "extra": "unsupported"
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-lifecycle",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "deleted",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-mutationBlocked",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": "false",
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-revision",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "revision": "",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "valid": false
+  }
+]

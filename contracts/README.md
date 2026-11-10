@@ -284,3 +284,51 @@ or duplicate acknowledgements fail with unavailable. Invalid responses advance
 nothing. Valid partial responses advance only those IDs, preserving other events
 for retry. Deduplication uses product/environment/event ID, never event ID alone.
 Authenticated transport, scope filtering and durable checkpoints remain runtime work.
+
+## Login payload and managed workspace gate v1
+
+Login payloads use the existing encrypted record envelope with kind=login. The
+storage key/AAD bind the opaque state lookup to product/environment. The encrypted
+payload contains issuer/client/callback/allowlisted return-destination key, nonce,
+PKCE verifier, browser-binding digest, timestamps, claim state and optional tenant
+policy. No login secret belongs in audit, discovery or ordinary exports.
+
+The browser binding is SHA-256 of the exact ASCII opaque browser cookie, whose
+runtime generator must use at least 32 random bytes and unpadded base64url. Store
+only the lowercase digest in the encrypted login payload. Callback code derives
+the comparison digest from the presented cookie, never from a browser-supplied
+hash. The internal validator compares fixed-size valid digests in constant time.
+State and nonce are independently random; PKCE uses S256. Random generation,
+callback parsing and OIDC verification remain runtime implementation work.
+
+Login records have a maximum lifetime of ten minutes (the selected v1 default),
+with shorter lifetimes allowed. Expiry is exclusive: now >= expiresAt rejects.
+Callback validation matches exact trusted product/environment/issuer/client and
+callback URL, checks the return key against startup configuration, and re-resolves
+tenant policy. Tenant ID, organization ID, policy version and strict-SSO flag must
+all still match. Added/removed policies also invalidate pending login. This is
+policy binding, not proof that the identity provider actually used required SSO.
+
+After successful validation, atomically CAS pending to claimed with claimedAt
+before exchanging the code. Losing the CAS, an already claimed record or an
+uncertain exchange requires a fresh login; never reset claimed to pending. Keep
+the claim through expiry/cleanup. Browser binding must be checked before claim so
+a stolen state alone cannot consume another browser's pending login. The pure
+validator performs no database CAS or code exchange. Invalid time ordering returns
+invalid_argument; expiry, replay or binding changes return unauthenticated.
+
+Workspace records carry product/environment, immutable ID, display name, lifecycle,
+mutationBlocked, non-repeating revision and creation/update times. Only active and
+unblocked yields check_relationships. Pending, suspended, tombstoned, blocked and
+absent records yield deny. This result never grants access: verified identity,
+enterprise lifecycle/policy checks, fresh membership-gated OpenFGA evaluation and
+durable audit remain mandatory. Database failures propagate unavailable; never
+convert a failed read into an absent record. A wrong-scope database result also
+returns unavailable, rather than evaluating it as a different tenant.
+
+Read authoritative lifecycle from the primary database on every managed check.
+Callers must audit local denials before reporting a completed decision. This check
+does not fence an in-flight request or justify clearing a mutation block. Revision
+uniqueness, atomic transitions, suspension/resumption authorization and tombstone
+retention are persistence/runtime gates. Schema validation cannot prove randomness,
+immutability, name validation at creation or primary-database consistency.

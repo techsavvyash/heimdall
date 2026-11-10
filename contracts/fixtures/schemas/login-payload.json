@@ -1,0 +1,511 @@
+[
+  {
+    "name": "valid",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": true
+  },
+  {
+    "name": "missing-schemaVersion",
+    "value": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-productId",
+    "value": {
+      "schemaVersion": 1,
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-environment",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-issuer",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-clientId",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-redirectUri",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-returnToKey",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-createdAt",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-expiresAt",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-nonce",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-pkceVerifier",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-browserBindingDigest",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-tenantPolicy",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-state",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-schemaVersion",
+    "value": {
+      "schemaVersion": 2,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-productId",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger\n",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-createdAt",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": -1,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-extra",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending",
+      "extra": "unsupported"
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-nonce",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "short",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-pkceVerifier",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "badbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbad",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-browserBindingDigest",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+      "tenantPolicy": null,
+      "state": "pending"
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-state",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "done"
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-claimedAt",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending",
+      "claimedAt": 1001
+    },
+    "valid": false
+  },
+  {
+    "name": "valid-claimed",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "claimed",
+      "claimedAt": 1001
+    },
+    "valid": true
+  },
+  {
+    "name": "missing-claimedAt",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "claimed"
+    },
+    "valid": false
+  }
+]

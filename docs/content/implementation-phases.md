@@ -35,8 +35,7 @@ Phase 1 turns selected semantics into executable schemas and fixtures. Public au
 
 ## Remaining Phase 1 gates
 
-Before advancing, finish the shared login-state payload, workspace lifecycle/deny
-fixtures, storage metadata and migration compatibility rules, and endpoint
+Before advancing, finish storage metadata and migration compatibility rules, and endpoint
 configuration including explicit loopback development policy. Review these
 against #31 and the selected contracts, then rerun cross-language conformance,
 mutation detection and the full workspace gate. Record the final phase acceptance
@@ -63,3 +62,5 @@ Phase evidence lives under docs/content/evidence/ when its first record is writt
 - [[evidence/phase-1-audit|Phase 1 audit checkpoint]]: event semantics and receipt shapes. Durable append and export remain pending.
 
 - [[evidence/phase-1-audit-receipts|Phase 1 audit receipt checkpoint]]: portable fingerprints and scoped receipt validation. Atomic persistence and export checkpoints remain pending.
+
+- [[evidence/phase-1-login-workspaces|Phase 1 login/workspace checkpoint]]: browser/policy binding and lifecycle-deny fixtures. Atomic claims and live enforcement remain runtime gates.
