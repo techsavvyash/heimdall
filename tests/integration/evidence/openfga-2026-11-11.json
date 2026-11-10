@@ -1,0 +1,13 @@
+{
+  "suite": "openfga-capabilities-v1",
+  "runId": "7feeae05-7e0e-492f-8ca3-3237291ec1c4",
+  "observedAt": "2026-11-10T21:39:17.912Z",
+  "observations": {
+    "unauthenticatedAndInvalidKey": "401",
+    "twoProductsFourWorkspaceObjects": "isolated relationship results",
+    "listing": "membership ListObjects and Read page_size=1 continuation verified",
+    "postRevocation": "immediate HIGHER_CONSISTENCY check denied",
+    "credentialBoundary": "preshared key has deployment-wide access to both stores; no per-store credential isolation"
+  },
+  "cleanedUpStores": ["01M73PD9ZMPEFRB8HV8WAZ1R1Y", "01M73PDA2P1Y362HV0FNWMQ6SX"]
+}

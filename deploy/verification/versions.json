@@ -1,0 +1,17 @@
+{
+  "openfga": {
+    "version": "1.22.0",
+    "releasedAt": "2026-10-06",
+    "image": "openfga/openfga:v1.22.0@sha256:9cf9a20af32a40434cd3a788c429879439ee9ea9abf65c9c200ee17cd43f769e"
+  },
+  "postgres": {
+    "version": "17.11",
+    "releasedAt": "2026-08-13",
+    "image": "postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac"
+  },
+  "zitadelCandidate": {
+    "version": "4.19.4",
+    "releasedAt": "2026-10-01",
+    "status": "not deployed or verified"
+  }
+}

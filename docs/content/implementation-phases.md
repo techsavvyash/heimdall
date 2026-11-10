@@ -29,7 +29,7 @@ Audit persistence is built before authorization results can be released; enterpr
 
 ## Current phase
 
-**Phase 1 is complete. Phase 2 is next and has not started.**
+**Phase 1 is complete. Phase 2 is in progress.**
 
 Phase 1 turns selected semantics into executable schemas and fixtures. Public authentication APIs remain unavailable until implemented and validated; internal contract utilities do not constitute verified authentication.
 
@@ -37,8 +37,7 @@ Phase 1 turns selected semantics into executable schemas and fixtures. Public au
 
 The final contract acceptance matrix and source commit/deployment proof are in
 [[evidence/phase-1-acceptance]]. Both language suites, deliberate mutation detection,
-full workspace checks, GitHub Actions and Railway publication passed. Before
-starting Phase 2, verify this final evidence publication is live.
+full workspace checks, GitHub Actions and Railway publication passed. The final completion record was verified live before starting Phase 2.
 
 ## Evidence ledger
 
@@ -65,3 +64,5 @@ Phase evidence lives under docs/content/evidence/ when its first record is writt
 - [[evidence/phase-1-storage|Phase 1 storage compatibility checkpoint]]: migration checksums, reader/writer ranges and bridge upgrade fixtures. Live migrations and coordination remain later gates.
 
 - [[evidence/phase-1-acceptance|Phase 1 final acceptance matrix]]: complete contract coverage, endpoint profiles, renewed mutation proof and final deployment gate.
+
+- [[evidence/phase-2-openfga|Phase 2 OpenFGA checkpoint]]: pinned Railway services and initial live two-store probes. Phase 2 remains open.
