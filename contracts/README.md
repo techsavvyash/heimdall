@@ -217,3 +217,30 @@ Uncertain has no automatic outgoing transition. Lease expiry, a relationship rea
 or a stopped worker cannot clear it. Operator recovery must establish real
 quiescence and reconcile under the eventual verified recovery protocol. This pure
 state helper does not fence remote requests or provide a force-unblock API.
+
+## Audit envelope v1
+
+Audit event, durable receipt and delivery receipt schemas define strict wire shapes.
+Structural validation precedes semantic validation. Reserved event types/outcomes
+are enumerated in audit-types-v1.json. Authorization requires decision/model/manifest
+IDs; allow/deny additionally require tenant and permission. Early invalid requests
+may have unknown actors/tenants. Authentication success and authorization allow
+require a user. Membership/ownership require operation, tenant, model and manifest.
+System audit actors identify trusted scheduled workers, not public service principals.
+
+Custom events require registered product.* types/versions and attribute schemas.
+Trusted call context prevents custom producers impersonating reserved SDK types.
+Backend code must derive actor/scope from verified context; validation cannot prove
+metadata truth, persistence or delivery.
+
+Attribute root depth is zero; maximum depth 8, container members 32, ASCII token
+key length 64 and string size 4096 UTF-8 bytes. Finite numeric magnitude is bounded
+by the safe-integer maximum. Structural weight is capped at 32768: null/bool=1,
+number=9, string=1+UTF-8 bytes, container=1+children plus object key bytes.
+This is not a serialized event-byte limit. Known secret/reserved metadata keys are
+rejected recursively, ignoring case, underscores and hyphens. Secrets concealed
+in innocuous values still require trusted schemas and sanitized construction.
+
+Receipt schemas validate shape only. Payload digest canonicalization, atomic
+append/idempotency, durable acknowledgement, trusted registry loading and SIEM
+replay remain implementation gates. These validators issue no durable receipts.

@@ -1,0 +1,22 @@
+{
+  "heimdall.authorization.requested": ["requested"],
+  "heimdall.authorization.completed": [
+    "allow",
+    "deny",
+    "invalid",
+    "unavailable",
+    "cancelled",
+    "outcome_unknown"
+  ],
+  "heimdall.membership.intent": ["requested"],
+  "heimdall.membership.attempt": ["attempted"],
+  "heimdall.membership.completed": ["succeeded", "failed", "outcome_unknown"],
+  "heimdall.ownership.intent": ["requested"],
+  "heimdall.ownership.attempt": ["attempted"],
+  "heimdall.ownership.completed": ["succeeded", "failed", "outcome_unknown"],
+  "heimdall.authentication.completed": ["succeeded", "deny", "invalid", "unavailable", "cancelled"],
+  "heimdall.recovery.completed": ["succeeded", "failed", "outcome_unknown"],
+  "heimdall.policy.completed": ["succeeded", "failed"],
+  "heimdall.export.completed": ["succeeded", "failed"],
+  "heimdall.identity.observed": ["succeeded", "failed"]
+}

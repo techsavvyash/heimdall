@@ -1,0 +1,274 @@
+[
+  {
+    "name": "allow",
+    "value": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "heimdall.authorization.completed",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "allow",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1
+    },
+    "valid": true
+  },
+  {
+    "name": "invalid-eventId",
+    "value": {
+      "schemaVersion": 1,
+      "eventId": "",
+      "eventType": "heimdall.authorization.completed",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "allow",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-actor",
+    "value": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "heimdall.authorization.completed",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "unknown",
+        "subject": "spoof"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "allow",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-attributes",
+    "value": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "heimdall.authorization.completed",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "allow",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": [],
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-outcome",
+    "value": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "heimdall.authorization.completed",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "whatever",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-eventType",
+    "value": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "product.fake\n",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "allow",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-recordedAt",
+    "value": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "heimdall.authorization.completed",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1.5,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "allow",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "no-raw-token",
+    "value": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "heimdall.authorization.completed",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "allow",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "rawToken": "synthetic"
+    },
+    "valid": false
+  }
+]

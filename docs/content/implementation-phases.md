@@ -48,3 +48,5 @@ Phase evidence lives under docs/content/evidence/ when its first record is writt
 - [[evidence/phase-1-crypto|Phase 1 cryptographic envelope checkpoint]]: shared authenticated formats and cross-language writer/reader vectors. Operational key management remains a runtime gate.
 
 - [[evidence/phase-1-operations|Phase 1 operation checkpoint]]: immutable fingerprints, journal schema and conservative state transitions. Durable execution and recovery remain pending.
+
+- [[evidence/phase-1-audit|Phase 1 audit checkpoint]]: event semantics and receipt shapes. Durable append and export remain pending.

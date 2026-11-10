@@ -1,0 +1,268 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://heimdall.dev/contracts/v1/audit-event.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "eventId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "eventType": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^(heimdall|product)([.][a-z][a-z0-9_]*)+$",
+      "not": {
+        "pattern": "[^a-z0-9_.]"
+      }
+    },
+    "eventVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
+    "occurredAt": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "recordedAt": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "productId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "environment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "tenantId": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "not": {
+            "pattern": "[^A-Za-z0-9_-]"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "actor": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "user"
+            },
+            "issuer": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "subject": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          "required": ["kind", "issuer", "subject"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "unknown"
+            }
+          },
+          "required": ["kind"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id"],
+          "properties": {
+            "kind": {
+              "const": "system"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "not": {
+                "pattern": "[^A-Za-z0-9_-]"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "not": {
+            "pattern": "[^A-Za-z0-9_-]"
+          }
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        }
+      },
+      "required": ["type", "id"]
+    },
+    "action": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "outcome": {
+      "enum": [
+        "requested",
+        "attempted",
+        "allow",
+        "deny",
+        "invalid",
+        "unavailable",
+        "cancelled",
+        "outcome_unknown",
+        "succeeded",
+        "failed"
+      ]
+    },
+    "requestId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "source": {
+      "enum": ["sdk", "product", "operator", "zitadel"]
+    },
+    "sdkVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "attributes": {
+      "type": "object",
+      "maxProperties": 32
+    },
+    "decisionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "operationId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "parentDecisionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "permission": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "modelId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "manifestVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
+    "policyVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "reasonCode": {
+      "enum": [
+        "unauthenticated",
+        "forbidden",
+        "invalid_argument",
+        "not_found",
+        "conflict",
+        "unavailable",
+        "deadline_exceeded",
+        "cancelled",
+        "audit_unavailable",
+        "outcome_unknown"
+      ]
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "eventId",
+    "eventType",
+    "eventVersion",
+    "occurredAt",
+    "recordedAt",
+    "productId",
+    "environment",
+    "tenantId",
+    "actor",
+    "target",
+    "action",
+    "outcome",
+    "requestId",
+    "source",
+    "sdkVersion",
+    "attributes"
+  ]
+}
