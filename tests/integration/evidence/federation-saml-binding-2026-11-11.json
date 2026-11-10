@@ -1,0 +1,47 @@
+{
+  "suite": "upstream-saml-intent-v1",
+  "runId": "994aa152-fa33-47fd-8ec8-215345fd7e11",
+  "observedAt": "2026-11-10T22:39:21.375Z",
+  "issuer": "https://capability-zitadel-verification.up.railway.app",
+  "fixture": "https://capability-enterprise-idp-verification.up.railway.app",
+  "observations": [
+    {
+      "tamperedNameId": "rejected at failure callback without intent token"
+    },
+    {
+      "downstreamOidc": {
+        "signatureIssuerSubjectAudienceNonce": "verified",
+        "organizationScopedRequest": true,
+        "amr": null,
+        "tokenSessionMatchesProviderSession": true,
+        "authTimeMatchesIntent": true
+      }
+    },
+    {
+      "replayedSamlResponse": {
+        "status": 302,
+        "callbackPath": "/failure",
+        "returnedIntentToken": false
+      }
+    },
+    {
+      "protocol": "upstream SAML",
+      "providerIdVerified": true,
+      "upstreamSubjectVerified": true,
+      "linkedZitadelSubjectVerified": true,
+      "organizationVerified": true,
+      "sessionIntentVerified": true,
+      "sessionIntentFields": ["verifiedAt"],
+      "passwordFallbackUsed": false,
+      "invalidIntentTokenStatus": 403,
+      "mismatchedUserStatus": 400
+    }
+  ],
+  "cleanup": "owned organization, realm and sessions deleted",
+  "limitations": [
+    "protocol fixture form automation; not browser UI validation",
+    "strict tenant switching, policy-version invalidation and browser binding still unverified",
+    "SDK strict policy lifecycle not implemented",
+    "intent evidence requires Login client API access; integration scope still under verification"
+  ]
+}

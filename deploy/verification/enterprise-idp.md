@@ -61,8 +61,9 @@ its own realm, organization and sessions. For unknown creates or process termina
 inspect the run ID printed before writes before manually cleaning up. Passwords,
 client secrets, upstream tokens and intent credentials are not logged or committed.
 
-The probe covers upstream OIDC and SAML intent evidence. Downstream token binding,
-strict tenant switching and production SDK integration remain separate acceptance work.
+The probe covers upstream OIDC and SAML intent evidence and downstream signed
+sid/auth_time binding. Strict tenant switching and production SDK integration remain
+separate acceptance work.
 
 Sources: [Keycloak containers](https://www.keycloak.org/server/containers),
 [reverse proxy](https://www.keycloak.org/server/reverseproxy),
@@ -90,5 +91,7 @@ The fixture-only HTML parser decodes attribute entities and verifies the exact A
 before forwarding the response. ZITADEL performs SAML validation. A successful flow
 is followed by verified intent retrieval, session identity/organization assertions,
 invalid-intent-token rejection and mismatched-linked-user rejection. The probe is
-not an XML signature implementation and does not yet cover tampered assertions,
-replay, certificate rotation, alternate bindings or provider logout.
+not an XML signature implementation. SAML mode also changes a signed NameID in a
+fresh response and checks rejection, then replays an accepted response and checks
+rejection. Both modes complete downstream OIDC and verify signed session/time binding.
+Certificate rotation, alternate bindings and provider logout remain unverified.
