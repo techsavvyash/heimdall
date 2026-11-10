@@ -70,3 +70,5 @@ Phase evidence lives under docs/content/evidence/ when its first record is writt
 - [[evidence/phase-2-zitadel|Phase 2 ZITADEL checkpoint]]: pinned API/Login UI, runtime credential separation and initial v2 provisioning probe. Phase 2 remains open.
 
 - [[evidence/phase-2-scim|Phase 2 SCIM checkpoint]]: two-organization Users lifecycle and authoritative state visibility. Credential boundaries and SDK lifecycle work remain open.
+
+- [[evidence/phase-2-scim-credentials|Phase 2 SCIM credential checkpoint]]: narrow role, organization boundaries and provisioning domains verified on Railway. Phase 2 remains open.

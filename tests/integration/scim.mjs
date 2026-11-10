@@ -10,7 +10,11 @@ const runId = randomUUID();
 console.error(`SCIM probe run: ${runId}`);
 const orgs = [];
 const observations = [];
-async function request(method, path, body, credential = pat) {
+const scopedTokens = new Map();
+const credentialChecks = [];
+async function request(method, path, body, credential) {
+  credential ??=
+    (path.startsWith("/scim/") ? scopedTokens.get(path.split("/")[3]) : undefined) ?? pat;
   const r = await fetch(`${issuer}${path}`, {
     method,
     headers: {
@@ -24,18 +28,18 @@ async function request(method, path, body, credential = pat) {
   const text = await r.text();
   return { status: r.status, body: text ? JSON.parse(text) : null };
 }
-async function ok(method, path, body) {
-  const r = await request(method, path, body);
+async function ok(method, path, body, credential) {
+  const r = await request(method, path, body, credential);
   assert(
     r.status >= 200 && r.status < 300,
     `${method} ${path}: HTTP ${r.status}, code ${r.body?.code ?? r.body?.scimType ?? "unknown"}`,
   );
   return r.body;
 }
-async function stateWithin(userId, expected) {
+async function stateWithin(userId, expected, credential) {
   const start = performance.now();
   while (performance.now() - start < 60000) {
-    const r = await request("GET", `/v2/users/${userId}`);
+    const r = await request("GET", `/v2/users/${userId}`, undefined, credential);
     if (
       expected === "deleted" ? r.status === 404 : r.status === 200 && r.body.user.state === expected
     ) {
@@ -53,6 +57,32 @@ try {
     const org = await ok("POST", "/v2/organizations", { name: `heimdall-scim-${tenant}-${runId}` });
     assert(org.organizationId);
     orgs.push(org.organizationId);
+    const machine = await ok("POST", "/v2/users/new", {
+      organizationId: org.organizationId,
+      username: `directory-${tenant}-${runId}`,
+      machine: { name: `SCIM ${tenant} capability probe` },
+      metadata: [
+        {
+          key: "urn:zitadel:scim:provisioningDomain",
+          value: Buffer.from(`directory-${tenant}`).toString("base64"),
+        },
+      ],
+    });
+    assert(machine.id);
+    await ok(
+      "POST",
+      "/zitadel.internal_permission.v2.InternalPermissionService/CreateAdministrator",
+      {
+        userId: machine.id,
+        resource: { organizationId: org.organizationId },
+        roles: ["ORG_HEIMDALL_SCIM"],
+      },
+    );
+    const token = await ok("POST", `/v2/users/${machine.id}/pats`, {
+      expirationDate: new Date(Date.now() + 3600000).toISOString(),
+    });
+    assert(token.token);
+    scopedTokens.set(org.organizationId, token.token);
   }
   const paths = orgs.map((id) => `/scim/v2/${id}/Users`);
   assert.equal((await request("GET", paths[0], undefined, "")).status, 401);
@@ -71,6 +101,49 @@ try {
     assert.equal((await ok("GET", `${path}/${user.id}`)).externalId, `employee-${runId}`);
   }
   assert.notEqual(users[0], users[1]);
+  const acmeToken = scopedTokens.get(orgs[0]);
+  for (const [method, path, body] of [
+    ["GET", `${paths[1]}/${users[1]}`],
+    [
+      "PATCH",
+      `${paths[1]}/${users[1]}`,
+      {
+        schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+        Operations: [{ op: "replace", path: "active", value: false }],
+      },
+    ],
+    ["DELETE", `${paths[1]}/${users[1]}`],
+    [
+      "POST",
+      "/zitadel.internal_permission.v2.InternalPermissionService/CreateAdministrator",
+      { userId: users[0], resource: { organizationId: orgs[0] }, roles: ["ORG_OWNER"] },
+    ],
+  ]) {
+    const result = await request(method, path, body, acmeToken);
+    assert(
+      [403, 404].includes(result.status),
+      `Scoped credential unexpectedly permitted ${method} ${path}: ${result.status}`,
+    );
+    credentialChecks.push({
+      method,
+      target: path.includes(orgs[1]) ? "other organization user" : "administrator grant",
+      status: result.status,
+    });
+  }
+  const crossApi = await request("GET", `/v2/users/${users[1]}`, undefined, acmeToken);
+  assert(
+    [403, 404].includes(crossApi.status),
+    "Scoped role must not read another organization through user API",
+  );
+  credentialChecks.push({
+    target: "other organization user through v2 user API",
+    status: crossApi.status,
+  });
+  const bootstrapRead = await ok("GET", `${paths[0]}/${users[0]}`, undefined, pat);
+  assert(!bootstrapRead.externalId, "External ID must use the caller's provisioning domain");
+  credentialChecks.push({
+    provisioningDomain: "directory external ID not exposed through unconfigured bootstrap domain",
+  });
   const duplicate = await request("POST", paths[1], {
     schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
     userName: `employee-0-${runId}@example.invalid`,
@@ -97,6 +170,7 @@ try {
     const readMs = await stateWithin(
       users[0],
       active ? "USER_STATE_ACTIVE" : "USER_STATE_INACTIVE",
+      acmeToken,
     );
     observations.push({
       active,
@@ -106,7 +180,10 @@ try {
   }
   await ok("DELETE", `${paths[0]}/${users[0]}`);
   assert.equal((await request("GET", `${paths[0]}/${users[0]}`)).status, 404);
-  observations.push({ deleted: true, authoritativeReadMs: await stateWithin(users[0], "deleted") });
+  observations.push({
+    deleted: true,
+    authoritativeReadMs: await stateWithin(users[0], "deleted", acmeToken),
+  });
   assert.equal((await ok("GET", `${paths[1]}/${users[1]}`)).active, true);
 } finally {
   const results = await Promise.allSettled(
@@ -120,17 +197,18 @@ try {
 console.log(
   JSON.stringify(
     {
-      suite: "zitadel-scim-users-v1",
+      suite: "zitadel-scim-minimum-role-v3",
       runId,
       observedAt: new Date().toISOString(),
       issuer,
       observations,
+      credentialChecks,
       cleanedUpOrganizations: orgs,
       limitations: [
-        "bootstrap credential; least-privilege SCIM credential not yet tested",
+        "custom role permits organization user lifecycle across APIs; not SCIM-endpoint-only",
         "single sequential sample; not a latency guarantee",
         "no SDK workers, sessions or tuple reconciliation tested",
-        "cross-organization resource lookup checked; hostile credential isolation not inferred",
+        "selected user read/write/delete and administrator-grant boundaries tested; not an exhaustive permission audit",
       ],
     },
     null,

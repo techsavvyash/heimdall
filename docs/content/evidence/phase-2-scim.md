@@ -9,7 +9,7 @@ date: 2026-11-11
 
 Run `pnpm run probe:scim` with the same protected verification issuer and bootstrap PAT used by the ZITADEL probe. The script creates two uniquely named organizations, creates one synthetic identity in each, performs assertions, and deletes only those organizations in a finally block. Each request has a 15-second timeout. Mutations are not automatically retried. If a create response is lost, inspect organizations named for the run ID printed before writes; confirm ownership before cleanup.
 
-The committed source is tests/integration/scim.mjs; sanitized output is tests/integration/evidence/scim-2026-11-11.json. Run 23770f27-0dc6-40e0-9eff-1e1a139c2253 used ZITADEL deployment a95c670e-c328-4dbb-a0e2-2af6089e08ca in Railway's verification environment.
+The original probe source is tests/integration/scim.mjs at commit 8a07ed6b5ea87c1b5e09539aeaad879ed4351ad0; the current version adds [[evidence/phase-2-scim-credentials|dedicated credential checks]]. sanitized output is tests/integration/evidence/scim-2026-11-11.json. Run 23770f27-0dc6-40e0-9eff-1e1a139c2253 used ZITADEL deployment a95c670e-c328-4dbb-a0e2-2af6089e08ca in Railway's verification environment.
 
 | Assertion | Observed result |
 | --- | --- |

@@ -110,4 +110,41 @@ Sources: [tagged upstream Compose](https://github.com/zitadel/zitadel/blob/v4.19
 
 ## SCIM Users lifecycle probe
 
-With the same protected issuer and bootstrap PAT environment, run `pnpm run probe:scim`. This creates two disposable organizations and synthetic identities, tests tenant resource paths, external-ID lookup, default username uniqueness, repeated disable/reactivation/deletion and authoritative user state, then deletes its owned organizations. It uses the privileged bootstrap credential; dedicated SCIM credential boundaries are not yet established. Run only in the verification environment. Use the printed run ID to inspect uncertain creates before manual cleanup. The committed sanitized evidence distinguishes upstream state visibility from later SDK worker/session guarantees.
+With the same protected issuer and bootstrap PAT environment, run `pnpm run probe:scim`. This creates two disposable organizations and synthetic identities, tests tenant resource paths, external-ID lookup, default username uniqueness, repeated disable/reactivation/deletion and authoritative user state, then deletes its owned organizations. The initial checkpoint used a bootstrap credential; the current probe uses the dedicated role described below for SCIM operations. Run only in the verification environment. Use the printed run ID to inspect uncertain creates before manual cleanup. The committed sanitized evidence distinguishes upstream state visibility from later SDK worker/session guarantees.
+
+## Narrow SCIM credential role
+
+The current probe creates a machine user in each disposable organization, assigns
+ORG_HEIMDALL_SCIM through the v2 InternalPermissionService/CreateAdministrator API,
+and issues a one-hour PAT. Provisioning-domain metadata is set on each machine
+before provisioning; SCIM user operations use that organization's token. Bootstrap
+credentials are retained only for creating/deleting organizations and assigning the
+initial role. Deleting the disposable organizations removes their machines too.
+No temporary directory PAT is printed or saved.
+
+The custom role has user.read, user.write and user.delete. These permissions apply
+to user-management APIs, not exclusively to SCIM URLs. Treat this as a powerful
+organization lifecycle credential, never a product session credential. The probe
+checks own-organization lifecycle, denied cross-organization read/update/delete,
+denied administrator grants, and provisioning-domain lookup isolation. It is not
+an exhaustive permission/security audit.
+
+The deploy/verification/zitadel-role-permissions.json file preserves all 27 default
+role mappings from the pinned v4.19.4 cmd/defaults.yaml and appends the custom role.
+The source YAML SHA-256 is
+07dbde584dadeb65d78d1860a09e6237746acdd22e42413513484b4b44b0ae95.
+Do not replace the map with only the new role: ZITADEL's environment setting replaces
+the complete map, including operator and Login UI permissions.
+
+Set ZITADEL_INTERNALAUTHZ_ROLEPERMISSIONMAPPINGS to the JSON file content. Run the
+pinned API once with `/app/zitadel start-from-setup --masterkeyFromEnv` to synchronize
+roles to the database, verify readiness, then return to
+`/app/zitadel start --masterkeyFromEnv` and redeploy. This uses the existing application
+database credential; bootstrap database superuser credentials are not restored.
+Keep the complete role configuration in deployment configuration. On a service
+upgrade, compare the new upstream defaults and preserve their required changes;
+do not blindly reuse an old default-role snapshot.
+
+Source: [pinned internal authorization mappings](https://github.com/zitadel/zitadel/blob/v4.19.4/cmd/defaults.yaml),
+[SCIM permission mapping](https://github.com/zitadel/zitadel/blob/v4.19.4/internal/api/scim/authz.go),
+[administrator API](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/internal_permission/v2/internal_permission_service.proto).
