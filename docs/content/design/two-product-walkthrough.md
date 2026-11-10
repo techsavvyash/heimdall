@@ -56,10 +56,12 @@ The operator deploys ZITADEL and OpenFGA with persistent databases. Setup creden
 
 ## 2. Register Ledger and Support
 
-The developer writes one manifest for each product. The manifest shown here is a proposed shape. A complete schema must include delegation rules and ownership behavior before use.
+The developer writes one manifest for each product. The version-1 structural schema is in contracts/manifest.schema.json. Both SDKs validate role/permission references, delegation and config bindings through shared fixtures. Provisioning and live enforcement remain unimplemented.
 
 ```yaml
-product: ledger
+schemaVersion: 1
+productId: ledger
+version: 1
 clients:
   web:
     redirectUris:
@@ -72,6 +74,11 @@ roles:
   viewer: [invoice.read]
   approver: [invoice.read, invoice.approve]
   admin: [invoice.read, invoice.approve, members.manage]
+  owner: [invoice.read, invoice.approve, members.manage]
+ownerRole: owner
+delegation:
+  admin: [viewer, approver]
+  owner: [viewer, approver, admin]
 ```
 
 Support declares `ticket.read`, `ticket.reply`, and `members.manage`, with viewer, agent, and admin roles. A proposed command provisions each manifest.

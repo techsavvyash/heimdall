@@ -14,7 +14,8 @@
         "storeId": "store-1",
         "modelId": "model-1"
       },
-      "manifestVersion": 1
+      "manifestVersion": 1,
+      "clientKey": "web"
     },
     "valid": true
   },
@@ -33,7 +34,8 @@
         "storeId": "store-1",
         "modelId": "model-1"
       },
-      "manifestVersion": 1
+      "manifestVersion": 1,
+      "clientKey": "web"
     },
     "valid": false
   },
@@ -52,7 +54,8 @@
         "storeId": "store-1",
         "modelId": "model-1"
       },
-      "manifestVersion": 0
+      "manifestVersion": 0,
+      "clientKey": "web"
     },
     "valid": false
   },
@@ -71,7 +74,8 @@
         "storeId": "store-1",
         "modelId": "model-1"
       },
-      "manifestVersion": "1"
+      "manifestVersion": "1",
+      "clientKey": "web"
     },
     "valid": false
   },
@@ -90,7 +94,8 @@
         "storeId": "store-1",
         "modelId": "model-1"
       },
-      "manifestVersion": 1
+      "manifestVersion": 1,
+      "clientKey": "web"
     },
     "valid": false
   },
@@ -109,7 +114,8 @@
         "storeId": "store-1",
         "modelId": "model-1"
       },
-      "manifestVersion": 1
+      "manifestVersion": 1,
+      "clientKey": "web"
     },
     "valid": false
   },
@@ -128,7 +134,8 @@
         "storeId": "store-1",
         "modelId": "model-1"
       },
-      "manifestVersion": 1
+      "manifestVersion": 1,
+      "clientKey": "web"
     },
     "valid": false
   },
@@ -147,7 +154,8 @@
         "storeId": "store-1",
         "modelId": "model-1"
       },
-      "manifestVersion": 1
+      "manifestVersion": 1,
+      "clientKey": "web"
     },
     "valid": false
   },
@@ -166,7 +174,8 @@
         "storeId": "store-1",
         "modelId": "model-1"
       },
-      "manifestVersion": 1
+      "manifestVersion": 1,
+      "clientKey": "web"
     },
     "valid": false
   },
@@ -185,7 +194,8 @@
         "storeId": "store-1",
         "modelId": "model-1"
       },
-      "manifestVersion": 1
+      "manifestVersion": 1,
+      "clientKey": "web"
     },
     "valid": false
   },
@@ -203,7 +213,8 @@
         "storeId": "store-1",
         "modelId": "model-1"
       },
-      "manifestVersion": 1
+      "manifestVersion": 1,
+      "clientKey": "web"
     },
     "valid": false
   },
@@ -223,7 +234,8 @@
         "modelId": "model-1"
       },
       "manifestVersion": 1,
-      "clientSecret": "do-not-store"
+      "clientSecret": "do-not-store",
+      "clientKey": "web"
     },
     "valid": false
   },
@@ -242,7 +254,8 @@
         "storeId": "store-1",
         "modelId": ""
       },
-      "manifestVersion": 1
+      "manifestVersion": 1,
+      "clientKey": "web"
     },
     "valid": false
   },
@@ -261,7 +274,8 @@
         "storeId": "store-1",
         "modelId": "model-1"
       },
-      "manifestVersion": 1
+      "manifestVersion": 1,
+      "clientKey": "web"
     },
     "valid": false
   },
@@ -280,7 +294,8 @@
         "storeId": "store-1",
         "modelId": "model-1"
       },
-      "manifestVersion": 1
+      "manifestVersion": 1,
+      "clientKey": "web"
     },
     "valid": false
   },
@@ -299,7 +314,8 @@
         "storeId": "store-1",
         "modelId": "model-1"
       },
-      "manifestVersion": 1
+      "manifestVersion": 1,
+      "clientKey": "web"
     },
     "valid": false
   }

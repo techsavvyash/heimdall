@@ -63,3 +63,32 @@ Specification references:
 
 - https://ajv.js.org/json-schema.html
 - https://github.com/santhosh-tekuri/jsonschema/tree/v6.0.2
+
+## Product manifest v1
+
+The manifest declares schemaVersion, productId, positive version, clients,
+permissions, roles, ownerRole and delegation. Roles use lowercase ASCII names
+starting with a letter and containing letters/digits/underscores (maximum 64).
+Permissions are dot-separated lowercase identifiers (maximum 128). These are
+product policy names, not user-supplied OpenFGA relation expressions.
+
+Each role explicitly lists its business permissions. The selected ownerRole must
+exist, but does not silently acquire every permission. Bootstrap and ownership
+transfer recognize that role separately. Delegation maps an acting role to the
+non-owner roles it may administer; missing or empty entries grant no delegation.
+Every referenced actor, target and permission must be declared. No delegation
+entry can target ownerRole, even when the actor is the owner. The runtime must
+also verify active membership and the actor's current roles before mutation.
+
+The structural schema rejects duplicates, unsupported fields and malformed
+identifiers. Internal semantic validators run after structural validation and
+reject dangling references and mismatched config productId, manifestVersion or
+clientKey. Tests prove both the structural precondition and semantic result.
+A config now includes clientKey to identify the manifest client that was
+provisioned; clientId remains the external identity-service client ID.
+
+Clients currently declare production HTTPS redirect URIs. The manifest is
+operator-owned configuration, never tenant-submitted policy. Pin it with the
+deployed model. Changing permissions or delegation requires a new manifest
+version and the model/config migration workflow. Semantic validation alone
+neither provisions a model nor authorizes a live user.

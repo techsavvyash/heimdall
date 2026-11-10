@@ -40,3 +40,5 @@ Phase evidence lives under docs/content/evidence/ when its first record is writt
 - [[evidence/phase-1-progress|Phase 1 identity-encoding checkpoint]]: tests, mutation detection and Railway verification. Partial progress; no phase advancement.
 
 - [[evidence/phase-1-errors-schemas|Phase 1 error and schema checkpoint]]: portable failures and structural conformance. Partial progress.
+
+- [[evidence/phase-1-manifests|Phase 1 manifest checkpoint]]: product policy references, delegation and runtime binding validation. Partial progress.
