@@ -31,7 +31,7 @@ sequenceDiagram
 | Resource IDs | Services to deployment state | Save returned IDs after each completed step |
 | Credentials | Secret store to setup or backend | Separate setup and runtime access |
 
-Retries reconcile known IDs. A timeout after create requires discovery or operator reconciliation before another create. Names alone may be ambiguous. The setup-state format and storage location remain open. Existing externally provisioned IDs should also be accepted.
+Retries reconcile known IDs. A timeout after create requires discovery or operator reconciliation before another create. Names alone may be ambiguous. The operator uses a durable PostgreSQL setup journal, separate from managed-workspace tables; concrete encoding is defined during contract implementation. Existing externally provisioned IDs should also be accepted.
 
 ## Workspace creation
 
@@ -53,7 +53,7 @@ sequenceDiagram
     API->>DB: Mark active and complete intent
     API-->>User: Active workspace
   else Timeout or failure
-    API->>DB: Keep pending for retry
+    API->>DB: Keep pending; quarantine uncertain dispatch
     API-->>User: Pending status or retryable error
   end
 ```
@@ -62,7 +62,7 @@ sequenceDiagram
 stateDiagram-v2
   [*] --> Pending
   Pending --> Active: Owner grant confirmed
-  Pending --> Pending: Retry same operation
+  Pending --> Pending: Safe retry or explicit uncertain-write recovery
   Pending --> Cancelled: Explicit cleanup
   Active --> Suspended: Product suspension
   Suspended --> Active: Authorized restoration
@@ -71,4 +71,4 @@ stateDiagram-v2
   Deleting --> Deleted: Data and tuple cleanup confirmed
 ```
 
-The product owns retries through its existing job mechanism or repeated requests. API operations reject inactive tenants before authorization. Suspension is an application gate that every entry point must honor. Deletion prevents new operations first, then removes data and relationships with retryable cleanup. Tenant IDs are never reused. See [[operations]].
+The product schedules bounded recovery through its existing job mechanism. Known pre-dispatch failures can retry; uncertain dispatched writes require verified quiescence before reconciliation, not a blind request replay. In managed mode the workspace stays blocked under [[design/built-in-adapters]]. API operations reject inactive tenants before authorization. Suspension is an application gate that every entry point must honor. Deletion prevents new operations first, then removes data and relationships with retryable cleanup. Tenant IDs are never reused. See [[operations]].

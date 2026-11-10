@@ -3,7 +3,7 @@ title: Login and tenant selection
 date: 2026-11-07
 ---
 
-The proposed web flow uses Authorization Code with PKCE and a product backend session. The backend owns the callback and session cookies. Native and SPA clients can use their corresponding OIDC client profiles. [ZITADEL OIDC guide](https://zitadel.com/docs/guides/integrate/login/oidc/login-users)
+The selected browser flow uses Authorization Code with PKCE and a product backend session. The backend owns the callback and session cookies. Native and SPA clients can use their corresponding OIDC client profiles. [ZITADEL OIDC guide](https://zitadel.com/docs/guides/integrate/login/oidc/login-users)
 
 ```mermaid
 sequenceDiagram
@@ -56,4 +56,4 @@ sequenceDiagram
 
 A selected tenant ID is a request input. Membership and permission checks establish access. A shared identity can select Acme or Globex and receive different permissions. A product token must satisfy the receiving API's audience requirements, even when both products share an issuer. [ZITADEL audience validation](https://zitadel.com/docs/support/troubleshooting)
 
-Disabling an identity and revoking a product membership have different propagation paths. Local token verification can accept an already issued token until expiry. Immediate account-wide revocation requirements need an explicit session or introspection policy in [[decisions]].
+Disabling an identity and revoking product membership have different propagation paths. Local JWT validation alone does not satisfy the selected contract. [[release-contract]] requires bounded authoritative identity/status freshness (60 seconds by default, capped by token expiry), no stale-positive fallback, and fresh membership-sensitive checks. Tenant selection also verifies the target SSO policy under [[enterprise-contract]].

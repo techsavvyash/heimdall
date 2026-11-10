@@ -6,7 +6,7 @@ date: 2026-11-07
 [[release-contract]], [[audit-contract]] and [[enterprise-contract]] now lock the first-release scope and supersede older open-policy questions in this walkthrough. Enterprise SSO/SCIM/SIEM are required; all authorization decisions, role changes and transfers require durable audit.
 
 
-Ledger and Support share a ZITADEL and OpenFGA deployment. Each product has Acme and Globex workspaces. Maya has different roles in each workspace. This walkthrough uses the proposed independent product membership default. APIs, manifests, and commands are illustrative contracts awaiting implementation.
+Ledger and Support share a ZITADEL and OpenFGA deployment. Each product has Acme and Globex workspaces. Maya has different roles in each workspace. This walkthrough uses the selected independent product membership policy. APIs, manifests, and commands are illustrative contracts awaiting implementation.
 
 ## Adapter update
 
@@ -393,7 +393,7 @@ The required SDK audit adapter durably records and exports product, tenant, acto
 | --- | --- | --- |
 | Sessions | First framework adapter and session-store contract | Two backend replicas handle callback, refresh and logout safely |
 | Workspace discovery | Query strategy and pagination contract | User has many workspaces, some inactive, with no skipped accessible rows |
-| Onboarding retries | Durable operation schema and reconciliation contract | Owner write succeeds, response is lost, activation fails, retry creates one active tenant |
+| Onboarding retries | Durable operation schema and reconciliation contract | Lost remote response stays pending/blocked until safe recovery; confirmed write with failed local activation recovers without duplicate creation |
 | SCIM lifecycle | Product execution mechanism and checkpointed reconciliation | Deactivation revokes intended memberships in both products despite a transient failure |
 | SIEM | Correlated event schema and delivery policy | Identity event, access decision and business outcome can be traced without cross-tenant disclosure |
 | Enterprise SSO | Organization mapping and enforcement contract | Acme SAML and Globex OIDC work independently, tenant switching respects login policy |

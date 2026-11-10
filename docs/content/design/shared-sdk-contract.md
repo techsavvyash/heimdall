@@ -6,7 +6,7 @@ date: 2026-11-07
 The November 10 decisions are locked in [[release-contract]], [[audit-contract]] and [[enterprise-contract]]. These extend the core interfaces below with mandatory durable audit and bounded identity revalidation. Earlier API sketches remain illustrative until encoded as schemas; enterprise delivery is mandatory in both SDKs.
 
 
-Contract v0.1 is a proposal for review. TypeScript and Go implement the same behavior with idiomatic APIs. Examples below describe interfaces to build. Live-service tests must validate the implementation before release. This page refines the illustrative APIs in [[two-product-walkthrough]] and [[sdk-contract]].
+The behavioral contract is selected; exact API spellings and concrete encodings remain implementation deliverables. TypeScript and Go implement the same behavior with idiomatic APIs. Examples below describe interfaces to build. Live-service tests must validate the implementation before release. This page refines the illustrative APIs in [[two-product-walkthrough]] and [[sdk-contract]].
 
 ## Adapter extension and precedence
 
@@ -347,7 +347,7 @@ Cancellation and grant writes must use the same product serialization mechanism.
 | Discovery | Wrong-principal cursor rejected, dependency errors fail the request |
 | Onboarding | Same key and payload produces one tenant and owner |
 | Onboarding | Changed owner or payload conflicts |
-| Onboarding | Grant succeeds but response or activation fails, retry completes |
+| Onboarding | Lost response quarantines uncertain dispatch; confirmed grant plus failed activation permits safe local recovery |
 | Onboarding | Cancelled operation cannot be revived by a stale worker |
 
 The principal encoding, storage versions, cursor format and error codes belong in `contracts/` with fixtures. The implementations belong in both SDKs. The product persistence recipes belong in Ledger and Support examples. See [[project-structure]] and [[task-list]].

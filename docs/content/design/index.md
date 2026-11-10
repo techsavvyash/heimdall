@@ -19,7 +19,9 @@ flowchart LR
 
 ## Read the design
 
-| Page | What we will decide |
+Start with [[system-design|the complete system-design specification]] for the functionality, component boundaries, developer wiring and end-to-end data flows. The documents below define the detailed contracts.
+
+| Page | What it specifies |
 | --- | --- |
 | [[development-workspace]] | Local setup, agent checks, Git hooks and CI |
 | [[release-contract]] | Locked first-release scope and revocation defaults |
@@ -31,7 +33,7 @@ flowchart LR
 | [[two-product-walkthrough]] | Two products end to end, developer wiring, SDK responsibilities, and integration gaps |
 | [[architecture]] | Deployment boundary, trust, and component responsibilities |
 | [[tenancy]] | Products, workspaces, identities, and ownership of data |
-| [[authorization-model]] | Membership, roles, permissions, and optional resource sharing |
+| [[authorization-model]] | Selected membership/role model; resource sharing is deferred |
 | [[shared-sdk-contract]] | TypeScript and Go session, discovery, and onboarding API proposal |
 | [[sdk-contract]] | Developer experience and a portable package contract |
 | [[flows/provisioning]] | Registering products and creating tenants safely |
@@ -40,7 +42,7 @@ flowchart LR
 | [[flows/membership]] | Invitations, grants, revocation, and ownership transfer |
 | [[operations]] | Model migrations, failures, concurrency, and audit events |
 | [[scenarios]] | Expected outcomes for normal and adversarial requests |
-| [[decisions]] | Agreed constraints, proposed defaults, and open questions |
+| [[decisions]] | Locked decisions, deferred scope and implementation evidence gates |
 
 ## Explorations
 
