@@ -49,3 +49,7 @@ Sanitized results are in tests/integration/evidence/browser-oidc-2026-11-11.json
 This is interactive browser verification with a separate callback verifier. It does not exercise a running product callback, cookie security, atomic durable session creation, enterprise browser SAML/OIDC, cross-account switching or SDK audit. Password authentication is not evidence of satisfying a strict enterprise policy. The separate-domain headers also require a broader routing/security review before production qualification.
 
 Sources: [upstream Login deployment guidance](https://zitadel.com/docs/guides/integrate/login-ui/login-app), [pinned header interceptor](https://github.com/zitadel/zitadel/blob/v4.19.4/apps/login/src/lib/zitadel.ts), [pinned trusted-domain API](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/instance/v2/instance_service.proto).
+
+## Publication proof
+
+Source commit 432581670bf1abc9d0137b42d88bafeed529c516 passed the full local workspace gate: 863 TypeScript tests, Go race tests, formatting/lint/type/Knip checks, SDK build and 52 Quartz pages. GitHub Actions runs [42925142409](https://github.com/techsavvyash/heimdall/actions/runs/42925142409) and [42925150780](https://github.com/techsavvyash/heimdall/actions/runs/42925150780) both succeeded. Railway docs deployment f1cf1479-c64a-43c8-b2a5-5601d26fd2f3 succeeded for that exact commit; the public evidence URL returned HTTP 200 with this run and Login deployment ID. This later publication note does not change the tested probe.
