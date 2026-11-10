@@ -44,4 +44,4 @@ Sources: [OpenFGA configuration](https://openfga.dev/docs/getting-started/setup-
 
 ## Repository validation and publication
 
-The full workspace gate passed: 765 Vitest tests, Go race tests, lint/format/types/Knip/vet, SDK build/declarations and Quartz. Compose configuration validation passed. Committed documentation deployment verification is pending.
+The full workspace gate passed: 765 Vitest tests, Go race tests, lint/format/types/Knip/vet, SDK build/declarations and Quartz. Compose configuration validation passed. Source commit 50d0d4a7de496e1bac71937c30c4ef2fcfa4df12 passed GitHub Actions run 42907238223. Railway docs deployment fc2db381-5592-4858-a45f-3381f7d8f579 reached SUCCESS, and the public evidence page returned HTTP 200 with the expected service deployment and credential-boundary findings. This checkpoint is committed and published; Phase 2 remains open.
