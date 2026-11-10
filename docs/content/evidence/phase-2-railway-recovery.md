@@ -50,3 +50,7 @@ After restart, the ordinary OpenFGA capability probe passed again with run 5ed5e
 This topology has one API replica, no independent writers or credential broker, and one trusted operator. The maintenance window affects every store using that deployment. Production procedures must inventory all writers and credential paths, prevent replacements and maintain local deny gates throughout. A deployment rollback can restore old variables; do not roll back to retired credentials. Multi-replica/independent-writer topologies need their own complete proof.
 
 The SDK still needs durable quarantine, authorized recovery records, immutable intent/generation checks, audit and atomic local completion. Those are later implementation gates; this service test cannot unblock a product workspace. Strict SSO/browser verification and other Phase 2 requirements remain open.
+
+## Validation and publication
+
+The Railway fault probe and subsequent full capability regression passed. Python syntax and the disabled-assertion guard were checked separately; the ordinary workspace gate does not execute maintenance probes. The full workspace gate passed: 841 Vitest tests, Go race tests, formatting/lint/types/Knip/vet, SDK build/declarations and Quartz. Source commit f8e6939ab490efb2eb25b069586d5441258bdc85 passed GitHub Actions runs 42921771851 and 42921759221. Railway docs deployment e9d2b329-cb1e-418b-ba7c-8357ffa647d0 reached SUCCESS. The public page returned HTTP 200 with the fault run, replacement runtime deployment, phase status and Mermaid source. Phase 2 remains open.
