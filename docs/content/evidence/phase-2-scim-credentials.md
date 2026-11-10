@@ -54,3 +54,7 @@ On upgrades, reconcile the full role map with the new pinned defaults before set
 Human OIDC tokens, strict SAML/OIDC policy evidence, token/session revocation, lifecycle workers, fault behavior, listing limits and uncertain-write recovery still require proof. This checkpoint does not advance Phase 2 or certify the SDK runtime.
 
 Sources: [pinned SCIM permission checks](https://github.com/zitadel/zitadel/blob/v4.19.4/internal/api/scim/authz.go), [pinned role defaults](https://github.com/zitadel/zitadel/blob/v4.19.4/cmd/defaults.yaml), [administrator API](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/internal_permission/v2/internal_permission_service.proto), [provisioning domains](https://github.com/zitadel/zitadel/blob/v4.19.4/apps/docs/content/guides/manage/user/scim2.mdx).
+
+## Validation and publication
+
+The full workspace gate passed: 765 Vitest tests, Go race tests, lint/format/types/Knip/vet, SDK builds/declarations and Quartz. Source commit 83a2c15d9678cee38d8d880e73429065255d8e42 passed GitHub Actions runs 42911930637 and 42911910425. Railway docs deployment 4f132a59-6fc6-45fd-a98e-39145954dd0c reached SUCCESS and remained running. The public evidence page returned HTTP 200 with the current probe ID, runtime deployment ID and Mermaid source. Phase 2 remains open.
