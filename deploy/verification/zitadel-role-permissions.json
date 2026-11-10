@@ -650,5 +650,13 @@
       "user.write",
       "user.delete"
     ]
+  },
+  {
+    "Role": "IAM_HEIMDALL_FEDERATION",
+    "Permissions": [
+      "session.read",
+      "session.write",
+      "session.link"
+    ]
   }
 ]

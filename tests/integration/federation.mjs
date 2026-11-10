@@ -8,6 +8,8 @@ const z = process.env.HEIMDALL_PROBE_ZITADEL_ISSUER;
 const k = process.env.HEIMDALL_PROBE_IDP_URL;
 const pat = process.env.HEIMDALL_PROBE_ZITADEL_PAT;
 const loginPat = process.env.HEIMDALL_PROBE_ZITADEL_LOGIN_PAT;
+const narrowLogin = process.env.HEIMDALL_PROBE_NARROW_LOGIN === "true";
+let flowPat = loginPat;
 const adminPassword = process.env.HEIMDALL_PROBE_IDP_ADMIN_PASSWORD;
 assert(
   z && k && pat && loginPat && adminPassword,
@@ -31,6 +33,7 @@ console.error(`Federation probe run: ${runId}`);
 let adminToken;
 let orgId;
 let homeOrgId;
+let narrowMachineId;
 let realmCreated = false;
 const sessions = [];
 async function api(origin, method, path, body, token, extra = {}) {
@@ -264,6 +267,66 @@ try {
     },
   });
   assert(user.id);
+  if (narrowLogin) {
+    const machine = await za("POST", "/v2/users/new", {
+      organizationId: orgId,
+      username: `federation-agent-${runId}`,
+      machine: { name: "Narrow federation probe" },
+    });
+    narrowMachineId = machine.id;
+    flowPat = (
+      await za("POST", `/v2/users/${machine.id}/pats`, {
+        expirationDate: new Date(Date.now() + 3600000).toISOString(),
+      })
+    ).token;
+    assert(flowPat);
+    async function forbidden(method, path, body) {
+      const response = await fetch(z + path, {
+        method,
+        headers: { "content-type": "application/json", authorization: `Bearer ${flowPat}` },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        redirect: "error",
+        signal: AbortSignal.timeout(15000),
+      });
+      const result = await response.json();
+      // A roleless token authenticates but may not create sessions. User reads hide unauthorized resources.
+      assert(
+        [403, 404].includes(response.status),
+        `${path}: expected denial, HTTP ${response.status}, code ${result.code}`,
+      );
+      return response.status;
+    }
+    const rolelessCreateSessionStatus = await forbidden("POST", "/v2/sessions", {});
+    await za(
+      "POST",
+      "/zitadel.internal_permission.v2.InternalPermissionService/CreateAdministrator",
+      {
+        userId: machine.id,
+        resource: { instance: true },
+        roles: ["IAM_HEIMDALL_FEDERATION"],
+      },
+    );
+    const unrelatedUserReadStatus = await forbidden("GET", `/v2/users/${user.id}`);
+    const administratorGrantStatus = await forbidden(
+      "POST",
+      "/zitadel.internal_permission.v2.InternalPermissionService/UpdateAdministrator",
+      {
+        userId: machine.id,
+        resource: { instance: true },
+        roles: ["IAM_OWNER"],
+      },
+    );
+    observations.push({
+      narrowLoginCredential: {
+        role: "IAM_HEIMDALL_FEDERATION",
+        permissions: ["session.read", "session.write", "session.link"],
+        scope: "instance",
+        rolelessCreateSessionStatus,
+        unrelatedUserReadStatus,
+        administratorGrantStatus,
+      },
+    });
+  }
   const complete = "https://heimdall-probe.example.invalid/complete";
   async function authenticate(tamper = false) {
     let capturedSamlFields;
@@ -277,7 +340,7 @@ try {
           failureUrl: "https://heimdall-probe.example.invalid/failure",
         },
       },
-      loginPat,
+      flowPat,
     );
     const upstreamAuthorization = new URL(intent.authUrl);
     assert(upstreamAuthorization.origin === k);
@@ -391,7 +454,7 @@ try {
     "POST",
     `/v2/idp_intents/${intentId}`,
     { idpIntentToken: intentToken },
-    loginPat,
+    flowPat,
   );
   assert(verified.idpInformation.idpId === provider.id, "Provider mismatch");
   assert(verified.idpInformation.userId === upstreamUser, "Upstream subject mismatch");
@@ -399,7 +462,7 @@ try {
   async function denied(path, body) {
     const response = await fetch(z + path, {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${loginPat}` },
+      headers: { "content-type": "application/json", authorization: `Bearer ${flowPat}` },
       body: JSON.stringify(body),
       redirect: "error",
       signal: AbortSignal.timeout(15000),
@@ -439,13 +502,13 @@ try {
       },
       lifetime: "3600s",
     },
-    loginPat,
+    flowPat,
   );
   sessions.push(session.sessionId);
-  const read = await za("GET", `/v2/sessions/${session.sessionId}`, undefined, loginPat);
+  const read = await za("GET", `/v2/sessions/${session.sessionId}`, undefined, flowPat);
   const reusedIntent = await fetch(`${z}/v2/sessions`, {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${loginPat}` },
+    headers: { "content-type": "application/json", authorization: `Bearer ${flowPat}` },
     body: JSON.stringify({
       checks: {
         user: { userId: user.id },
@@ -519,7 +582,7 @@ try {
     "POST",
     `/v2/oidc/auth_requests/${authRequestId}`,
     { session: { sessionId: session.sessionId, sessionToken: session.sessionToken } },
-    loginPat,
+    flowPat,
   );
   let callbackUrl = new URL(callback.callbackUrl);
   for (let i = 0; i < 4 && callbackUrl.origin === z; i++) {
@@ -600,7 +663,7 @@ try {
   observations.push({
     selfServiceEvidence: {
       credential: "user access token with ZITADEL API audience; no PAT or session token",
-      sessionFactorsMatchLoginClient: true,
+      sessionFactorsMatchFlowCredential: true,
       intentFields: Object.keys(selfSession.session.factors.intent),
     },
   });
@@ -702,6 +765,20 @@ try {
     mismatchedUserStatus,
   });
 } finally {
+  const administratorCleanup = await Promise.allSettled(
+    narrowMachineId
+      ? [
+          za(
+            "POST",
+            "/zitadel.internal_permission.v2.InternalPermissionService/DeleteAdministrator",
+            {
+              userId: narrowMachineId,
+              resource: { instance: true },
+            },
+          ),
+        ]
+      : [],
+  );
   const results = await Promise.allSettled([
     ...sessions.map((id) => za("DELETE", `/v2/sessions/${id}`, undefined, loginPat)),
     ...(orgId ? [za("DELETE", `/v2/organizations/${orgId}`)] : []),
@@ -709,7 +786,7 @@ try {
     ...(realmCreated ? [ka("DELETE", `/admin/realms/${realm}`)] : []),
   ]);
   assert(
-    results.every((r) => r.status === "fulfilled"),
+    [...administratorCleanup, ...results].every((r) => r.status === "fulfilled"),
     `Federation cleanup incomplete for run ${runId}`,
   );
 }
@@ -727,7 +804,9 @@ console.log(
         "protocol fixture form automation; not browser UI validation",
         "strict tenant switching, policy-version invalidation and browser binding still unverified",
         "SDK strict policy lifecycle not implemented",
-        "Login client performs fixture authentication; downstream session evidence also verified with user token",
+        narrowLogin
+          ? "Dedicated instance session role performs fixture authentication; browser binding remains unverified"
+          : "Login client performs fixture authentication; downstream session evidence also verified with user token",
       ],
     },
     null,

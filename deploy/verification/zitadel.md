@@ -206,3 +206,18 @@ product-only rejection, another user's session denial and other-product introspe
 denial. The federation probe checks identical session factors with the user token.
 These reads do not expose provider ID/upstream subject: full strict-SSO provenance
 still requires the separate verified-intent flow.
+
+## Narrow federation login role
+
+The complete role map now also includes IAM_HEIMDALL_FEDERATION with session.read,
+session.write and session.link. Synchronize role updates with the same one-time
+start-from-setup procedure above, then restore the ordinary start command. The role
+is instance-scoped because session creation checks permission before a user is set.
+It is for SDK-controlled strict federation flows, not a tested replacement credential
+for the entire upstream Login UI and not a tenant-isolation boundary.
+
+Set HEIMDALL_PROBE_NARROW_LOGIN=true for the federation probe. It creates a disposable
+machine/PAT, proves roleless session creation fails, grants the narrow role using
+bootstrap authority, and runs the protocol chain with the new credential. User
+reads and self-escalation must fail. Cleanup revokes the instance grant before
+removing the organization. The ordinary Login PAT remains available for cleanup.

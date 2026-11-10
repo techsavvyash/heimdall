@@ -83,3 +83,5 @@ Correlate ZITADEL identity/configuration events with product audit using verifie
 ## Implementation and release
 
 #44 owns provider setup and strict SSO; #45 verifies SCIM capability; #47 implements lifecycle reconciliation; #46 implements durable audit; #48 implements SIEM delivery. #50 depends on all of them plus adapter safety and compatibility. Live-service assertions, TS/Go parity and a documented operator setup are required. The docs may be published now, but no deployed auth functionality is implied.
+
+[[evidence/phase-2-federation-credentials]] verifies a narrower instance-scoped session role for SDK-controlled intent/session/OIDC flows. The broad Login client role is unnecessary for that measured chain, but browser binding and strict integration remain open. A server-side SDK credential is still required; this does not introduce a companion service or tenant-isolated infrastructure authority.
