@@ -161,6 +161,8 @@ sequenceDiagram
 
 Only one refresh attempt may own a session version. Other requests wait within their deadline or receive an unavailable response. If refresh outcome is uncertain, require reauthentication rather than replay a potentially consumed refresh token. This intentionally trades a new login after rare failures for deterministic behavior. A crashed attempt has a bounded lifetime, after which the session becomes unusable.
 
+Pinned-service evidence: [[evidence/phase-2-oidc]] found that deleting a ZITADEL provider session did not revoke its refresh capability. The optional upstream-revocation policy must use explicit token revocation and report uncertain/outage results; provider-session deletion alone cannot be called complete token revocation. This does not change the local logout default.
+
 Local logout atomically deletes the stored session and clears the cookie. Refresh persistence uses compare-and-swap, so it cannot resurrect a deleted session. Upstream token revocation or provider-wide logout is an explicit additional policy. Already-authenticated in-flight product operations follow the revocation limits in [[operations]].
 
 ## Workspace discovery

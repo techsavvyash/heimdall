@@ -148,3 +148,21 @@ do not blindly reuse an old default-role snapshot.
 Source: [pinned internal authorization mappings](https://github.com/zitadel/zitadel/blob/v4.19.4/cmd/defaults.yaml),
 [SCIM permission mapping](https://github.com/zitadel/zitadel/blob/v4.19.4/internal/api/scim/authz.go),
 [administrator API](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/internal_permission/v2/internal_permission_service.proto).
+
+## Human OIDC capability probe
+
+Run `pnpm run probe:oidc` with HEIMDALL_PROBE_ZITADEL_ISSUER, the protected bootstrap
+HEIMDALL_PROBE_ZITADEL_PAT and the separate HEIMDALL_PROBE_ZITADEL_LOGIN_PAT from the
+Login client file. The Login client credential verifies a generated synthetic human
+password through the upstream session API and completes the OIDC request; it is not
+a product runtime credential. Never expose it in product configuration.
+
+The probe creates a disposable organization, human, two projects/clients and provider
+sessions. It tests code/PKCE, signatures/audiences, refresh, account disable/delete,
+provider-session deletion and explicit token revocation. It captures HTTPS callback
+redirects to example.invalid without making requests to those domains. No browser
+Login UI or external enterprise IdP is exercised. Temporary secrets stay in memory.
+Owned sessions and organization are deleted on exit; inspect the printed run ID
+before cleanup after uncertain creation or process termination. Provider-session
+deletion was observed to allow refresh into a new active access token; explicit
+refresh-token revocation prevented that. See the published Phase 2 OIDC evidence.

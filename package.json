@@ -19,6 +19,7 @@
     "check:fast": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run knip && pnpm run check:go",
     "check": "pnpm run check:fast && pnpm test && pnpm run test:go && pnpm run build && pnpm run docs:build",
     "probe:openfga": "node tests/integration/openfga.mjs",
+    "probe:oidc": "node tests/integration/oidc.mjs",
     "probe:scim": "node tests/integration/scim.mjs",
     "probe:zitadel": "node tests/integration/zitadel.mjs"
   },
