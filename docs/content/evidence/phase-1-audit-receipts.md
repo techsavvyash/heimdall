@@ -33,4 +33,4 @@ The digest is a checksum, not a signature or commit receipt. Atomic append, conf
 
 ## Deployment proof
 
-Pending verification for this checkpoint.
+Source commit c4c180967a0a60cdbcb39038abe861180b723785 passed GitHub Actions run 42902073963. Railway docs deployment b6b328bc-f20a-44fe-8ecd-a5c554857eae reached SUCCESS. The public evidence page returned HTTP 200 with the expected 523-test result and Mermaid sequence source. This is a documentation deployment, not an audit-storage or SIEM runtime deployment.

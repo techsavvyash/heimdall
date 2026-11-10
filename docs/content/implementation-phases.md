@@ -33,6 +33,17 @@ Audit persistence is built before authorization results can be released; enterpr
 
 Phase 1 turns selected semantics into executable schemas and fixtures. Public authentication APIs remain unavailable until implemented and validated; internal contract utilities do not constitute verified authentication.
 
+## Remaining Phase 1 gates
+
+Before advancing, finish the shared login-state payload, workspace lifecycle/deny
+fixtures, storage metadata and migration compatibility rules, and endpoint
+configuration including explicit loopback development policy. Review these
+against #31 and the selected contracts, then rerun cross-language conformance,
+mutation detection and the full workspace gate. Record the final phase acceptance
+matrix and verify its committed Railway publication. SQL execution, CAS races and
+live service behavior belong to later phases; their contracts must already be
+unambiguous here.
+
 ## Evidence ledger
 
 Phase evidence lives under docs/content/evidence/ when its first record is written. Distinguish contract checks from live-service checks, and docs deployment from runtime deployment. Each completed phase links its evidence here before the next phase begins.
