@@ -122,3 +122,50 @@ do not authenticate a cursor.
 The authenticated-encryption envelope, cursor signature format, key rotation and
 cross-language cryptographic vectors remain Phase 1 work. Storage CAS, callback
 consumption and refresh/logout concurrency are later persistence/runtime work.
+
+## Cryptographic envelopes v1
+
+Internal RecordCipher uses AES-256-GCM via node:crypto and Go crypto/aes/cipher.
+The wire string is hr1.keyId.base64url(nonce || ciphertext || tag), with a random
+12-byte nonce and 16-byte authentication tag. Go uses NewGCMWithRandomNonce;
+Node uses randomBytes and a fixed 16-byte auth tag. Callers cannot supply nonces.
+No partial plaintext is returned before authentication succeeds.
+
+Associated data is ASCII, pipe-separated in this exact order:
+heimdall.record.v1, keyId, productId, environment, record kind, recordKey.
+Kinds are session/login. Scope and key fields use bounded ASCII letters, digits,
+underscore and hyphen, so separators cannot be injected. The recordKey is the
+storage identifier/hash, never the raw browser cookie. Plaintext is limited to
+1 MiB, and must subsequently pass its payload schema and semantic validation.
+
+CursorSigner uses HMAC-SHA256 with a separate signing key set. Its wire string is
+hc1.keyId.base64url(payload).base64url(mac). The MAC input is ASCII
+heimdall.cursor.v1|keyId|base64url(payload). Payload is limited to 64 KiB.
+Signing does not encrypt the payload. Consumers treat it as opaque; do not put
+secrets in it. Verify the MAC before parsing its JSON and checking schema, scope,
+model, principal and expiry. Authentication of bytes does not imply payload validity.
+
+Both formats require canonical unpadded base64url, reject whitespace/padding,
+unknown versions and unknown keys, and bound input size before decoding. Key
+configuration requires 32-byte keys, 1–64-character ASCII key IDs, a present
+active key and at most 32 retained keys. Constructors copy key bytes. Readers
+accept retained keys; writers use only the active key. Key IDs are authenticated.
+
+Keys must be random secret material, stable across serving replicas and distinct
+between record encryption and cursor signing. Retain retired decryption keys until
+records expire or are rewritten; retain signing keys through cursor lifetime.
+Configuration/rotation orchestration is later adapter work. In particular,
+Go's GCM API requires fewer than 2^32 encryptions per key across all replicas.
+A durable key-usage/rotation policy is a production release requirement; these
+internal primitives do not claim to enforce a deployment-wide counter.
+
+All cryptographic fixtures use public synthetic keys and payloads. The shared
+corpus includes a reference vector and captured outputs from both SDK writers,
+plus tampering, mismatched contexts and noncanonical base64. Both languages read
+both writers' outputs. No fixture key is suitable for deployment.
+
+References:
+
+- https://nodejs.org/docs/latest-v24.x/api/crypto.html
+- https://pkg.go.dev/crypto/cipher#NewGCMWithRandomNonce
+- https://pkg.go.dev/crypto/hmac#Equal
