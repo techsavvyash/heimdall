@@ -18,7 +18,7 @@ The earlier onboarding example below illustrates desired-state reconciliation; i
 
 The client is bound to product, environment, trusted issuer, audience, OpenFGA store, model and manifest version. Callers cannot override these per request. A verified principal contains issuer and subject, principal kind, and available authentication evidence. Session helpers return this verified principal. Trusted internal workflows can resolve another principal through a separate privileged identity API.
 
-The proposed human-user object encoding is `user:` followed by unpadded base64url of UTF-8 compact JSON `[issuer,subject]`. Preserve the configured issuer exactly after discovery validation. Both languages must produce identical bytes, including JSON string escaping. Golden fixtures cover Unicode, punctuation and issuer differences. Keep tenant IDs immutable and validate length and permitted characters. Service principals require their own future contract.
+The version-1 human-user object encoding is `user:` followed by unpadded base64url of UTF-8 compact JSON `[issuer,subject]`. Preserve the configured issuer exactly after discovery validation. Both languages produce identical bytes using canonical ASCII JSON escaping as specified in contracts/README.md: lowercase Unicode escapes, including surrogate pairs, with no normalization. Encoding alone does not authenticate a principal. Golden fixtures cover Unicode, punctuation and issuer differences. Keep tenant IDs immutable and validate length and permitted characters. Service principals require their own future contract.
 
 | Behavior | TypeScript | Go |
 | --- | --- | --- |

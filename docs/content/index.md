@@ -19,6 +19,8 @@ flowchart LR
   Support --> SA[Acme and Globex Support workspaces]
 ```
 
+Implementation follows the [[implementation-phases|seven sequential phases]]. Each phase requires test evidence, a commit and a verified Railway deployment before the next begins.
+
 ## Read the specification
 
 | Read | Purpose |

@@ -5,7 +5,7 @@ date: 2026-11-08
 
 The [GitHub roadmap issue #29](https://github.com/techsavvyash/heimdall/issues/29) tracks delivery through 26 focused tickets. Each ticket includes a PRD, requirements, implementation details, dependencies, boundaries and acceptance criteria. GitHub issues are the source of execution status; this page is the navigation index.
 
-Start with the contract decision and service evidence. Creating implementation tickets does not approve the proposals in [[design/decisions]]. Both TypeScript and Go must satisfy the same behavioral contract before the initial release. SSO, SCIM user lifecycle and SIEM are required in the first release. [[design/built-in-adapters|Optional PostgreSQL adapters]] are selected scope; #51 closes the design decision while #52–#55 implement and validate it.
+Follow [[implementation-phases|the seven sequential phases and completion gates]]. Product decisions are locked; Phase 1 encodes them as executable contracts. Audit persistence precedes protected operations, and enterprise capabilities are verified early. Both TypeScript and Go must satisfy the same behavioral contract before the initial release. SSO, SCIM user lifecycle and SIEM are required in the first release. [[design/built-in-adapters|Optional PostgreSQL adapters]] are selected scope; #51 closes the design decision while #52–#55 implement and validate it.
 
 ## Contract and service foundations
 

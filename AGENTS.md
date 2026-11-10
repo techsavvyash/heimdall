@@ -9,6 +9,11 @@
 - Keep auth code inside SDK packages. Product examples own business data and integration code.
 - Add module directories when their implementation starts. Current empty directories mark agreed workspace boundaries.
 
+## Sequential delivery
+
+- Follow docs/content/implementation-phases.md. Complete the current phase with test evidence, committed changes and a verified Railway deployment before advancing.
+- Record partial progress honestly; docs deployment is not runtime validation or phase completion.
+
 ## Setup
 
 Use Node 24, pnpm 12.10.1 and Go 1.24 or newer. Run `nvm use` and `pnpm install --frozen-lockfile` from the repository root. pnpm installs the tracked Git hooks through `prepare`. Existing custom hook paths require explicit integration.
@@ -29,7 +34,7 @@ Quartz and the TypeScript SDK share the root pnpm workspace and lockfile. The ve
 - Preserve product and tenant boundaries, identity verification, error distinctions and cancellation.
 - Add shared fixtures and focused regression tests when implementing nontrivial behavior.
 - Avoid placeholder public APIs. The initial SDK entry points intentionally contain no runtime implementation.
-- Vitest currently permits an empty test suite during scaffolding. Remove `passWithNoTests` when the first tests land.
+- Vitest must fail on an empty test suite. Both languages consume shared contract fixtures.
 - Keep package scripts and Knip entries accurate. Do not suppress unused findings broadly.
 - Keep secret values, local environment files, generated output and dependencies out of commits.
 - Stage intended paths. Keep screenshots and local debugging artifacts out of the repository root.
