@@ -444,3 +444,9 @@ readers reject records carrying new evidence. Older strict login payloads withou
 provider selection are rejected. No persistent runtime has shipped: before runtime
 rollout, storage compatibility must advertise the finalized reader/writer contract.
 Do not deploy mixed old/new readers against these records or silently strip evidence.
+
+The enterprise-two-tenants-v1 corpus derives sanitized evidence from the live
+two-tenant/one-client probe. Fixed evaluation times keep it deterministic. Both
+runners exercise tenant/subject/policy/age rejection, including a previous account
+with all other expected fields held constant. These fixtures do not replace live
+provider verification or prove browser session replacement.

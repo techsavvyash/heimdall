@@ -1,0 +1,59 @@
+{
+  "suite": "two-tenant-shared-product-federation-v1",
+  "runId": "52e88904-d130-4fb2-a50e-a304f6bb98fb",
+  "observedAt": "2026-11-10T23:26:46.595Z",
+  "sameSyntheticEmail": true,
+  "distinctTenantSubjects": true,
+  "sameProductClient": true,
+  "results": [
+    {
+      "runId": "cd32789e-85fa-41cb-be1e-e37f74565029",
+      "evidence": {
+        "schemaVersion": 1,
+        "productId": "federation-product",
+        "environment": "verification",
+        "issuer": "https://capability-zitadel-verification.up.railway.app",
+        "subject": "399058145395088096",
+        "clientId": "399058135026768608",
+        "tenantId": "399058140781353696",
+        "organizationId": "399058140781353696",
+        "policyVersion": "probe-policy-1",
+        "providerId": "399058141603437280",
+        "protocol": "saml",
+        "upstreamSubject": "a8f50db0-fb38-4e90-8228-09a7e57b62fe",
+        "providerSessionId": "399058148817640160",
+        "authTime": 1794353192000,
+        "verifiedAt": 1794353192060
+      },
+      "cleanup": "owned organizations, realm and sessions deleted"
+    },
+    {
+      "runId": "26a9d723-8496-488b-9936-37e6b82bf720",
+      "evidence": {
+        "schemaVersion": 1,
+        "productId": "federation-product",
+        "environment": "verification",
+        "issuer": "https://capability-zitadel-verification.up.railway.app",
+        "subject": "399058163430595296",
+        "clientId": "399058135026768608",
+        "tenantId": "399058161232780000",
+        "organizationId": "399058161232780000",
+        "policyVersion": "probe-policy-1",
+        "providerId": "399058162138749664",
+        "protocol": "oidc",
+        "upstreamSubject": "2c8f2d61-7e89-4d04-9534-acaa7af17fdd",
+        "providerSessionId": "399058166014286560",
+        "authTime": 1794353202000,
+        "verifiedAt": 1794353202319
+      },
+      "cleanup": "owned organizations, realm and sessions deleted"
+    }
+  ],
+  "cleanup": "both tenant fixtures and shared product organization deleted",
+  "limitations": [
+    "sequential protocol logins; not browser session switching",
+    "each child removes its sessions before the next child runs",
+    "does not establish one stable subject across independent tenant directories",
+    "SDK atomic session replacement, membership and audit integration remain unimplemented"
+  ]
+}

@@ -15,7 +15,15 @@ assert(
 );
 for (const origin of [z, k])
   assert(origin.startsWith("https://") && new URL(origin).origin === origin);
+const sharedClient = process.env.HEIMDALL_PROBE_SHARED_CLIENT_JSON
+  ? JSON.parse(process.env.HEIMDALL_PROBE_SHARED_CLIENT_JSON)
+  : null;
+if (sharedClient)
+  assert(sharedClient.projectId && sharedClient.clientId && sharedClient.clientSecret);
 const runId = randomUUID();
+const syntheticEmail =
+  process.env.HEIMDALL_PROBE_SHARED_EMAIL ?? `federation-${runId}@example.invalid`;
+assert(syntheticEmail.endsWith("@example.invalid"));
 const realm = `heimdall-${runId}`;
 const password = `Aa1!${randomBytes(24).toString("hex")}`;
 const clientSecret = randomBytes(32).toString("hex");
@@ -97,7 +105,7 @@ try {
     firstName: "Federation",
     lastName: "Probe",
     enabled: true,
-    email: `federation-${runId}@example.invalid`,
+    email: syntheticEmail,
     emailVerified: true,
     credentials: [{ type: "password", value: password, temporary: false }],
   });
@@ -251,7 +259,7 @@ try {
     username: `federated-${runId}`,
     human: {
       profile: { givenName: "Federation", familyName: "Probe" },
-      email: { email: `federation-${runId}@example.invalid`, isVerified: true },
+      email: { email: syntheticEmail, isVerified: true },
       idpLinks: [{ idpId: provider.id, userId: upstreamUser, userName: "federation-user" }],
     },
   });
@@ -465,23 +473,27 @@ try {
     "Session identity binding mismatch",
   );
   assert(!read.session.factors.password, "Federated session must not have local password evidence");
-  const project = await za("POST", "/zitadel.project.v2.ProjectService/CreateProject", {
-    organizationId: orgId,
-    name: `federation-product-${runId}`,
-  });
+  const project = sharedClient
+    ? { projectId: sharedClient.projectId }
+    : await za("POST", "/zitadel.project.v2.ProjectService/CreateProject", {
+        organizationId: orgId,
+        name: `federation-product-${runId}`,
+      });
   const redirectUri = "https://heimdall-product.example.invalid/callback";
-  const app = await za("POST", "/zitadel.application.v2.ApplicationService/CreateApplication", {
-    projectId: project.projectId,
-    name: "federated-product",
-    oidcConfiguration: {
-      redirectUris: [redirectUri],
-      responseTypes: ["OIDC_RESPONSE_TYPE_CODE"],
-      grantTypes: ["OIDC_GRANT_TYPE_AUTHORIZATION_CODE"],
-      applicationType: "OIDC_APP_TYPE_WEB",
-      authMethodType: "OIDC_AUTH_METHOD_TYPE_BASIC",
-      accessTokenType: "OIDC_TOKEN_TYPE_JWT",
-    },
-  });
+  const app = sharedClient
+    ? { oidcConfiguration: sharedClient }
+    : await za("POST", "/zitadel.application.v2.ApplicationService/CreateApplication", {
+        projectId: project.projectId,
+        name: "federated-product",
+        oidcConfiguration: {
+          redirectUris: [redirectUri],
+          responseTypes: ["OIDC_RESPONSE_TYPE_CODE"],
+          grantTypes: ["OIDC_GRANT_TYPE_AUTHORIZATION_CODE"],
+          applicationType: "OIDC_APP_TYPE_WEB",
+          authMethodType: "OIDC_AUTH_METHOD_TYPE_BASIC",
+          accessTokenType: "OIDC_TOKEN_TYPE_JWT",
+        },
+      });
   const client = app.oidcConfiguration;
   assert(client && !client.nonCompliant);
   const nonce = randomUUID();
@@ -606,6 +618,27 @@ try {
     idClaims.auth_time === Math.floor(Date.parse(read.session.factors.intent.verifiedAt) / 1000),
     "Signed authentication time must match verified intent",
   );
+  if (sharedClient)
+    observations.push({
+      verifiedEnterpriseEvidence: {
+        schemaVersion: 1,
+        productId: "federation-product",
+        environment: "verification",
+        issuer: z,
+        subject: idClaims.sub,
+        clientId: client.clientId,
+        tenantId: orgId,
+        organizationId: providerRead.idp.details.resourceOwner,
+        policyVersion: "probe-policy-1",
+        providerId: provider.id,
+        protocol,
+        upstreamSubject: upstreamUser,
+        providerSessionId: idClaims.sid,
+        authTime: idClaims.auth_time * 1000,
+        verifiedAt: Date.parse(read.session.factors.intent.verifiedAt),
+      },
+    });
+
   observations.push({
     downstreamOidc: {
       signatureIssuerSubjectAudienceNonce: "verified",

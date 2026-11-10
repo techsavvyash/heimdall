@@ -104,3 +104,12 @@ organization-scoped provider with HTTP 400/code 9, then performs the successful
 same-organization federation regression. Both modes also read the selected provider
 and check its active state, protocol and resource owner. This is not a proof of
 stable-subject switching across independently owned enterprise providers.
+
+## Two tenants on one product
+
+Run `pnpm run probe:federation-tenants` with the same protected environment.
+It creates one product client and runs SAML and OIDC tenant fixtures sequentially
+with the same synthetic email. It asserts distinct subjects/organizations/providers
+and a common downstream client, then removes all owned resources. Evidence fields
+are sanitized and contain no tokens. This is a protocol/account-boundary probe,
+not browser session switching; child sessions are deleted between runs.

@@ -23,7 +23,8 @@
     "probe:oidc": "node tests/integration/oidc.mjs",
     "probe:scim": "node tests/integration/scim.mjs",
     "probe:zitadel": "node tests/integration/zitadel.mjs",
-    "probe:openfga-recovery": "node tests/integration/openfga-recovery.mjs"
+    "probe:openfga-recovery": "node tests/integration/openfga-recovery.mjs",
+    "probe:federation-tenants": "node tests/integration/federation-tenants.mjs"
   },
   "devDependencies": {
     "@types/node": "24.19.1",

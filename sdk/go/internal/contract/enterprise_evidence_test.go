@@ -8,22 +8,27 @@ import (
 )
 
 func TestEnterpriseEvidence(t *testing.T) {
-	data, err := os.ReadFile("../../../../contracts/fixtures/enterprise-evidence-v1.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var cases []struct {
+	type fixture struct {
 		Name          string
 		Evidence      json.RawMessage
 		Scope         EnterpriseScope
 		Now, MaxAgeMs int64
 		Error         string
 	}
-	if err := json.Unmarshal(data, &cases); err != nil {
-		t.Fatal(err)
-	}
-	if len(cases) == 0 {
-		t.Fatal("empty fixtures")
+	var cases []fixture
+	for _, name := range []string{"enterprise-evidence-v1.json", "enterprise-two-tenants-v1.json"} {
+		data, err := os.ReadFile("../../../../contracts/fixtures/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var batch []fixture
+		if err := json.Unmarshal(data, &batch); err != nil {
+			t.Fatal(err)
+		}
+		if len(batch) == 0 {
+			t.Fatal("empty fixtures: " + name)
+		}
+		cases = append(cases, batch...)
 	}
 	schema := payloadSchema(t, "enterprise-evidence")
 	for _, c := range cases {

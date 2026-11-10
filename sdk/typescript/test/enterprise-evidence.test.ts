@@ -7,14 +7,18 @@ const read = (name: string): unknown => JSON.parse(readFileSync(new URL(name, ro
 const shape = new Ajv2020({ strict: true }).compile(
   read("enterprise-evidence.schema.json") as object,
 );
-const cases = read("fixtures/enterprise-evidence-v1.json") as {
+type EvidenceCase = {
   name: string;
   evidence: Parameters<typeof validateEnterpriseEvidence>[0];
   scope: Parameters<typeof validateEnterpriseEvidence>[1];
   now: number;
   maxAgeMs: number;
   error?: string;
-}[];
+};
+const cases = [
+  ...(read("fixtures/enterprise-evidence-v1.json") as EvidenceCase[]),
+  ...(read("fixtures/enterprise-two-tenants-v1.json") as EvidenceCase[]),
+];
 describe("enterprise evidence target-policy gate", () => {
   it.each(cases.filter((c) => c.evidence !== null))("structural precondition $name", (c) =>
     expect(shape(c.evidence)).toBe(true),
