@@ -42,3 +42,5 @@ Phase evidence lives under docs/content/evidence/ when its first record is writt
 - [[evidence/phase-1-errors-schemas|Phase 1 error and schema checkpoint]]: portable failures and structural conformance. Partial progress.
 
 - [[evidence/phase-1-manifests|Phase 1 manifest checkpoint]]: product policy references, delegation and runtime binding validation. Partial progress.
+
+- [[evidence/phase-1-session-cursor|Phase 1 session/cursor payload checkpoint]]: shared expiry and scope semantics. Cryptographic envelopes remain pending.

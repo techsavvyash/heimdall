@@ -92,3 +92,33 @@ operator-owned configuration, never tenant-submitted policy. Pin it with the
 deployed model. Changing permissions or delegation requires a new manifest
 version and the model/config migration workflow. Semantic validation alone
 neither provisions a model nor authorizes a live user.
+
+## Session and cursor payload v1
+
+Timestamps are integer Unix milliseconds in the JavaScript safe-integer range.
+Both languages compare exact expiry with now >= expiresAt. Session payloads
+carry scope, issuer/subject, policy version, access/refresh tokens, activity and
+absolute/idle/token deadlines, identity-validation time, and a state of active,
+refreshing or reauth_required. A refreshing state requires an attempt ID and
+deadline; other states prohibit that field. These are plaintext before
+encryption, never cookie or log contents.
+
+The internal session status helper requires a structurally validated and decrypted
+record plus trusted expected scope. It validates timestamp ordering, rejects
+wrong scope/policy and expired sessions, and distinguishes active, refreshing,
+refresh_required, identity_revalidation_required and reauth_required. A refresh
+attempt reaching its deadline requires reauthentication, not token replay.
+Freshness is supplied explicitly between zero and 60,000 milliseconds; the runtime
+default is 60,000. Zero requires an authoritative check on every request.
+An active status is only a record-state result, not verified authentication or
+permission to skip token, identity or enterprise-policy validation.
+
+Cursor payloads bind format/kind, product, environment, principal, model, last
+consumed source position, issue time and expiry. The internal scope helper runs
+only after structural and signature verification. Wrong scope, future issue time
+and exact expiry return invalid_argument. Payload schemas and scope checks alone
+do not authenticate a cursor.
+
+The authenticated-encryption envelope, cursor signature format, key rotation and
+cross-language cryptographic vectors remain Phase 1 work. Storage CAS, callback
+consumption and refresh/logout concurrency are later persistence/runtime work.

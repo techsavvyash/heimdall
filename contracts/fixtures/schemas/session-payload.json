@@ -1,0 +1,220 @@
+[
+  {
+    "name": "valid",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "valid": true
+  },
+  {
+    "name": "invalid-schemaVersion",
+    "value": {
+      "schemaVersion": 2,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-productId",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger\n",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-time--1",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": -1,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-time-1.5",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1.5,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-time-1000",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": "1000",
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-time-9007199254740992",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 9007199254740992,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "valid": false
+  },
+  {
+    "name": "refresh-without-attempt",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "refreshing",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "valid": false
+  },
+  {
+    "name": "refreshing",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "refreshing",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh",
+      "refreshAttempt": {
+        "id": "attempt-1",
+        "expiresAt": 7000
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "active-with-attempt",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh",
+      "refreshAttempt": {
+        "id": "attempt-1",
+        "expiresAt": 7000
+      }
+    },
+    "valid": false
+  }
+]
