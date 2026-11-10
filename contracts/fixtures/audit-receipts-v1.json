@@ -1,0 +1,110 @@
+[
+  {
+    "name": "matching",
+    "expected": {
+      "productId": "ledger",
+      "environment": "production",
+      "eventId": "event-1",
+      "recordedAt": 1001,
+      "payloadDigest": "205ba3677790f75943e33a114b132a4a2b688584795c15a1e710867f251c701c"
+    },
+    "received": {
+      "productId": "ledger",
+      "environment": "production",
+      "eventId": "event-1",
+      "recordedAt": 1001,
+      "payloadDigest": "205ba3677790f75943e33a114b132a4a2b688584795c15a1e710867f251c701c"
+    },
+    "valid": true
+  },
+  {
+    "name": "wrong-productId",
+    "expected": {
+      "productId": "ledger",
+      "environment": "production",
+      "eventId": "event-1",
+      "recordedAt": 1001,
+      "payloadDigest": "205ba3677790f75943e33a114b132a4a2b688584795c15a1e710867f251c701c"
+    },
+    "received": {
+      "productId": "different",
+      "environment": "production",
+      "eventId": "event-1",
+      "recordedAt": 1001,
+      "payloadDigest": "205ba3677790f75943e33a114b132a4a2b688584795c15a1e710867f251c701c"
+    },
+    "valid": false
+  },
+  {
+    "name": "wrong-environment",
+    "expected": {
+      "productId": "ledger",
+      "environment": "production",
+      "eventId": "event-1",
+      "recordedAt": 1001,
+      "payloadDigest": "205ba3677790f75943e33a114b132a4a2b688584795c15a1e710867f251c701c"
+    },
+    "received": {
+      "productId": "ledger",
+      "environment": "different",
+      "eventId": "event-1",
+      "recordedAt": 1001,
+      "payloadDigest": "205ba3677790f75943e33a114b132a4a2b688584795c15a1e710867f251c701c"
+    },
+    "valid": false
+  },
+  {
+    "name": "wrong-eventId",
+    "expected": {
+      "productId": "ledger",
+      "environment": "production",
+      "eventId": "event-1",
+      "recordedAt": 1001,
+      "payloadDigest": "205ba3677790f75943e33a114b132a4a2b688584795c15a1e710867f251c701c"
+    },
+    "received": {
+      "productId": "ledger",
+      "environment": "production",
+      "eventId": "different",
+      "recordedAt": 1001,
+      "payloadDigest": "205ba3677790f75943e33a114b132a4a2b688584795c15a1e710867f251c701c"
+    },
+    "valid": false
+  },
+  {
+    "name": "wrong-recordedAt",
+    "expected": {
+      "productId": "ledger",
+      "environment": "production",
+      "eventId": "event-1",
+      "recordedAt": 1001,
+      "payloadDigest": "205ba3677790f75943e33a114b132a4a2b688584795c15a1e710867f251c701c"
+    },
+    "received": {
+      "productId": "ledger",
+      "environment": "production",
+      "eventId": "event-1",
+      "recordedAt": 1002,
+      "payloadDigest": "205ba3677790f75943e33a114b132a4a2b688584795c15a1e710867f251c701c"
+    },
+    "valid": false
+  },
+  {
+    "name": "wrong-payloadDigest",
+    "expected": {
+      "productId": "ledger",
+      "environment": "production",
+      "eventId": "event-1",
+      "recordedAt": 1001,
+      "payloadDigest": "205ba3677790f75943e33a114b132a4a2b688584795c15a1e710867f251c701c"
+    },
+    "received": {
+      "productId": "ledger",
+      "environment": "production",
+      "eventId": "event-1",
+      "recordedAt": 1001,
+      "payloadDigest": "different"
+    },
+    "valid": false
+  }
+]

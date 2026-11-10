@@ -119,9 +119,9 @@ only after structural and signature verification. Wrong scope, future issue time
 and exact expiry return invalid_argument. Payload schemas and scope checks alone
 do not authenticate a cursor.
 
-The authenticated-encryption envelope, cursor signature format, key rotation and
-cross-language cryptographic vectors remain Phase 1 work. Storage CAS, callback
-consumption and refresh/logout concurrency are later persistence/runtime work.
+The following section defines authenticated envelopes and cross-language vectors.
+Storage CAS, operational key rotation, callback consumption and refresh/logout
+concurrency are later persistence/runtime work.
 
 ## Cryptographic envelopes v1
 
@@ -241,6 +241,46 @@ This is not a serialized event-byte limit. Known secret/reserved metadata keys a
 rejected recursively, ignoring case, underscores and hyphens. Secrets concealed
 in innocuous values still require trusted schemas and sanitized construction.
 
-Receipt schemas validate shape only. Payload digest canonicalization, atomic
-append/idempotency, durable acknowledgement, trusted registry loading and SIEM
-replay remain implementation gates. These validators issue no durable receipts.
+Receipt schemas validate shape; the receipt helpers below check scope and payload
+binding. Atomic append/idempotency, durable acknowledgement, trusted registry
+loading and SIEM replay remain runtime gates. These validators issue no receipts.
+
+### Audit payload fingerprint and receipt binding
+
+The fingerprint is lowercase SHA-256 over ASCII heimdall.audit.v1 followed by a
+zero byte and the canonical typed value encoding of the complete validated event.
+This is a private v1 fingerprint encoding, not JSON serialization or JCS. It avoids
+cross-language differences in JSON whitespace, key order and decimal formatting.
+The stored/exported event remains ordinary JSON.
+
+Value tags are single ASCII bytes: n=null, t=true, f=false, d=number, s=string,
+a=array, o=object. A number carries 8-byte big-endian IEEE-754 binary64; negative
+zero becomes positive zero. Only finite magnitudes <= 9007199254740991 are allowed.
+A string carries a 4-byte unsigned big-endian UTF-8 byte count then exact UTF-8;
+ill-formed Unicode is rejected and text is never normalized. Arrays carry a 4-byte
+item count followed by values in order. Objects carry a 4-byte property count,
+then key-string/value pairs sorted by ASCII key bytes. Keys must be ASCII tokens
+of 1–64 characters, matching validated envelope/attribute keys. Missing optional
+fields differ from present null fields. No fields, including recordedAt, are omitted.
+
+The encoder rejects more than 1 MiB of encoded value bytes and nesting deeper than
+16 (root zero). Envelope and attribute validation impose narrower input limits.
+Use JSON-decoded numeric values in Go (float64); semantic integers must first pass
+the schema's safe-integer bounds. Reject duplicate JSON keys at a raw ingestion
+boundary before parsing, rather than silently accepting conflicting field values.
+
+Create the immutable event once, including event ID and recordedAt, before the
+first append attempt. Retries reuse it unchanged; never restamp recordedAt. Storage
+atomically enforces unique (productId, environment, eventId): identical digest
+returns the original receipt, different digest conflicts. This does not establish
+business-operation idempotency or authenticate an event.
+
+A local receipt must exactly match product, environment, event ID, recordedAt and
+payload digest. Mismatch returns audit_unavailable and cannot release protected
+work. A valid receipt still requires the store's proven commit-before-reply behavior.
+SIEM receipts must match sink/product/environment and acknowledge a nonempty,
+duplicate-free subset of submitted IDs. Reordering is allowed; unknown IDs, empty
+or duplicate acknowledgements fail with unavailable. Invalid responses advance
+nothing. Valid partial responses advance only those IDs, preserving other events
+for retry. Deduplication uses product/environment/event ID, never event ID alone.
+Authenticated transport, scope filtering and durable checkpoints remain runtime work.

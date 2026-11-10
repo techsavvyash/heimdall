@@ -43,10 +43,12 @@ Phase evidence lives under docs/content/evidence/ when its first record is writt
 
 - [[evidence/phase-1-manifests|Phase 1 manifest checkpoint]]: product policy references, delegation and runtime binding validation. Partial progress.
 
-- [[evidence/phase-1-session-cursor|Phase 1 session/cursor payload checkpoint]]: shared expiry and scope semantics. Cryptographic envelopes remain pending.
+- [[evidence/phase-1-session-cursor|Phase 1 session/cursor payload checkpoint]]: shared expiry and scope semantics. See the subsequent cryptographic envelope checkpoint.
 
 - [[evidence/phase-1-crypto|Phase 1 cryptographic envelope checkpoint]]: shared authenticated formats and cross-language writer/reader vectors. Operational key management remains a runtime gate.
 
 - [[evidence/phase-1-operations|Phase 1 operation checkpoint]]: immutable fingerprints, journal schema and conservative state transitions. Durable execution and recovery remain pending.
 
 - [[evidence/phase-1-audit|Phase 1 audit checkpoint]]: event semantics and receipt shapes. Durable append and export remain pending.
+
+- [[evidence/phase-1-audit-receipts|Phase 1 audit receipt checkpoint]]: portable fingerprints and scoped receipt validation. Atomic persistence and export checkpoints remain pending.

@@ -1,0 +1,504 @@
+[
+  {
+    "name": "security-event",
+    "event": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "heimdall.authorization.requested",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "requested",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    "digest": "205ba3677790f75943e33a114b132a4a2b688584795c15a1e710867f251c701c"
+  },
+  {
+    "name": "reordered-object",
+    "event": {
+      "policyVersion": "policy-1",
+      "operationId": "operation-1",
+      "manifestVersion": 1,
+      "modelId": "model-1",
+      "permission": "invoice.approve",
+      "decisionId": "decision-1",
+      "attributes": {},
+      "sdkVersion": "0.0.0",
+      "source": "sdk",
+      "requestId": "request-1",
+      "outcome": "requested",
+      "action": "invoice.approve",
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "tenantId": "tenant-1",
+      "environment": "production",
+      "productId": "ledger",
+      "recordedAt": 1001,
+      "occurredAt": 1000,
+      "eventVersion": 1,
+      "eventType": "heimdall.authorization.requested",
+      "eventId": "event-1",
+      "schemaVersion": 1
+    },
+    "digest": "205ba3677790f75943e33a114b132a4a2b688584795c15a1e710867f251c701c"
+  },
+  {
+    "name": "changed-productId",
+    "event": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "heimdall.authorization.requested",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "other",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "requested",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    "digest": "0db44a3024d01a6c7de5382c0a68619c8265a71563c70d2ba49134845bf2cb75"
+  },
+  {
+    "name": "changed-environment",
+    "event": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "heimdall.authorization.requested",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "other",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "requested",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    "digest": "c6b8608eb8a95a1dc05047e93fcf9082c7417df137d2ee5c7394f85a418d9bc7"
+  },
+  {
+    "name": "changed-eventId",
+    "event": {
+      "schemaVersion": 1,
+      "eventId": "other",
+      "eventType": "heimdall.authorization.requested",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "requested",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    "digest": "a2d32061674897b5c9e1cb514d01d7bcf810e6bf0ab1e888b74d2bbb51d30391"
+  },
+  {
+    "name": "changed-recordedAt",
+    "event": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "heimdall.authorization.requested",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1002,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "requested",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    "digest": "c06c5ff9e95d87c257eeaed1ca64e050861930db0f358ab161f1cf2a262c6db0"
+  },
+  {
+    "name": "zero",
+    "event": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "product.test",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "requested",
+      "requestId": "request-1",
+      "source": "product",
+      "sdkVersion": "0.0.0",
+      "attributes": {
+        "value": 0
+      },
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    "digest": "5e825f4b30c9812716512219bc6280a1483705d352e8227c22a20c5bc2feb513"
+  },
+  {
+    "name": "negative-zero",
+    "event": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "product.test",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "requested",
+      "requestId": "request-1",
+      "source": "product",
+      "sdkVersion": "0.0.0",
+      "attributes": {
+        "value": -0.0
+      },
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    "digest": "5e825f4b30c9812716512219bc6280a1483705d352e8227c22a20c5bc2feb513"
+  },
+  {
+    "name": "fraction",
+    "event": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "product.test",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "requested",
+      "requestId": "request-1",
+      "source": "product",
+      "sdkVersion": "0.0.0",
+      "attributes": {
+        "value": 0.1
+      },
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    "digest": "2abfc23e78f6a54abb8ef1545c7bb433c475b0ce5cfc7c0ee404824d1d109df3"
+  },
+  {
+    "name": "small-number",
+    "event": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "product.test",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "requested",
+      "requestId": "request-1",
+      "source": "product",
+      "sdkVersion": "0.0.0",
+      "attributes": {
+        "value": 1e-100
+      },
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    "digest": "4a249499e177a985af8b5bf5c887b49551eb55268531479ebd84cb04d52c0193"
+  },
+  {
+    "name": "safe-integer",
+    "event": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "product.test",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "requested",
+      "requestId": "request-1",
+      "source": "product",
+      "sdkVersion": "0.0.0",
+      "attributes": {
+        "value": 9007199254740991
+      },
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    "digest": "6b099a3b0a380ecc9f8a00701b4cae5725c44b70ff57587ba07c7c69b6a4f703"
+  },
+  {
+    "name": "nested",
+    "event": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "product.test",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "requested",
+      "requestId": "request-1",
+      "source": "product",
+      "sdkVersion": "0.0.0",
+      "attributes": {
+        "text": "\u00e9\ud83d\ude42\n",
+        "values": [
+          null,
+          true,
+          false,
+          3.5,
+          {
+            "z": 1,
+            "a": 2
+          }
+        ]
+      },
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    "digest": "96f72f6b3c51c00a3b6b253b0114a679da45be8251705507cb102451e33d87b1"
+  },
+  {
+    "name": "array-order",
+    "event": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "product.test",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "requested",
+      "requestId": "request-1",
+      "source": "product",
+      "sdkVersion": "0.0.0",
+      "attributes": {
+        "text": "\u00e9\ud83d\ude42\n",
+        "values": [
+          true,
+          null,
+          false,
+          3.5,
+          {
+            "a": 2,
+            "z": 1
+          }
+        ]
+      },
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    "digest": "bb7b275fe7457753956cb448d5ee442ad707c604ee1a746a1210d445dbfb811e"
+  }
+]

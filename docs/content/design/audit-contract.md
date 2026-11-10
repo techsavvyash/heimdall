@@ -24,6 +24,8 @@ Core mode requires a DurableAuditStore supplied by the product; missing mandator
 
 The shared contract requires append(event, options) to return a durable receipt only after commit. Event ID is unique per scope. Repeating the same event ID/payload returns the existing receipt; reusing it with a different payload conflicts. Batch append is atomic or returns explicit per-event receipts; do not acknowledge unpersisted members. TS uses AbortSignal; Go uses context.Context. Physical fsync/replication policy belongs to the supported database durability configuration and its verification.
 
+The executable v1 encoding is specified in contracts/README.md and shared receipt/digest fixtures. Construct an immutable event once before append; retries preserve its event ID, payload and recordedAt. The digest covers every field using a portable typed-value encoding, independent of JSON key order. A returned receipt must match the event's product/environment, ID, timestamp and digest. A mismatch blocks protected work with audit_unavailable. These checks do not substitute for verified database durability.
+
 ```mermaid
 sequenceDiagram
   participant App as Product request
@@ -67,6 +69,8 @@ Go exposes the equivalent Audit().Record(ctx, Event) with the same validation an
 ## Delivery, retention and failure policy
 
 Export is explicitly scheduled and at least once. Persist per-sink delivery/checkpoints; advance only after acknowledgement of the durable event IDs. Receivers deduplicate by event ID. A timeout after sink acceptance may cause a duplicate; never claim exactly once. Retry transient errors with bounded backoff/jitter; quarantine poison records, alert and preserve them for operator replay. A bad event must not silently disappear or indefinitely block unrelated tenants.
+
+The v1 batch receipt binds sink, product/environment and a nonempty unique subset of submitted event IDs. Partial acknowledgement advances only those IDs; the rest remain pending. Unknown IDs, wrong scope, duplicate IDs or an empty acknowledgement invalidate the response and advance nothing. Receivers deduplicate by product/environment/event ID. A transport timeout preserves the batch for retry even if the receiver may already have committed it.
 
 The first reference transport is authenticated HTTPS JSON batch delivery to an operator-configured SIEM ingestion endpoint/adapter, with an explicit receipt contract. Provider-specific adapters may translate this envelope and acknowledgement. Integration tests require a real compatible ingestion configuration or a clearly identified protocol receiver; a mock alone cannot establish a vendor compatibility claim. Collect ZITADEL events through its supported Events API/export integration with an independent durable checkpoint, then correlate through explicit organization/product mappings. [ZITADEL audit export](https://zitadel.com/docs/guides/integrate/external-audit-log)
 

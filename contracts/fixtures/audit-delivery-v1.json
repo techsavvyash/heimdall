@@ -1,0 +1,162 @@
+[
+  {
+    "name": "full",
+    "batch": {
+      "productId": "ledger",
+      "environment": "production",
+      "sinkId": "siem",
+      "eventIds": ["e1", "e2"]
+    },
+    "receipt": {
+      "productId": "ledger",
+      "environment": "production",
+      "sinkId": "siem",
+      "eventIds": ["e1", "e2"]
+    },
+    "valid": true
+  },
+  {
+    "name": "reordered",
+    "batch": {
+      "productId": "ledger",
+      "environment": "production",
+      "sinkId": "siem",
+      "eventIds": ["e1", "e2"]
+    },
+    "receipt": {
+      "productId": "ledger",
+      "environment": "production",
+      "sinkId": "siem",
+      "eventIds": ["e2", "e1"]
+    },
+    "valid": true
+  },
+  {
+    "name": "partial",
+    "batch": {
+      "productId": "ledger",
+      "environment": "production",
+      "sinkId": "siem",
+      "eventIds": ["e1", "e2"]
+    },
+    "receipt": {
+      "productId": "ledger",
+      "environment": "production",
+      "sinkId": "siem",
+      "eventIds": ["e2"]
+    },
+    "valid": true
+  },
+  {
+    "name": "wrong-product",
+    "batch": {
+      "productId": "ledger",
+      "environment": "production",
+      "sinkId": "siem",
+      "eventIds": ["e1", "e2"]
+    },
+    "receipt": {
+      "productId": "support",
+      "environment": "production",
+      "sinkId": "siem",
+      "eventIds": ["e1", "e2"]
+    },
+    "valid": false
+  },
+  {
+    "name": "wrong-environment",
+    "batch": {
+      "productId": "ledger",
+      "environment": "production",
+      "sinkId": "siem",
+      "eventIds": ["e1", "e2"]
+    },
+    "receipt": {
+      "productId": "ledger",
+      "environment": "staging",
+      "sinkId": "siem",
+      "eventIds": ["e1", "e2"]
+    },
+    "valid": false
+  },
+  {
+    "name": "wrong-sink",
+    "batch": {
+      "productId": "ledger",
+      "environment": "production",
+      "sinkId": "siem",
+      "eventIds": ["e1", "e2"]
+    },
+    "receipt": {
+      "productId": "ledger",
+      "environment": "production",
+      "sinkId": "other",
+      "eventIds": ["e1", "e2"]
+    },
+    "valid": false
+  },
+  {
+    "name": "unsubmitted",
+    "batch": {
+      "productId": "ledger",
+      "environment": "production",
+      "sinkId": "siem",
+      "eventIds": ["e1", "e2"]
+    },
+    "receipt": {
+      "productId": "ledger",
+      "environment": "production",
+      "sinkId": "siem",
+      "eventIds": ["e3"]
+    },
+    "valid": false
+  },
+  {
+    "name": "empty",
+    "batch": {
+      "productId": "ledger",
+      "environment": "production",
+      "sinkId": "siem",
+      "eventIds": ["e1", "e2"]
+    },
+    "receipt": {
+      "productId": "ledger",
+      "environment": "production",
+      "sinkId": "siem",
+      "eventIds": []
+    },
+    "valid": false
+  },
+  {
+    "name": "duplicate",
+    "batch": {
+      "productId": "ledger",
+      "environment": "production",
+      "sinkId": "siem",
+      "eventIds": ["e1", "e2"]
+    },
+    "receipt": {
+      "productId": "ledger",
+      "environment": "production",
+      "sinkId": "siem",
+      "eventIds": ["e1", "e1"]
+    },
+    "valid": false
+  },
+  {
+    "name": "duplicate-batch",
+    "batch": {
+      "productId": "ledger",
+      "environment": "production",
+      "sinkId": "siem",
+      "eventIds": ["e1", "e1"]
+    },
+    "receipt": {
+      "productId": "ledger",
+      "environment": "production",
+      "sinkId": "siem",
+      "eventIds": ["e1", "e2"]
+    },
+    "valid": false
+  }
+]
