@@ -1,5 +1,5 @@
 # Build from the repository root with docker build -f docs/Dockerfile .
-FROM node:24-slim
+FROM node:24-slim AS build
 
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 RUN npm install --global pnpm@12.10.1
@@ -12,4 +12,9 @@ COPY docs/package.json ./docs/package.json
 COPY scripts/install-hooks.mjs ./scripts/install-hooks.mjs
 RUN pnpm install --frozen-lockfile
 COPY docs/ ./docs/
-CMD ["pnpm", "run", "docs:dev"]
+RUN pnpm run docs:build
+
+FROM caddy:2-alpine
+COPY docs/Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /workspace/docs/public /srv
+EXPOSE 8080

@@ -14,7 +14,7 @@ pnpm run docs:dev
 
 Open http://localhost:8080. Run `pnpm run docs:build` from the root to generate `docs/public/`.
 
-The production site is https://techsavvyash.github.io/heimdall/ and analytics are disabled. `configuration.baseUrl` includes the GitHub Pages project path. Only `content/` is published. Dependencies, build output, and Quartz caches are ignored by Git.
+The production site is https://docs-production-7570859e.up.railway.app/ and analytics are disabled. `configuration.baseUrl` points to the Railway domain. Only `content/` is published. Dependencies, build output, and Quartz caches are ignored by Git.
 
 ## Design status
 
@@ -34,4 +34,8 @@ For the documentation container, use the repository root as its build context wi
 
 ## Publishing
 
-The `Publish documentation` workflow builds and checks the workspace, uploads only `docs/public/`, and deploys through GitHub Pages. Pushes to `feat/docs-website` publish during the initial design phase; pushes to `main` publish after integration. Remove the feature-branch trigger and environment rule when that branch is retired. Pull requests do not deploy. The `github-pages` environment restricts deployment to those two branches. GitHub Pages must use the Actions build type. No Docker image build is involved.
+Railway hosts the static Quartz output in the dedicated Heimdall project, production environment, docs service. The service builds from the repository root with `RAILWAY_DOCKERFILE_PATH=docs/Dockerfile`. The multi-stage image builds with Node 24 and pnpm 12.10.1, then serves only `docs/public/` using Caddy on Railway's `PORT` (8080 locally). Clean URLs and real HTTP 404 responses are supported.
+
+The service tracks `feat/docs-website` during the design phase. Switch its source branch to `main` after integration. GitHub Actions continues to check the workspace; GitHub Pages publishing is removed.
+
+For a manual deployment, link the Railway CLI to the Heimdall project and run `railway up --service docs` from the repository root after `pnpm run check`. When changing the public domain, update `configuration.baseUrl` and the documentation links before rebuilding.

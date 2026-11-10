@@ -51,4 +51,4 @@ See [the documentation index](docs/content/index.md), [shared SDK contract](docs
 
 `pnpm-workspace.yaml` includes the TypeScript SDK and Quartz. `minimumReleaseAge: 43200` requires releases to be at least 30 days old, including transitive dependencies. Strict mode rejects versions that cannot satisfy the age limit. Both projects share one frozen lockfile.
 
-Documentation: https://techsavvyash.github.io/heimdall/. First-release scope includes both SDKs, PostgreSQL adapters, tenant SSO, SCIM user lifecycle and durable SIEM integration.
+Documentation: https://docs-production-7570859e.up.railway.app/. First-release scope includes both SDKs, PostgreSQL adapters, tenant SSO, SCIM user lifecycle and durable SIEM integration.

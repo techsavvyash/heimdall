@@ -6,7 +6,7 @@ configuration:
   enablePopovers: true
   analytics: null
   locale: en-US
-  baseUrl: techsavvyash.github.io/heimdall
+  baseUrl: docs-production-7570859e.up.railway.app
   ignorePatterns:
     - private
     - templates
