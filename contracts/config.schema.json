@@ -29,7 +29,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 2048,
-      "pattern": "^https://[^/?#@\\s]+(?:/[^?#\\s]*)?$",
+      "pattern": "^https?://[^/?#@\\s]+(?:/[^?#\\s]*)?$",
       "not": {
         "pattern": "[\\s?#@]"
       }
@@ -63,7 +63,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 2048,
-          "pattern": "^https://[^/?#@\\s]+(?:/[^?#\\s]*)?$",
+          "pattern": "^https?://[^/?#@\\s]+(?:/[^?#\\s]*)?$",
           "not": {
             "pattern": "[\\s?#@]"
           }
@@ -100,6 +100,9 @@
       "not": {
         "pattern": "[^a-z0-9_-]"
       }
+    },
+    "transportProfile": {
+      "enum": ["production", "loopback"]
     }
   },
   "required": [
@@ -113,5 +116,35 @@
     "openfga",
     "manifestVersion",
     "clientKey"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "required": ["transportProfile"],
+        "properties": {
+          "transportProfile": {
+            "const": "loopback"
+          }
+        }
+      },
+      "then": {},
+      "else": {
+        "properties": {
+          "issuer": {
+            "pattern": "^https://",
+            "type": "string"
+          },
+          "openfga": {
+            "properties": {
+              "url": {
+                "pattern": "^https://",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        }
+      }
+    }
   ]
 }

@@ -318,5 +318,47 @@
       "clientKey": "web"
     },
     "valid": false
+  },
+  {
+    "name": "explicit-loopback",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "http://127.0.0.1:8080",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "http://[::1]:8081",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1,
+      "clientKey": "web",
+      "transportProfile": "loopback"
+    },
+    "valid": true
+  },
+  {
+    "name": "invalid-profile",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "http://127.0.0.1:8080",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "http://[::1]:8081",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1,
+      "clientKey": "web",
+      "transportProfile": "insecure"
+    },
+    "valid": false
   }
 ]

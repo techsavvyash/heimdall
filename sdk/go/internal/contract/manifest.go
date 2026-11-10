@@ -4,16 +4,20 @@ type Manifest struct {
 	SchemaVersion int
 	ProductID     string
 	Version       int
-	Clients       map[string]struct{ RedirectURIs []string }
-	Permissions   []string
-	Roles         map[string][]string
-	OwnerRole     string
-	Delegation    map[string][]string
+	Clients       map[string]struct {
+		RedirectURIs     []string
+		TransportProfile string
+	}
+	Permissions []string
+	Roles       map[string][]string
+	OwnerRole   string
+	Delegation  map[string][]string
 }
 type Binding struct {
-	ProductID       string
-	ManifestVersion int
-	ClientKey       string
+	ProductID        string
+	ManifestVersion  int
+	ClientKey        string
+	TransportProfile string
 }
 
 // ValidateManifestBinding checks cross references after structural validation.
@@ -23,6 +27,28 @@ func ValidateManifestBinding(manifest Manifest, config Binding) error {
 	if config.ProductID != manifest.ProductID || config.ManifestVersion != manifest.Version ||
 		!clientExists || !ownerExists {
 		return ErrInvalidArgument
+	}
+	profile := config.TransportProfile
+	if profile == "" {
+		profile = "production"
+	}
+	selected := manifest.Clients[config.ClientKey].TransportProfile
+	if selected == "" {
+		selected = "production"
+	}
+	if profile != selected {
+		return ErrInvalidArgument
+	}
+	for _, client := range manifest.Clients {
+		p := client.TransportProfile
+		if p == "" {
+			p = "production"
+		}
+		for _, uri := range client.RedirectURIs {
+			if err := ValidateEndpoint(uri, p); err != nil {
+				return err
+			}
+		}
 	}
 	permissions := make(map[string]bool, len(manifest.Permissions))
 	for _, p := range manifest.Permissions {

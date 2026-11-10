@@ -35,13 +35,9 @@ Phase 1 turns selected semantics into executable schemas and fixtures. Public au
 
 ## Remaining Phase 1 gates
 
-Before advancing, finish endpoint configuration including explicit loopback
-development policy. Review these
-against #31 and the selected contracts, then rerun cross-language conformance,
-mutation detection and the full workspace gate. Record the final phase acceptance
-matrix and verify its committed Railway publication. SQL execution, CAS races and
-live service behavior belong to later phases; their contracts must already be
-unambiguous here.
+The final contract acceptance matrix is in [[evidence/phase-1-acceptance]]. Local
+conformance and deliberate mutation checks passed. Final source CI and Railway
+verification remain pending before declaring Phase 1 complete.
 
 ## Evidence ledger
 
@@ -66,3 +62,5 @@ Phase evidence lives under docs/content/evidence/ when its first record is writt
 - [[evidence/phase-1-login-workspaces|Phase 1 login/workspace checkpoint]]: browser/policy binding and lifecycle-deny fixtures. Atomic claims and live enforcement remain runtime gates.
 
 - [[evidence/phase-1-storage|Phase 1 storage compatibility checkpoint]]: migration checksums, reader/writer ranges and bridge upgrade fixtures. Live migrations and coordination remain later gates.
+
+- [[evidence/phase-1-acceptance|Phase 1 final acceptance matrix]]: complete contract coverage, endpoint profiles, renewed mutation proof and final deployment gate.

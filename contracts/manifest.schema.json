@@ -44,7 +44,7 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 2048,
-              "pattern": "^https://[^/?#@\\s]+/[^?#\\s]*$",
+              "pattern": "^https?://[^/?#@\\s]+/[^?#\\s]*$",
               "not": {
                 "pattern": "[\\s?#@]"
               }
@@ -52,9 +52,36 @@
             "minItems": 1,
             "maxItems": 32,
             "uniqueItems": true
+          },
+          "transportProfile": {
+            "enum": ["production", "loopback"]
           }
         },
-        "required": ["redirectUris"]
+        "required": ["redirectUris"],
+        "allOf": [
+          {
+            "if": {
+              "required": ["transportProfile"],
+              "properties": {
+                "transportProfile": {
+                  "const": "loopback"
+                }
+              }
+            },
+            "then": {},
+            "else": {
+              "properties": {
+                "redirectUris": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^https://"
+                  }
+                }
+              }
+            }
+          }
+        ]
       }
     },
     "permissions": {

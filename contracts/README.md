@@ -1,7 +1,7 @@
 # Shared SDK contracts
 
 Language-neutral contracts and fixtures define matching TypeScript/Go behavior.
-Version 1 is under construction as Phase 1, not yet a complete released contract.
+Version 1 defines the executable baseline. This is not a released SDK or proof of runtime behavior.
 
 ## Canonical human identity encoding v1
 
@@ -50,14 +50,13 @@ matching positive/negative corpus in fixtures/schemas/. They use JSON Schema
 2020-12 with no coercion or inserted defaults. Ajv 8.20.0 (released April 24, 2026) and Go jsonschema/v6 v6.0.2 (released May 23, 2025) satisfy the minimum
 dependency age. Both are test dependencies at this stage.
 
-Configuration v1 defines the production binding shape: product/environment,
+Configuration v1 defines the binding shape: product/environment,
 issuer, audience, client/project, OpenFGA endpoint/store/model and manifest
 version. It contains no inline secrets or per-request overrides. This schema is
 structural validation, not proof of issuer trust, URL reachability, service ID
-existence or manifest compatibility. The URL pattern rejects insecure endpoints,
-userinfo, whitespace, query and fragment; complete endpoint parsing and verified
-service bindings remain runtime validation work. An explicit loopback development
-profile remains to be specified before local runtime configuration ships.
+existence or manifest compatibility. Schema validation is followed by manifest
+binding and endpoint semantic validation. The explicit transport profile described
+below governs local HTTP; omission keeps production HTTPS requirements.
 
 Specification references:
 
@@ -373,3 +372,35 @@ commit together; nontransactional or interrupted work stays migrating until
 explicit verified recovery. Exclusive migration locking, actual SQL, database
 privilege separation, backups/restoration and mixed-version runtime tests remain
 Phase 3/7 gates. PostgreSQL is the only selected first-release store adapter.
+
+## Endpoint and transport profile v1
+
+Runtime configuration has optional transportProfile=production|loopback; omitted
+means production. Manifest clients have the same optional field. The selected
+client and runtime profiles must match. All manifest client callbacks are validated
+under their declared profile; runtime issuer/OpenFGA endpoints use the runtime
+profile. Structural validation must precede these checks. Browser requests cannot
+select a transport profile or override the configured endpoints.
+
+Production requires HTTPS. Explicit loopback mode additionally permits HTTP only
+for exact localhost, 127.0.0.1 or [::1], with optional canonical decimal port 1–65535.
+It never permits remote HTTP, wildcard listeners, other 127/8 spellings, short/octal/
+hex numeric hosts or a localhost suffix. HTTPS remains allowed in either profile.
+The runtime transport must enforce loopback resolution for local HTTP, reject
+unsafe credential-bearing redirects, and use the selected secure cookie policy;
+these are later transport/HTTP acceptance gates, not guarantees of URL validation.
+
+Endpoint configuration uses lowercase ASCII DNS labels (IDNs supplied as punycode),
+standard IPv4 or lowercase bracketed IPv6 without zone IDs. It rejects credentials,
+queries, fragments, whitespace, backslashes, malformed ports and trailing DNS dots.
+Paths permit URI path characters and well-formed percent-encoded UTF-8. Dot segments,
+encoded path separators and ASCII control/space characters are rejected. Unescaped
+characters outside the URI path grammar must be percent-encoded. Input length is
+bounded to 2048 ASCII bytes. These deliberate input rules eliminate parser ambiguity
+between Go and Node; they do not assert endpoint reachability or issuer trust.
+
+Validated values are never rewritten. A trailing slash, explicit default port or
+percent-encoding spelling remains part of the exact configured issuer identity.
+Tokens must match that configured issuer. Production and local development must
+use separate client/environment configuration; local cookies must not use __Host
+names or silently weaken a production application's cookie settings.
