@@ -52,4 +52,4 @@ Sources: [upstream pinned deployment](https://github.com/zitadel/zitadel/blob/v4
 
 ## Repository validation
 
-The full workspace gate passed: 765 Vitest tests, Go race tests, formatting, lint, TypeScript, Knip, Go vet, SDK build/declarations and Quartz. The live ZITADEL probe passed after removal of bootstrap environment credentials. Publication verification follows the source commit.
+The full workspace gate passed: 765 Vitest tests, Go race tests, formatting, lint, TypeScript, Knip, Go vet, SDK build/declarations and Quartz. The live ZITADEL probe passed after removal of bootstrap environment credentials. Source commit 4898c436c3ef922d65d07b464db4f64eccc930dd passed GitHub Actions run 42909882357. Railway docs deployment c8344bee-c43c-4988-9bd8-19f4916a27ae reached SUCCESS and remained running. The public evidence URL returned HTTP 200 with this runtime deployment ID, probe run ID and Mermaid source. Phase 2 remains open.
