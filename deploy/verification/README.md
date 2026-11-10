@@ -2,7 +2,7 @@
 
 This is a capability test environment, not production infrastructure. The current
 slice deploys OpenFGA 1.22.0 and PostgreSQL 17.11 using pinned multi-platform image
-digests. ZITADEL 4.19.4 is a candidate awaiting deployment and capability verification.
+digests. ZITADEL API and upstream Login UI 4.19.4 are deployed with preliminary checks; see [ZITADEL setup](zitadel.md).
 No service version is yet certified for the full Heimdall release.
 
 ## Local reproduction

@@ -18,7 +18,8 @@
     "docs:dev": "pnpm --filter @jackyzha0/quartz run dev",
     "check:fast": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run knip && pnpm run check:go",
     "check": "pnpm run check:fast && pnpm test && pnpm run test:go && pnpm run build && pnpm run docs:build",
-    "probe:openfga": "node tests/integration/openfga.mjs"
+    "probe:openfga": "node tests/integration/openfga.mjs",
+    "probe:zitadel": "node tests/integration/zitadel.mjs"
   },
   "devDependencies": {
     "@types/node": "24.19.1",

@@ -9,9 +9,16 @@
     "releasedAt": "2026-08-13",
     "image": "postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac"
   },
-  "zitadelCandidate": {
+  "zitadel": {
     "version": "4.19.4",
     "releasedAt": "2026-10-01",
-    "status": "not deployed or verified"
+    "image": "ghcr.io/zitadel/zitadel:v4.19.4@sha256:90a3045b80a2b5b395e1e770302076906af3a5911225af7c464b4f3bd00d0a1b",
+    "status": "deployed; preliminary capability checks only"
+  },
+  "zitadelLogin": {
+    "version": "4.19.4",
+    "releasedAt": "2026-10-01",
+    "image": "ghcr.io/zitadel/zitadel-login:v4.19.4@sha256:93ffd1395b827f685ba29c02fa70aee881fc21102519c4e2bbb0b89c0e00f42c",
+    "status": "deployed; preliminary capability checks only"
   }
 }
