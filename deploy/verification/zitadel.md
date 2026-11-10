@@ -107,3 +107,7 @@ Sources: [tagged upstream Compose](https://github.com/zitadel/zitadel/blob/v4.19
 [tagged configuration](https://github.com/zitadel/zitadel/blob/v4.19.4/cmd/defaults.yaml),
 [Project v2 API](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/project/v2/project_service.proto),
 [Railway volume permissions](https://docs.railway.com/volumes).
+
+## SCIM Users lifecycle probe
+
+With the same protected issuer and bootstrap PAT environment, run `pnpm run probe:scim`. This creates two disposable organizations and synthetic identities, tests tenant resource paths, external-ID lookup, default username uniqueness, repeated disable/reactivation/deletion and authoritative user state, then deletes its owned organizations. It uses the privileged bootstrap credential; dedicated SCIM credential boundaries are not yet established. Run only in the verification environment. Use the printed run ID to inspect uncertain creates before manual cleanup. The committed sanitized evidence distinguishes upstream state visibility from later SDK worker/session guarantees.

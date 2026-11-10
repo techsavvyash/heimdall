@@ -68,3 +68,5 @@ Phase evidence lives under docs/content/evidence/ when its first record is writt
 - [[evidence/phase-2-openfga|Phase 2 OpenFGA checkpoint]]: pinned Railway services and initial live two-store probes. Phase 2 remains open.
 
 - [[evidence/phase-2-zitadel|Phase 2 ZITADEL checkpoint]]: pinned API/Login UI, runtime credential separation and initial v2 provisioning probe. Phase 2 remains open.
+
+- [[evidence/phase-2-scim|Phase 2 SCIM checkpoint]]: two-organization Users lifecycle and authoritative state visibility. Credential boundaries and SDK lifecycle work remain open.
