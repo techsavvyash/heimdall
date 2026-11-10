@@ -34,3 +34,5 @@ Shared schema and semantic fixtures exercise both languages. Deliberately removi
 Provider/API verification, browser callback claim and atomic persistence remain separate requirements. The helper accepts already authenticated, schema-validated evidence; it cannot prove its origin. Live strict tenant switching, browser UI acceptance, credential minimization, expiry and recovery/quiescence remain Phase 2 work. No advancement to Phase 3 follows from this checkpoint.
 
 The full local workspace gate passed: 841 Vitest tests, Go race tests, formatting, Oxlint, TypeScript, Knip, Go vet, Rolldown/declarations and Quartz. Both deliberate missing-tenant mutations failed the intended fixture, and restored implementations passed the full gate. Publication proof is recorded after the source deployment is verified.
+
+Source commit 536368b8b1bb06aa243587f7444e9a599a0e7e41 passed GitHub Actions runs 42918879483 and 42918866293. Railway docs deployment cac9b5f2-64fd-4f48-bbb5-8876233d22bb reached SUCCESS. The public evidence page returned HTTP 200 with the amendment, 841-test count, mutation evidence and Mermaid source. Phase 2 remains open.
