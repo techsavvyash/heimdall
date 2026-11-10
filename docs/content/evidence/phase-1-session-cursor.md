@@ -16,3 +16,7 @@ The focused tests passed: 189 Vitest tests and Go race tests. The full workspace
 ## Remaining work
 
 Authenticated encryption/signatures, operation/audit formats, persistence compatibility and complete endpoint/configuration validation still block Phase 1 completion. SessionStore atomicity, refresh coordination, login callbacks and live-service evidence are subsequent runtime gates.
+
+## Deployment proof
+
+Source commit d854fa97e816003dc86b4b45cceddfbd05c2f352 passed the full workspace gate and GitHub Actions. Railway docs deployment ec74960e-717b-4c69-b336-7a7da3543925 reached SUCCESS. The evidence page returned HTTP 200 with the expected 189-test result. This verifies the documentation checkpoint, not runtime session authentication.
