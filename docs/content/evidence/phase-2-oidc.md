@@ -66,3 +66,7 @@ This reinforces the selected [[design/shared-sdk-contract|local logout contract]
 The browser Login UI, external SAML/OIDC, strict provider/organization policy evidence, session-policy switching, unknown-key refresh/fault behavior, concurrent refresh/logout, and SDK identity freshness enforcement remain unverified. These are healthy sequential samples, not a measured maximum revocation SLA. Shared identity and matching organization do not grant OpenFGA membership. No first-release SDK capability is claimed by this probe.
 
 Sources: [pinned OIDC API](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/oidc/v2/oidc_service.proto), [session API](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/session/v2/session_service.proto), [application configuration](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/application/v2/application_service.proto).
+
+## Validation and publication
+
+The full workspace gate passed: 765 Vitest tests, Go race tests, formatting/lint/types/Knip/vet, SDK build/declarations and Quartz. Source commit 1b34a449a91addb01e3f47a77123bba3e0750bab passed GitHub Actions runs 42913037198 and 42913022768. Railway docs deployment 1dce04a4-6a74-4030-afeb-7a21f0092381 reached SUCCESS and remained running. The public evidence page returned HTTP 200 with the current probe ID, provider-session refresh finding and Mermaid source. Phase 2 remains open.
