@@ -3,7 +3,7 @@ title: Phase 1 acceptance — executable TS and Go contracts
 date: 2026-11-11
 ---
 
-**Contract acceptance checks passed locally; final CI and Railway verification pending.** This phase covers executable language-neutral contracts. It does not claim deployed authentication, database adapters or enterprise integrations.
+**Phase 1 complete.** This phase covers executable language-neutral contracts. It does not claim deployed authentication, database adapters or enterprise integrations.
 
 ## Requirement-by-requirement evidence
 
@@ -47,4 +47,4 @@ flowchart LR
 
 ## Deployment proof
 
-Pending final verification. Do not advance to Phase 2 until this record is updated with the tested source commit and successful Railway deployment.
+Source commit b6790c2d9d5e32e0bdd142f4ce13ecdc374b55fd passed GitHub Actions run 42905076577, including frozen dependency installation and the complete workspace gate. Railway docs deployment 8f349e9a-8afd-4da4-8f72-f10e0a5908f7 reached SUCCESS. The public acceptance page returned HTTP 200 with the 765-test result, requirement matrix and Mermaid source. Phase 1 contract acceptance is complete; Phase 2 pinned-service verification is next. This deployment serves documentation, not an authentication runtime.

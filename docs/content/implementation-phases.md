@@ -29,15 +29,16 @@ Audit persistence is built before authorization results can be released; enterpr
 
 ## Current phase
 
-**Phase 1 is in progress. No implementation phase is complete yet.**
+**Phase 1 is complete. Phase 2 is next and has not started.**
 
 Phase 1 turns selected semantics into executable schemas and fixtures. Public authentication APIs remain unavailable until implemented and validated; internal contract utilities do not constitute verified authentication.
 
-## Remaining Phase 1 gates
+## Phase 1 acceptance
 
-The final contract acceptance matrix is in [[evidence/phase-1-acceptance]]. Local
-conformance and deliberate mutation checks passed. Final source CI and Railway
-verification remain pending before declaring Phase 1 complete.
+The final contract acceptance matrix and source commit/deployment proof are in
+[[evidence/phase-1-acceptance]]. Both language suites, deliberate mutation detection,
+full workspace checks, GitHub Actions and Railway publication passed. Before
+starting Phase 2, verify this final evidence publication is live.
 
 ## Evidence ledger
 
