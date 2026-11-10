@@ -92,3 +92,5 @@ Phase evidence lives under docs/content/evidence/ when its first record is writt
 - [[evidence/phase-2-provider-organization|Phase 2 provider organization boundary]]: cross-organization user-link APIs reject both SAML and OIDC; same-organization federation regressions pass. Cross-tenant account topology remains a strict-SSO acceptance gate.
 
 - [[evidence/phase-2-two-tenant-federation|Phase 2 two-tenant product federation]]: SAML/OIDC tenant accounts authenticate to one client; same-email subjects remain distinct; live-derived TS/Go policy fixtures reject identity carryover. Browser/session switching and the cross-directory identity product choice remain open.
+
+Browser deployment checkpoint: [[evidence/phase-2-browser-oidc]] records the real Login UI path and separate-domain configuration fix. Phase 2 remains open.

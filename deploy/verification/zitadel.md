@@ -86,12 +86,22 @@ NEXT_PUBLIC_BASE_PATH=/ui/v2/login
 ZITADEL_API_URL=https://<API Railway domain>
 ZITADEL_SERVICE_USER_TOKEN=<dedicated Login client PAT>
 ZITADEL_SESSION_COOKIE_SECRET=<separate random 64-character hex value>
+CUSTOM_REQUEST_HEADERS=x-zitadel-instance-host:<API Railway domain>,x-zitadel-public-host:<Login UI domain>
 ```
 
 The API URL is public HTTPS; the upstream UI's Connect client uses HTTP/1.1. The UI
 is an upstream ZITADEL component, not a Heimdall wrapper service. A request to
 `/ui/v2/login/login` without an authentication request returns 400. This is only
 missing-request rejection evidence, not a completed human login.
+
+For this separate-domain, single-instance topology, add the exact Login hostname
+with InstanceService/AddTrustedDomain before browser testing. The fixed custom
+headers override browser-supplied instance/public hosts on outbound API calls.
+The pinned Login transport applies them after its inferred host headers. Without
+this configuration, a valid browser auth request returned an instance-not-found
+error even though the Login startup credential check passed. Do not reuse these
+fixed headers for a Login UI serving multiple ZITADEL instances. See the browser
+evidence for the deployed result.
 
 ## Capability probe
 
@@ -166,3 +176,26 @@ Owned sessions and organization are deleted on exit; inspect the printed run ID
 before cleanup after uncertain creation or process termination. Provider-session
 deletion was observed to allow refresh into a new active access token; explicit
 refresh-token revocation prevented that. See the published Phase 2 OIDC evidence.
+
+## Browser OIDC probe
+
+Run `pnpm run probe:browser-oidc setup` with the same issuer and two protected PATs
+as the OIDC probe, plus HEIMDALL_PROBE_BROWSER_STATE set to an absolute path in a
+protected directory outside the repository. Setup creates a disposable organization,
+user and confidential client, saving credentials/PKCE state with mode 600. It prints
+only the synthetic interactive username/password and authorization URL. Open that URL
+in a browser, sign in, and capture the callback URL. The example.invalid callback is
+intentionally unreachable; its DNS error is not an authentication failure.
+
+Pass that exact callback as HEIMDALL_PROBE_BROWSER_CALLBACK to
+`pnpm run probe:browser-oidc verify`. Keep it out of logs and source files. This
+standalone verifier checks state, code/PKCE exchange, signed tokens and provider
+session binding; it does not implement the SDK callback. Finally run
+`pnpm run probe:browser-oidc cleanup` to remove owned sessions/organization and the
+protected file. Setup will not overwrite an existing fixture file. If interrupted
+before a create response is saved, inspect resources with the run ID before cleanup;
+there are no mutation retries or uncertain-write guarantees in this test helper.
+
+Sources: [Login domain setup](https://zitadel.com/docs/guides/integrate/login-ui/login-app),
+[pinned outbound header ordering](https://github.com/zitadel/zitadel/blob/v4.19.4/apps/login/src/lib/zitadel.ts),
+[pinned trusted-domain API](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/instance/v2/instance_service.proto).
