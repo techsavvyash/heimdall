@@ -53,3 +53,5 @@ The SDK's durable operation journal, quarantine gate, authorized recovery action
 ## Validation and publication
 
 The complete local fault probe passed and removed its owned resources. The full workspace gate also passed: 841 Vitest tests, Go race tests, formatting/lint/types/Knip/vet, SDK build/declarations and Quartz. Source commit 6c510bb5d9b0fd579465fa2fb4d2eb15b802f13e passed GitHub Actions runs 42920470829 and 42920459099. Railway docs deployment 1365d5e6-e74f-4e68-b15b-3765df7a455d reached SUCCESS. The public page returned HTTP 200 with the fault-run ID, phase status and Mermaid source. This is publication on Railway of a local fault proof, not a Railway runtime recovery test.
+
+Follow-up: [[phase-2-railway-recovery]] records the Railway control-plane and database-drain run for the single-replica verification topology. SDK recovery workflow requirements remain open.

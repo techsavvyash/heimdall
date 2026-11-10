@@ -49,3 +49,36 @@ the maintenance impact is deployment-wide; this is not per-workspace fencing.
 Railway-specific replica/process/database controls, recovery authorization and
 journal integration remain unverified. The managed-lifecycle release gate stays
 open until those required deployment and SDK tests pass.
+
+## Railway verification run
+
+The dedicated single-replica Railway test passed on November 11, 2026; see
+../../docs/content/evidence/phase-2-railway-recovery.md. The opt-in command is:
+
+    python3 tests/integration/openfga-recovery-railway.py --execute-verification-recovery
+
+This is a maintenance operation against exact Heimdall verification IDs embedded
+in the probe. It is not a generic production command. It requires Python 3,
+Railway CLI credentials and the registered SSH identity (override its path with
+HEIMDALL_PROBE_SSH_KEY). Supply HEIMDALL_PROBE_OPENFGA_KEY and a distinct generated
+HEIMDALL_PROBE_NEW_OPENFGA_KEY via a protected environment. Save the replacement
+in operator secret storage before starting; after the variable change it remains
+the active credential, including if a later assertion fails. Never restore the
+retired key or roll back to an old deployment's variables. The script does not
+print keys or edit the operator's secret files.
+
+Preflight requires one replica and the exact sole current preshared key. The run
+creates only a test store, but the table lock and maintenance affect the entire
+verification OpenFGA service. It removes the old deployment, waits for REMOVED,
+checks that no listed deployment is active/building, drains database backends,
+retires the old key with skip-deploys, then starts a replacement through
+serviceInstanceDeployV2 using current configuration. It verifies health before
+reconciliation and removes its owned store. ZITADEL and docs are not targeted.
+
+A bounded observation deadline is not authorization to launch another recovery
+or replacement. Inspect the known deployment/request state first. If an operator
+interrupts the probe, inspect the test lock, service/deployment state, current
+credential and owned store before resuming. Keep affected product gates closed.
+The script's success/failure is not a signed recovery receipt and cannot itself
+clear the future SDK's journal. The topology assumptions and later SDK gates in
+the evidence page remain mandatory.

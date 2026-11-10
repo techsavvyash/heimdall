@@ -78,5 +78,5 @@ remains pending.
 
 [Recovery verification](recovery.md) describes the isolated local fault probe and
 the demonstrated stop/drain/credential-retirement sequence. Run
-`pnpm run probe:openfga-recovery` with a free loopback port 8080. Railway controls
-and SDK recovery integration remain pending.
+`pnpm run probe:openfga-recovery` with a free loopback port 8080. The opt-in Railway variant has also passed for the dedicated single-replica
+verification environment; SDK recovery integration remains pending.
