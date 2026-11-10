@@ -23,4 +23,10 @@ A temporary mutation replaced the first identity vector's expected ID with an in
 
 Configuration/manifest schemas and semantic validation, stable typed errors/cancellation distinctions, tenant ID validation, session/cursor/operation/audit formats, persistence compatibility and further conformance fixtures remain. There is no verified-principal public API and no runtime service deployment in this checkpoint.
 
-Deployment verification will be recorded after the committed source is built by Railway. Documentation deployment does not satisfy later runtime deployment gates.
+## Committed and deployed proof
+
+Source commit: 41c578a870a08d879e9fa2ead075586768f24994. GitHub Actions completed successfully for that source commit.
+
+Railway docs deployment: 0c06e53b-5f6d-46fe-bf5a-871fc31095bc, status SUCCESS. Verified HTTP 200 and expected content on both the [phase plan](https://docs-production-7570859e.up.railway.app/implementation-phases) and [this evidence page](https://docs-production-7570859e.up.railway.app/evidence/phase-1-progress).
+
+This evidence update follows verification of that source deployment. Documentation deployment does not satisfy later runtime deployment gates.

@@ -36,3 +36,5 @@ Phase 1 turns selected semantics into executable schemas and fixtures. Public au
 ## Evidence ledger
 
 Phase evidence lives under docs/content/evidence/ when its first record is written. Distinguish contract checks from live-service checks, and docs deployment from runtime deployment. Each completed phase links its evidence here before the next phase begins.
+
+- [[evidence/phase-1-progress|Phase 1 identity-encoding checkpoint]]: tests, mutation detection and Railway verification. Partial progress; no phase advancement.
