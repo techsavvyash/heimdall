@@ -20,3 +20,7 @@ The full workspace gate passed: 226 Vitest tests, Go race tests, lint/types/Knip
 The primitives do not constitute verified session authentication. Payload schema/scope/expiry checks follow successful cryptographic verification. Runtime composition must supply distinct stable encryption/signing keys and enforce rotation/usage policy across replicas. Go's random-nonce GCM API sets a per-key encryption limit; production key-usage enforcement is still an adapter release requirement. [Go GCM documentation](https://pkg.go.dev/crypto/cipher#NewGCMWithRandomNonce)
 
 Phase 1 still needs operation/audit formats, persistence compatibility and complete configuration validation. Callback atomicity, refresh/logout races and live services remain later gates.
+
+## Deployment proof
+
+Source commit db8a88fe481e6b9ad33aee4af281fdc7440d6d04 passed GitHub Actions. Railway docs deployment 32610e33-ddc3-4586-950f-9dc988441c92 reached SUCCESS. The public crypto evidence page returned HTTP 200 with the expected 226-test result. This records a documentation deployment; runtime session/authentication integration remains unimplemented.
