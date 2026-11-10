@@ -63,10 +63,33 @@ This reinforces the selected [[design/shared-sdk-contract|local logout contract]
 
 ## Remaining work
 
-The browser Login UI, external SAML/OIDC, strict provider/organization policy evidence, session-policy switching, unknown-key refresh/fault behavior, concurrent refresh/logout, and SDK identity freshness enforcement remain unverified. These are healthy sequential samples, not a measured maximum revocation SLA. Shared identity and matching organization do not grant OpenFGA membership. No first-release SDK capability is claimed by this probe.
+Subsequent checkpoints verify [[phase-2-browser-oidc|browser password login]], [[phase-2-two-tenant-federation|two enterprise tenants]] and [[phase-2-enterprise-contract|shared policy evidence checks]]. Enterprise browser federation, session-policy switching, SDK unknown-key refresh/fault behavior, concurrent refresh/logout, and SDK identity freshness enforcement remain unverified. These are healthy sequential samples, not a measured maximum revocation SLA. Shared identity and matching organization do not grant OpenFGA membership. No first-release SDK capability is claimed by this probe.
 
 Sources: [pinned OIDC API](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/oidc/v2/oidc_service.proto), [session API](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/session/v2/session_service.proto), [application configuration](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/application/v2/application_service.proto).
 
 ## Validation and publication
 
 The full workspace gate passed: 765 Vitest tests, Go race tests, formatting/lint/types/Knip/vet, SDK build/declarations and Quartz. Source commit 1b34a449a91addb01e3f47a77123bba3e0750bab passed GitHub Actions runs 42913037198 and 42913022768. Railway docs deployment 1dce04a4-6a74-4030-afeb-7a21f0092381 reached SUCCESS and remained running. The public evidence page returned HTTP 200 with the current probe ID, provider-session refresh finding and Mermaid source. Phase 2 remains open.
+
+## Unknown and untrusted signing keys
+
+Run 26a65757-9915-46c2-bdfc-93b8433ec602 extended the same probe on the pinned API deployment 618677e2-8c80-4453-b984-ec56cc00a53e. For each product, a freshly issued access token first introspected active. The probe then retained its payload and signed two variants with a newly generated, untrusted RSA key: one with an unknown key ID and one claiming the original trusted key ID.
+
+| Variant | Probe signature verifier | ZITADEL introspection |
+| --- | --- | --- |
+| Unknown signing key ID | No matching signing key | HTTP 200, active false |
+| Trusted key ID, untrusted signature | Invalid signature | HTTP 200, active false |
+
+Both products passed both cases. The normal code/PKCE, audience, refresh, revocation, deactivation and deletion regression checks also passed, and owned resources were deleted. Sanitized results are in tests/integration/evidence/oidc-signing-keys-2026-11-11.json. No private key or token is persisted.
+
+```mermaid
+flowchart LR
+  Valid[Fresh valid product token] --> Positive[Introspection active]
+  Valid --> Copy[Keep payload and sign with untrusted test key]
+  Copy --> Unknown[Unknown key ID]
+  Copy --> Known[Claim original key ID]
+  Unknown --> Deny[Local verification rejects and provider reports inactive]
+  Known --> Deny
+```
+
+This records the service's forged-token behavior required by #32. It does not exercise legitimate key rotation, stale JWKS caches, refresh rate limiting or provider outages; those remain requirements for the SDK identity implementation and its fault tests. The probe's hand-written verifier is test-only code, not a public authentication API.

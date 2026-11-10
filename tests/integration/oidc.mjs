@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { randomUUID, randomBytes, createHash, createPublicKey, verify } from "node:crypto";
+import {
+  randomUUID,
+  randomBytes,
+  createHash,
+  createPublicKey,
+  generateKeyPairSync,
+  sign,
+  verify,
+} from "node:crypto";
 
 const issuer = process.env.HEIMDALL_PROBE_ZITADEL_ISSUER;
 const pat = process.env.HEIMDALL_PROBE_ZITADEL_PAT;
@@ -122,6 +130,7 @@ try {
   const discovery = await ok("GET", "/.well-known/openid-configuration", undefined, "");
   assert(new URL(discovery.jwks_uri).origin === issuer);
   const { keys } = await ok("GET", new URL(discovery.jwks_uri).pathname, undefined, "");
+  const untrustedKey = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
   let session = await ok(
     "POST",
     "/v2/sessions",
@@ -192,6 +201,32 @@ try {
       introspection.status === 200 && introspection.body.active === true,
       "Fresh token must introspect active",
     );
+    const original = result.body.access_token.split(".");
+    const originalHeader = JSON.parse(Buffer.from(original[0], "base64url"));
+    const keyRejections = [];
+    for (const [scenario, kid] of [
+      ["unknown signing key", `heimdall-unknown-${runId}`],
+      ["known key ID with untrusted signature", originalHeader.kid],
+    ]) {
+      const header = Buffer.from(JSON.stringify({ ...originalHeader, kid })).toString("base64url");
+      const input = `${header}.${original[1]}`;
+      const forged = `${input}.${sign("RSA-SHA256", Buffer.from(input), untrustedKey).toString("base64url")}`;
+      assert.throws(
+        () => validateJWT(forged, keys, client.projectId, user.id),
+        scenario === "unknown signing key" ? /No matching signing key/ : /Invalid signature/,
+      );
+      const rejected = await form("/oauth/v2/introspect", client, { token: forged });
+      assert(
+        rejected.status === 200 && rejected.body.active === false,
+        `${scenario}: forged token must not introspect active`,
+      );
+      keyRejections.push({
+        scenario,
+        localValidation: "rejected",
+        introspectionStatus: rejected.status,
+        active: rejected.body.active,
+      });
+    }
     assert(result.body.refresh_token, "Refresh token missing");
     const wrongClient = await form("/oauth/v2/introspect", other, {
       token: result.body.access_token,
@@ -218,6 +253,7 @@ try {
       amr: id.amr,
       accessAudiences: access.aud,
       introspectionActive: true,
+      keyRejections,
       otherProductIntrospectionActive: false,
       refreshBeforeDeactivation: "succeeded",
     });
