@@ -57,3 +57,7 @@ SAML yields the same relevant evidence split as OIDC: intent retrieval identifie
 Tampered assertions, replay, certificate rotation, alternate bindings, provider logout, downstream token binding, policy changes and cross-tenant session reuse remain unverified. Browser Login UI acceptance and both SDKs' strict policy enforcement also remain ahead. This checkpoint does not advance Phase 2 or certify the first release.
 
 Sources: [pinned SAML configuration](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/management.proto), [ZITADEL SAML assertion handling](https://github.com/zitadel/zitadel/blob/v4.19.4/internal/idp/providers/saml/session.go), [Keycloak persistent NameID mapping](https://github.com/keycloak/keycloak/blob/26.8.2/services/src/main/java/org/keycloak/protocol/saml/SamlProtocol.java).
+
+## Validation and publication
+
+The full workspace gate passed: 765 Vitest tests, Go race tests, formatting/lint/types/Knip/vet, SDK build/declarations and Quartz. Source commit f2684b11904366b3755f8a38dfb514fd8a0912e5 passed GitHub Actions runs 42915821716 and 42915808365. Railway docs deployment d3291226-d005-43ce-a7f6-e22f19a04f98 reached SUCCESS and remained running. The public evidence page returned HTTP 200 with the current SAML probe ID, persistent-subject result and Mermaid source. Phase 2 remains open.
