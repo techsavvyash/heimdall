@@ -84,3 +84,5 @@ Phase evidence lives under docs/content/evidence/ when its first record is writt
 - [[evidence/phase-2-enterprise-contract|Phase 2 enterprise evidence contract amendment]]: structured session evidence, selected provider binding and shared TS/Go target-policy gates. Runtime provenance and atomic persistence remain open.
 
 - [[evidence/phase-2-openfga-limits|Phase 2 OpenFGA limits]]: measured ListObjects truncation, write-batch rejection and complete stable direct-tuple pagination. Recovery/quiescence remains open.
+
+- [[evidence/phase-2-openfga-recovery|Phase 2 local recovery faults]]: committed-response loss and blocked database writes exercised through stop/drain/credential retirement. Railway control and SDK workflow proof remain open.

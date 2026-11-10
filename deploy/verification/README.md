@@ -73,3 +73,10 @@ service used to exercise customer federation. It is not a Heimdall runtime depen
 Run `pnpm run probe:federation` for upstream OIDC or set
 HEIMDALL_PROBE_FEDERATION_PROTOCOL=saml for SAML. Complete strict SSO acceptance
 remains pending.
+
+## Recovery fault probe
+
+[Recovery verification](recovery.md) describes the isolated local fault probe and
+the demonstrated stop/drain/credential-retirement sequence. Run
+`pnpm run probe:openfga-recovery` with a free loopback port 8080. Railway controls
+and SDK recovery integration remain pending.
