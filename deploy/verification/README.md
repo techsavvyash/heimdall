@@ -62,3 +62,10 @@ Sources:
 - https://www.postgresql.org/docs/17/release-17-11.html
 - https://openfga.dev/docs/getting-started/setup-openfga/configure-openfga
 - https://docs.railway.com/integrations/api/manage-services
+
+## Customer IdP fixture
+
+[Enterprise IdP setup](enterprise-idp.md) describes the test-only upstream Keycloak
+service used to exercise customer federation. It is not a Heimdall runtime dependency.
+The live upstream OIDC intent probe is `pnpm run probe:federation`; SAML and complete
+strict SSO acceptance remain pending.

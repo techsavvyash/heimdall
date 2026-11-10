@@ -20,5 +20,11 @@
     "releasedAt": "2026-10-01",
     "image": "ghcr.io/zitadel/zitadel-login:v4.19.4@sha256:93ffd1395b827f685ba29c02fa70aee881fc21102519c4e2bbb0b89c0e00f42c",
     "status": "deployed; preliminary capability checks only"
+  },
+  "enterpriseIdpFixture": {
+    "version": "26.8.2",
+    "releasedAt": "2026-11-05",
+    "image": "quay.io/keycloak/keycloak:26.8.2@sha256:723b1d6e254c0fc96d5cffec860c7e0744d6a3277822b865bb538cf891575e41",
+    "status": "test-only upstream enterprise IdP; not a Heimdall runtime dependency"
   }
 }
