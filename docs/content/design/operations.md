@@ -3,7 +3,7 @@ title: Consistency and operations
 date: 2026-11-07
 ---
 
-SDKs execute within product processes. Product workflows own durable retries, lifecycle transactions, and audit persistence. Authentication services and the business database have independent transactions.
+SDKs execute within product processes. Core workflows use product-owned persistence; selected adapters can supply operation and audit storage. [[audit-contract]] requires durable recording of all decisions, role changes and ownership transfers. [[release-contract]] fixes revocation/freshness behavior. Authentication services and the business database have independent transactions.
 
 ```mermaid
 flowchart LR
@@ -11,7 +11,9 @@ flowchart LR
   Call --> Result{Outcome}
   Result -->|Confirmed| Complete[Product records completion]
   Result -->|Known failure| Retry[Retry or reject]
-  Result -->|Timeout| Reconcile[Read current state and reconcile]
+  Result -->|Timeout| Block[Quarantine uncertain attempt]
+  Block --> Proof[Establish verified quiescence]
+  Proof --> Reconcile[Inspect state and reconcile]
   Reconcile --> Complete
   Reconcile --> Retry
 ```
@@ -37,7 +39,7 @@ sequenceDiagram
   Request->>DB: Commit previously authorized operation
 ```
 
-This race is possible in the baseline. The proposed guarantee covers new decisions after a confirmed revocation, subject to the selected datastore and consistency behavior. A requirement to cancel all already-authorized in-flight operations needs product-level coordination and a stronger protocol. Model that requirement before claiming immediate revocation.
+This race is possible in the baseline. The agreed guarantee covers new decisions after a confirmed revocation, subject to the selected datastore and consistency behavior. A requirement to cancel all already-authorized in-flight operations needs product-level coordination and a stronger protocol. Model that requirement before claiming immediate revocation.
 
 ## Model rollout
 
@@ -61,13 +63,14 @@ During rolling deployment, callers may use different models over the same tuples
 | Failure | Behavior |
 | --- | --- |
 | OpenFGA timeout during check | Availability error, block protected operation |
-| ZITADEL unavailable with valid cached JWT verification material | Existing JWT requests can verify until token expiry and key-cache limits |
+| ZITADEL unavailable | Existing verified identity status usable only within configured freshness/token expiry; stale status returns unavailable |
 | Unknown signing key while discovery is unavailable | Authentication cannot complete |
 | Timeout during tuple write | Reconcile desired state before reporting success |
 | Product database commit fails after owner grant | Tenant stays pending until recovered |
 | Concurrent role grants and revocations | Product serializes mutations for affected scope |
-| Audit sink fails | Apply product's explicit audit durability policy |
+| SIEM sink fails | Retain durable outbox and retry; never silently drop required events |
+| Local audit persistence fails | Block protected work and return audit_unavailable; never report a completed allow |
 
-Audit events include actor, tenant, permission or mutation, target, outcome, correlation ID, and model ID. Exclude raw tokens, credentials, and unnecessary identity data. Guaranteed mutation audit requires a durable product intent or outbox because an SDK callback can fail after a remote write succeeds.
+The required envelope, custom event registration, durable receipt, unresolved-attempt handling, retention and delivery are specified in [[audit-contract]]. Callbacks are optional notifications after persistence, never the durability boundary.
 
 Service identities and delegated background jobs need a separate principal policy. The first model covers human users. See [[decisions]] for pending service-account semantics.

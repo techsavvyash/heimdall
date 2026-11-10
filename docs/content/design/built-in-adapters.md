@@ -3,6 +3,9 @@ title: Built-in adapters — scope and safety contract
 date: 2026-11-08
 ---
 
+The November 10 [[release-contract]] requires enterprise features and [[audit-contract|durable audit for all authorization decisions, role changes and ownership transfers]]. PostgreSQL adapters now include separate audit/outbox tables in both compositions. [[enterprise-contract]] adds the identity lifecycle gate. These requirements supersede earlier optional-audit wording below.
+
+
 The adapter direction is selected following the design discussion. This page closes the design scope for implementation; it does not claim implemented or verified runtime behavior. It supersedes [[explorations/built-in-adapters]] for supported scope. The core interfaces in [[shared-sdk-contract]] remain available. API spellings below are contract sketches, to be locked with the executable schemas before publication.
 
 ## Decision and release boundary
@@ -36,7 +39,7 @@ Session-only consumers do not install workspace tables. Managed workspace state,
 | Creation, billing and customer eligibility policy | Product | Product policy callback on creation |
 | Recovery algorithm | Product workflow plus SDK ensure helpers | SDK reconcile, invoked explicitly by product |
 | Business data and tenant predicates | Product | Product |
-| Durable SIEM delivery and business outcome | Product | Product; SDK journal is not a SIEM outbox |
+| Durable audit and SIEM delivery | Required product DurableAuditStore/outbox | PostgreSQL audit/outbox adapter; journal remains separate; product schedules delivery |
 
 OpenFGA is the authority for evaluated relationships. The operation journal records requested transitions, not an unconditional desired-state mirror. After an operation completes, reconciliation must not regrant old relationships merely because they appear in historical intent. Out-of-band service changes are drift to inspect; they are not automatically overwritten.
 
@@ -244,7 +247,7 @@ Workspace suspension is a local deny gate and can be applied while remote recove
 
 The product schedules calls. No implicit timers, goroutines or startup work. Session cleanup has its own bounded maintenance invocation so session-only users do not need managed operations. Expired sessions are inaccessible even if physical cleanup is delayed. Provide queue age, blocked count, attempt count, cleanup lag and last-success metrics without tokens or sensitive payloads. Request status is caller-authorized; operator diagnostics are separately privileged.
 
-Recovery is at-least-once execution with idempotent local transitions, not exactly-once remote delivery. Durable completion events or SIEM delivery are not implied by a successful callback. Use the audit contract and a product outbox for required delivery. Do not delete operation records as routine cleanup until their idempotency and uncertain-attempt obligations are discharged.
+Recovery is at-least-once execution with idempotent local transitions, not exactly-once remote delivery. A callback is not durable evidence. Required records use [[audit-contract]] and the adapter audit/outbox tables or a conforming product store before completion is reported. SIEM delivery follows asynchronously. Do not delete operation records as routine cleanup until their idempotency and uncertain-attempt obligations are discharged.
 
 ## Migration, adoption and exit
 

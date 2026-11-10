@@ -14,11 +14,11 @@ pnpm run docs:dev
 
 Open http://localhost:8080. Run `pnpm run docs:build` from the root to generate `docs/public/`.
 
-The default configuration uses localhost and disables analytics. Set `configuration.baseUrl` to the intended domain before publishing. Only `content/` is published. Dependencies, build output, and Quartz caches are ignored by Git.
+The production site is https://techsavvyash.github.io/heimdall/ and analytics are disabled. `configuration.baseUrl` includes the GitHub Pages project path. Only `content/` is published. Dependencies, build output, and Quartz caches are ignored by Git.
 
 ## Design status
 
-The SDK APIs and authorization model are proposals. See `content/design/decisions.md` for agreed constraints and open decisions. The auth system has not been implemented or exercised against running ZITADEL and OpenFGA services.
+The first-release scope is locked, including SSO, SCIM user lifecycle and SIEM. SDK API spellings and executable models remain implementation work. See `content/design/decisions.md` for agreed constraints and open decisions. The auth system has not been implemented or exercised against running ZITADEL and OpenFGA services.
 
 ## Upstream
 
@@ -31,3 +31,7 @@ Validated on November 7, 2026 using Node 24.13.1. The production build succeeds,
 Workspace dependencies are pinned in the root `pnpm-lock.yaml`. The release-age policy can require older versions than upstream latest.
 
 For the documentation container, use the repository root as its build context with `docker build -f docs/Dockerfile .`.
+
+## Publishing
+
+The `Publish documentation` workflow builds and checks the workspace, uploads only `docs/public/`, and deploys through GitHub Pages. Pushes to `feat/docs-website` publish during the initial design phase; pushes to `main` publish after integration. Remove the feature-branch trigger and environment rule when that branch is retired. Pull requests do not deploy. The `github-pages` environment restricts deployment to those two branches. GitHub Pages must use the Actions build type. No Docker image build is involved.

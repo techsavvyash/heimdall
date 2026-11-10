@@ -3,6 +3,9 @@ title: SDK contract and integration
 date: 2026-11-07
 ---
 
+The first-release contract is now selected: [[release-contract]], [[audit-contract]] and [[enterprise-contract]]. Durable audit is required for every authorization decision and mutation; online identity freshness applies in both core and managed modes. The snippets below illustrate API shape, not a bypass of those requirements.
+
+
 Each language package shares the same identity encoding, permission manifest, error semantics, and behavioral fixtures. Framework adapters translate HTTP requests into the core contract. Method names below illustrate the proposed TypeScript ergonomics.
 
 ```mermaid

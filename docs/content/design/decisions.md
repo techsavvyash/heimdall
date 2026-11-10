@@ -1,69 +1,51 @@
 ---
-title: Decisions and open questions
-date: 2026-11-07
+title: Agreed design and implementation gates
+date: 2026-11-10
 ---
 
-The distinction between agreed constraints and proposed defaults keeps this design reviewable.
+The user locked the product decisions on November 10, 2026. These decisions supersede earlier proposal wording. [[release-contract]] defines the first-release acceptance boundary, [[audit-contract]] defines mandatory durable audit, and [[enterprise-contract]] defines SSO, SCIM and SIEM. SDK behavior is still unimplemented; publishing this design does not certify runtime guarantees.
 
-| Status | Decision | Rationale |
+## Locked decisions
+
+| Decision | Selected behavior | Consequence |
 | --- | --- | --- |
-| Agreed | Deploy ZITADEL and OpenFGA with SDKs in product processes | Lean integration and direct service use |
-| Agreed | Use Rolldown, Oxlint, Oxfmt and Vitest for TypeScript | Requested tooling for fast agent feedback |
-| Agreed | Ship TypeScript and Go SDKs in the initial release | Both are required for initial product integrations |
-| Agreed | Publish installable packages per language | Product developers integrate through familiar tooling |
-| Agreed | Support multiple products and tenants per deployment | Reuse the auth deployment across products |
-| Agreed | Design and dry-run before implementation | Validate the model and failure behavior together |
-| Proposed | One ZITADEL project and OpenFGA store per product and environment | Independent policy and configuration |
-| Proposed | Start with tenant-scoped RBAC | Short integration path for common role checks |
-| Selected design | Optional PostgreSQL adapters in TS and Go; sessions-only or managed-workspace composition | Reduce wiring while preserving core interfaces; see [[design/built-in-adapters]] |
-| Selected design | Fetch handlers in TS and net/http in Go initially | Portable HTTP boundaries; framework wrappers follow concrete need |
-| Selected design | Core mode keeps product tenant ownership; managed mode owns minimal auth workspace state in product DB | Explicit opt-in; invitations and business data stay product-owned |
-| Selected design | Explicit migrations and reconcile; uncertain remote attempts block conflicting changes and managed access | No implicit workers or claim that a lease fences OpenFGA |
-| Proposed | Shared sign-in with independent product memberships | Explicit access boundaries between products |
-| Proposed | Trusted product backends under one operator | Fits direct SDK access to shared services |
-| Proposed | Versioned model and permission manifest | Predictable behavior across SDK languages and rollout |
+| Deployment | ZITADEL and OpenFGA; SDKs in product processes | No Heimdall wrapper service |
+| Languages | TypeScript and Go together | Shared behavioral fixtures and release parity |
+| Trust | Product backends are operated by one trusted operator | No promise of isolation from hostile backend owners; end-user tenant isolation remains mandatory |
+| Products and environments | One ZITADEL project and OpenFGA store per product/environment | Separate audiences/configuration/model rollout; service credentials still need least privilege |
+| Product membership | Shared sign-in, independently granted memberships | Joining Acme Ledger does not enroll a person in Acme Support |
+| Roles | Product-defined, versioned tenant roles for human users | Tenants assign allowed roles; runtime tenant-defined roles, service principals and resource sharing are deferred |
+| Adapters | PostgreSQL sessions and optional managed workspaces | Core interfaces remain supported; see [[design/built-in-adapters]] |
+| HTTP | TypeScript Fetch and Go net/http | Framework-specific wrappers are optional later additions |
+| Recovery | Explicit reconcile, quarantine uncertain dispatched writes | No lease-as-fencing assumption; safe recovery evidence blocks managed release |
+| Revocation | Fresh membership decisions; earlier authorized work may finish | Identity/session freshness is bounded separately in [[release-contract]] |
+| Audit | Durable records for every authorization decision, role change and ownership transfer | Required local audit failure blocks protected work; export can recover asynchronously |
+| Extensible audit | Validated product/user-configured event definitions | Extensions cannot disable or impersonate mandatory security events |
+| First release | Core, adapters, tenant SAML/OIDC, SCIM user lifecycle and SIEM | Enterprise work is a hard release dependency in both SDKs |
+| Tooling | Rolldown, Oxlint, Oxfmt, Vitest; pnpm 30-day minimum release age | Existing workspace gates remain required |
+
+## What remains to prove, not re-decide
+
+- Pin supported service releases and verify audiences, claims, SCIM lifecycle and credential boundaries.
+- Verify strict SSO evidence for new login, existing sessions and tenant switching. Refuse unsupported strict configurations rather than silently allowing fallback.
+- Demonstrate uncertain-write quiescence/recovery, atomic storage, mixed-language formats and model migrations.
+- Verify provider identity-state freshness, deprovisioning latency, audit crash recovery, sink replay and storage backpressure.
+- Finalize concrete schema/crypto/driver/API encodings through implementation review and shared fixtures. These choices must preserve the selected contract.
+
+The default values in [[release-contract]] are design defaults selected to make implementation concrete, not performance measurements or universal compliance guarantees. Runtime evidence can require a documented contract change, but cannot silently weaken first-release scope.
+
+## Deferred scope
+
+Mutually untrusted product operators, tenant-authored runtime roles, resource sharing, public service-account APIs, SCIM group-to-role synchronization, additional database adapters and additional SDK languages require separate designs. Infrastructure service credentials for setup/SCIM/export are still necessary and distinct from public service-principal authorization APIs.
 
 ```mermaid
-flowchart TD
-  Start[Review next concrete product] --> Membership{Shared customer directory needed}
-  Membership -->|Yes| Directory[Design cross-product membership ownership]
-  Membership -->|No| Independent[Keep product memberships independent]
-  Directory --> Roles{Tenant RBAC sufficient}
-  Independent --> Roles
-  Roles -->|Yes| Baseline[Validate baseline scenarios]
-  Roles -->|No| Resources[Design resource relations and listing]
-  Resources --> Baseline
+flowchart LR
+  Decisions[Locked decisions] --> Contract[Shared schemas and fixtures]
+  Contract --> Core[TS and Go core plus adapters]
+  Contract --> Enterprise[SSO SCIM and SIEM]
+  Core --> Evidence[Live safety and parity tests]
+  Enterprise --> Evidence
+  Evidence --> Release[Both SDKs first release]
 ```
 
-## Questions for the next design session
-
-1. Should a company manage one directory across products, or invite members independently in each product?
-2. Which server integration should demonstrate the selected TypeScript Fetch boundary? Go uses net/http. Framework-specific wrappers are deferred.
-3. Are all product backends trusted under the same operator? What per-store service credential restrictions are required?
-4. Do tenants need custom roles at runtime, or are product-defined roles sufficient initially?
-5. Is document or resource sharing required for the first product?
-6. What revocation window is acceptable for identities, memberships, and already-running operations?
-7. Should service accounts act as themselves, on behalf of users, or both?
-8. Where should setup tooling store provisioning progress and lock concurrent runs?
-9. What audit events require durable storage before an operation is acknowledged?
-
-## Gaps from the two-product walkthrough
-
-The [[design/built-in-adapters]] decision selects storage ownership, initial HTTP boundaries, pagination integration and conservative recovery scope. Executable service verification remains required. The [[two-product-walkthrough]] describes the core/product-owned path; managed mode supersedes its wiring and automatic-recovery assumptions where specified. Shared organization mappings share login policy across products. Strict SSO enforcement must cover existing sessions and tenant switching.
-
-SCIM user lifecycle and SIEM export are covered in the walkthrough. Open questions include the product worker that runs reconciliation, directory-to-workspace enrollment rules, unsupported SCIM group provisioning, audit event coverage, and durable export.
-
-## Verification status
-
-The documentation build and diagram checks are recorded in the project README after validation. Auth services and the SDK are proposed designs. The candidate OpenFGA model, service credential isolation, and concurrent ownership workflows require executable service tests during implementation.
-
-## Primary references
-
-- [ZITADEL projects](https://zitadel.com/docs/guides/manage/console/projects-overview)
-- [ZITADEL organizations](https://zitadel.com/docs/guides/manage/console/organizations-overview)
-- [ZITADEL OIDC flow](https://zitadel.com/docs/guides/integrate/login/oidc/login-users)
-- [OpenFGA concepts](https://openfga.dev/docs/concepts)
-- [OpenFGA roles and permissions](https://openfga.dev/docs/modeling/roles-and-permissions)
-- [OpenFGA consistency](https://openfga.dev/docs/interacting/consistency)
-- [OpenFGA configuration](https://openfga.dev/docs/getting-started/setup-openfga/configure-openfga)
-- [Quartz setup](https://quartz.jzhao.xyz/)
+The earlier discussion and [[explorations/built-in-adapters]] remain historical context. [[implementation-roadmap]] is the execution index.

@@ -4,6 +4,7 @@
 
 - Read `docs/content/design/decisions.md` and the relevant contract before implementing behavior.
 - TypeScript and Go are both initial-release SDKs. Share behavior through `contracts/fixtures/`.
+- `release-contract.md`, `audit-contract.md` and `enterprise-contract.md` in the design directory lock first-release scope. SSO, SCIM user lifecycle, SIEM and durable audit of every authorization decision/role change/ownership transfer are mandatory.
 - `docs/content/design/built-in-adapters.md` is the selected adapter scope. Its historical exploration is superseded; other explorations remain unapproved. Preserve the managed lifecycle gate and uncertain-write recovery limits.
 - Keep auth code inside SDK packages. Product examples own business data and integration code.
 - Add module directories when their implementation starts. Current empty directories mark agreed workspace boundaries.

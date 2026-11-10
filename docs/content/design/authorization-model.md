@@ -3,7 +3,7 @@ title: Roles and permission model
 date: 2026-11-07
 ---
 
-The default proposal is tenant-scoped RBAC. Each action maps to a permission relation in the pinned OpenFGA model. An explicit active membership gates every permission, so removing membership disables all roles for that tenant.
+The selected first release uses product-defined tenant-scoped RBAC for human users. Each action maps to a permission relation in the pinned OpenFGA model. An explicit active membership gates every permission, so removing membership disables all roles for that tenant.
 
 ```mermaid
 flowchart LR

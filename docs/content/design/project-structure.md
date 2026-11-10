@@ -115,7 +115,7 @@ flowchart TB
 | Session persistence | Product store or PostgreSQL adapter | Product operates database/keys; adapter implements storage semantics |
 | Invitation delivery | Product notification integration | Product owns recipients, content and communication provider |
 | Retry state and execution | Core: product workflow; managed: SDK journal/reconcile | Product schedules execution; uncertain writes require safe recovery |
-| Audit delivery | Product logging or outbox pipeline | Product selects durability, retention and SIEM destination |
+| Audit delivery | Required durable store/outbox; optional PostgreSQL implementation | All security decisions/mutations are durable; product configures retention, sink and execution |
 | Identity organization mapping | Product tenant settings | Customer login scope may span several product tenants |
 
 SCIM reconciliation helpers can be added inside the SDK when that capability is implemented. Their scheduler, checkpoints and enrollment policy belong to the consuming product. SIEM helpers emit events through the product's audit integration. See [[two-product-walkthrough]].

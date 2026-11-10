@@ -3,7 +3,7 @@ title: Implementation task list
 date: 2026-11-07
 ---
 
-This is a proposed backlog derived from [[two-product-walkthrough]]. Checked items describe completed documentation work. Unchecked items require design decisions or implementation. Directory ownership is described in [[project-structure]].
+This backlog implements the locked [[release-contract]] and the scenarios in [[two-product-walkthrough]]. Checked items describe completed documentation work. Unchecked items require design decisions or implementation. Directory ownership is described in [[project-structure]].
 
 Execution is tracked in [[implementation-roadmap|the implementation roadmap]] and [GitHub issue #29](https://github.com/techsavvyash/heimdall/issues/29). Its 26 child tickets expand this backlog into PRDs, implementation plans, dependencies and acceptance criteria. Ticket creation does not approve unresolved design proposals.
 
@@ -25,13 +25,13 @@ The [[shared-sdk-contract]] now contains a v0.1 API proposal for review. Its sto
 
 - [x] Select TypeScript and Go as the initial SDK languages.
 - [x] Select TypeScript Fetch handlers and Go net/http as initial HTTP boundaries; framework-specific TS wrappers are deferred.
-- [ ] Confirm independent product membership and backend trust assumptions.
+- [x] Confirm independent product membership and one trusted backend operator.
 - [ ] Define identity encoding, tenant IDs, error semantics and configuration schemas.
 - [ ] Define roles, delegation rules and first-owner bootstrap behavior.
 - [ ] Define session-store interface, refresh concurrency, logout and expiry.
 - [ ] Verify workspace query limits and choose a discovery pagination contract.
 - [ ] Define setup state, locking, idempotency keys and onboarding reconciliation.
-- [ ] Choose revocation and audit guarantees, including in-flight operations.
+- [x] Select fresh membership checks, bounded identity freshness, in-flight completion limits and mandatory durable audit; see [[release-contract]] and [[audit-contract]].
 
 **Where:** Quartz decisions first, then `contracts/` and `policies/`.
 
@@ -97,7 +97,7 @@ The [[shared-sdk-contract]] now contains a v0.1 API proposal for review. Its sto
 - [ ] Define explicit directory-to-workspace enrollment and revocation policy.
 - [ ] Implement reconciliation helpers and a product-worker example with checkpoints.
 - [ ] Test deactivation, reactivation, replay and failures across both products.
-- [ ] Finalize audit event schema and SDK event hooks.
+- [ ] Implement mandatory durable audit/store receipts, PostgreSQL outbox, custom event schemas and optional post-persistence hooks.
 - [ ] Demonstrate ZITADEL event collection and product audit delivery to a selected sink.
 - [ ] Verify tenant filtering, event correlation, retention and required delivery durability.
 
@@ -117,7 +117,7 @@ The [[shared-sdk-contract]] now contains a v0.1 API proposal for review. Its sto
 
 **Where:** Package metadata, CI workflows, Quartz integration docs and future language directories.
 
-**Exit condition:** A fresh product can reproduce the documented integration. The release scope is explicit about any enterprise features scheduled for later delivery.
+**Exit condition:** A fresh product can reproduce the documented integration. SSO, SCIM user lifecycle and SIEM must all pass first-release acceptance; none may silently move to later delivery.
 
 ## Dependency order
 
@@ -136,7 +136,7 @@ flowchart LR
   Scope --> Languages[Additional language SDKs]
 ```
 
-Baseline release timing and enterprise feature priority are still open. The next task is to encode the selected adapter contracts and validate them against pinned services. Uncertain-write recovery evidence remains a managed-mode release gate.
+Release timing depends on validation. SSO, SCIM user lifecycle and SIEM are mandatory in the first release. The next task is to encode the selected adapter contracts and validate them against pinned services. Uncertain-write recovery evidence remains a managed-mode release gate.
 
 ## Initial-release parity gate
 

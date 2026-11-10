@@ -60,6 +60,6 @@ flowchart LR
   SDK -->|configured store and model| F
 ```
 
-The initial proposal trusts the product backends operated on this deployment. A store ID partitions authorization data, while service access control determines what a credential can read or write. Verify the selected OpenFGA version and its access-control configuration before promising credential isolation between products. Standard shared-key authentication alone is insufficient evidence of per-store isolation. [OpenFGA configuration](https://openfga.dev/docs/getting-started/setup-openfga/configure-openfga)
+The agreed first-release scope trusts product backends operated by the same operator. A store ID partitions authorization data, while service access control determines what a credential can read or write. Verify the selected OpenFGA version and its access-control configuration before promising credential isolation between products. Standard shared-key authentication alone is insufficient evidence of per-store isolation. [OpenFGA configuration](https://openfga.dev/docs/getting-started/setup-openfga/configure-openfga)
 
 A compromised backend can exercise the privileges of its service credential. This is an explicit deployment trust assumption. See [[decisions]] for the isolation question and [[operations]] for concurrency limits.

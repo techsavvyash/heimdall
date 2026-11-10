@@ -3,6 +3,9 @@ title: Shared TypeScript and Go SDK contract
 date: 2026-11-07
 ---
 
+The November 10 decisions are locked in [[release-contract]], [[audit-contract]] and [[enterprise-contract]]. These extend the core interfaces below with mandatory durable audit and bounded identity revalidation. Earlier API sketches remain illustrative until encoded as schemas; enterprise delivery is mandatory in both SDKs.
+
+
 Contract v0.1 is a proposal for review. TypeScript and Go implement the same behavior with idiomatic APIs. Examples below describe interfaces to build. Live-service tests must validate the implementation before release. This page refines the illustrative APIs in [[two-product-walkthrough]] and [[sdk-contract]].
 
 ## Adapter extension and precedence
@@ -26,7 +29,7 @@ The proposed human-user object encoding is `user:` followed by unpadded base64ur
 | Dependency failure | Throw unavailable or deadline error | Return corresponding error |
 | Mutation after uncertain response | Return outcome-unknown error and operation ID where available | Same error category and operation ID |
 
-Shared error codes include `unauthenticated`, `forbidden`, `invalid_argument`, `not_found`, `conflict`, `unavailable`, `deadline_exceeded`, `cancelled`, and `outcome_unknown`. Cancellation after a remote write may leave its outcome unknown. Do not automatically retry non-idempotent mutations. Credentials and token material must never appear in errors.
+Shared error codes include `unauthenticated`, `forbidden`, `invalid_argument`, `not_found`, `conflict`, `unavailable`, `deadline_exceeded`, `cancelled`, `audit_unavailable`, and `outcome_unknown`. Cancellation after a remote write may leave its outcome unknown. Do not automatically retry non-idempotent mutations. Credentials and token material must never appear in errors.
 
 ```ts
 const actor = await auth.sessions.authenticate(request, { signal })

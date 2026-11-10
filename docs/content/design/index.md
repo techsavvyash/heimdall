@@ -5,7 +5,7 @@ date: 2026-11-07
 
 Heimdall makes shared authentication and tenant-scoped authorization available through an SDK installed in each product. Operators deploy ZITADEL and OpenFGA with their databases. Product backends call both services directly through the SDK.
 
-This is a working design dated November 7, 2026. Package names, methods, and provisioning commands are proposals. The scenarios are reasoning exercises awaiting executable verification.
+Product decisions are locked as of November 10, 2026. [[release-contract]], [[audit-contract]] and [[enterprise-contract]] define required delivery. API spellings and schemas are finalized during implementation; the scenarios still require executable verification.
 
 ```mermaid
 flowchart LR
@@ -22,6 +22,9 @@ flowchart LR
 | Page | What we will decide |
 | --- | --- |
 | [[development-workspace]] | Local setup, agent checks, Git hooks and CI |
+| [[release-contract]] | Locked first-release scope and revocation defaults |
+| [[audit-contract]] | All-decision durable audit, custom events and export failure behavior |
+| [[enterprise-contract]] | Mandatory SSO, SCIM user lifecycle and SIEM |
 | [[task-list]] | Implementation tasks, dependencies, and acceptance gates |
 | [[design/built-in-adapters]] | Selected adapter scope, ownership modes, recovery limits and footguns |
 | [[project-structure]] | Repository layout and where each responsibility lives |

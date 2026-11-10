@@ -5,7 +5,7 @@ date: 2026-11-07
 
 A product is an independently configured application such as Ledger or Support. A tenant is a workspace within that product. A person can belong to several workspaces with different roles.
 
-The proposed mapping uses one ZITADEL project and one OpenFGA store for each product in each environment. Related web, mobile, and API clients belong to that product's ZITADEL project. ZITADEL groups application clients within projects. [ZITADEL projects](https://zitadel.com/docs/guides/manage/console/projects-overview)
+The agreed mapping uses one ZITADEL project and one OpenFGA store for each product in each environment. Related web, mobile, and API clients belong to that product's ZITADEL project. ZITADEL groups application clients within projects. [ZITADEL projects](https://zitadel.com/docs/guides/manage/console/projects-overview)
 
 ```mermaid
 flowchart TB
@@ -48,7 +48,7 @@ flowchart LR
 | Optional resource relation | OpenFGA | Resource object, parent tenant, explicit grants |
 | Audit event | Product audit sink | Actor, tenant, operation, target, result, request ID |
 
-The principal encoding must preserve the pair of issuer and subject across every language SDK. The exact encoding is open. Never use a mutable email address as its key. Opaque tenant IDs receive a fixed OpenFGA type prefix. Runtime requests cannot override the configured store, model, or issuer.
+The principal encoding must preserve the pair of issuer and subject across every language SDK. The shared contract specifies an encoding proposal that must be frozen with executable cross-language fixtures. Never use a mutable email address as its key. Opaque tenant IDs receive a fixed OpenFGA type prefix. Runtime requests cannot override the configured store, model, or issuer.
 
 ```mermaid
 erDiagram
@@ -60,4 +60,4 @@ erDiagram
   TENANT ||--o{ INVITATION : issues
 ```
 
-This diagram shows logical relationships across authorities. OpenFGA represents memberships and roles as tuples. A company-wide directory shared across products remains a decision in [[decisions]].
+This diagram shows logical relationships across authorities. OpenFGA represents memberships and roles as tuples. Product memberships are independently granted, even when a customer directory/organization is shared. Explicit enrollment policy is specified in [[enterprise-contract]].

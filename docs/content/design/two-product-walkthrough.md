@@ -3,6 +3,9 @@ title: Two products from setup to enforcement
 date: 2026-11-07
 ---
 
+[[release-contract]], [[audit-contract]] and [[enterprise-contract]] now lock the first-release scope and supersede older open-policy questions in this walkthrough. Enterprise SSO/SCIM/SIEM are required; all authorization decisions, role changes and transfers require durable audit.
+
+
 Ledger and Support share a ZITADEL and OpenFGA deployment. Each product has Acme and Globex workspaces. Maya has different roles in each workspace. This walkthrough uses the proposed independent product membership default. APIs, manifests, and commands are illustrative contracts awaiting implementation.
 
 ## Adapter update
@@ -345,7 +348,7 @@ sequenceDiagram
   Product->>Product: Validate login and check tenant membership
 ```
 
-**SSO enforcement gap.** Provider selection and strict SSO enforcement require separate acceptance criteria. Decide fallback login policy, account linking, guest access, tenant switching, and reuse of existing sessions. Verify organization binding and authentication evidence against the chosen ZITADEL version before promising SSO-only access. OpenFGA membership alone cannot establish which upstream provider authenticated a session.
+**SSO implementation gate.** [[enterprise-contract]] selects strict SSO defaults, account-linking constraints, explicit guest/fallback policy, tenant switching and session reuse criteria. Verify organization binding and authentication evidence against the chosen ZITADEL version before promising SSO-only access. OpenFGA membership alone cannot establish which upstream provider authenticated a session.
 
 ## 9. SCIM provisioning and deprovisioning
 
@@ -380,9 +383,9 @@ flowchart LR
   Logs -->|durable delivery policy| SIEM
 ```
 
-The proposed SDK audit adapter emits product, tenant, actor, permission, target, result, model ID and correlation ID. The product adds the actual business-operation outcome. The operator connects these events to their SIEM using existing collectors or sinks. Identity events need explicit organization-to-product mappings for correlation and tenant-scoped export.
+The required SDK audit adapter durably records and exports product, tenant, actor, permission, target, result, model ID and correlation ID. The product adds the actual business-operation outcome. The operator connects these events to their SIEM using existing collectors or sinks. Identity events need explicit organization-to-product mappings for correlation and tenant-scoped export.
 
-**Audit gap.** Define event schemas, retention, tenant filtering, replay and delivery guarantees. SDK callbacks need durable product storage when losing an audit event is unacceptable. A service API access log alone may lack the actor and business outcome needed for investigation. Verify coverage of direct service changes as well as SDK-mediated writes. Credentials and raw tokens must be excluded from exported events.
+**Audit implementation gate.** [[audit-contract]] defines event schemas, retention, filtering, replay and mandatory durable delivery behavior. SDK callbacks alone cannot satisfy this contract. A service API access log alone may lack the actor and business outcome needed for investigation. Verify coverage of direct service changes as well as SDK-mediated writes. Credentials and raw tokens must be excluded from exported events.
 
 ## Integration gaps to close next
 
