@@ -503,7 +503,7 @@ try {
     client_id: client.clientId,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: `openid urn:zitadel:iam:org:project:id:${project.projectId}:aud urn:zitadel:iam:org:id:${orgId}`,
+    scope: `openid urn:zitadel:iam:org:project:id:${project.projectId}:aud urn:zitadel:iam:org:id:${orgId} urn:zitadel:iam:org:project:id:zitadel:aud`,
     state,
     nonce,
     code_challenge_method: "S256",
@@ -586,6 +586,24 @@ try {
   const idClaims = verifiedClaims(tokens.id_token, client.clientId);
   verifiedClaims(tokens.access_token, project.projectId);
   assert(idClaims.nonce === nonce, "Downstream nonce mismatch");
+  const selfSession = await za(
+    "GET",
+    `/v2/sessions/${idClaims.sid}`,
+    undefined,
+    tokens.access_token,
+  );
+  assert.deepEqual(
+    selfSession.session.factors,
+    read.session.factors,
+    "User token must return the same verified federation factors as the Login client",
+  );
+  observations.push({
+    selfServiceEvidence: {
+      credential: "user access token with ZITADEL API audience; no PAT or session token",
+      sessionFactorsMatchLoginClient: true,
+      intentFields: Object.keys(selfSession.session.factors.intent),
+    },
+  });
   const codeReplay = await fetch(`${z}/oauth/v2/token`, {
     method: "POST",
     headers: {
@@ -709,7 +727,7 @@ console.log(
         "protocol fixture form automation; not browser UI validation",
         "strict tenant switching, policy-version invalidation and browser binding still unverified",
         "SDK strict policy lifecycle not implemented",
-        "intent evidence requires Login client API access; integration scope still under verification",
+        "Login client performs fixture authentication; downstream session evidence also verified with user token",
       ],
     },
     null,

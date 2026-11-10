@@ -96,3 +96,5 @@ Phase evidence lives under docs/content/evidence/ when its first record is writt
 Browser deployment checkpoint: [[evidence/phase-2-browser-oidc]] records the real Login UI path and separate-domain configuration fix. Phase 2 remains open.
 
 The [[evidence/phase-2-oidc|OIDC checkpoint]] now also records live unknown-key and untrusted-signature rejection for both products. SDK JWKS rotation/cache/outage behavior remains an implementation gate.
+
+[[evidence/phase-2-self-service-evidence|User-scoped session evidence]] verifies user-token reads for password, SAML and OIDC sessions. The session omits provider identity; strict hosted-login integration remains open.

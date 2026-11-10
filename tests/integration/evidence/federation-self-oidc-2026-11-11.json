@@ -1,0 +1,66 @@
+{
+  "suite": "upstream-oidc-intent-v1",
+  "runId": "47744912-23a5-4ef8-afa5-86f921f862fd",
+  "observedAt": "2026-11-10T23:46:55.234Z",
+  "issuer": "https://capability-zitadel-verification.up.railway.app",
+  "fixture": "https://capability-enterprise-idp-verification.up.railway.app",
+  "observations": [
+    {
+      "providerConfiguration": {
+        "ownerMatchesTargetOrganization": true,
+        "active": true,
+        "protocolMatches": true
+      }
+    },
+    {
+      "verifiedIntentReuse": {
+        "status": 400,
+        "createdSecondVerifiedSession": false
+      }
+    },
+    {
+      "selfServiceEvidence": {
+        "credential": "user access token with ZITADEL API audience; no PAT or session token",
+        "sessionFactorsMatchLoginClient": true,
+        "intentFields": ["verifiedAt"]
+      }
+    },
+    {
+      "downstreamCodeReplay": {
+        "status": 400,
+        "error": "invalid_request"
+      }
+    },
+    {
+      "downstreamOidc": {
+        "signatureIssuerSubjectAudienceNonce": "verified",
+        "organizationScopedRequest": true,
+        "amr": null,
+        "tokenSessionMatchesProviderSession": true,
+        "authTimeMatchesIntent": true
+      }
+    },
+    {
+      "protocol": "upstream OIDC",
+      "providerIdVerified": true,
+      "upstreamSubjectVerified": true,
+      "linkedZitadelSubjectVerified": true,
+      "organizationVerified": true,
+      "crossOrganizationLinkRejectionTested": false,
+      "successfulUserHomeMatchesProviderOrganization": true,
+      "sessionOrganizationMatchesProviderOrganization": true,
+      "sessionIntentVerified": true,
+      "sessionIntentFields": ["verifiedAt"],
+      "passwordFallbackUsed": false,
+      "invalidIntentTokenStatus": 403,
+      "mismatchedUserStatus": 400
+    }
+  ],
+  "cleanup": "owned organizations, realm and sessions deleted",
+  "limitations": [
+    "protocol fixture form automation; not browser UI validation",
+    "strict tenant switching, policy-version invalidation and browser binding still unverified",
+    "SDK strict policy lifecycle not implemented",
+    "Login client performs fixture authentication; downstream session evidence also verified with user token"
+  ]
+}

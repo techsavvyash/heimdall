@@ -199,3 +199,10 @@ there are no mutation retries or uncertain-write guarantees in this test helper.
 Sources: [Login domain setup](https://zitadel.com/docs/guides/integrate/login-ui/login-app),
 [pinned outbound header ordering](https://github.com/zitadel/zitadel/blob/v4.19.4/apps/login/src/lib/zitadel.ts),
 [pinned trusted-domain API](https://github.com/zitadel/zitadel/blob/v4.19.4/proto/zitadel/instance/v2/instance_service.proto).
+
+The OIDC probe also tests self-service session/identity reads with a second code flow
+requesting the ZITADEL API audience in addition to the product audience. It checks
+product-only rejection, another user's session denial and other-product introspection
+denial. The federation probe checks identical session factors with the user token.
+These reads do not expose provider ID/upstream subject: full strict-SSO provenance
+still requires the separate verified-intent flow.

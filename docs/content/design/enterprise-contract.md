@@ -35,6 +35,8 @@ Account linking requires verified identity ownership and authorized provider con
 
 Pinned-service progress: [[evidence/phase-2-federation-binding]] verifies an intent-to-session-to-token evidence chain for both SAML and OIDC. The implementation still needs strict target-policy and browser-transaction checks, and atomic persistence. [[evidence/phase-2-enterprise-contract]] records the structured evidence schema and shared TS/Go policy-gate amendment; those internal validators do not verify provider provenance. This is evidence of capability, not completed SDK enforcement.
 
+[[evidence/phase-2-self-service-evidence]] verifies session reads with an API-audience user token, avoiding a Login PAT for that read. The returned intent factor contains only a timestamp; it cannot replace verified provider ID/upstream subject provenance. Ordinary hosted-login callback integration remains unproven for the full strict-evidence chain.
+
 ## SCIM users and lifecycle
 
 SCIM requests go directly to ZITADEL's organization-scoped service. The customer directory configures endpoint and least-privilege credentials. The SDK does not introduce a SCIM server. Current upstream documentation describes user lifecycle support and excludes SCIM Group provisioning; group-to-role synchronization is not a first-release capability claim. [ZITADEL SCIM guide](https://zitadel.com/docs/guides/manage/user/scim2)

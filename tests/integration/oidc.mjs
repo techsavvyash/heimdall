@@ -138,8 +138,27 @@ try {
     loginPat,
   );
   sessions.push(session.sessionId);
+  const otherUser = await ok("POST", "/v2/users/new", {
+    organizationId: orgId,
+    username: `other-${runId}`,
+    human: {
+      profile: { givenName: "Other", familyName: "Probe" },
+      email: { email: `other-${runId}@example.invalid`, isVerified: true },
+      password: { password, changeRequired: false },
+    },
+  });
+  const otherSession = await ok(
+    "POST",
+    "/v2/sessions",
+    {
+      checks: { user: { userId: otherUser.id }, password: { password } },
+      lifetime: "3600s",
+    },
+    loginPat,
+  );
+  sessions.push(otherSession.sessionId);
   const tokens = [];
-  async function authorize(client) {
+  async function authorize(client, apiAudience = false) {
     const verifier = randomBytes(32).toString("base64url");
     const nonce = randomUUID();
     const state = randomUUID();
@@ -147,7 +166,7 @@ try {
       client_id: client.clientId,
       redirect_uri: client.redirectUri,
       response_type: "code",
-      scope: `openid profile offline_access urn:zitadel:iam:org:project:id:${client.projectId}:aud`,
+      scope: `openid profile offline_access urn:zitadel:iam:org:project:id:${client.projectId}:aud${apiAudience ? " urn:zitadel:iam:org:project:id:zitadel:aud" : ""}`,
       state,
       nonce,
       code_challenge: createHash("sha256").update(verifier).digest("base64url"),
@@ -184,6 +203,74 @@ try {
     assert(result.status === 200, `Code exchange failed: ${result.status} ${result.body.error}`);
     const id = validateJWT(result.body.id_token, keys, client.clientId, user.id, auth.nonce);
     const access = validateJWT(result.body.access_token, keys, client.projectId, user.id);
+    const withoutAPIAudience = await req(
+      "GET",
+      `/v2/sessions/${id.sid}`,
+      undefined,
+      result.body.access_token,
+    );
+    assert.equal(
+      withoutAPIAudience.status,
+      401,
+      "Product-only token must not access ZITADEL session API",
+    );
+    const apiAuth = await authorize(client, true);
+    const apiToken = await form("/oauth/v2/token", client, {
+      grant_type: "authorization_code",
+      code: apiAuth.code,
+      redirect_uri: client.redirectUri,
+      code_verifier: apiAuth.verifier,
+    });
+    assert.equal(apiToken.status, 200);
+    const apiID = validateJWT(
+      apiToken.body.id_token,
+      keys,
+      client.clientId,
+      user.id,
+      apiAuth.nonce,
+    );
+    const apiAccess = validateJWT(apiToken.body.access_token, keys, client.projectId, user.id);
+    const otherProduct = clients.find((candidate) => candidate !== client);
+    assert(![apiAccess.aud].flat().includes(otherProduct.projectId));
+    const otherProductAPIIntrospection = await form("/oauth/v2/introspect", otherProduct, {
+      token: apiToken.body.access_token,
+    });
+    assert.equal(otherProductAPIIntrospection.status, 200);
+    assert.equal(otherProductAPIIntrospection.body.active, false);
+    assert.equal(apiID.sid, session.sessionId);
+    const ownSession = await req(
+      "GET",
+      `/v2/sessions/${apiID.sid}`,
+      undefined,
+      apiToken.body.access_token,
+    );
+    assert.equal(ownSession.status, 200, "API-audience user token must read own session");
+    assert.equal(ownSession.body.session.factors.user.id, user.id);
+    assert.equal(ownSession.body.session.factors.user.organizationId, orgId);
+    const foreignSession = await req(
+      "GET",
+      `/v2/sessions/${otherSession.sessionId}`,
+      undefined,
+      apiToken.body.access_token,
+    );
+    assert(
+      [403, 404].includes(foreignSession.status),
+      `Another user's session must be denied: ${foreignSession.status}`,
+    );
+    const ownUser = await req("GET", `/v2/users/${user.id}`, undefined, apiToken.body.access_token);
+    assert.equal(ownUser.status, 200, "API-audience user token must read own identity state");
+    assert.equal(ownUser.body.user.state, "USER_STATE_ACTIVE");
+    observations.push({
+      product: client.product,
+      selfServiceEvidence: {
+        productOnlySessionStatus: withoutAPIAudience.status,
+        apiAudienceOwnSessionStatus: ownSession.status,
+        anotherUserSessionStatus: foreignSession.status,
+        ownIdentityStatus: ownUser.status,
+        otherProductIntrospectionActive: otherProductAPIIntrospection.body.active,
+        credential: "user access token; no PAT or session token",
+      },
+    });
     const other = clients.find((c) => c !== client);
     assert(![access.aud].flat().includes(other.projectId), "Cross-product access audience");
     assert.throws(
