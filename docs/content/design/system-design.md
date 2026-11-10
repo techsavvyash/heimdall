@@ -14,15 +14,15 @@ Heimdall lets one operator onboard multiple products onto one ZITADEL/OpenFGA de
 | Capability | Required first-release behavior | Detailed specification |
 | --- | --- | --- |
 | Product setup | Register or bind a product/environment to identity clients, audiences, store and pinned model; emit language-neutral configuration | [[flows/provisioning]], [[release-contract]] |
-| Authentication and sessions | Verified identity, browser login/callback/logout, secure server sessions, refresh coordination and bounded identity freshness | [[shared-sdk-contract]], [[built-in-adapters]] |
-| Workspace discovery | Return only active workspaces whose membership is currently verified; bounded pagination, scope-bound cursors, explicit errors | [[shared-sdk-contract]], [[built-in-adapters]] |
-| Workspace onboarding | Authorized creation, stable IDs and first owner, durable idempotency, status and conservative recovery | [[built-in-adapters]], [[flows/provisioning]] |
+| Authentication and sessions | Verified identity, browser login/callback/logout, secure server sessions, refresh coordination and bounded identity freshness | [[shared-sdk-contract]], [[design/built-in-adapters]] |
+| Workspace discovery | Return only active workspaces whose membership is currently verified; bounded pagination, scope-bound cursors, explicit errors | [[shared-sdk-contract]], [[design/built-in-adapters]] |
+| Workspace onboarding | Authorized creation, stable IDs and first owner, durable idempotency, status and conservative recovery | [[design/built-in-adapters]], [[flows/provisioning]] |
 | Role resolution and enforcement | Product-defined roles and permissions, active membership gate, tenant-bound checks and delegation rules | [[authorization-model]], [[flows/authorization]] |
 | Membership administration | Explicit invitations, grants, revocation and serialized ownership transfer; protect the last owner | [[flows/membership]], [[release-contract]] |
 | Tenant enterprise login | Organization-mapped SAML/OIDC setup and strict SSO enforcement, including tenant switching | [[enterprise-contract]] |
 | Directory lifecycle | SCIM users into ZITADEL; explicit per-product enrollment and deprovisioning reconciliation | [[enterprise-contract]] |
 | Audit and SIEM | Durable records for all decisions, role changes and ownership transfers; validated custom events; replayable export | [[audit-contract]] |
-| Built-in adapters | PostgreSQL persistence plus TS Fetch and Go net/http boundaries, explicit migrations and maintenance | [[built-in-adapters]] |
+| Built-in adapters | PostgreSQL persistence plus TS Fetch and Go net/http boundaries, explicit migrations and maintenance | [[design/built-in-adapters]] |
 | Language parity | Same observable semantics and storage/wire formats in both SDKs | [[shared-sdk-contract]], [[project-structure]] |
 
 Deferred: tenant-authored runtime roles, SCIM group synchronization, resource sharing, public service-account APIs, mutually untrusted backend operators, additional databases and languages. Product-defined custom audit events are included; they do not imply runtime custom roles.
@@ -113,7 +113,7 @@ Shared login does not grant membership. The same company name does not establish
 
 **Two supported compositions:** an existing product can keep its workspace source and durable workflow while using sessions/core contracts; a new product can choose managed workspaces and SDK operation/index tables. Core consumers provide conforming durable audit and identity/lifecycle behavior too. Choosing core is not an exemption from security requirements. There are no implicit migrations, timers or workers.
 
-Both language API sketches live in [[built-in-adapters]] and [[shared-sdk-contract]]. They are interfaces to implement, not packages that currently execute.
+Both language API sketches live in [[design/built-in-adapters]] and [[shared-sdk-contract]]. They are interfaces to implement, not packages that currently execute.
 
 ## 5. Setup and onboarding data flow
 
@@ -158,7 +158,7 @@ sequenceDiagram
   end
 ```
 
-Same scoped key and same payload refer to one operation. Changed payload conflicts. A timeout is not proof of failure. A lease expiry or successful relationship read does not prove an old write can no longer arrive. Uncertain dispatched operations remain quarantined until verified quiescence and reconciliation; only known-safe retries are automatic. See [[built-in-adapters]] for the recovery procedure and release gate.
+Same scoped key and same payload refer to one operation. Changed payload conflicts. A timeout is not proof of failure. A lease expiry or successful relationship read does not prove an old write can no longer arrive. Uncertain dispatched operations remain quarantined until verified quiescence and reconciliation; only known-safe retries are automatic. See [[design/built-in-adapters]] for the recovery procedure and release gate.
 
 ## 6. Login, discovery and tenant switching
 
@@ -252,7 +252,7 @@ Every authorization decision, role change and ownership transfer is durably reco
 | Invoice/ticket/customer readiness/invitations | Product | Tenant predicates and product transactions |
 | Setup progress | Operator PostgreSQL setup journal | Serialized product/environment provisioning |
 
-Restore and model migration are coordinated operations across independent systems. Restoring local state cannot blindly replay old grants against live OpenFGA. [[operations]] and [[built-in-adapters]] specify compatibility, recovery and exit requirements.
+Restore and model migration are coordinated operations across independent systems. Restoring local state cannot blindly replay old grants against live OpenFGA. [[operations]] and [[design/built-in-adapters]] specify compatibility, recovery and exit requirements.
 
 ## 10. Implementation acceptance and traceability
 
@@ -260,8 +260,8 @@ Restore and model migration are coordinated operations across independent system
 | --- | --- | --- |
 | Maya joins Acme Ledger, then logs into Support | Login succeeds; no Support membership is implied | [[two-product-walkthrough]], [[tenancy]] |
 | Maya substitutes a Globex invoice ID on Acme route | No cross-tenant read or write | [[flows/authorization]], [[scenarios]] |
-| Concurrent create retries | One stable workspace and owner intent; changed payload conflicts | [[built-in-adapters]] |
-| Owner write succeeds but response is lost | Pending/blocked; no blind retry or false activation | [[built-in-adapters]] |
+| Concurrent create retries | One stable workspace and owner intent; changed payload conflicts | [[design/built-in-adapters]] |
+| Owner write succeeds but response is lost | Pending/blocked; no blind retry or false activation | [[design/built-in-adapters]] |
 | Workspace discovery encounters stale candidates or service outage | Fresh checks filter candidates; outage is explicit | [[shared-sdk-contract]] |
 | Session refresh races logout or loses its response | No resurrection; uncertain refresh requires reauthentication | [[shared-sdk-contract]] |
 | Password session switches into strict SAML workspace | Compliant reauthentication or deny | [[enterprise-contract]] |
@@ -272,4 +272,4 @@ Restore and model migration are coordinated operations across independent system
 
 Implementation order is contracts/fixtures, core and persistence, managed workflows and enterprise integrations, then live two-product verification. [[implementation-roadmap]] maps the work to tickets; [[project-structure]] maps it to directories. Every behavioral change updates its owning contract and shared fixture. A service limitation that prevents the selected behavior is a release blocker or an explicit design change.
 
-[[decisions]] records locked decisions. [[release-contract]], [[audit-contract]], [[enterprise-contract]] and [[built-in-adapters]] own their detailed requirements. Earlier examples with looser retry or optional-audit wording are superseded by these contracts. Historical [[explorations/built-in-adapters|alternatives]] remain separate. The site describes the build target; passing live-service and cross-language tests is what establishes that it has been built.
+[[decisions]] records locked decisions. [[release-contract]], [[audit-contract]], [[enterprise-contract]] and [[design/built-in-adapters]] own their detailed requirements. Earlier examples with looser retry or optional-audit wording are superseded by these contracts. Historical [[explorations/built-in-adapters|alternatives]] remain separate. The site describes the build target; passing live-service and cross-language tests is what establishes that it has been built.

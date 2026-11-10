@@ -58,10 +58,10 @@ flowchart LR
 
 HTTP adapters typically map these errors to 401, 403, and 503. A tenant-scoped lookup may return 404 to avoid exposing resource existence. Unknown permission names fail validation. Browser helpers can drive UI visibility through product endpoints. Privileged OpenFGA credentials stay in backend processes.
 
-Setup tooling and runtime use separate entry points. TypeScript and Go are the initial SDK languages. The selected HTTP boundaries are TypeScript Fetch and Go net/http; [[built-in-adapters]] defines the supported configuration and persistence compositions.
+Setup tooling and runtime use separate entry points. TypeScript and Go are the initial SDK languages. The selected HTTP boundaries are TypeScript Fetch and Go net/http; [[design/built-in-adapters]] defines the supported configuration and persistence compositions.
 
 ## Walkthrough refinements
 
-The [[two-product-walkthrough]] adds proposed `auth.routes`, `addMember`, `listMemberships`, and `provisioning.ensureOwner` helpers. It defines the developer-owned persistence and route wiring for each, and illustrates session, discovery, retry, and enterprise SSO integration; the selected behavior is governed by [[shared-sdk-contract]], [[built-in-adapters]] and [[enterprise-contract]]. These names remain illustrative.
+The [[two-product-walkthrough]] adds proposed `auth.routes`, `addMember`, `listMemberships`, and `provisioning.ensureOwner` helpers. It defines the developer-owned persistence and route wiring for each, and illustrates session, discovery, retry, and enterprise SSO integration; the selected behavior is governed by [[shared-sdk-contract]], [[design/built-in-adapters]] and [[enterprise-contract]]. These names remain illustrative.
 
 Both initial packages run the same behavioral fixtures. Go APIs should accept request contexts for cancellation and deadlines and expose idiomatic typed errors. TypeScript APIs should expose corresponding cancellation and error behavior. See [[project-structure]] for package locations and [[task-list]] for the parity release gate.
