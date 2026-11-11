@@ -296,8 +296,11 @@ func conditionalCases(t *testing.T) conditionalFixture {
 	return f
 }
 func TestConditionalRevisionValidation(t *testing.T) {
-	s := &SessionRecords{}
+	s := &IdentityRecords{}
 	for _, revision := range conditionalCases(t).InvalidRevisions {
+		if _, e := (&SessionRecords{}).CompareAndSwapSession(context.Background(), "key", revision, nil, 0); !errors.Is(e, contract.ErrInvalidArgument) {
+			t.Fatal(revision, e)
+		}
 		if _, e := s.InvalidateSessionVersion(context.Background(), "key", revision, "https://id.example.com", "subject"); !errors.Is(e, contract.ErrInvalidArgument) {
 			t.Fatal(revision, e)
 		}
@@ -562,7 +565,11 @@ func TestIdentityGate(t *testing.T) {
 	})
 	defer func() { http.DefaultTransport = original }()
 	sessions.records.now = func() int64 { return token.Now }
-	gate, e := sessions.IdentityGate("gate-go", "production")
+	identities, e := NewIdentityRecords(db, "gate-go", "production", func() int64 { return token.Now })
+	if e != nil {
+		t.Fatal(e)
+	}
+	gate, e := identities.IdentityGate("gate-go", "production")
 	if e != nil {
 		t.Fatal(e)
 	}

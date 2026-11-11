@@ -1,5 +1,16 @@
 {
-  "invalidRevisions": ["", "0", "-1", "01", "1.0", "1e1", "9223372036854775808"],
+  "invalidRevisions": [
+    "",
+    "0",
+    "-1",
+    "01",
+    "1.0",
+    "1e1",
+    "9223372036854775808",
+    "1\n",
+    "1\r",
+    "1\r\n"
+  ],
   "raceCount": 12,
   "sharedKey": "conditional-from-ts",
   "cases": [

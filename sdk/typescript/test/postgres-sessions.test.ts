@@ -1,3 +1,4 @@
+import { IdentityRecords } from "../src/internal/postgres/identity.js";
 import { AuditedAuthentication } from "../src/internal/audited-authentication.js";
 import { PostgresAudit } from "../src/internal/postgres/audit.js";
 import { sessionIdentityContext } from "../src/internal/identity-context.js";
@@ -322,7 +323,7 @@ test("conditional session invalidation rejects malformed revisions before access
       ...read("fixtures/session-invalidation.json").invalidRevisions,
       1,
       null,
-    ])
+    ]) {
       await expect(
         store(pool).invalidateSessionVersion(
           "key",
@@ -331,6 +332,10 @@ test("conditional session invalidation rejects malformed revisions before access
           fixture.record.subject,
         ),
       ).rejects.toThrow("invalid_argument");
+      await expect(
+        store(pool).compareAndSwapSession("key", revision, new Uint8Array(), fixture.expiresAt),
+      ).rejects.toThrow("invalid_argument");
+    }
   } finally {
     await pool.end();
   }
@@ -485,8 +490,15 @@ test.skipIf(!process.env.HEIMDALL_TEST_SESSION_DELETE_LOSS)(
 
 test("identity gate refuses mismatched scope and malformed contexts before storage", async () => {
   const pool = new Pool();
-  const sessions = store(pool);
+  const sessions = new IdentityRecords(pool, "ledger-identity", "production");
   try {
+    for (const [product, environment] of [
+      ["", "production"],
+      ["ledger\n", "production"],
+      ["ledger", "production\n"],
+    ])
+      expect(() => new IdentityRecords(pool, product!, environment!)).toThrow("invalid_argument");
+
     expect(() => sessions.identityGate("support", "production")).toThrow("invalid_argument");
     expect(() => sessions.identityGate("ledger-identity", "staging")).toThrow("invalid_argument");
     const gate = sessions.identityGate("ledger-identity", "production");
@@ -549,7 +561,10 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       }
       return Response.json(current.user, { status: current.userStatus });
     });
-    const gate = sessions.identityGate("gate-ts", "production");
+    const gate = new IdentityRecords(pool, "gate-ts", "production", () => f.now).identityGate(
+      "gate-ts",
+      "production",
+    );
     const config = {
       issuer: f.issuer,
       audience: f.audience,

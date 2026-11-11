@@ -61,3 +61,46 @@ The full workspace gate passed 1,004 TypeScript tests, Go race tests, formatting
 ## Remaining work
 
 This is internal persistence/identity composition. Public factories must bind immutable configuration, load/validate sessions per request, supply required durable audit, and implement refresh/logout and enterprise context. Reactivation requires explicit reconciliation; the gate has no clear-denial shortcut. Phase 3 remains in progress.
+
+
+## Cipher-independent gate checkpoint
+
+The November 11 follow-up separates `IdentityRecords` from encrypted session storage
+in both SDKs. A durable identity gate requires the caller-owned PostgreSQL pool,
+product and environment, but no session encryption key or payload validator.
+`SessionRecords` delegates denial and invalidation to the same implementation.
+Identity hashing, advisory locks, SQL predicates, synchronous commits and uncertain
+commit outcomes remain shared. There is no schema migration or new public API in
+this checkpoint.
+
+```mermaid
+flowchart LR
+  Bearer[Audited bearer authentication] --> Gate[IdentityRecords gate]
+  Session[Encrypted SessionRecords] --> Gate
+  Gate --> Denial[(Scoped identity denials)]
+  Gate --> Delete[(Exact session revision deletion)]
+  Session --> Cipher[Session cipher and payload validation]
+```
+
+Pinned PostgreSQL run `heimdall-records-5ac765d8843c4dcd90d391dee92b12f1`
+passed the full storage and fault-injection harness. The combined authentication
+tests instantiate the gate independently of the session cipher, while creating
+real sessions through the encrypted adapter to verify invalidation and replacement
+preservation. Both languages still produce six committed authentication events and
+six outbox rows per scope. The tests use fixture provider responses, not a new live
+ZITADEL login. Machine-readable evidence is
+`tests/integration/evidence/standalone-identity-gate-2026-11-11.json`.
+
+Shared invalid-revision fixtures additionally reject trailing LF, CR and CRLF for
+conditional invalidation and session compare-and-swap. This fixes TypeScript's
+end-anchor acceptance of a trailing newline and preserves Go parity. No database
+access occurs for these invalid arguments. Unit tests also exercise scope mismatch,
+cancellation and bearer token-negative no-op without opening a database connection.
+
+The full workspace check passed 1,251 TypeScript tests (26 optional live tests
+skipped), Go race tests, package-consumer checks and SDK/Quartz builds. The
+documentation build validates 115 Mermaid diagrams.
+
+The public PostgreSQL runtime factory is still pending. This extraction removes
+its dependency on session encryption without fabricating a cipher or weakening
+session validation. Phase 3 remains open.

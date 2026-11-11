@@ -1,10 +1,7 @@
-import { createHash } from "node:crypto";
+import { IdentityRecords } from "./identity.js";
 import type { Pool } from "pg";
 import type { RecordCipher } from "../envelopes.js";
-import { encodeIdentity } from "../identity-encoding.js";
-import type { IdentityVerifier } from "../identity-verifier.js";
-import { parseIdentityContext } from "../identity-context.js";
-import { HeimdallError, checkCancellation } from "../errors.js";
+import { HeimdallError } from "../errors.js";
 import { PostgresRecords, columns } from "./records.js";
 import type { Row } from "./records.js";
 import { query, transaction } from "./query.js";
@@ -12,6 +9,11 @@ type Principal = { productId: string; environment: string; issuer: string; subje
 // Validation includes the session schema and returns its exact principal/scope.
 // Provider authentication and freshness remain the calling SDK layer's job.
 export class SessionRecords extends PostgresRecords {
+  private readonly identities: IdentityRecords;
+  readonly identityGate: IdentityRecords["identityGate"];
+  readonly invalidateSessionVersion: IdentityRecords["invalidateSessionVersion"];
+  readonly isIdentityDenied: IdentityRecords["isIdentityDenied"];
+  readonly invalidateIdentity: IdentityRecords["invalidateIdentity"];
   constructor(
     pool: Pool,
     cipher: RecordCipher,
@@ -21,63 +23,18 @@ export class SessionRecords extends PostgresRecords {
     now: () => number = Date.now,
   ) {
     super(pool, cipher, productId, environment, now);
+    this.identities = new IdentityRecords(pool, productId, environment, now);
+    this.identityGate = this.identities.identityGate.bind(this.identities);
+    this.invalidateSessionVersion = this.identities.invalidateSessionVersion.bind(this.identities);
+    this.isIdentityDenied = this.identities.isIdentityDenied.bind(this.identities);
+    this.invalidateIdentity = this.identities.invalidateIdentity.bind(this.identities);
     if (typeof validate !== "function") throw new HeimdallError("invalid_argument");
-  }
-  // Bind to the verifier's immutable scope before attaching this durable gate.
-  identityGate(
-    productId: string,
-    environment: string,
-  ): ConstructorParameters<typeof IdentityVerifier>[2] {
-    if (productId !== this.productId || environment !== this.environment)
-      throw new HeimdallError("invalid_argument");
-    return {
-      check: (identity, signal) => this.isIdentityDenied(identity.issuer, identity.subject, signal),
-      invalidate: async (negative, signal) => {
-        checkCancellation(signal);
-        const context = parseIdentityContext(negative.context);
-        if (!/^[0-9a-f]{64}$/.test(negative.tokenDigest))
-          throw new HeimdallError("invalid_argument");
-        if (negative.reason === "token_inactive") {
-          if (context)
-            await this.invalidateSessionVersion(
-              context.key,
-              context.revision,
-              negative.issuer,
-              negative.subject,
-              signal,
-            );
-          return;
-        }
-        if (negative.reason !== "identity_inactive" && negative.reason !== "identity_deleted")
-          throw new HeimdallError("invalid_argument");
-        await this.invalidateIdentity(
-          negative.issuer,
-          negative.subject,
-          this.now(),
-          negative.reason === "identity_deleted" ? "deleted" : "inactive",
-          signal,
-        );
-      },
-    };
-  }
-  private identity(issuer: string, subject: string) {
-    return createHash("sha256").update(encodeIdentity(issuer, subject), "ascii").digest();
   }
   private principal(value: Uint8Array) {
     const principal = this.validate(value);
     if (principal.productId !== this.productId || principal.environment !== this.environment)
       throw new HeimdallError("invalid_argument");
-    return this.identity(principal.issuer, principal.subject);
-  }
-  private lock(identity: Buffer) {
-    return createHash("sha256")
-      .update(
-        `heimdall.identity.v1|${this.productId}|${this.environment}|${identity.toString("hex")}`,
-        "ascii",
-      )
-      .digest()
-      .readBigInt64BE()
-      .toString();
+    return this.identities.identity(principal.issuer, principal.subject);
   }
   private openSession(hash: Buffer, row: Row) {
     try {
@@ -101,7 +58,7 @@ export class SessionRecords extends PostgresRecords {
   ) {
     if (
       typeof revision !== "string" ||
-      !/^[1-9][0-9]{0,18}$/.test(revision) ||
+      !/^[1-9][0-9]{0,18}(?![\s\S])/.test(revision) ||
       BigInt(revision) > 9223372036854775807n
     )
       throw new HeimdallError("invalid_argument");
@@ -121,7 +78,9 @@ export class SessionRecords extends PostgresRecords {
     return transaction(
       this.pool,
       async (client) => {
-        await client.query("SELECT pg_advisory_xact_lock($1::bigint)", [this.lock(identity)]);
+        await client.query("SELECT pg_advisory_xact_lock($1::bigint)", [
+          this.identities.lock(identity),
+        ]);
         const denied = await client.query(
           "SELECT 1 FROM heimdall.identity_denials WHERE product_id=$1 AND environment=$2 AND identity_hash=$3",
           [this.productId, this.environment, identity],
@@ -169,77 +128,6 @@ export class SessionRecords extends PostgresRecords {
       "DELETE FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind='session' AND key_hash=$3 AND identity_hash IS NOT NULL",
       [this.productId, this.environment, hash],
       true,
-      signal,
-    );
-  }
-  async invalidateSessionVersion(
-    key: string,
-    revision: string,
-    issuer: string,
-    subject: string,
-    signal?: AbortSignal,
-  ) {
-    if (
-      typeof revision !== "string" ||
-      !/^[1-9][0-9]{0,18}$/.test(revision) ||
-      BigInt(revision) > 9223372036854775807n
-    )
-      throw new HeimdallError("invalid_argument");
-    const hash = this.key("session", key);
-    const identity = this.identity(issuer, subject);
-    return transaction(
-      this.pool,
-      async (client) => {
-        await client.query("SELECT pg_advisory_xact_lock($1::bigint)", [this.lock(identity)]);
-        const removed = await client.query(
-          "DELETE FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind='session' AND key_hash=$3 AND identity_hash=$4 AND revision=$5",
-          [this.productId, this.environment, hash, identity, revision],
-        );
-        return removed.rowCount === 1;
-      },
-      signal,
-    );
-  }
-  async isIdentityDenied(issuer: string, subject: string, signal?: AbortSignal) {
-    const identity = this.identity(issuer, subject);
-    const rows = await query<{ denied: boolean }>(
-      this.pool,
-      "SELECT EXISTS(SELECT 1 FROM heimdall.identity_denials WHERE product_id=$1 AND environment=$2 AND identity_hash=$3) AS denied",
-      [this.productId, this.environment, identity],
-      false,
-      signal,
-    );
-    if (typeof rows[0]?.denied !== "boolean") throw new HeimdallError("unavailable");
-    return rows[0].denied;
-  }
-  async invalidateIdentity(
-    issuer: string,
-    subject: string,
-    observedAt: number,
-    reason: "inactive" | "deleted",
-    signal?: AbortSignal,
-  ) {
-    if (
-      !Number.isSafeInteger(observedAt) ||
-      observedAt < 0 ||
-      !["inactive", "deleted"].includes(reason)
-    )
-      throw new HeimdallError("invalid_argument");
-    const identity = this.identity(issuer, subject);
-    return transaction(
-      this.pool,
-      async (client) => {
-        await client.query("SELECT pg_advisory_xact_lock($1::bigint)", [this.lock(identity)]);
-        await client.query(
-          "INSERT INTO heimdall.identity_denials(product_id,environment,identity_hash,observed_at,reason) VALUES($1,$2,$3,$4,$5) ON CONFLICT(product_id,environment,identity_hash) DO UPDATE SET observed_at=GREATEST(identity_denials.observed_at,EXCLUDED.observed_at),reason=CASE WHEN identity_denials.reason='deleted' OR EXCLUDED.reason='deleted' THEN 'deleted' ELSE 'inactive' END",
-          [this.productId, this.environment, identity, observedAt, reason],
-        );
-        const removed = await client.query(
-          "DELETE FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND identity_hash=$3",
-          [this.productId, this.environment, identity],
-        );
-        return removed.rowCount!;
-      },
       signal,
     );
   }
