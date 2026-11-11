@@ -183,3 +183,5 @@ Phase 3 candidate-repair checkpoint: [[evidence/phase-3-candidate-repair]] adds
 revision-guarded publication of explicit membership observations, atomic audit and
 serialization with managed mutations. Remote rebuild/checkpoint orchestration and
 broader storage operational foundations remain open.
+
+Phase 3 storage maintenance: [[evidence/phase-3-record-cleanup]] records bounded TS/Go expired-record cleanup, concurrency and commit-loss proof. This does not complete audit retention, sanitized export or restore qualification.

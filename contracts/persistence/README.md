@@ -284,3 +284,41 @@ current request remains unauthenticated; orchestration must distinguish a stale
 negative result from explicit logout and avoid clearing a replacement session's
 cookie on the basis of an unmatched old observation. Session/account-wide logout
 and identity denial retain their separate explicit operations.
+
+## Explicit bounded expired-record cleanup
+
+Internal TS `RecordMaintenance.cleanupExpired(limit, signal?)` and Go
+`RecordMaintenance.CleanupExpired(ctx, limit)` supply session-only maintenance,
+independent of encryption keys and managed workspace configuration. The product
+schedules invocations; construction starts no worker. Each port fixes the product
+and environment. Its trusted clock is sampled once per call and must be a safe
+nonnegative millisecond timestamp. A limit must be an integer from 1 through 100.
+
+A primary read/write transaction selects at most that many expired login/session
+rows (`expires_at <= cutoff`), ordered by expiry, kind and key hash, with
+`FOR UPDATE SKIP LOCKED`. Deletion joins those exact scoped keys and rechecks
+expiry. Both identity-bound and generic records are eligible. A concurrent refresh
+holding a row lock is skipped; after a committed extension beyond the cutoff, the
+row survives subsequent cleanup. This maintenance never decrypts or returns record
+contents, so expired records can be removed after their encryption key is retired.
+The stored expiry metadata is trusted for physical retention; corrupt ciphertext
+does not pin already-expired storage indefinitely.
+
+The returned integer is this transaction's committed deletion count, not an
+estimate of backlog or proof the scope is drained. Zero can mean locked rows were
+skipped. Schedule later bounded passes; no automatic unbounded drain loop is part
+of the adapter. A five-second total deadline bounds pool/lock/work time. Invalid
+input and pre-cancellation dispatch no SQL. Pre-commit failure rolls back; lost
+commit acknowledgement returns `outcome_unknown`. A later call safely reevaluates
+current expiry, but cannot recover the lost batch's exact deletion count. Counts
+across uncertain retries must not be presented as exact deletion metrics.
+
+The runtime needs SELECT, UPDATE (for row locking) and DELETE on records, with
+schema USAGE; no migration privilege or encryption key is needed. Trusted
+operators own clock synchronization and scheduling. An erroneously advanced clock
+can expire sessions early. Delayed cleanup does not extend logical session
+validity. This is physical expiry housekeeping, not an authorization decision,
+identity reactivation, recovery action, audit retention or bulk export. It appends
+no security event. Identity denials, audit/outbox, managed workspaces, operation
+idempotency records and candidate indexes are untouched. Caller authorization and
+public session maintenance composition remain integration work.

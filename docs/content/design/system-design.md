@@ -5,7 +5,7 @@ date: 2026-11-11
 
 This is the entry point to the agreed Heimdall design. It defines what we are building, how the pieces work together, who owns each responsibility and which scenarios must pass. The linked contracts are part of this specification. Implementation tickets organize delivery; they do not replace or weaken these requirements.
 
-**Status: design selected; runtime unimplemented.** TypeScript and Go ship together. Exact API spellings, physical schemas and service-version compatibility are implementation deliverables, not reasons to reopen the selected product scope. Historical explorations are not implementation instructions.
+**Status: design selected; implementation in progress, not release-qualified.** [[evidence/phase-3-readiness-audit]] records implemented foundations and remaining gaps. TypeScript and Go ship together. Exact API spellings, physical schemas and service-version compatibility are implementation deliverables, not reasons to reopen the selected product scope. Historical explorations are not implementation instructions.
 
 ## 1. Functionality we are building
 

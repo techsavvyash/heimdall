@@ -1,0 +1,35 @@
+{
+  "cutoff": 1000,
+  "invalidLimits": [0, -1, 101],
+  "records": [
+    {
+      "key": "old-login",
+      "kind": "login",
+      "environment": "test",
+      "expiresAt": 999,
+      "identity": false
+    },
+    {
+      "key": "boundary-session",
+      "kind": "session",
+      "environment": "test",
+      "expiresAt": 1000,
+      "identity": true
+    },
+    {
+      "key": "future-session",
+      "kind": "session",
+      "environment": "test",
+      "expiresAt": 1001,
+      "identity": true
+    },
+    {
+      "key": "other-environment",
+      "kind": "login",
+      "environment": "production",
+      "expiresAt": 1,
+      "identity": false
+    }
+  ],
+  "remaining": ["future-session", "other-environment"]
+}
