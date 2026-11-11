@@ -224,4 +224,86 @@ export class PostgresAudit {
       signal,
     );
   }
+  private deliveryArgs(sink: string, eventId: string, attempts: number) {
+    if (
+      !token(sink, 128) ||
+      !token(eventId, 128) ||
+      !Number.isInteger(attempts) ||
+      attempts < 0 ||
+      attempts > 2147483647
+    )
+      throw new HeimdallError("invalid_argument");
+    return [this.productId, this.environment, sink, eventId, attempts];
+  }
+  // Claims a delivery attempt, not exclusive ownership of an external request.
+  async beginAttempt(
+    sink: string,
+    eventId: string,
+    expectedAttempts: number,
+    now: number,
+    retryAt: number,
+    signal?: AbortSignal,
+  ): Promise<number | null> {
+    const args = this.deliveryArgs(sink, eventId, expectedAttempts);
+    if (
+      expectedAttempts === 2147483647 ||
+      !Number.isSafeInteger(now) ||
+      now < 0 ||
+      !Number.isSafeInteger(retryAt) ||
+      retryAt <= now
+    )
+      throw new HeimdallError("invalid_argument");
+    return transaction(
+      this.pool,
+      async (client) => {
+        const rows = await client.query<{ attempts: number }>(
+          "UPDATE heimdall.audit_deliveries SET attempts=attempts+1,next_attempt_at=$7 WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=$4 AND attempts=$5 AND state='pending' AND next_attempt_at<=$6 RETURNING attempts",
+          [...args, now, retryAt],
+        );
+        return rows.rows[0]?.attempts ?? null;
+      },
+      signal,
+    );
+  }
+  async deferAttempt(
+    sink: string,
+    eventId: string,
+    attempt: number,
+    retryAt: number,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    const args = this.deliveryArgs(sink, eventId, attempt);
+    if (attempt < 1 || !Number.isSafeInteger(retryAt) || retryAt < 0)
+      throw new HeimdallError("invalid_argument");
+    return transaction(
+      this.pool,
+      async (client) => {
+        const rows = await client.query(
+          "UPDATE heimdall.audit_deliveries SET next_attempt_at=GREATEST(next_attempt_at,$6) WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=$4 AND attempts=$5 AND state='pending' RETURNING attempts",
+          [...args, retryAt],
+        );
+        return rows.rowCount === 1;
+      },
+      signal,
+    );
+  }
+  async quarantine(
+    sink: string,
+    eventId: string,
+    expectedAttempts: number,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    const args = this.deliveryArgs(sink, eventId, expectedAttempts);
+    return transaction(
+      this.pool,
+      async (client) => {
+        const rows = await client.query(
+          "UPDATE heimdall.audit_deliveries SET state='quarantined' WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=$4 AND attempts=$5 AND state IN ('pending','quarantined') RETURNING attempts",
+          args,
+        );
+        return rows.rowCount === 1;
+      },
+      signal,
+    );
+  }
 }

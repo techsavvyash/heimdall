@@ -101,3 +101,5 @@ Phase 3 audit checkpoint: [[evidence/phase-3-audit-persistence]] adds atomic eve
 Phase 3 acknowledgement checkpoint: [[evidence/phase-3-audit-acknowledgements]] records atomic partial delivery receipts, replay timestamp preservation, quarantine/missing-route rejection and committed-response-loss recovery in both SDKs. Delivery transport and scheduling remain open.
 
 Phase 3 pending-read checkpoint: [[evidence/phase-3-audit-pending]] records bounded due-event selection, payload/scope verification, explicit invalid candidates and cross-language decoding. Worker scheduling and quarantine remain open.
+
+Phase 3 delivery-transition checkpoint: [[evidence/phase-3-audit-transitions]] records conditional attempt claims, monotonic retry deferral, idempotent quarantine and lost-COMMIT proof in both languages. External delivery policy and privileged replay remain open.

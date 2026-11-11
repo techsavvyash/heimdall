@@ -184,3 +184,30 @@ invalid/quarantine candidate, never a payload to export. Healthy later candidate
 in the same batch remain available. SQL/connection failure returns an error, not
 an empty backlog. Automatic quarantine and fairness across successive batches
 remain exporter work; this read primitive alone cannot guarantee their progress.
+
+Delivery transition primitives now use the scoped attempts counter for conditional
+updates. beginAttempt/BeginAttempt requires pending state, a due timestamp and the
+exact observed counter. It increments the counter and sets a future retry time in
+one committed transaction, returning the new counter or null/nil when no new claim
+was obtained. Dispatch only after a confirmed returned claim. outcome_unknown is
+not ownership; retrying an ambiguous claim with its old counter must not dispatch.
+Attempts count durable claims, including a process stopping before HTTP dispatch.
+
+The counter is bounded by the existing SQL integer type. Incrementing 2147483647
+is rejected; the future worker must quarantine/alert instead of wrapping/resetting.
+Operator replay must preserve monotonicity or advance the counter, never reset it.
+
+DeferAttempt requires the current positive attempt counter and pending state. It
+uses GREATEST(existing next-attempt time, requested time), so replay/stale callbacks
+within one attempt cannot shorten a newer scheduled delay. Older attempts cannot
+alter newer claims. Quarantine requires the observed counter and pending/already
+quarantined state; repeating the same quarantine is idempotent. Neither primitive
+can change delivered state or immutable event data. A quarantined event remains
+stored and is excluded from subsequent pending reads; no automatic replay exists.
+
+Each transition uses synchronous_commit=on and returns outcome_unknown on COMMIT
+response loss. Known nonmatching updates return null/false without claiming success.
+Retry time is scheduling state, not a fence: an old external request may still be
+running when another attempt becomes due. At-least-once sink deduplication remains
+required. These audit delivery primitives must not be reused to unblock managed
+OpenFGA mutations; their separate quiescence/recovery gate is unchanged.

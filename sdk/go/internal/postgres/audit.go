@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"github.com/lib/pq"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"math"
@@ -278,4 +279,72 @@ func (a *Audit) Pending(ctx context.Context, sink string, now int64, limit int) 
 		return nil, err
 	}
 	return result, nil
+}
+
+func (a *Audit) deliveryArgs(sink, eventID string, attempts int) ([]any, error) {
+	if !valid(sink, 128) || !valid(eventID, 128) || attempts < 0 || attempts > 2147483647 {
+		return nil, contract.ErrInvalidArgument
+	}
+	return []any{a.product, a.environment, sink, eventID, attempts}, nil
+}
+func (a *Audit) deliveryTransition(ctx context.Context, query string, args []any) (*int, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := contract.CheckCancellation(ctx); err != nil {
+		return nil, err
+	}
+	tx, err := a.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return nil, databaseError(ctx)
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, "SET LOCAL synchronous_commit='on'"); err != nil {
+		return nil, databaseError(ctx)
+	}
+	var attempt int
+	var result *int
+	err = tx.QueryRowContext(ctx, query, args...).Scan(&attempt)
+	if err == nil {
+		result = &attempt
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return nil, databaseError(ctx)
+	}
+	if err = contract.CheckCancellation(ctx); err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, contract.ErrOutcomeUnknown
+	}
+	return result, nil
+}
+
+// BeginAttempt is an atomic claim, not a fence for an external delivery request.
+func (a *Audit) BeginAttempt(ctx context.Context, sink, eventID string, expectedAttempts int, now, retryAt int64) (*int, error) {
+	args, err := a.deliveryArgs(sink, eventID, expectedAttempts)
+	if err != nil {
+		return nil, err
+	}
+	if expectedAttempts == 2147483647 || now < 0 || now > maxSafe || retryAt <= now || retryAt > maxSafe {
+		return nil, contract.ErrInvalidArgument
+	}
+	return a.deliveryTransition(ctx, "UPDATE heimdall.audit_deliveries SET attempts=attempts+1,next_attempt_at=$7 WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=$4 AND attempts=$5 AND state='pending' AND next_attempt_at<=$6 RETURNING attempts", append(args, now, retryAt))
+}
+func (a *Audit) DeferAttempt(ctx context.Context, sink, eventID string, attempt int, retryAt int64) (bool, error) {
+	args, err := a.deliveryArgs(sink, eventID, attempt)
+	if err != nil {
+		return false, err
+	}
+	if attempt < 1 || retryAt < 0 || retryAt > maxSafe {
+		return false, contract.ErrInvalidArgument
+	}
+	result, err := a.deliveryTransition(ctx, "UPDATE heimdall.audit_deliveries SET next_attempt_at=GREATEST(next_attempt_at,$6) WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=$4 AND attempts=$5 AND state='pending' RETURNING attempts", append(args, retryAt))
+	return result != nil, err
+}
+func (a *Audit) Quarantine(ctx context.Context, sink, eventID string, expectedAttempts int) (bool, error) {
+	args, err := a.deliveryArgs(sink, eventID, expectedAttempts)
+	if err != nil {
+		return false, err
+	}
+	result, err := a.deliveryTransition(ctx, "UPDATE heimdall.audit_deliveries SET state='quarantined' WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=$4 AND attempts=$5 AND state IN ('pending','quarantined') RETURNING attempts", args)
+	return result != nil, err
 }

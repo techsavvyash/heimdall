@@ -518,3 +518,237 @@ func TestAuditPending(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestAuditTransitions(t *testing.T) {
+	url := os.Getenv("HEIMDALL_TEST_DATABASE_URL")
+	if url == "" || os.Getenv("HEIMDALL_TEST_READ_PEER") != "" {
+		t.Skip("live transitions")
+	}
+	fixtures, validate := auditFixtureValidator(t)
+	db, err := sql.Open("postgres", url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	deliveryDB, err := sql.Open("postgres", url+"&options=-c%20role%3Dheimdall_audit_delivery")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer deliveryDB.Close()
+	writer, _ := NewAudit(db, "retry-go", "production", []string{"retry", "other"}, validate)
+	store, _ := NewAudit(deliveryDB, "retry-go", "production", nil, validate)
+	ctx := context.Background()
+	seed := func(id string) {
+		t.Helper()
+		event := fixtures[0].Event
+		event["productId"] = "retry-go"
+		event["eventId"] = id
+		if _, err := writer.Append(ctx, event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	raw, err := os.ReadFile("../../../../contracts/fixtures/audit-transitions.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Operation      string
+		Attempt        int
+		Now, RetryAt   int64
+		Result         any
+		StoredAttempts int
+		StoredDue      int64
+		StoredState    string
+	}
+	if json.Unmarshal(raw, &cases) != nil {
+		t.Fatal("fixtures")
+	}
+	seed("retry-go-main")
+	for _, step := range cases {
+		var result any
+		var err error
+		switch step.Operation {
+		case "begin":
+			var claim *int
+			claim, err = store.BeginAttempt(ctx, "retry", "retry-go-main", step.Attempt, step.Now, step.RetryAt)
+			if claim != nil {
+				result = float64(*claim)
+			}
+		case "defer":
+			result, err = store.DeferAttempt(ctx, "retry", "retry-go-main", step.Attempt, step.RetryAt)
+		case "quarantine":
+			result, err = store.Quarantine(ctx, "retry", "retry-go-main", step.Attempt)
+		}
+		if err != nil || !reflect.DeepEqual(result, step.Result) {
+			t.Fatal("transition", step.Operation, result, err)
+		}
+		var attempt int
+		var due int64
+		var state string
+		if err = db.QueryRow("SELECT attempts,next_attempt_at,state FROM heimdall.audit_deliveries WHERE product_id='retry-go' AND event_id='retry-go-main' AND sink_id='retry'").Scan(&attempt, &due, &state); err != nil || attempt != step.StoredAttempts || due != step.StoredDue || state != step.StoredState {
+			t.Fatal("stored transition", err)
+		}
+	}
+	var attempt int
+	var state string
+	if err = db.QueryRow("SELECT attempts,state FROM heimdall.audit_deliveries WHERE product_id='retry-go' AND event_id='retry-go-main' AND sink_id='other'").Scan(&attempt, &state); err != nil || attempt != 0 || state != "pending" {
+		t.Fatal("sink isolation", err)
+	}
+	other, _ := NewAudit(deliveryDB, "support", "production", nil, validate)
+	if claim, err := other.BeginAttempt(ctx, "retry", "retry-go-main", 0, 100, 200); err != nil || claim != nil {
+		t.Fatal("product isolation", err)
+	}
+	if claim, err := store.BeginAttempt(ctx, "missing", "retry-go-main", 0, 100, 200); err != nil || claim != nil {
+		t.Fatal("sink missing", err)
+	}
+	seed("retry-go-race")
+	var wg sync.WaitGroup
+	claims := make(chan *int, 8)
+	errs := make(chan error, 8)
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			claim, err := store.BeginAttempt(ctx, "retry", "retry-go-race", 0, 100, 200)
+			claims <- claim
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(claims)
+	close(errs)
+	winners := 0
+	for claim := range claims {
+		if claim != nil {
+			winners++
+			if *claim != 1 {
+				t.Fatal("counter")
+			}
+		}
+	}
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if winners != 1 {
+		t.Fatal("claim race", winners)
+	}
+	batch := contract.AuditDelivery{ProductID: "retry-go", Environment: "production", SinkID: "retry", EventIDs: []string{"retry-go-race"}}
+	if err = store.Acknowledge(ctx, batch, batch, 150); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := store.DeferAttempt(ctx, "retry", "retry-go-race", 1, 999); err != nil || changed {
+		t.Fatal("delivered defer", err)
+	}
+	if changed, err := store.Quarantine(ctx, "retry", "retry-go-race", 1); err != nil || changed {
+		t.Fatal("delivered quarantine", err)
+	}
+	if claim, err := store.BeginAttempt(ctx, "retry", "retry-go-race", 1, 999, 1000); err != nil || claim != nil {
+		t.Fatal("delivered claim", err)
+	}
+	if _, err = store.BeginAttempt(ctx, "retry", "unused", 2147483647, 100, 200); !errors.Is(err, contract.ErrInvalidArgument) {
+		t.Fatal(err)
+	}
+	seed("retry-go-0-invalid")
+	seed("retry-go-1-healthy")
+	if _, err = db.Exec("UPDATE heimdall.audit_events SET payload_digest=decode(repeat('00',32),'hex') WHERE event_id='retry-go-0-invalid'"); err != nil {
+		t.Fatal(err)
+	}
+	first, err := writer.Pending(ctx, "retry", 100, 1)
+	if err != nil || len(first) != 1 || first[0].Event != nil {
+		t.Fatal("invalid head", err)
+	}
+	if changed, err := store.Quarantine(ctx, "retry", "retry-go-0-invalid", 0); err != nil || !changed {
+		t.Fatal(err)
+	}
+	next, err := writer.Pending(ctx, "retry", 100, 1)
+	if err != nil || len(next) != 1 || next[0].EventID != "retry-go-1-healthy" || next[0].Event == nil {
+		t.Fatal("poison progress", err)
+	}
+	var count int
+	if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_events WHERE event_id='retry-go-0-invalid'").Scan(&count); err != nil || count != 1 {
+		t.Fatal("quarantine deleted event", err)
+	}
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err = store.BeginAttempt(cancelled, "retry", "retry-go-1-healthy", 0, 100, 200); !errors.Is(err, contract.ErrCancelled) {
+		t.Fatal(err)
+	}
+}
+
+func TestTransitionCommitLoss(t *testing.T) {
+	url := os.Getenv("HEIMDALL_TEST_TRANSITION_LOSS")
+	if url == "" {
+		t.Skip("transition response loss proxy")
+	}
+	fixtures, validate := auditFixtureValidator(t)
+	fault, err := sql.Open("postgres", url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fault.Close()
+	direct, err := sql.Open("postgres", os.Getenv("HEIMDALL_TEST_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer direct.Close()
+	operation := os.Getenv("HEIMDALL_TEST_TRANSITION_KIND")
+	id := "transition-go-loss-" + operation
+	ctx := context.Background()
+	writer, _ := NewAudit(direct, "ledger", "production", []string{"transition-loss"}, validate)
+	store, _ := NewAudit(fault, "ledger", "production", nil, validate)
+	fixtures[0].Event["eventId"] = id
+	if _, err = writer.Append(ctx, fixtures[0].Event); err != nil {
+		t.Fatal(err)
+	}
+	if operation != "begin" {
+		if _, err = writer.BeginAttempt(ctx, "transition-loss", id, 0, 100, 200); err != nil {
+			t.Fatal(err)
+		}
+	}
+	invoke := func(target *Audit) (any, error) {
+		switch operation {
+		case "begin":
+			claim, err := target.BeginAttempt(ctx, "transition-loss", id, 0, 100, 200)
+			if claim == nil {
+				return nil, err
+			}
+			return *claim, err
+		case "defer":
+			return target.DeferAttempt(ctx, "transition-loss", id, 1, 300)
+		default:
+			return target.Quarantine(ctx, "transition-loss", id, 1)
+		}
+	}
+	if _, err = invoke(store); !errors.Is(err, contract.ErrOutcomeUnknown) {
+		t.Fatal("lost transition response", err)
+	}
+	expectedDue := int64(200)
+	expectedState := "pending"
+	var expectedResult any
+	if operation == "defer" {
+		expectedDue = 300
+	}
+	if operation == "quarantine" {
+		expectedState = "quarantined"
+	}
+	if operation != "begin" {
+		expectedResult = true
+	}
+	verify := func() {
+		t.Helper()
+		var attempt int
+		var due int64
+		var state string
+		if err = direct.QueryRow("SELECT attempts,next_attempt_at,state FROM heimdall.audit_deliveries WHERE event_id=$1", id).Scan(&attempt, &due, &state); err != nil || attempt != 1 || due != expectedDue || state != expectedState {
+			t.Fatal("stored transition", err)
+		}
+	}
+	verify()
+	result, err := invoke(writer)
+	if err != nil || !reflect.DeepEqual(result, expectedResult) {
+		t.Fatal("transition replay", result, err)
+	}
+	verify()
+}

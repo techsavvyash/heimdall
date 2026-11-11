@@ -413,3 +413,161 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !process.env.HEIMDALL_TES
     }
   },
 );
+
+test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TEST_READ_PEER)(
+  "delivery attempt transitions and poison progress",
+  async () => {
+    const pool = new Pool({ connectionString: process.env.HEIMDALL_TEST_DATABASE_URL });
+    const deliveryPool = new Pool({
+      connectionString: process.env.HEIMDALL_TEST_DATABASE_URL,
+      options: "-c role=heimdall_audit_delivery",
+    });
+    const writer = new PostgresAudit(pool, "retry-ts", "production", ["retry", "other"], validate);
+    const store = new PostgresAudit(deliveryPool, "retry-ts", "production", [], validate);
+    const event = (eventId: string) => ({ ...fixtures[0].event, productId: "retry-ts", eventId });
+    const cases = JSON.parse(
+      readFileSync(new URL("fixtures/audit-transitions.json", root), "utf8"),
+    ) as {
+      operation: string;
+      attempt: number;
+      now: number;
+      retryAt: number;
+      result: number | boolean | null;
+      storedAttempts: number;
+      storedDue: number;
+      storedState: string;
+    }[];
+    try {
+      await writer.append(event("retry-ts-main"));
+      for (const step of cases) {
+        let result: number | boolean | null;
+        if (step.operation === "begin")
+          result = await store.beginAttempt(
+            "retry",
+            "retry-ts-main",
+            step.attempt,
+            step.now,
+            step.retryAt,
+          );
+        else if (step.operation === "defer")
+          result = await store.deferAttempt("retry", "retry-ts-main", step.attempt, step.retryAt);
+        else result = await store.quarantine("retry", "retry-ts-main", step.attempt);
+        expect(result).toBe(step.result);
+        expect(
+          (
+            await pool.query(
+              "SELECT attempts,next_attempt_at::text,state FROM heimdall.audit_deliveries WHERE product_id='retry-ts' AND event_id='retry-ts-main' AND sink_id='retry'",
+            )
+          ).rows[0],
+        ).toEqual({
+          attempts: step.storedAttempts,
+          next_attempt_at: String(step.storedDue),
+          state: step.storedState,
+        });
+      }
+      expect(
+        (
+          await pool.query(
+            "SELECT attempts,state FROM heimdall.audit_deliveries WHERE product_id='retry-ts' AND event_id='retry-ts-main' AND sink_id='other'",
+          )
+        ).rows[0],
+      ).toEqual({ attempts: 0, state: "pending" });
+      expect(
+        await new PostgresAudit(deliveryPool, "support", "production", [], validate).beginAttempt(
+          "retry",
+          "retry-ts-main",
+          0,
+          100,
+          200,
+        ),
+      ).toBeNull();
+      expect(await store.beginAttempt("missing", "retry-ts-main", 0, 100, 200)).toBeNull();
+      await writer.append(event("retry-ts-race"));
+      const claims = await Promise.all(
+        Array.from({ length: 8 }, () => store.beginAttempt("retry", "retry-ts-race", 0, 100, 200)),
+      );
+      expect(claims.filter((value) => value !== null)).toEqual([1]);
+      const batch = {
+        productId: "retry-ts",
+        environment: "production",
+        sinkId: "retry",
+        eventIds: ["retry-ts-race"],
+      };
+      await store.acknowledge(batch, batch, 150);
+      expect(await store.deferAttempt("retry", "retry-ts-race", 1, 999)).toBe(false);
+      expect(await store.quarantine("retry", "retry-ts-race", 1)).toBe(false);
+      expect(await store.beginAttempt("retry", "retry-ts-race", 1, 999, 1000)).toBeNull();
+      await expect(store.beginAttempt("retry", "unused", 2147483647, 100, 200)).rejects.toThrow(
+        "invalid_argument",
+      );
+      await writer.append(event("retry-ts-0-invalid"));
+      await writer.append(event("retry-ts-1-healthy"));
+      await pool.query(
+        "UPDATE heimdall.audit_events SET payload_digest=decode(repeat('00',32),'hex') WHERE event_id='retry-ts-0-invalid'",
+      );
+      expect((await writer.pending("retry", 100, 1))[0]?.event).toBeNull();
+      expect(await store.quarantine("retry", "retry-ts-0-invalid", 0)).toBe(true);
+      expect((await writer.pending("retry", 100, 1))[0]?.event?.eventId).toBe("retry-ts-1-healthy");
+      expect(
+        (
+          await pool.query(
+            "SELECT count(*)::int AS n FROM heimdall.audit_events WHERE event_id='retry-ts-0-invalid'",
+          )
+        ).rows[0].n,
+      ).toBe(1);
+      await expect(
+        store.beginAttempt("retry", "retry-ts-1-healthy", 0, 100, 200, AbortSignal.abort()),
+      ).rejects.toThrow("cancelled");
+    } finally {
+      await deliveryPool.end();
+      await pool.end();
+    }
+  },
+  20000,
+);
+
+test.skipIf(!process.env.HEIMDALL_TEST_TRANSITION_LOSS)(
+  "delivery transition committed response loss",
+  async () => {
+    const fault = new Pool({ connectionString: process.env.HEIMDALL_TEST_TRANSITION_LOSS });
+    const direct = new Pool({ connectionString: process.env.HEIMDALL_TEST_DATABASE_URL });
+    const operation = process.env.HEIMDALL_TEST_TRANSITION_KIND!;
+    const id = `transition-ts-loss-${operation}`;
+    const writer = new PostgresAudit(direct, "ledger", "production", ["transition-loss"], validate);
+    const store = new PostgresAudit(fault, "ledger", "production", [], validate);
+    const invoke = (target: PostgresAudit) => {
+      if (operation === "begin") return target.beginAttempt("transition-loss", id, 0, 100, 200);
+      if (operation === "defer") return target.deferAttempt("transition-loss", id, 1, 300);
+      return target.quarantine("transition-loss", id, 1);
+    };
+    try {
+      await writer.append({ ...fixtures[0].event, eventId: id });
+      if (operation !== "begin") await writer.beginAttempt("transition-loss", id, 0, 100, 200);
+      await expect(invoke(store)).rejects.toThrow("outcome_unknown");
+      const before = await direct.query(
+        "SELECT attempts,next_attempt_at::text,state FROM heimdall.audit_deliveries WHERE event_id=$1",
+        [id],
+      );
+      expect(before.rows).toEqual([
+        {
+          attempts: 1,
+          next_attempt_at: operation === "defer" ? "300" : "200",
+          state: operation === "quarantine" ? "quarantined" : "pending",
+        },
+      ]);
+      expect(await invoke(writer)).toBe(operation === "begin" ? null : true);
+      expect(
+        (
+          await direct.query(
+            "SELECT attempts,next_attempt_at::text,state FROM heimdall.audit_deliveries WHERE event_id=$1",
+            [id],
+          )
+        ).rows,
+      ).toEqual(before.rows);
+    } finally {
+      await fault.end();
+      await direct.end();
+    }
+  },
+  15000,
+);
