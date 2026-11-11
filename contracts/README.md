@@ -450,3 +450,28 @@ two-tenant/one-client probe. Fixed evaluation times keep it deterministic. Both
 runners exercise tenant/subject/policy/age rejection, including a previous account
 with all other expected fields held constant. These fixtures do not replace live
 provider verification or prove browser session replacement.
+
+## Pinned model readiness
+
+The internal TS/Go model-binding guard accepts structurally validated manifest
+and binding values and recomputes the complete compiler artifact. The supplied
+model, hash, role mapping and permission mapping must all match. Construction
+snapshots these values; no mutable caller artifact becomes a trusted mapping.
+
+Verification reads exactly the configured OpenFGA store/model pair. It never
+uses latest-model discovery or writes a model. A five-second budget includes
+credential loading and the read; caller cancellation can shorten it. Redirects
+are rejected, responses are limited to one MiB, and credentials/errors never
+appear in the result. Credential callbacks must honor cancellation; the SDK
+cannot forcibly terminate arbitrary callback work.
+
+The returned model ID and full model must match. Comparison adds only the
+pinned API's protobuf defaults: empty conditions, absent user relations and
+metadata, empty computed-userset object, metadata module/source_info, and empty
+relation-reference condition. Unknown fields remain in comparison and fail.
+Local mismatch is invalid_argument; remote mismatch, missing model, malformed
+response or credential failure is unavailable; cancellation remains distinct.
+Shared model-binding.json fixtures capture the pinned provider response and
+drift cases. Verified results bind mappings to that exact immutable model ID;
+future checks must send that ID. This guard does not implement runtime check
+orchestration, role mutation, model activation, or tuple migration.

@@ -111,3 +111,5 @@ Phase 3 signature-verification checkpoint: [[evidence/phase-3-token-verification
 Phase 3 identity-freshness checkpoint: [[evidence/phase-3-identity-freshness]] adds authoritative human status, bounded positive freshness, local deny checks, distinct token/identity invalidation and late-positive race rejection in both SDKs. Durable factory/session/audit composition remains open.
 
 Phase 3 observed-version invalidation checkpoint: [[evidence/phase-3-session-version-invalidation]] records revision/identity-bound deletion, refresh races, cross-language invalidation and lost-COMMIT replay that preserves a replacement session. Full session orchestration remains open.
+
+Phase 3 pinned-model checkpoint: [[evidence/phase-3-model-binding]] records complete local artifact comparison, exact remote model reads and direct Railway verification in both SDKs. Runtime authorization composition, administrative writes and model migration remain open.

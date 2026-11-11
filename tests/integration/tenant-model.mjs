@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -34,6 +35,33 @@ try {
     const store = await api("/stores", { name: `heimdall-model-${c.name}-${runId}` });
     stores.push(store.id);
     const model = await api(`/stores/${store.id}/authorization-models`, c.expected.model);
+    if (process.env.HEIMDALL_PROBE_MODEL_BINDING === "1") {
+      const env = {
+        ...process.env,
+        HEIMDALL_TEST_MODEL_BINDING: JSON.stringify({
+          url: base,
+          storeId: store.id,
+          modelId: model.authorization_model_id,
+          name: c.name,
+        }),
+      };
+      for (const [command, args, cwd] of [
+        ["pnpm", ["exec", "vitest", "run", "test/model-binding.live.test.ts"], "sdk/typescript"],
+        [
+          "go",
+          ["test", "-race", "./internal/modelbinding", "-run", "^TestLiveBinding$", "-count=1"],
+          "sdk/go",
+        ],
+      ]) {
+        const result = spawnSync(command, args, { env, cwd, encoding: "utf8", timeout: 60000 });
+        assert(result.status === 0, `SDK binding verification failed: ${command} ${c.name}`);
+        observations.push({
+          product: c.name,
+          sdk: command === "go" ? "Go" : "TypeScript",
+          pinnedModelVerified: true,
+        });
+      }
+    }
     const roles = Object.keys(c.manifest.roles).sort();
     const tuples = [];
     const checks = [];
@@ -142,7 +170,7 @@ console.log(
       observations,
       cleanup: "owned stores deleted",
       limitations: [
-        "internal compiler only; runtime tuple mutation authorization and model migration not implemented",
+        "internal compiler and optional pinned-model guard only; runtime tuple mutation authorization and model migration not implemented",
       ],
     },
     null,
