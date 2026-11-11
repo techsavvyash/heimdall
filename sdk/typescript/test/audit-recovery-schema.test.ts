@@ -96,3 +96,16 @@ test("prepared retention hold SQL matches shared checksum", () => {
   );
   expect(createHash("sha256").update(sql).digest("hex")).toBe(fixture.checksum);
 });
+
+test("prepared retention capacity SQL matches shared checksum", () => {
+  const fixture = JSON.parse(
+    readFileSync(
+      new URL("../../../contracts/fixtures/audit-retention-capacity.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const sql = readFileSync(
+    new URL(`../../../contracts/persistence/${fixture.path}`, import.meta.url),
+  );
+  expect(createHash("sha256").update(sql).digest("hex")).toBe(fixture.checksum);
+});

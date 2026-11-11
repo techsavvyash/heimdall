@@ -274,6 +274,43 @@ try:
   # A hold on the request protects a resolved decision's whole group, not only its target row.
   assert sql("SELECT EXISTS(SELECT 1 FROM heimdall_retention.event_holds h JOIN heimdall_retention.event_identities i USING(product_id,environment,event_id) WHERE h.product_id='ledger' AND h.environment='staging' AND i.decision_id='decision-1' AND h.released_at IS NULL)",hold_db)=='t'
   assert sql("SELECT has_table_privilege('public_capacity_runtime','heimdall_retention.event_holds','INSERT')",hold_db)=='f'
+  quota_fixture=json.loads((ROOT/'contracts/fixtures/audit-retention-capacity.json').read_text())
+  quota_sql=(ROOT/'contracts/persistence'/quota_fixture['path']).read_text()
+  assert hashlib.sha256(quota_sql.encode()).hexdigest()==quota_fixture['checksum']
+  quota_db='retention_capacity'
+  sql('CREATE DATABASE '+quota_db+' TEMPLATE retention_holds')
+  sql('BEGIN;'+quota_sql+'ROLLBACK;',quota_db)
+  assert sql("SELECT to_regclass('heimdall_retention.capacity') IS NULL",quota_db)=='t'
+  sql(quota_sql,quota_db)
+  def reject_quota(statement):
+   r=subprocess.run(['docker','exec','-i',name,'psql','-U','postgres','-d',quota_db,'-At','-v','ON_ERROR_STOP=1','-v','VERBOSITY=verbose'],input='BEGIN;'+statement+';ROLLBACK;',capture_output=True,text=True)
+   assert r.returncode!=0 and '23514' in r.stderr,r.stderr
+  reject_quota(place.replace('hold-1','uninitialized'))
+  reject_quota("INSERT INTO heimdall_retention.capacity(row_limit,byte_limit) VALUES(1,8192)")
+  sql("INSERT INTO heimdall_retention.capacity(row_limit,byte_limit,used_rows,reserved_rows) VALUES(1000,8192000,0,0)",quota_db)
+  assert sql("SELECT used_rows=(SELECT count(*) FROM heimdall_retention.event_identities)+(SELECT count(*) FROM heimdall_retention.decision_identities)+(SELECT count(*) FROM heimdall_retention.event_holds) AND reserved_rows=4 FROM heimdall_retention.capacity",quota_db)=='t'
+  sql("UPDATE heimdall_retention.capacity SET row_limit=used_rows+reserved_rows,byte_limit=(used_rows+reserved_rows)*8192",quota_db)
+  before=sql("SELECT used_rows||':'||reserved_rows FROM heimdall_retention.capacity",quota_db)
+  reject_quota(place.replace('hold-1','full'))
+  assert sql("SELECT used_rows||':'||reserved_rows FROM heimdall_retention.capacity",quota_db)==before
+  # Release consumes its original fixed slot; it must work at a full quota.
+  sql(release.replace('hold-1','hold-2'),quota_db)
+  assert sql("SELECT used_rows||':'||reserved_rows FROM heimdall_retention.capacity",quota_db)==before
+  sql("UPDATE heimdall_retention.capacity SET row_limit=row_limit+1,byte_limit=byte_limit+8192",quota_db)
+  def race_hold(hold):
+   return subprocess.run(['docker','exec','-i',name,'psql','-U','postgres','-d',quota_db,'-At','-v','ON_ERROR_STOP=1'],input=place.replace('hold-1',hold),capture_output=True,text=True).returncode
+  with concurrent.futures.ThreadPoolExecutor(max_workers=2) as workers:
+   results=list(workers.map(race_hold,['quota-race-a','quota-race-b']))
+  assert sorted(results)==[0,3],results
+  assert sql("SELECT count(*) FROM heimdall_retention.event_holds WHERE hold_id IN ('quota-race-a','quota-race-b')",quota_db)=='1'
+  # Recover source history, then consume reserved metadata slots at full quota.
+  go('^TestRuntimeRecovery$',dict(env,HEIMDALL_TEST_RUNTIME_RECOVERY_URL=dsn(quota_db)))
+  sql("UPDATE heimdall.schema_metadata SET state='ready'",quota_db)
+  sql(identity_fixture['copyEvents']+' ON CONFLICT DO NOTHING;'+identity_fixture['copyDecisions']+' ON CONFLICT(product_id,environment,decision_id) DO UPDATE SET resolution=EXCLUDED.resolution,terminal_event_id=EXCLUDED.terminal_event_id,recovery_event_id=EXCLUDED.recovery_event_id,resolved_at=EXCLUDED.resolved_at',quota_db)
+  assert sql("SELECT used_rows+reserved_rows=row_limit AND reserved_rows=2 FROM heimdall_retention.capacity",quota_db)=='t'
+  final_quota=sql("SELECT used_rows||':'||reserved_rows FROM heimdall_retention.capacity",quota_db)
+  sql(identity_fixture['copyEvents']+' ON CONFLICT DO NOTHING;'+identity_fixture['copyDecisions']+' ON CONFLICT(product_id,environment,decision_id) DO UPDATE SET resolution=EXCLUDED.resolution,terminal_event_id=EXCLUDED.terminal_event_id,recovery_event_id=EXCLUDED.recovery_event_id,resolved_at=EXCLUDED.resolved_at',quota_db)
+  assert sql("SELECT used_rows||':'||reserved_rows FROM heimdall_retention.capacity",quota_db)==final_quota
   identity_db='retention_identities'
   sql('CREATE DATABASE '+identity_db+' TEMPLATE cli_activation')
   sql('BEGIN;'+identity_sql+'ROLLBACK;',identity_db)
@@ -307,6 +344,6 @@ try:
   sql("UPDATE heimdall_capacity.policy SET state='ready'",'normal')
   go('^TestCapacityBackfillPendingRecovery$',dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
   ts(dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
- print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work','SIGKILL after the first committed candidate resumes in the other language with original initiators and exact event outbox and capacity counts','reciprocal retention COMMIT loss returns unknown and the other SDK retries without changing compact metadata','prepared hold ledger preserves independent holds and immutable releases with scoped reference checks','prepared immutable identities bind source routing and decision members and survive privileged test payload removal']}))
+ print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work','SIGKILL after the first committed candidate resumes in the other language with original initiators and exact event outbox and capacity counts','reciprocal retention COMMIT loss returns unknown and the other SDK retries without changing compact metadata','retained metadata quota blocks overflow and reserves recovery slots while independent hold release remains possible','prepared hold ledger preserves independent holds and immutable releases with scoped reference checks','prepared immutable identities bind source routing and decision members and survive privileged test payload removal']}))
 finally:
  if created:run(['docker','rm','--force',name],stdout=subprocess.DEVNULL)

@@ -227,3 +227,35 @@ compact reference and hold transition with metadata accounting. Full history
 validation, hold quotas, retirement exclusion, v4 admission and public APIs remain
 required. Tests of this prepared schema use existing events as reference stand-ins;
 they prove structural constraints, not authorized administrative actions.
+
+## Prepared metadata capacity
+
+`0004-retention-capacity.sql` adds an explicit deployment-wide logical quota for
+retained event identities, decision identities and hold history. Configuration
+requires both row and byte limits; writes refuse while uninitialized. Adoption
+recounts all existing rows and pending obligations instead of trusting supplied
+usage counters. Installation/adoption requires drained writers and an enclosing
+migration transaction; runtime activation is still absent.
+
+Each row consumes a conservative 8192-byte logical slot. SQL rejects a serialized
+metadata row larger than its slot. Resolution and release updates keep the slot,
+so hold release requires no extra quota and never refunds immutable history. This
+trades storage utilization for a simple bound on future metadata growth. It is a
+logical admission budget, not a measurement of physical PostgreSQL pages, indexes,
+WAL or disk space; physical capacity monitoring remains necessary.
+
+A pending decision reserves two additional slots for its terminal and recovery
+administration identities. Inserting either member consumes one reservation;
+resolving the decision releases any remaining unused reservation. Already-resolved
+history reserves nothing. All used/reserved changes serialize on one capacity
+row and participate in the identity/hold transaction. A failed quota check rolls
+back inserted metadata, and exact retries or release updates do not double-charge.
+
+The prepared live proof covers initialization over existing mixed-language
+history, uninitialized/insufficient quota refusal, competing holds for the final
+slot, release at full capacity, recovery consuming reserved slots at full capacity,
+and accounting-stable retries. It does not yet prove online v4 request admission,
+atomic administrative hold creation, or the complete bounded backfill/activation
+workflow. Future runtime transactions must create the request identity, pending
+decision and reservation together before releasing protected work. No grants or
+compatibility version are changed by this SQL.

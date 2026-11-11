@@ -47,3 +47,23 @@ func TestAuditRetentionHoldsChecksum(t *testing.T) {
 		t.Fatal("hold SQL checksum differs")
 	}
 }
+
+func TestAuditRetentionCapacityChecksum(t *testing.T) {
+	const root = "../../../../contracts/"
+	raw, err := os.ReadFile(root + "fixtures/audit-retention-capacity.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var f struct{ Path, Checksum string }
+	if json.Unmarshal(raw, &f) != nil {
+		t.Fatal("fixture")
+	}
+	data, err := os.ReadFile(root + "persistence/" + f.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(data)
+	if hex.EncodeToString(sum[:]) != f.Checksum {
+		t.Fatal("retention capacity SQL checksum differs")
+	}
+}
