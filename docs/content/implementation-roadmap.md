@@ -173,3 +173,8 @@ Phase 3 membership-intent checkpoint: [[evidence/phase-3-membership-intents]] ad
 atomic reservation of existing workspaces, durable membership/ownership intent and
 audit, with idempotency, concurrency and COMMIT-loss proof in both SDKs. Rebuild
 coordination, recovery scanning and operational foundations remain open.
+
+Phase 3 operation-scan checkpoint: [[evidence/phase-3-operation-scans]] adds
+bounded primary maintenance queues for runnable, recovery and local completion
+work. Scans do not claim or replay operations. Rebuild coordination and broader
+operational foundations remain open.

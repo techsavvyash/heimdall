@@ -128,3 +128,44 @@ unauthenticated mutation endpoint.
 The shared fixture is fixtures/membership-intents.json. Live tests cover all four
 kinds, gates, stale revisions, duplicate and competing races, uncertain reservation,
 audit rollback, cancellation, cross-language retries and confirmed COMMIT loss.
+
+## Maintenance scans
+
+Internal `scan` / `Scan` is for trusted product maintenance, not end-user operation
+listing. It intentionally reads all initiating identities within the configured
+product/environment; every payload still binds to its indexed canonical actor and
+target hashes, fingerprint, manifest and model pins. Public operation lookup remains
+actor-scoped. A maintenance result is not a newly authenticated principal.
+
+Three fixed queues prevent accidental replay classification:
+
+| Queue      | States                 | Time filter                   |
+| ---------- | ---------------------- | ----------------------------- |
+| runnable   | pending, retryable     | nextAttemptAt <= now          |
+| recovery   | dispatching, uncertain | None; age never proves safety |
+| completion | confirmed              | None; local completion only   |
+
+Terminal records are excluded but retained in storage. Unknown queue names,
+malformed positions, unsafe timestamps and limits outside 1..100 are invalid.
+Ordering is the immutable operation ID under PostgreSQL C collation, with a strict
+after-ID keyset. Null starts a traversal. One primary query selects at most limit + 1
+records, then bounds the sum of encoded record sizes to 4 MiB before returning them.
+JSON array framing is additional bounded overhead. A five-second budget covers I/O.
+A short byte-bounded page has continuation even if it contains fewer than limit
+items. Continuation always references the final returned ID, never an omitted row.
+
+All returned rows, including count lookahead, pass the same full journal decoder.
+Bad bindings/model pins, unexpected states/order and non-primary reads fail the
+whole page. Primary status is checked even for an empty page. No work is claimed,
+no attempt is incremented and no audit/mutation is performed by selection.
+Multiple workers can see identical records; subsequent generation-checked
+transitions determine who can proceed. Only a successfully committed dispatch
+transition permits that worker to send a remote request.
+
+This is a live traversal, not a durable scheduler checkpoint or snapshot. New work,
+state changes and retry deadlines behind the current ID require a new sweep from
+null. Row/time/output bounds do not promise bounded total database work. Corrupt
+records require inspection; they are not silently filtered or replayed. Recovery
+queue membership never authorizes retry, cancellation or unblocking: verified
+quiescence and reconciliation remain mandatory. Automatic recovery orchestration,
+operator authorization and deployment controls are not implemented by this scan.

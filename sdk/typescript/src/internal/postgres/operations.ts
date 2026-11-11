@@ -212,6 +212,79 @@ export class OperationRecords {
       byKey,
     );
   }
+  // Trusted maintenance only: selection does not claim work or authorize remote replay.
+  async scan(
+    queue: "runnable" | "recovery" | "completion",
+    after: string | null,
+    now: number,
+    limit: number,
+    signal?: AbortSignal,
+  ) {
+    const states = {
+      runnable: ["pending", "retryable"],
+      recovery: ["dispatching", "uncertain"],
+      completion: ["confirmed"],
+    };
+    if (
+      !Object.hasOwn(states, queue) ||
+      (after !== null && !token(after, 128)) ||
+      !Number.isSafeInteger(now) ||
+      now < 0 ||
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 100
+    )
+      throw new HeimdallError("invalid_argument");
+    const b = this.binding;
+    const rows = await query<{
+      primary: boolean;
+      records: Record<string, unknown>[];
+      selected_count: number;
+    }>(
+      this.pool,
+      `
+      WITH selected AS MATERIALIZED (
+        SELECT * FROM heimdall_managed.operations WHERE product_id=$1 AND environment=$2 AND state=ANY($3::text[])
+         AND ($4::text IS NULL OR operation_id COLLATE "C">$4 COLLATE "C") AND (NOT $5::boolean OR next_attempt_at<=$6)
+         ORDER BY operation_id COLLATE "C" LIMIT $7
+      ), encoded AS MATERIALIZED (
+        SELECT o.operation_id, ${columns} AS record FROM selected o
+      ), sized AS (
+        SELECT *,sum(octet_length(record::text)) OVER(ORDER BY operation_id COLLATE "C") AS size FROM encoded
+      ) SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
+        COALESCE(jsonb_agg(o.record ORDER BY o.operation_id COLLATE "C"),'[]'::jsonb) AS records,
+        (SELECT count(*)::int FROM selected) AS selected_count FROM sized o WHERE size<=4194304`,
+      [b.productId, b.environment, states[queue], after, queue === "runnable", now, limit + 1],
+      false,
+      signal,
+    );
+    const row = rows[0];
+    if (
+      rows.length !== 1 ||
+      row?.primary !== true ||
+      !Array.isArray(row.records) ||
+      !Number.isInteger(row.selected_count) ||
+      row.selected_count < row.records.length ||
+      row.selected_count > limit + 1 ||
+      (row.selected_count > 0 && row.records.length === 0)
+    )
+      throw new HeimdallError("unavailable");
+    let previous = after ?? "";
+    const items = row.records.map((r) => {
+      const record = decodeOperation(r, b, r.actorHash as string);
+      if (
+        record.operationId <= previous ||
+        !states[queue].includes(record.state) ||
+        (queue === "runnable" && record.nextAttemptAt > now)
+      )
+        throw new HeimdallError("unavailable");
+      previous = record.operationId;
+      return record;
+    });
+    const more = row.selected_count > limit || row.selected_count > items.length;
+    if (items.length > limit) items.pop();
+    return { items, nextOperationId: more ? items[items.length - 1]!.operationId : null };
+  }
   async get(
     operationId: string,
     actor: Identity,
