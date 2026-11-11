@@ -31,6 +31,8 @@ Audit persistence is built before authorization results can be released; enterpr
 
 **Phase 1 is complete. Phase 2 is in progress.**
 
+[[evidence/phase-2-acceptance|The current Phase 2 acceptance audit]] consolidates the service proofs and later-phase obligations. The cross-directory account-model decision remains pending; this is not authorization to advance.
+
 Phase 1 turns selected semantics into executable schemas and fixtures. Public authentication APIs remain unavailable until implemented and validated; internal contract utilities do not constitute verified authentication.
 
 ## Phase 1 acceptance
