@@ -1,3 +1,4 @@
+import { checkAuditReadiness } from "../src/internal/postgres/readiness.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
@@ -179,4 +180,29 @@ test.skipIf(!url)(
     }
   },
   20000,
+);
+
+test.skipIf(!process.env.HEIMDALL_TEST_CAPACITY_UPGRADE_URL)(
+  "offline Go capacity preparation refuses both TS writer paths",
+  async () => {
+    const p = new Pool({ connectionString: process.env.HEIMDALL_TEST_CAPACITY_UPGRADE_URL });
+    try {
+      const a = port(p);
+      await expect(checkAuditReadiness(p)).rejects.toThrow("unavailable");
+      await expect(a.appendRuntime(f.request)).rejects.toThrow("unavailable");
+      await expect(a.appendCapacity(f.request)).rejects.toThrow("audit_unavailable");
+      expect(
+        (
+          await p.query(
+            "SELECT used_events::int AS used,reserved_events::int AS reserved FROM heimdall_capacity.policy",
+          )
+        ).rows[0],
+      ).toEqual({ used: 1, reserved: 0 });
+      expect(
+        (await p.query("SELECT count(*)::int AS n FROM heimdall.audit_events")).rows[0].n,
+      ).toBe(6);
+    } finally {
+      await p.end();
+    }
+  },
 );

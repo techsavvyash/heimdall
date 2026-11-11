@@ -2,9 +2,9 @@
 
 This implements the arithmetic behind the selected audit hard-limit requirement.
 It is an internal shared contract, not an activated public admission gate yet.
-`fixtures/audit-capacity.json` is executed by both SDKs. Deployment installation,
-existing-history accounting and public runtime composition remain
-required before this can protect a serving deployment.
+`fixtures/audit-capacity.json` is executed by both SDKs. Offline preparation is
+implemented; historical accounting, activation and public runtime composition
+remain required before this can protect a serving deployment.
 
 ## Units and bounds
 
@@ -89,9 +89,9 @@ fail-closed tests remain required for deployed enforcement.
 
 `persistence/session/0003-capacity.sql` is a checksum-pinned prepared addition,
 not an activated migration in the compatibility catalog. It requires the v2 audit
-and decision tables. Serving writers must be drained before installation; policy
-initialization, historical accounting and compatible runtime activation are still
-required. The default policy state is `preparing`.
+and decision tables. Serving writers must be drained before installation. The
+explicit preparation step below initializes policy; historical accounting and
+compatible runtime activation are still required. Policy starts `preparing`.
 
 One policy row bounds the entire audit database across products/environments. This
 prevents separate per-product budgets from silently exceeding that database's
@@ -162,3 +162,45 @@ races, cross-product admission, both cross-language recovery directions and lost
 COMMIT responses for ordinary/request/completion/recovery writes. Public startup,
 a versioned migration/backfill/activation gate, managed mutation reservations and
 authorized retention remain required before claiming complete enforcement.
+
+## Offline upgrade preparation
+
+The deployment executable `heimdall-migrate --prepare-capacity-upgrade` now installs
+`0003-capacity.sql` and `0003-upgrade.sql` from `--sql-directory`. It requires
+`--writers-drained` and explicit positive `--capacity-events`, `--capacity-bytes`
+and `--capacity-deliveries` limits in the shared safe-integer range. Its database
+comes from `HEIMDALL_MIGRATION_DATABASE_URL`. The CLI serves deployments using either
+SDK; no additional running service is introduced.
+
+Preparation validates the activated v2 metadata, original upgrade receipt and
+exact PostgreSQL 17 catalog profile before adding the capacity objects. Within one
+synchronous transaction under exclusive deployment admission, it installs the
+pinned SQL, initializes a preparing policy, stores the requested limits/checksums,
+creates an empty backfill checkpoint, and changes v2 state to `migrating`. It then
+checks the extended structural profile, including both schema identities and the
+new audit foreign keys/triggers. No v3 migration or runtime readiness is published.
+
+An existing capacity namespace is not adopted as a fresh install. Exact retries
+require the prepared receipt, matching policy, complete structural profile and
+unchanged requested limits. They preserve already committed charges and backfill
+progress. Changed requested limits are a conflict; independently altered policy
+or metadata is refused. A lost COMMIT is `outcome_unknown` and requires the same
+command to inspect its receipt. Mid-DDL failure rolls back both schema and metadata.
+The operation has a 30-second deadline, 5-second lock timeout and 20-second statement
+timeout. Operator quiescence remains an external assertion; these locks cannot
+fence a stopped process that is later restarted with an old unrestricted port.
+
+`0003-upgrade.sql` extends the prepared reservation triggers so offline backfill
+can insert an already completed/recovered binding while policy is `preparing`.
+Such a binding consumes no future reservation and retains all scoped decision and
+charge foreign keys. Pending imports reserve the full recovery bound. Once policy
+is ready, new resolved imports are rejected. The old pinned SQL is unchanged.
+This SQL mechanism does not validate historical event semantics; the backfill
+runner must decode and validate every request/terminal/recovery administration
+before using it, without fabricating missing recovery records.
+
+The checkpoint records event and decision passes, a global product/environment/ID
+cursor, and separate scanned counts. Creating it is not performing the backfill.
+Bounded semantic accounting, coverage verification, activation and public protocol
+composition remain outstanding. Preparation intentionally leaves a serving outage;
+it is only one stage of the incomplete upgrade workflow.

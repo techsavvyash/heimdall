@@ -57,3 +57,18 @@ test("prepared audit capacity SQL matches the shared proof checksum", () => {
   );
   expect(createHash("sha256").update(sql).digest("hex")).toBe(fixture.checksum);
 });
+
+test("offline capacity preparation matches the shared pinned SQL", () => {
+  const fixture = JSON.parse(
+    readFileSync(
+      new URL("../../../contracts/fixtures/audit-capacity-upgrade.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  for (const item of fixture.files) {
+    const sql = readFileSync(
+      new URL(`../../../contracts/persistence/session/${item.path}`, import.meta.url),
+    );
+    expect(createHash("sha256").update(sql).digest("hex")).toBe(item.checksum);
+  }
+});
