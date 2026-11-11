@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "eventId": "unicode-nul-shared",
+  "eventType": "heimdall.authorization.requested",
+  "eventVersion": 1,
+  "occurredAt": 1000,
+  "recordedAt": 1001,
+  "productId": "ledger",
+  "environment": "production",
+  "tenantId": "tenant-1",
+  "actor": {
+    "kind": "user",
+    "issuer": "https://id.example.com",
+    "subject": "maya"
+  },
+  "target": {
+    "type": "invoice",
+    "id": "invoice\u0000\u6771\u4eac"
+  },
+  "action": "invoice.approve",
+  "outcome": "requested",
+  "requestId": "request-1",
+  "source": "sdk",
+  "sdkVersion": "0.0.0",
+  "attributes": {},
+  "decisionId": "decision-1",
+  "permission": "invoice.approve",
+  "modelId": "model-1",
+  "manifestVersion": 1,
+  "operationId": "operation-1",
+  "policyVersion": "policy-1"
+}

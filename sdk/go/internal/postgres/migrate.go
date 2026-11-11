@@ -25,39 +25,39 @@ func MigrateSession(ctx context.Context, db *sql.DB, migration []byte) error {
 	}
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
-		return migrationError(ctx)
+		return databaseError(ctx)
 	}
 	defer tx.Rollback()
 	// READ COMMITTED is deliberate: a runner waiting on the lock must see the
 	// previous runner's committed installation in its next statement snapshot.
 	if _, err = tx.ExecContext(ctx, "SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='20s'"); err != nil {
-		return migrationError(ctx)
+		return databaseError(ctx)
 	}
 	if _, err = tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(74162401)"); err != nil {
-		return migrationError(ctx)
+		return databaseError(ctx)
 	}
 	var primary bool
 	if err = tx.QueryRowContext(ctx, "SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'").Scan(&primary); err != nil || !primary {
-		return migrationError(ctx)
+		return databaseError(ctx)
 	}
 	var exists bool
 	if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname='heimdall')").Scan(&exists); err != nil {
-		return migrationError(ctx)
+		return databaseError(ctx)
 	}
 	if exists {
 		var ready bool
 		if err = tx.QueryRowContext(ctx, readinessSQL, sessionChecksum).Scan(&ready); err != nil || !ready {
-			return migrationError(ctx)
+			return databaseError(ctx)
 		}
 	} else {
 		if _, err = tx.ExecContext(ctx, string(migration)); err != nil {
-			return migrationError(ctx)
+			return databaseError(ctx)
 		}
 		if _, err = tx.ExecContext(ctx, "INSERT INTO heimdall.migrations(version,checksum) VALUES(1,$1)", sessionChecksum); err != nil {
-			return migrationError(ctx)
+			return databaseError(ctx)
 		}
 		if _, err = tx.ExecContext(ctx, "INSERT INTO heimdall.schema_metadata(database_version,state,reader_min,reader_max,writer_min,writer_max) VALUES(1,'ready',1,1,1,1)"); err != nil {
-			return migrationError(ctx)
+			return databaseError(ctx)
 		}
 	}
 	if err := contract.CheckCancellation(ctx); err != nil {
@@ -70,7 +70,7 @@ func MigrateSession(ctx context.Context, db *sql.DB, migration []byte) error {
 	}
 	return nil
 }
-func migrationError(ctx context.Context) error {
+func databaseError(ctx context.Context) error {
 	if err := contract.CheckCancellation(ctx); err != nil {
 		return err
 	}

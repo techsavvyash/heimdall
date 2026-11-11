@@ -110,3 +110,37 @@ the exact tool to inspect committed metadata under the lock, not to force recove
 A migration operator must still target the dedicated application database and
 coordinate/drain incompatible runtimes. The command does not provision runtime
 credentials or claim future-schema rolling-upgrade support.
+
+Audit append is now an internal TS/Go transaction primitive. The factory must
+supply schema and semantic validation; the primitive snapshots and validates the
+event before dispatch, binds it to its configured product/environment, computes
+the shared typed-value digest, and rechecks stored payloads before returning a
+receipt. Verified actors and trusted origin are the authenticated caller's job.
+The public factory and protected-operation orchestration remain to be composed.
+
+The audit_events.event JSONB column stores exactly six envelope properties:
+format="ha1", productId, environment, eventId, recordedAt, and payload. payload is
+unpadded base64url of UTF-8 JSON for the complete original event. This preserves
+contract-valid U+0000 strings that PostgreSQL JSONB cannot represent directly.
+The typed digest covers the decoded original event, not the storage wrapper or
+JSON key ordering. Scope/timestamp properties match the columns and the decoded
+event. Reject unknown wrapper formats/properties and noncanonical base64url.
+JSONB predicates can address routing fields; full event analytics/export must
+first decode the payload. The immutable SQL migration and checksums are unchanged.
+
+Append inserts the event and its initial sink delivery rows atomically at READ
+COMMITTED with synchronous_commit=on. No UPDATE privilege on events is needed.
+An identical scoped event ID/digest returns its original receipt; a different
+digest conflicts. Concurrent inserts use ON CONFLICT DO NOTHING, followed by a
+new statement snapshot that sees the committed winner. Stored payload corruption
+returns audit_unavailable. Receipts are returned only after confirmed COMMIT.
+A lost COMMIT response returns outcome_unknown; the caller retains the immutable
+event and may replay it to recover the receipt. Errors before COMMIT return no
+receipt and roll back. Protected decisions must map persistence failure to the
+selected audit_unavailable behavior at the orchestration layer.
+
+Sink IDs are copied, unique, sorted and bounded to 32. A retry preserves the
+original delivery set even if current sink configuration differs; retroactive
+routing requires separate explicit export/replay behavior. This primitive does
+not run deliveries, apply retention, implement backpressure, batch appends or
+verify the database's physical fsync/replication guarantees. Those remain required.

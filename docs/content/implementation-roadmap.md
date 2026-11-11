@@ -95,3 +95,5 @@ Phase 3 readiness checkpoint: [[evidence/phase-3-storage-readiness]] records pri
 Phase 3 migration checkpoint: [[evidence/phase-3-migration-runner]] adds one shared deployment command, atomic v1 installation, checksum verification and exclusive locking. Runtime credential provisioning and audit composition remain open.
 
 The migration checkpoint now includes compiled-runner execution on Railway with verified cleanup, and a PostgreSQL wire-protocol test proving outcome_unknown after a committed response is lost.
+
+Phase 3 audit checkpoint: [[evidence/phase-3-audit-persistence]] adds atomic event/delivery append in TS and Go, replay/conflict handling, lossless payload encoding and lost-COMMIT-response recovery evidence. Protected-operation orchestration and delivery workers remain open.
