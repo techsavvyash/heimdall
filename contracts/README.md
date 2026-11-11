@@ -179,6 +179,30 @@ the journal transaction, outside the creation request fingerprint. Other operati
 require a workspace ID and empty name. Removal/transfer prohibit a role list.
 Product policy must separately validate roles and delegation before recording intent.
 
+Digest helpers now perform complete intent shape/semantic validation themselves;
+callers cannot bypass schema constraints by calling the digest function directly.
+TS `parseIntent` and Go `ParseIntent` additionally accept a bounded JSON payload
+(maximum 1 MiB), require exact camel-case fields and reject Unicode repair before
+decoding. They preserve identity strings, names and role ordering; sorting is only
+for the canonical fingerprint. Go's typed Intent uses explicit matching JSON tags.
+JSON objects follow last-member semantics in both languages, including replacement
+of a repeated identity object rather than Go struct merging. Unknown or missing
+fields in the resulting object still fail. The parser never authenticates an actor.
+
+`parseBoundIntent` / `ParseBoundIntent` recompute the fingerprint and canonical
+actor/target SHA-256 hashes and compare product, environment, kind and manifest
+version with indexed journal fields. Non-create workspace IDs must match the
+allocated journal workspace. Create requests keep their empty workspace ID; the
+separately allocated journal ID must be a valid nonempty identifier. A corrupt
+payload/index pair returns unavailable, never absence. Raw input errors return
+invalid_argument. These helpers do not verify OpenFGA model pins, operation state,
+key-digest lookup or actor provenance; the managed persistence/API composition must
+supply those checks. The raw idempotency key is not stored in the intent, so its
+key digest cannot be reconstructed from that payload alone.
+
+Shared `operation-intent-runtime.json` and `operation-intent-binding.json` cover
+these runtime boundaries alongside the unchanged v1 digest vectors.
+
 Display names reject ASCII controls and ill-formed Unicode; blank Unicode
 whitespace (including BOM) is rejected for creation. Inputs are not normalized.
 Idempotency keys are nonempty Unicode strings bounded to 256 UTF-8 bytes. They

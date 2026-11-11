@@ -1,0 +1,357 @@
+[
+  {
+    "name": "create",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": true
+  },
+  {
+    "name": "add_member",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"add_member\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"acme\",\"name\":\"\",\"roles\":[\"viewer\"],\"manifestVersion\":1}",
+    "valid": true
+  },
+  {
+    "name": "assign_roles",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"assign_roles\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"acme\",\"name\":\"\",\"roles\":[\"viewer\"],\"manifestVersion\":1}",
+    "valid": true
+  },
+  {
+    "name": "remove_member",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"remove_member\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"acme\",\"name\":\"\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": true
+  },
+  {
+    "name": "transfer_owner",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"transfer_owner\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"acme\",\"name\":\"\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": true
+  },
+  {
+    "name": "missing schemaVersion",
+    "json": "{\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "null schemaVersion",
+    "json": "{\"schemaVersion\":null,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "missing productId",
+    "json": "{\"schemaVersion\":1,\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "null productId",
+    "json": "{\"schemaVersion\":1,\"productId\":null,\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "missing environment",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "null environment",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":null,\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "missing kind",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "null kind",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":null,\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "missing actor",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "null actor",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":null,\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "missing target",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "null target",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":null,\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "missing workspaceId",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "null workspaceId",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":null,\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "missing name",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "null name",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":null,\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "missing roles",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "null roles",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":null,\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "missing manifestVersion",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[]}",
+    "valid": false
+  },
+  {
+    "name": "null manifestVersion",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":null}",
+    "valid": false
+  },
+  {
+    "name": "invalid schemaVersion 2",
+    "json": "{\"schemaVersion\":2,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "invalid schemaVersion '1'",
+    "json": "{\"schemaVersion\":\"1\",\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "invalid productId 'ledger\\n'",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\\n\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "invalid productId 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "json": "{\"schemaVersion\":1,\"productId\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "invalid environment 'prod space'",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"prod space\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "invalid kind 'delete_all'",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"delete_all\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "invalid workspaceId 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "invalid name ''",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "invalid name '\\x85\\ufeff'",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"\\u0085\\ufeff\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "invalid name 'bad\\x00name'",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"bad\\u0000name\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "invalid name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "invalid roles ['viewer']",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[\"viewer\"],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "invalid manifestVersion 0",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":0}",
+    "valid": false
+  },
+  {
+    "name": "invalid manifestVersion 2147483648",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":2147483648}",
+    "valid": false
+  },
+  {
+    "name": "invalid manifestVersion 1.5",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1.5}",
+    "valid": false
+  },
+  {
+    "name": "invalid manifestVersion True",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":true}",
+    "valid": false
+  },
+  {
+    "name": "additional root",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1,\"unexpected\":true}",
+    "valid": false
+  },
+  {
+    "name": "actor null issuer",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":null,\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "actor null subject",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":null},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "actor extra",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\",\"extra\":\"x\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "target null issuer",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":null,\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "target null subject",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":null},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "target extra",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\",\"extra\":\"x\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "create actor target mismatch",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"other\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "identity byte limit",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "identity escaped NUL",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"Maya\\u0000\\u6771\\u4eac\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"Maya\\u0000\\u6771\\u4eac\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": true
+  },
+  {
+    "name": "invalid roles ['viewer', 'viewer']",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"assign_roles\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"acme\",\"name\":\"\",\"roles\":[\"viewer\",\"viewer\"],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "invalid roles ['Viewer']",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"assign_roles\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"acme\",\"name\":\"\",\"roles\":[\"Viewer\"],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "invalid roles ['viewer\\n']",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"assign_roles\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"acme\",\"name\":\"\",\"roles\":[\"viewer\\n\"],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "invalid roles ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"assign_roles\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"acme\",\"name\":\"\",\"roles\":[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "invalid roles [None]",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"assign_roles\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"acme\",\"name\":\"\",\"roles\":[null],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "invalid roles ['a0', 'a1', 'a2', 'a3', 'a4', 'a5'",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"assign_roles\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"acme\",\"name\":\"\",\"roles\":[\"a0\",\"a1\",\"a2\",\"a3\",\"a4\",\"a5\",\"a6\",\"a7\",\"a8\",\"a9\",\"a10\",\"a11\",\"a12\",\"a13\",\"a14\",\"a15\",\"a16\",\"a17\",\"a18\",\"a19\",\"a20\",\"a21\",\"a22\",\"a23\",\"a24\",\"a25\",\"a26\",\"a27\",\"a28\",\"a29\",\"a30\",\"a31\",\"a32\",\"a33\",\"a34\",\"a35\",\"a36\",\"a37\",\"a38\",\"a39\",\"a40\",\"a41\",\"a42\",\"a43\",\"a44\",\"a45\",\"a46\",\"a47\",\"a48\",\"a49\",\"a50\",\"a51\",\"a52\",\"a53\",\"a54\",\"a55\",\"a56\",\"a57\",\"a58\",\"a59\",\"a60\",\"a61\",\"a62\",\"a63\",\"a64\",\"a65\",\"a66\",\"a67\",\"a68\",\"a69\",\"a70\",\"a71\",\"a72\",\"a73\",\"a74\",\"a75\",\"a76\",\"a77\",\"a78\",\"a79\",\"a80\",\"a81\",\"a82\",\"a83\",\"a84\",\"a85\",\"a86\",\"a87\",\"a88\",\"a89\",\"a90\",\"a91\",\"a92\",\"a93\",\"a94\",\"a95\",\"a96\",\"a97\",\"a98\",\"a99\",\"a100\",\"a101\",\"a102\",\"a103\",\"a104\",\"a105\",\"a106\",\"a107\",\"a108\",\"a109\",\"a110\",\"a111\",\"a112\",\"a113\",\"a114\",\"a115\",\"a116\",\"a117\",\"a118\",\"a119\",\"a120\",\"a121\",\"a122\",\"a123\",\"a124\",\"a125\",\"a126\",\"a127\",\"a128\"],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "128 roles",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"assign_roles\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"acme\",\"name\":\"\",\"roles\":[\"a0\",\"a1\",\"a2\",\"a3\",\"a4\",\"a5\",\"a6\",\"a7\",\"a8\",\"a9\",\"a10\",\"a11\",\"a12\",\"a13\",\"a14\",\"a15\",\"a16\",\"a17\",\"a18\",\"a19\",\"a20\",\"a21\",\"a22\",\"a23\",\"a24\",\"a25\",\"a26\",\"a27\",\"a28\",\"a29\",\"a30\",\"a31\",\"a32\",\"a33\",\"a34\",\"a35\",\"a36\",\"a37\",\"a38\",\"a39\",\"a40\",\"a41\",\"a42\",\"a43\",\"a44\",\"a45\",\"a46\",\"a47\",\"a48\",\"a49\",\"a50\",\"a51\",\"a52\",\"a53\",\"a54\",\"a55\",\"a56\",\"a57\",\"a58\",\"a59\",\"a60\",\"a61\",\"a62\",\"a63\",\"a64\",\"a65\",\"a66\",\"a67\",\"a68\",\"a69\",\"a70\",\"a71\",\"a72\",\"a73\",\"a74\",\"a75\",\"a76\",\"a77\",\"a78\",\"a79\",\"a80\",\"a81\",\"a82\",\"a83\",\"a84\",\"a85\",\"a86\",\"a87\",\"a88\",\"a89\",\"a90\",\"a91\",\"a92\",\"a93\",\"a94\",\"a95\",\"a96\",\"a97\",\"a98\",\"a99\",\"a100\",\"a101\",\"a102\",\"a103\",\"a104\",\"a105\",\"a106\",\"a107\",\"a108\",\"a109\",\"a110\",\"a111\",\"a112\",\"a113\",\"a114\",\"a115\",\"a116\",\"a117\",\"a118\",\"a119\",\"a120\",\"a121\",\"a122\",\"a123\",\"a124\",\"a125\",\"a126\",\"a127\"],\"manifestVersion\":1}",
+    "valid": true
+  },
+  {
+    "name": "256 supplementary name",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\\ud83d\\ude00\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": true
+  },
+  {
+    "name": "literal backslash unicode text",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"literal \\\\ud800\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": true
+  },
+  {
+    "name": "trailing document",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}{}",
+    "valid": false
+  },
+  {
+    "name": "root array",
+    "json": "[]",
+    "valid": false
+  },
+  {
+    "name": "lone high surrogate",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"\\ud800\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "lone low surrogate",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"\\udfff\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "bad surrogate pair",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"\\ud800\\u0041\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  },
+  {
+    "name": "decimal integer",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1.0}",
+    "valid": true
+  },
+  {
+    "name": "exponent integer",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1e0}",
+    "valid": true
+  },
+  {
+    "name": "duplicate last value",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":\"bad\",\"manifestVersion\":1}",
+    "valid": true
+  },
+  {
+    "name": "duplicate overflowing overwritten",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1e9999,\"manifestVersion\":1}",
+    "valid": true
+  },
+  {
+    "name": "duplicate invalid last",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1,\"manifestVersion\":\"bad\"}",
+    "valid": false
+  },
+  {
+    "name": "duplicate partial actor",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"old\",\"subject\":\"old\"},\"actor\":{\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "valid": false
+  }
+]

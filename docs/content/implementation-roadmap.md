@@ -148,3 +148,8 @@ Phase 3 atomic managed audit checkpoint: [[evidence/phase-3-managed-audit-transa
 adds the shared transaction boundary for local SDK writes and audit/outbox receipts,
 with rollback and confirmed COMMIT-response-loss proof in both languages. Semantic
 managed mutation methods and operation deduplication remain required.
+
+Phase 3 operation-intent checkpoint: [[evidence/phase-3-operation-intents]] adds
+bounded payload parsing and complete shape/semantic validation in both SDKs,
+plus journal fingerprint/identity/scope binding checks. Durable operation lookup,
+idempotent creation and mutation transitions remain required.

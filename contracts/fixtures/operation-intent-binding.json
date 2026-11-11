@@ -1,0 +1,227 @@
+[
+  {
+    "name": "create",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "binding": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "allocated-one",
+      "kind": "create_workspace",
+      "actorHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "targetHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "manifestVersion": 1
+    },
+    "valid": true
+  },
+  {
+    "name": "role-order-a",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"assign_roles\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"other\"},\"workspaceId\":\"tenant-1\",\"name\":\"\",\"roles\":[\"viewer\",\"approver\"],\"manifestVersion\":1}",
+    "binding": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "tenant-1",
+      "kind": "assign_roles",
+      "actorHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "targetHash": "aeec6916c684bc4872af94f388f720f10aa9a35f6e541dab195f3a40d3aea6d3",
+      "fingerprint": "377f43ddd17727ccd94923c33db0043073af80c32256b89f8eec37fb2afb10fc",
+      "manifestVersion": 1
+    },
+    "valid": true
+  },
+  {
+    "name": "mismatch productId",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "binding": {
+      "productId": "support",
+      "environment": "production",
+      "workspaceId": "allocated-one",
+      "kind": "create_workspace",
+      "actorHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "targetHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "mismatch environment",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "binding": {
+      "productId": "ledger",
+      "environment": "test",
+      "workspaceId": "allocated-one",
+      "kind": "create_workspace",
+      "actorHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "targetHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "mismatch workspaceId",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "binding": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "",
+      "kind": "create_workspace",
+      "actorHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "targetHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "mismatch workspaceId",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "binding": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "bad\n",
+      "kind": "create_workspace",
+      "actorHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "targetHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "mismatch kind",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "binding": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "allocated-one",
+      "kind": "assign_roles",
+      "actorHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "targetHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "mismatch actorHash",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "binding": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "allocated-one",
+      "kind": "create_workspace",
+      "actorHash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "targetHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "mismatch targetHash",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "binding": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "allocated-one",
+      "kind": "create_workspace",
+      "actorHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "targetHash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "mismatch fingerprint",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "binding": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "allocated-one",
+      "kind": "create_workspace",
+      "actorHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "targetHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "mismatch manifestVersion",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "binding": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "allocated-one",
+      "kind": "create_workspace",
+      "actorHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "targetHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "manifestVersion": 2
+    },
+    "valid": false
+  },
+  {
+    "name": "non-create workspace mismatch",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"assign_roles\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"other\"},\"workspaceId\":\"tenant-1\",\"name\":\"\",\"roles\":[\"viewer\",\"approver\"],\"manifestVersion\":1}",
+    "binding": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "other",
+      "kind": "assign_roles",
+      "actorHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "targetHash": "aeec6916c684bc4872af94f388f720f10aa9a35f6e541dab195f3a40d3aea6d3",
+      "fingerprint": "377f43ddd17727ccd94923c33db0043073af80c32256b89f8eec37fb2afb10fc",
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "tampered payload name",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Other\",\"roles\":[],\"manifestVersion\":1}",
+    "binding": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "allocated-one",
+      "kind": "create_workspace",
+      "actorHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "targetHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid JSON payload",
+    "json": "{",
+    "binding": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "allocated-one",
+      "kind": "create_workspace",
+      "actorHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "targetHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "manifestVersion": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "creation allocation outside fingerprint",
+    "json": "{\"schemaVersion\":1,\"productId\":\"ledger\",\"environment\":\"production\",\"kind\":\"create_workspace\",\"actor\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"target\":{\"issuer\":\"https://id.example.com\",\"subject\":\"maya\"},\"workspaceId\":\"\",\"name\":\"Acme\",\"roles\":[],\"manifestVersion\":1}",
+    "binding": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "allocated-two",
+      "kind": "create_workspace",
+      "actorHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "targetHash": "f109c5cdc17bacee9841a9050740b1de767a3255b0bbe188a08e588d6e73d33b",
+      "fingerprint": "93e292a2b37fa4abbf2d2b8babb0ffcc74687d34864371dfc45e9c7eb510d425",
+      "manifestVersion": 1
+    },
+    "valid": true
+  }
+]
