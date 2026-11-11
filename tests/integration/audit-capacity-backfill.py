@@ -226,6 +226,21 @@ try:
    selected=dict(env,HEIMDALL_TEST_RETENTION_URL=dsn(database))
    if language=='go':go('^TestPreparedRetention$',selected)
    else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retention.test.ts'],env=selected)
+  for first,second in [('go','ts'),('ts','go')]:
+   database='retention_loss_'+first
+   sql('CREATE DATABASE '+database+' TEMPLATE cli_activation')
+   sql(identity_sql,database)
+   def retention_attempt(language,selected):
+    if language=='go':go('^TestRetentionCommitLoss$',selected)
+    else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retention-loss.test.ts'],env=selected)
+   selected=dict(env,HEIMDALL_TEST_RETENTION_LOSS_URL=dsn(database))
+   with CommitLossProxy(int(port)) as proxy:
+    retention_attempt(first,dict(selected,HEIMDALL_TEST_RETENTION_FAULT_URL=dsn(database,proxy.port)))
+    assert proxy.dropped.is_set() and not proxy.errors,proxy.errors
+   snapshot_query="SELECT jsonb_build_object('events',(SELECT jsonb_agg(to_jsonb(i) ORDER BY product_id,environment,event_id) FROM heimdall_retention.event_identities i),'decisions',(SELECT jsonb_agg(to_jsonb(d) ORDER BY product_id,environment,decision_id) FROM heimdall_retention.decision_identities d))"
+   before=sql(snapshot_query,database)
+   retention_attempt(second,selected)
+   assert sql(snapshot_query,database)==before
   identity_db='retention_identities'
   sql('CREATE DATABASE '+identity_db+' TEMPLATE cli_activation')
   sql('BEGIN;'+identity_sql+'ROLLBACK;',identity_db)
@@ -259,6 +274,6 @@ try:
   sql("UPDATE heimdall_capacity.policy SET state='ready'",'normal')
   go('^TestCapacityBackfillPendingRecovery$',dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
   ts(dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
- print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work','SIGKILL after the first committed candidate resumes in the other language with original initiators and exact event outbox and capacity counts','prepared immutable identities bind source routing and decision members and survive privileged test payload removal']}))
+ print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work','SIGKILL after the first committed candidate resumes in the other language with original initiators and exact event outbox and capacity counts','reciprocal retention COMMIT loss returns unknown and the other SDK retries without changing compact metadata','prepared immutable identities bind source routing and decision members and survive privileged test payload removal']}))
 finally:
  if created:run(['docker','rm','--force',name],stdout=subprocess.DEVNULL)

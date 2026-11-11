@@ -42,8 +42,8 @@ The ports read original routing rather than current SDK sink configuration. They
 check that actual envelope bytes and sink count match existing charges, and
 validate full semantics before writing. Source tables are locked for this offline
 operation. No payload deletion, runtime grants or compatibility publication occurs.
-COMMIT-loss behavior uses the existing transaction error boundary; this checkpoint
-does not add a retention-specific network-fault proof. Metadata budgets, holds,
+[[phase-3-retention-commit-loss]] now proves reciprocal lost-COMMIT response
+and retry behavior through a network fault proxy. Metadata budgets, holds,
 retirement markers, checkpointed migration and runtime integration remain required.
 See [[phase-3-retention-validation]], [[phase-3-retention-identities]],
 [[design/audit-retention]] and [[phase-3-readiness-audit]].
