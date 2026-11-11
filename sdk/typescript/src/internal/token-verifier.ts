@@ -34,7 +34,8 @@ export class TokenVerifier {
       new URL(config.issuer).origin !== new URL(config.jwksUri).origin ||
       typeof config.audience !== "string" ||
       !config.audience ||
-      Buffer.byteLength(config.audience) > 1024
+      !config.audience.isWellFormed() ||
+      Array.from(config.audience).length > 2048
     )
       throw new HeimdallError("invalid_argument");
     this.config = { ...config };

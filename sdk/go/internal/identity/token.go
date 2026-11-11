@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 type Config struct{ Issuer, Audience, JWKSURI, Profile string }
@@ -43,7 +44,7 @@ type TokenVerifier struct {
 }
 
 func NewTokenVerifier(config Config, now func() time.Time) (*TokenVerifier, error) {
-	if contract.ValidateEndpoint(config.Issuer, config.Profile) != nil || contract.ValidateEndpoint(config.JWKSURI, config.Profile) != nil || len(config.Audience) == 0 || len(config.Audience) > 1024 {
+	if contract.ValidateEndpoint(config.Issuer, config.Profile) != nil || contract.ValidateEndpoint(config.JWKSURI, config.Profile) != nil || len(config.Audience) == 0 || !utf8.ValidString(config.Audience) || utf8.RuneCountInString(config.Audience) > 2048 {
 		return nil, contract.ErrInvalidArgument
 	}
 	issuer, _ := url.Parse(config.Issuer)

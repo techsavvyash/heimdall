@@ -8,6 +8,10 @@ Configuration is immutable per verifier: exact trusted issuer and intended produ
 audience, plus a same-origin JWKS URL validated with the existing production or
 explicit loopback endpoint profile. Never derive URLs or algorithms from a token.
 Discovery/setup integration must pin these values before constructing the verifier.
+The intended audience follows config.schema.json: 1–2048 well-formed Unicode code
+points, matched exactly without normalization. This is a character bound, not a
+1024-byte bound. Both constructors reject malformed Unicode and oversized/empty
+values before any network call. The separate 16 KiB compact-token limit remains.
 
 Compact JWTs are bounded to 16 KiB. Require a printable ASCII kid of 1–128 bytes
 and RS256; reject critical extensions and b64 overrides. Ignore untrusted jku.

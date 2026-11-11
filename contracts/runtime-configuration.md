@@ -37,3 +37,9 @@ operator selected the intended external product/project/store when two products
 share the same policy. Provisioning/configuration remains the trusted binding
 for those external IDs. The loader performs no remote writes and does not expose
 public authentication, authorization, login or session APIs by itself.
+
+Audience validation is shared with the token-verifier construction boundary: both
+accept 1–2048 Unicode code points without normalization, rather than imposing a
+stricter byte limit after configuration loading. audience-boundaries.json supplies
+signed public test vectors for accepted ASCII/Unicode limits and wrong-audience
+rejection; its private signing key is not retained.
