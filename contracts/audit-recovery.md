@@ -1,0 +1,110 @@
+# Durable authorization-decision recovery
+
+This is the implementation protocol for the existing requirement to reconcile
+unresolved authorization attempts without inventing historical results. The
+prepared `persistence/session/0002.sql` implements its physical decision slot.
+It is not yet registered in the supported migration catalog or required by runtime
+readiness. Current deployed SDK storage still uses session/audit v1. Do not apply
+this file manually to a serving application and claim recovery is enabled.
+
+## Atomic resolution protocol
+
+A decision is identified by product, environment and decision ID. Its durable slot
+references the immutable requested event and starts `pending`. The request event,
+slot and original outbox deliveries must commit together before evaluation begins.
+A receipt for the event alone is insufficient once v2 is activated.
+
+Normal completion and recovery contend on that same pending slot in a local
+transaction. Normal completion validates the original request context and writes
+its observed authorization.completed event and outbox. Recovery writes
+an authorization.completed event with `outcome_unknown` plus the required recovery
+administration event, preserving the historical decision's scope/correlation and
+identifying the recovery initiator separately. The chosen terminal event ID and
+resolved timestamp are installed only while the slot is pending. All events,
+outbox entries and the slot transition commit together. Losing contention rolls
+back the entire attempted finalization; no unselected terminal event may escape.
+
+The physical states are `pending`, `completed` and `recovered`. Both terminal
+states are immutable; neither permits another outcome or a return to pending.
+A no-op update is harmless. Request IDs, scope and requested timestamp cannot be
+rebound. SQL foreign keys keep request and terminal references within the same
+product/environment and prevent those events being deleted while referenced.
+The SDK must additionally validate the stored envelope/digest, decision ID,
+event type, actor, tenant, target/action/permission, model/manifest/policy and
+correlation against the original request. SQL references alone do not prove that
+an event is an authorization outcome or that its timestamp matches the event.
+
+If normal completion commits first, recovery observes a terminal slot and performs
+no historical reevaluation. If recovery commits first, a late normal completion
+must fail to obtain its own terminal receipt. The audited runner must return
+`audit_unavailable` and release no allow/deny result. A read-only evaluator may
+still finish, but cannot release protected work through that invocation. This is
+a local result-release gate; it is not fencing of dispatched remote mutations.
+Managed uncertain-write quarantine and verified quiescence remain unchanged.
+
+## Retry, scan and retention requirements
+
+A duplicate event append must compare the complete immutable payload and verify
+its existing slot binding before returning the original receipt. A changed payload,
+request binding or different terminal event conflicts. A lost COMMIT response is
+not rollback: retry/recovery inspects the durable slot and original receipt, never
+reruns the old authorization evaluation. Outcome_unknown records do not assert
+that a business transaction ran or that the original evaluator returned anything.
+
+The scheduled scanner must use primary reads, fixed product/environment scope,
+request-time/decision-ID keyset pagination, a validated caller cutoff, a count
+limit and a payload byte budget. It returns validated pending candidates, not a
+lease or ownership claim. Every finalization must recheck pending state in its
+transaction. An age threshold is an eligibility policy, not proof that a process
+is dead. A too-aggressive cutoff can make an active caller fail closed. Scheduling,
+queue-age alerts, bounded cancellation and restart checkpoints remain explicit.
+
+Unresolved or held requests cannot be purged by delivered-event retention. The
+ordinary runtime role has no DELETE on decision slots. A future authorized
+retention transaction must consider the decision pair, all delivery/hold policy,
+and retained retry obligations before removing a terminal slot and its events.
+Hard audit-capacity policy and terminal/recovery persistence reservations remain
+required; the new table alone provides neither backpressure nor reserved space.
+
+## Explicit upgrade and backfill gate
+
+The immutable session/audit v1 SQL remains unchanged. Version 2 must be activated
+through a checksum-pinned, serialized deployment upgrade, not runtime DDL:
+
+1. Stop admission and drain all v1 audit writers, including scheduled jobs. Ensure
+   old processes cannot resume writing during or after cutover. Startup checks
+   alone do not stop already-running processes.
+2. Install the additive table/index/guard in the coordinated deployment transaction.
+   Keep the database unavailable to v2 runtime until backfill and validation finish.
+3. Scan existing audit events in bounded, restartable batches. Decode ha1 and verify
+   complete schema/digests before correlating authorization requests and outcomes.
+   Preserve all events and outbox receipts; do not rewrite historical payloads.
+4. Create exactly one slot per valid requested decision and bind any existing
+   matching terminal event. Reject duplicate requests, ambiguous/conflicting
+   completions, corrupt envelopes and incompatible context. An unmatched terminal
+   is an explicit migration problem, not permission to fabricate its request.
+5. Verify full coverage, then publish v2 readiness and reader/writer compatibility
+   metadata. Both SDKs must require the activated v2 contract for decision-aware
+   append/recovery. The migration command must support inspected retry after lost
+   COMMIT and refuse incompatible/checksum-divergent state.
+6. Start v2 writers and verify request/evaluation/finalization and recovery races in
+   both languages. Keep old writer credentials/processes drained. Do not advertise
+   rollback to v1 once new resolution behavior is active.
+
+A bridge/upgrade implementation may separate installation and backfill transactions
+for bounded work, but readiness must remain unavailable until coverage is complete.
+No automatic repair, silent old-writer coexistence or timer-based backfill shortcut
+is allowed. The current migration CLI intentionally does not accept 0002.sql yet.
+
+## Evidence boundary
+
+`fixtures/audit-recovery-schema.json` pins the prepared SQL checksum and physical
+constraint cases. `tests/integration/audit-recovery-schema.py` verifies real
+PostgreSQL DDL rollback, scope/retention constraints, terminal immutability,
+normal-versus-recovery races, both deterministic resolution orders and transactional
+outbox failure. Its routing fixtures are not SDK-valid authorization events.
+
+Required next evidence: explicit upgrade/backfill and corruption refusal; both
+SDKs' atomic append/resolve and receipt behavior; crash/commit-loss recovery;
+bounded scanning; no late allow release; cross-language parity; audit-capacity and
+retention policy. Do not infer those properties from the physical SQL tests.
