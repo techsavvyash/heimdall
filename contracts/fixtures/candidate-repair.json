@@ -1,0 +1,20 @@
+{
+  "observations": [
+    {
+      "identity": { "issuer": "https://issuer.example", "subject": "alpha" },
+      "member": true,
+      "observedAt": 200
+    },
+    {
+      "identity": { "issuer": "https://issuer.example", "subject": "Beta\u0000東京" },
+      "member": true,
+      "observedAt": 200
+    }
+  ],
+  "gates": [
+    { "lifecycle": "pending", "blocked": false },
+    { "lifecycle": "suspended", "blocked": false },
+    { "lifecycle": "tombstoned", "blocked": false },
+    { "lifecycle": "active", "blocked": true }
+  ]
+}

@@ -178,3 +178,8 @@ Phase 3 operation-scan checkpoint: [[evidence/phase-3-operation-scans]] adds
 bounded primary maintenance queues for runnable, recovery and local completion
 work. Scans do not claim or replay operations. Rebuild coordination and broader
 operational foundations remain open.
+
+Phase 3 candidate-repair checkpoint: [[evidence/phase-3-candidate-repair]] adds
+revision-guarded publication of explicit membership observations, atomic audit and
+serialization with managed mutations. Remote rebuild/checkpoint orchestration and
+broader storage operational foundations remain open.

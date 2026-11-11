@@ -50,3 +50,47 @@ public discovery remain separate implementation requirements.
 Shared decoder cases: `fixtures/candidate-page.json`. The managed PostgreSQL harness
 proves pagination, scope isolation, lifecycle changes, cancellation and reciprocal
 TS/Go reads, including candidates written by completed managed operations.
+
+## Guarded repair batches
+
+Internal `OperationRecords.repairCandidates` / `RepairCandidates` applies 1..100
+trusted membership observations to one known active, unblocked workspace. Capture
+its revision **before** obtaining the observations. Each entry supplies an exact
+identity, member boolean and observation timestamp; duplicate identities and invalid
+bounds fail before I/O. A false value requires an explicit verified non-membership
+result, not absence from an incomplete list. The method does not query OpenFGA or
+validate the remote evidence; future orchestration must do so and audit decisions.
+
+The five-second transaction updates the workspace at the expected revision before
+locking candidate rows. It rejects stale revisions, inactive/blocked workspaces,
+observation times older than the workspace's previous update, and existing candidate
+observations newer than the incoming result. Every successful batch advances the
+workspace revision, even when its hint changes are logically idempotent. This
+serializes cooperating rebuild batches with SDK membership reservation, cancellation
+and completion. A stale batch cannot simply be retried with a new revision: capture
+new state and obtain new observations first.
+
+Positive observations upsert canonical candidates while preserving existing source
+positions. Explicit negatives delete only their specified identity. Unmentioned
+candidates remain unchanged. Existing principal/hash inconsistency conflicts rather
+than being silently overwritten. The workspace remains active and unblocked; repair
+never clears quarantine, changes relationships or creates an unknown workspace.
+
+The candidate changes, new workspace revision and required recovery audit/outbox
+record commit together. The event has a fixed system actor candidate-rebuild,
+action candidate.repair and empty attributes. Audit failure rolls back the whole
+batch. A lost COMMIT acknowledgement returns outcome_unknown without a success
+result. Its old revision cannot be replayed after a committed repair. This does
+not provide operation-key deduplication or permit reusing old remote observations.
+
+A complete rebuild orchestrator still needs bounded remote enumeration, explicit
+verification of stale existing hints, durable progress, cancellation and restart
+rules. Each remote listing page may supply positive observations only; it cannot
+supply inferred removals. Progress must not advance past a failed/uncertain local
+commit. These methods coordinate local publication but do not promise an atomic
+snapshot of a remote graph changed out of band. Current authorization checks remain
+mandatory regardless of hint contents.
+
+Shared repair inputs: fixtures/candidate-repair.json. The managed PostgreSQL harness
+covers partial batches, stale revisions/timestamps, mutation races, audit rollback,
+TS/Go reads and committed-response-loss behavior.

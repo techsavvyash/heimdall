@@ -13,7 +13,7 @@ import { validateAuditShape } from "../audit-shape.js";
 import { validateAuditEvent } from "../audit.js";
 import { PostgresAudit } from "./audit.js";
 import { query } from "./query.js";
-import { decodeWorkspace } from "./workspaces.js";
+import { decodeWorkspace, type ManagedWorkspace } from "./workspaces.js";
 
 type Binding = {
   productId: string;
@@ -494,6 +494,126 @@ export class OperationRecords {
         throw new HeimdallError("outcome_unknown", operationId);
       throw e;
     }
+    return result!;
+  }
+  // Observations must be verified after capturing expectedRevision. No remote writes occur here.
+  async repairCandidates(
+    workspaceId: string,
+    expectedRevision: string,
+    observations: readonly { identity: Identity; member: boolean; observedAt: number }[],
+    metadata: Omit<Allocation, "workspaceId" | "operationId">,
+    caller?: AbortSignal,
+  ): Promise<ManagedWorkspace> {
+    const signal = caller
+      ? AbortSignal.any([caller, AbortSignal.timeout(5000)])
+      : AbortSignal.timeout(5000);
+    checkCancellation(signal);
+    const m = { ...metadata },
+      b = this.binding;
+    if (
+      !token(workspaceId, 128) ||
+      typeof expectedRevision !== "string" ||
+      !/^[1-9][0-9]{0,18}(?![\s\S])/.test(expectedRevision) ||
+      BigInt(expectedRevision) > 9223372036854775807n ||
+      !Array.isArray(observations) ||
+      observations.length < 1 ||
+      observations.length > 100
+    )
+      throw new HeimdallError("invalid_argument");
+    const seen = new Set<string>();
+    const batch = observations.map((o) => {
+      if (
+        !o ||
+        typeof o.member !== "boolean" ||
+        !Number.isSafeInteger(o.observedAt) ||
+        o.observedAt < 0 ||
+        o.observedAt > m.recordedAt
+      )
+        throw new HeimdallError("invalid_argument");
+      const identityHash = hash(o.identity),
+        principal = encodeIdentity(o.identity.issuer, o.identity.subject);
+      if (seen.has(identityHash)) throw new HeimdallError("invalid_argument");
+      seen.add(identityHash);
+      return { identityHash, principal, member: o.member, observedAt: o.observedAt };
+    });
+    const event = {
+      schemaVersion: 1,
+      eventId: m.eventId,
+      eventType: "heimdall.recovery.completed",
+      eventVersion: 1,
+      occurredAt: m.occurredAt,
+      recordedAt: m.recordedAt,
+      productId: b.productId,
+      environment: b.environment,
+      tenantId: workspaceId,
+      actor: { kind: "system", id: "candidate-rebuild" },
+      target: { type: "workspace", id: workspaceId },
+      action: "candidate.repair",
+      outcome: "succeeded",
+      requestId: m.requestId,
+      source: "sdk",
+      sdkVersion: "0.0.0",
+      attributes: {},
+      modelId: b.modelId,
+      manifestVersion: b.manifestVersion,
+      policyVersion: m.policyVersion,
+    };
+    validateAudit(event);
+    let result: ManagedWorkspace | null = null;
+    await this.audit.appendWith(
+      event,
+      async (tx) => {
+        const reserved = await tx.query(
+          `UPDATE heimdall_managed.workspaces SET updated_at=$5
+        WHERE product_id=$1 AND environment=$2 AND workspace_id=$3 AND revision=$4::bigint
+        AND lifecycle='active' AND NOT mutation_blocked AND updated_at<=$5 AND updated_at<=$6
+        RETURNING NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
+        product_id,environment,workspace_id,name,lifecycle,mutation_blocked,revision::text,created_at::text,updated_at::text`,
+          [
+            b.productId,
+            b.environment,
+            workspaceId,
+            expectedRevision,
+            m.recordedAt,
+            Math.min(...batch.map((o) => o.observedAt)),
+          ],
+        );
+        if (reserved.rows.length !== 1) throw new HeimdallError("conflict");
+        result = decodeWorkspace(reserved.rows[0], {
+          productId: b.productId,
+          environment: b.environment,
+          workspaceId,
+        });
+        if (!result) throw new HeimdallError("unavailable");
+        for (const o of batch) {
+          const key = [b.productId, b.environment, workspaceId, Buffer.from(o.identityHash, "hex")];
+          const prior = await tx.query<{ principal: string; observed_at: string }>(
+            "SELECT principal,observed_at::text FROM heimdall_managed.membership_candidates WHERE product_id=$1 AND environment=$2 AND workspace_id=$3 AND identity_hash=$4 FOR UPDATE",
+            key,
+          );
+          if (prior.rows.length > 1) throw new HeimdallError("unavailable");
+          if (
+            prior.rows.length === 1 &&
+            (prior.rows[0]!.principal !== o.principal ||
+              integer(prior.rows[0]!.observed_at, 0) > o.observedAt)
+          )
+            throw new HeimdallError("conflict");
+          if (o.member) {
+            await tx.query(
+              `INSERT INTO heimdall_managed.membership_candidates(product_id,environment,workspace_id,identity_hash,principal,observed_at)
+            VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(product_id,environment,identity_hash,workspace_id) DO UPDATE SET observed_at=EXCLUDED.observed_at`,
+              [...key, o.principal, o.observedAt],
+            );
+          } else {
+            await tx.query(
+              "DELETE FROM heimdall_managed.membership_candidates WHERE product_id=$1 AND environment=$2 AND workspace_id=$3 AND identity_hash=$4",
+              key,
+            );
+          }
+        }
+      },
+      signal,
+    );
     return result!;
   }
   create(
