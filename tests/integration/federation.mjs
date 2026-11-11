@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID, randomBytes, createHash, createPublicKey, verify } from "node:crypto";
+import { createBrowserBridge } from "./browser-bridge.mjs";
 
 const protocol = process.env.HEIMDALL_PROBE_FEDERATION_PROTOCOL ?? "oidc";
 assert(["oidc", "saml"].includes(protocol));
@@ -9,8 +10,13 @@ const k = process.env.HEIMDALL_PROBE_IDP_URL;
 const pat = process.env.HEIMDALL_PROBE_ZITADEL_PAT;
 const loginPat = process.env.HEIMDALL_PROBE_ZITADEL_LOGIN_PAT;
 const narrowLogin = process.env.HEIMDALL_PROBE_NARROW_LOGIN === "true";
+const browserMode = process.env.HEIMDALL_PROBE_BROWSER === "true";
 const expirySeconds = Number(process.env.HEIMDALL_PROBE_INTENT_EXPIRY_SECONDS ?? 0);
 assert(Number.isInteger(expirySeconds) && expirySeconds >= 0 && expirySeconds <= 45);
+assert(
+  !browserMode || (narrowLogin && expirySeconds === 0),
+  "Browser mode requires narrow login and a normal intent lifetime",
+);
 let flowPat = loginPat;
 const adminPassword = process.env.HEIMDALL_PROBE_IDP_ADMIN_PASSWORD;
 assert(
@@ -36,6 +42,8 @@ let adminToken;
 let orgId;
 let homeOrgId;
 let narrowMachineId;
+let browserBridge;
+let probePassed = false;
 let realmCreated = false;
 const sessions = [];
 async function api(origin, method, path, body, token, extra = {}) {
@@ -56,21 +64,7 @@ async function api(origin, method, path, body, token, extra = {}) {
 }
 const za = (method, path, body, token = pat, extra) => api(z, method, path, body, token, extra);
 const ka = (method, path, body) => api(k, method, path, body, adminToken);
-const observations = [];
-function htmlAttribute(value) {
-  return value
-    .replace(/&#(x[0-9a-f]+|[0-9]+);/gi, (_, n) =>
-      String.fromCodePoint(
-        n[0].toLowerCase() === "x" ? Number.parseInt(n.slice(1), 16) : Number(n),
-      ),
-    )
-    .replaceAll("&quot;", '"')
-    .replaceAll("&apos;", "'")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&amp;", "&");
-}
-try {
+async function authenticateFixtureAdmin() {
   const login = await fetch(`${k}/realms/master/protocol/openid-connect/token`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -86,6 +80,23 @@ try {
   assert(login.status === 200, `Fixture administrator login: HTTP ${login.status}`);
   adminToken = (await login.json()).access_token;
   assert(adminToken);
+}
+const observations = [];
+function htmlAttribute(value) {
+  return value
+    .replace(/&#(x[0-9a-f]+|[0-9]+);/gi, (_, n) =>
+      String.fromCodePoint(
+        n[0].toLowerCase() === "x" ? Number.parseInt(n.slice(1), 16) : Number(n),
+      ),
+    )
+    .replaceAll("&quot;", '"')
+    .replaceAll("&apos;", "'")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&");
+}
+try {
+  await authenticateFixtureAdmin();
   await ka("POST", "/admin/realms", {
     realm,
     enabled: true,
@@ -332,7 +343,10 @@ try {
       },
     });
   }
-  const complete = "https://heimdall-probe.example.invalid/complete";
+  if (browserMode) browserBridge = await createBrowserBridge();
+  const complete = browserMode
+    ? `${browserBridge.origin}/complete`
+    : "https://heimdall-probe.example.invalid/complete";
   async function authenticate(tamper = false) {
     let capturedSamlFields;
     const intent = await za(
@@ -341,7 +355,7 @@ try {
       {
         idpId: provider.id,
         urls: {
-          successUrl: complete,
+          successUrl: browserMode ? browserBridge.callbackUrl : complete,
           failureUrl: "https://heimdall-probe.example.invalid/failure",
         },
       },
@@ -355,6 +369,31 @@ try {
     } else {
       assert(upstreamAuthorization.searchParams.get("SAMLRequest"));
       assert(upstreamAuthorization.searchParams.get("Signature"), "SAML request must be signed");
+    }
+    if (browserMode) {
+      const expectedIntent = upstreamAuthorization.searchParams.get(
+        protocol === "oidc" ? "state" : "RelayState",
+      );
+      assert(expectedIntent);
+      console.error(`Disposable fixture username: federation-user; password: ${password}`);
+      const target = await browserBridge.authenticate(intent.authUrl, expectedIntent);
+      observations.push({
+        browserCallback: {
+          missingCookie: 401,
+          wrongCookie: 401,
+          wrongState: 400,
+          wrongIntent: 400,
+          replay: 409,
+          matchedBrowserAndIntent: true,
+        },
+      });
+      return {
+        target,
+        page: (url) => {
+          assert.equal(new URL(url).origin, z, "Only issuer redirects may be followed");
+          return fetch(url, { redirect: "manual", signal: AbortSignal.timeout(15000) });
+        },
+      };
     }
     const cookies = new Map();
     async function page(url, body) {
@@ -437,7 +476,7 @@ try {
     }
     return { target, page, capturedSamlFields };
   }
-  if (protocol === "saml") {
+  if (protocol === "saml" && !browserMode) {
     const altered = await authenticate(true);
     assert(
       altered.target.origin + altered.target.pathname ===
@@ -793,7 +832,7 @@ try {
     },
   });
 
-  if (protocol === "saml") {
+  if (protocol === "saml" && !browserMode) {
     const replay = await page(samlAcs, capturedSamlFields);
     const location = replay.headers.get("location");
     const replayTarget = location ? new URL(location, samlAcs) : null;
@@ -825,6 +864,7 @@ try {
     invalidIntentTokenStatus,
     mismatchedUserStatus,
   });
+  probePassed = true;
 } finally {
   const administratorCleanup = await Promise.allSettled(
     narrowMachineId
@@ -844,12 +884,17 @@ try {
     ...sessions.map((id) => za("DELETE", `/v2/sessions/${id}`, undefined, loginPat)),
     ...(orgId ? [za("DELETE", `/v2/organizations/${orgId}`)] : []),
     ...(homeOrgId && homeOrgId !== orgId ? [za("DELETE", `/v2/organizations/${homeOrgId}`)] : []),
-    ...(realmCreated ? [ka("DELETE", `/admin/realms/${realm}`)] : []),
+    ...(realmCreated
+      ? [authenticateFixtureAdmin().then(() => ka("DELETE", `/admin/realms/${realm}`))]
+      : []),
   ]);
-  assert(
-    [...administratorCleanup, ...results].every((r) => r.status === "fulfilled"),
-    `Federation cleanup incomplete for run ${runId}`,
+  const cleanupPassed = [...administratorCleanup, ...results].every(
+    (r) => r.status === "fulfilled",
   );
+  browserBridge?.finish(probePassed && cleanupPassed);
+  for (const result of [...administratorCleanup, ...results])
+    if (result.status === "rejected") console.error(`Cleanup failure: ${result.reason.message}`);
+  assert(cleanupPassed, `Federation cleanup incomplete for run ${runId}`);
 }
 console.log(
   JSON.stringify(
@@ -862,11 +907,16 @@ console.log(
       observations,
       cleanup: "owned organizations, realm and sessions deleted",
       limitations: [
-        "protocol fixture form automation; not browser UI validation",
-        "strict tenant switching, policy-version invalidation and browser binding still unverified",
+        browserMode
+          ? "Loopback HTTP browser callback harness; not production SDK HTTP or durable storage"
+          : "protocol fixture form automation; not browser UI validation",
+        "strict tenant switching and policy-version invalidation still unverified",
+        browserMode
+          ? "Upstream login uses browser; downstream product OIDC exchange uses backend HTTP probe"
+          : "Browser callback binding unverified in this mode",
         "SDK strict policy lifecycle not implemented",
         narrowLogin
-          ? "Dedicated instance session role performs fixture authentication; browser binding remains unverified"
+          ? "Dedicated instance session role performs fixture authentication; production durable callback claims remain unverified"
           : "Login client performs fixture authentication; downstream session evidence also verified with user token",
       ],
     },

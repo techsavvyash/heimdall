@@ -233,3 +233,16 @@ retrieval/session creation to fail afterward, and runs a fresh successful flow.
 No API lifetime change is needed. ZITADEL's MaxIdPIntentLifetime is a fallback when
 the upstream supplies no expiry, not a cap on an explicit upstream expiry. The
 verification API is restored to ZITADEL_SYSTEMDEFAULTS_MAXIDPINTENTLIFETIME=1h.
+
+## Interactive browser federation probe
+
+Set HEIMDALL_PROBE_BROWSER=true and HEIMDALL_PROBE_NARROW_LOGIN=true, leave
+HEIMDALL_PROBE_INTENT_EXPIRY_SECONDS unset/zero, and run tests/integration/federation.mjs
+once for each HEIMDALL_PROBE_FEDERATION_PROTOCOL (oidc and saml). Open the printed
+loopback start URL and use the disposable credentials printed to stderr within five
+minutes. Do not retain or publish stderr. The browser performs upstream login;
+downstream product OIDC verification remains an HTTP probe. Stdout is sanitized
+JSON only after all assertions and cleanup pass. The result page remains for one
+minute after completion. This HTTP/in-memory harness is not a production adapter.
+Cleanup obtains a fresh Keycloak administrator token because interactive login can
+outlast the original fixture token. See the browser-federation evidence in Quartz.
