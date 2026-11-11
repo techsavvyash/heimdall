@@ -10,8 +10,12 @@ import (
 	"fmt"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/identity"
+	"io"
+	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -253,7 +257,11 @@ func TestIdentityCommitLoss(t *testing.T) {
 	if _, err = healthy.CreateSession(ctx, "fault-session", value, f.ExpiresAt); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = fault.InvalidateIdentity(ctx, "https://id.example.com", "Maya\x00東京", 4000, "inactive"); !errors.Is(err, contract.ErrOutcomeUnknown) {
+	gate, err := fault.IdentityGate("identity-fault-go", "production")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = gate.Invalidate(ctx, identity.Negative{Identity: identity.Identity{Issuer: "https://id.example.com", Subject: "Maya\x00東京"}, Context: "bearer", TokenDigest: strings.Repeat("a", 64), Reason: "identity_inactive"}); !errors.Is(err, contract.ErrOutcomeUnknown) {
 		t.Fatal(err)
 	}
 	var denials, sessions int
@@ -439,7 +447,15 @@ func TestConditionalSessionCommitLoss(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, e = broken.InvalidateSessionVersion(ctx, "fault", record.Revision, issuer, subject); !errors.Is(e, contract.ErrOutcomeUnknown) {
+	gate, e := broken.IdentityGate("conditional-fault-go", "production")
+	if e != nil {
+		t.Fatal(e)
+	}
+	contextKey, e := identity.SessionIdentityContext("fault", record.Revision)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = gate.Invalidate(ctx, identity.Negative{Identity: identity.Identity{Issuer: issuer, Subject: subject}, Context: contextKey, TokenDigest: strings.Repeat("a", 64), Reason: "token_inactive"}); !errors.Is(e, contract.ErrOutcomeUnknown) {
 		t.Fatal(e)
 	}
 	if current, e := s.GetSession(ctx, "fault"); e != nil || current != nil {
@@ -454,5 +470,214 @@ func TestConditionalSessionCommitLoss(t *testing.T) {
 	}
 	if current, e := s.GetSession(ctx, "fault"); e != nil || current == nil || current.Revision != replacement.Revision {
 		t.Fatal("replacement absent", e)
+	}
+}
+
+type gateTransport func(*http.Request) (*http.Response, error)
+
+func (f gateTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+func TestIdentityGate(t *testing.T) {
+	url := os.Getenv("HEIMDALL_TEST_DATABASE_URL")
+	if url == "" || os.Getenv("HEIMDALL_TEST_READ_PEER") != "" {
+		t.Skip("durable identity gate")
+	}
+	db, e := sql.Open("postgres", url+"&options=-c%20role%3Dheimdall_identity_runtime")
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer db.Close()
+	sessions, f := sessionSetup(t, db, "gate-go")
+	if _, e = sessions.IdentityGate("support", "production"); e != contract.ErrInvalidArgument {
+		t.Fatal("cross-product gate")
+	}
+	if _, e = sessions.IdentityGate("gate-go", "staging"); e != contract.ErrInvalidArgument {
+		t.Fatal("cross-environment gate")
+	}
+	raw, e := os.ReadFile("../../../../contracts/fixtures/token-verification.json")
+	if e != nil {
+		t.Fatal(e)
+	}
+	var token struct {
+		Issuer, Audience, Subject string
+		Now                       int64
+		JWKS                      json.RawMessage
+		Vectors                   []struct{ Name, Token string }
+	}
+	if e = json.Unmarshal(raw, &token); e != nil {
+		t.Fatal(e)
+	}
+	var access string
+	for _, v := range token.Vectors {
+		if v.Name == "valid" {
+			access = v.Token
+		}
+	}
+	raw, e = os.ReadFile("../../../../contracts/fixtures/identity-status.json")
+	if e != nil {
+		t.Fatal(e)
+	}
+	type status struct {
+		Name, NegativeReason            string
+		Introspection, User             json.RawMessage
+		IntrospectionStatus, UserStatus int
+	}
+	var cases []status
+	if e = json.Unmarshal(raw, &cases); e != nil {
+		t.Fatal(e)
+	}
+	active := cases[0]
+	var inactive, disabled status
+	for _, c := range cases {
+		if c.Name == "inactive-token" {
+			inactive = c
+		}
+		if c.NegativeReason == "identity_inactive" {
+			disabled = c
+		}
+	}
+	var mu sync.Mutex
+	current := active
+	online := 0
+	var replace func()
+	original := http.DefaultTransport
+	http.DefaultTransport = gateTransport(func(r *http.Request) (*http.Response, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		body := token.JWKS
+		code := 200
+		if strings.HasSuffix(r.URL.Path, "/introspect") {
+			online++
+			if replace != nil {
+				replace()
+				replace = nil
+			}
+			body = current.Introspection
+			code = current.IntrospectionStatus
+		} else if r.URL.Path != "/keys" {
+			body = current.User
+			code = current.UserStatus
+		}
+		return &http.Response{StatusCode: code, Body: io.NopCloser(bytes.NewReader(body)), Header: http.Header{}}, nil
+	})
+	defer func() { http.DefaultTransport = original }()
+	sessions.records.now = func() int64 { return token.Now }
+	gate, e := sessions.IdentityGate("gate-go", "production")
+	if e != nil {
+		t.Fatal(e)
+	}
+	config := identity.StatusConfig{Config: identity.Config{Issuer: token.Issuer, Audience: token.Audience, JWKSURI: token.Issuer + "/keys", Profile: "production"}, ProductID: "gate-go", Environment: "production", PolicyVersion: "p1", ClientID: "client"}
+	warm, e := identity.NewIdentityVerifier(config, func(context.Context) (string, error) { return "secret", nil }, gate, func() time.Time { return time.UnixMilli(token.Now) })
+	if e != nil {
+		t.Fatal(e)
+	}
+	zero := int64(0)
+	config.FreshnessMs = &zero
+	fresh, e := identity.NewIdentityVerifier(config, func(context.Context) (string, error) { return "secret", nil }, gate, func() time.Time { return time.UnixMilli(token.Now) })
+	if e != nil {
+		t.Fatal(e)
+	}
+	var record map[string]any
+	_ = json.Unmarshal(f.Record, &record)
+	record["productId"] = "gate-go"
+	record["issuer"] = token.Issuer
+	record["subject"] = token.Subject
+	record["accessToken"] = access
+	record["createdAt"] = token.Now - 1000
+	record["lastActivityAt"] = token.Now
+	record["identityValidatedAt"] = token.Now
+	record["absoluteExpiresAt"] = token.Now + 28800000
+	record["idleExpiresAt"] = token.Now + 1800000
+	record["accessTokenExpiresAt"] = token.Now + 3600000
+	value, _ := json.Marshal(record)
+	expiry := token.Now + 1800000
+	ctx := context.Background()
+	first, e := sessions.CreateSession(ctx, "first", value, expiry)
+	if e != nil {
+		t.Fatal(e)
+	}
+	other, e := sessions.CreateSession(ctx, "other", value, expiry)
+	if e != nil {
+		t.Fatal(e)
+	}
+	contextKey, _ := identity.SessionIdentityContext("first", first.Revision)
+	if p, e := warm.Verify(ctx, access, contextKey); e != nil || p.Identity().Subject != token.Subject {
+		t.Fatal("active", e)
+	}
+	mu.Lock()
+	current = inactive
+	mu.Unlock()
+	if _, e = fresh.Verify(ctx, access, "bearer"); !errors.Is(e, contract.ErrUnauthenticated) {
+		t.Fatal("bearer negative", e)
+	}
+	if r, e := sessions.GetSession(ctx, "first"); e != nil || r == nil {
+		t.Fatal("bearer removed session", e)
+	}
+	if _, e = fresh.Verify(ctx, access, contextKey); !errors.Is(e, contract.ErrUnauthenticated) {
+		t.Fatal("negative", e)
+	}
+	if r, e := sessions.GetSession(ctx, "first"); e != nil || r != nil {
+		t.Fatal("token session survived", e)
+	}
+	if denied, e := sessions.IsIdentityDenied(ctx, token.Issuer, token.Subject); e != nil || denied {
+		t.Fatal("token banned identity", e)
+	}
+	mu.Lock()
+	replace = func() {
+		if _, e := sessions.CompareAndSwapSession(ctx, "other", other.Revision, value, expiry); e != nil {
+			t.Error(e)
+		}
+	}
+	mu.Unlock()
+	otherContext, _ := identity.SessionIdentityContext("other", other.Revision)
+	if _, e = fresh.Verify(ctx, access, otherContext); !errors.Is(e, contract.ErrUnauthenticated) {
+		t.Fatal(e)
+	}
+	replacement, e := sessions.GetSession(ctx, "other")
+	if e != nil || replacement == nil || replacement.Revision == other.Revision {
+		t.Fatal("replacement lost", e)
+	}
+	record["subject"] = "unrelated"
+	unrelated, _ := json.Marshal(record)
+	if _, e = sessions.CreateSession(ctx, "unrelated", unrelated, expiry); e != nil {
+		t.Fatal(e)
+	}
+	mu.Lock()
+	current = disabled
+	mu.Unlock()
+	otherContext, _ = identity.SessionIdentityContext("other", replacement.Revision)
+	if _, e = fresh.Verify(ctx, access, otherContext); !errors.Is(e, contract.ErrUnauthenticated) {
+		t.Fatal(e)
+	}
+	if denied, e := sessions.IsIdentityDenied(ctx, token.Issuer, token.Subject); e != nil || !denied {
+		t.Fatal("identity not denied", e)
+	}
+	if r, e := sessions.GetSession(ctx, "other"); e != nil || r != nil {
+		t.Fatal("identity session survived", e)
+	}
+	if r, e := sessions.GetSession(ctx, "unrelated"); e != nil || r == nil {
+		t.Fatal("unrelated session removed", e)
+	}
+	if e = gate.Invalidate(ctx, identity.Negative{Identity: identity.Identity{Issuer: token.Issuer, Subject: token.Subject}, Context: "bearer", TokenDigest: strings.Repeat("a", 64), Reason: "identity_deleted"}); e != nil {
+		t.Fatal(e)
+	}
+	var reason string
+	if e = db.QueryRow("SELECT reason FROM heimdall.identity_denials WHERE product_id='gate-go'").Scan(&reason); e != nil || reason != "deleted" {
+		t.Fatal("deleted mapping", e)
+	}
+	mu.Lock()
+	before := online
+	current = active
+	mu.Unlock()
+	if _, e = warm.Verify(ctx, access, contextKey); !errors.Is(e, contract.ErrUnauthenticated) {
+		t.Fatal("warm cache bypassed local deny", e)
+	}
+	mu.Lock()
+	after := online
+	mu.Unlock()
+	if after != before {
+		t.Fatal("local deny consulted provider")
+	}
+	if _, e = sessions.CreateSession(ctx, "resurrect", value, expiry); !errors.Is(e, contract.ErrUnauthenticated) {
+		t.Fatal("resurrected identity", e)
 	}
 }

@@ -115,3 +115,5 @@ Phase 3 observed-version invalidation checkpoint: [[evidence/phase-3-session-ver
 Phase 3 pinned-model checkpoint: [[evidence/phase-3-model-binding]] records complete local artifact comparison, exact remote model reads and direct Railway verification in both SDKs. Runtime authorization composition, administrative writes and model migration remain open.
 
 Phase 3 audited-decision checkpoint: [[evidence/phase-3-audited-decisions]] records enforced request/evaluation/terminal ordering, receipt verification, cancellation and lost-COMMIT refusal in both SDKs. Public identity/authorization composition and unresolved-decision recovery remain open.
+
+Phase 3 durable-identity checkpoint: [[evidence/phase-3-durable-identity-gate]] connects verified identity status to scoped PostgreSQL denial and revision-safe session invalidation in both SDKs. Public factory/session/audit composition remains open.

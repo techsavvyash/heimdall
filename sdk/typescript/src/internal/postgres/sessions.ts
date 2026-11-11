@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import type { RecordCipher } from "../envelopes.js";
 import { encodeIdentity } from "../identity-encoding.js";
-import { HeimdallError } from "../errors.js";
+import type { IdentityVerifier } from "../identity-verifier.js";
+import { parseIdentityContext } from "../identity-context.js";
+import { HeimdallError, checkCancellation } from "../errors.js";
 import { PostgresRecords, columns } from "./records.js";
 import type { Row } from "./records.js";
 import { query, transaction } from "./query.js";
@@ -20,6 +22,43 @@ export class SessionRecords extends PostgresRecords {
   ) {
     super(pool, cipher, productId, environment, now);
     if (typeof validate !== "function") throw new HeimdallError("invalid_argument");
+  }
+  // Bind to the verifier's immutable scope before attaching this durable gate.
+  identityGate(
+    productId: string,
+    environment: string,
+  ): ConstructorParameters<typeof IdentityVerifier>[2] {
+    if (productId !== this.productId || environment !== this.environment)
+      throw new HeimdallError("invalid_argument");
+    return {
+      check: (identity, signal) => this.isIdentityDenied(identity.issuer, identity.subject, signal),
+      invalidate: async (negative, signal) => {
+        checkCancellation(signal);
+        const context = parseIdentityContext(negative.context);
+        if (!/^[0-9a-f]{64}$/.test(negative.tokenDigest))
+          throw new HeimdallError("invalid_argument");
+        if (negative.reason === "token_inactive") {
+          if (context)
+            await this.invalidateSessionVersion(
+              context.key,
+              context.revision,
+              negative.issuer,
+              negative.subject,
+              signal,
+            );
+          return;
+        }
+        if (negative.reason !== "identity_inactive" && negative.reason !== "identity_deleted")
+          throw new HeimdallError("invalid_argument");
+        await this.invalidateIdentity(
+          negative.issuer,
+          negative.subject,
+          this.now(),
+          negative.reason === "identity_deleted" ? "deleted" : "inactive",
+          signal,
+        );
+      },
+    };
   }
   private identity(issuer: string, subject: string) {
     return createHash("sha256").update(encodeIdentity(issuer, subject), "ascii").digest();

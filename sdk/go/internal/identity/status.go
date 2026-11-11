@@ -197,6 +197,9 @@ func (v *IdentityVerifier) Verify(ctx context.Context, raw, contextKey string) (
 	cached, ok := v.cache[key]
 	if ok && v.now().UnixMilli() >= cached.principal.validatedAt && v.now().UnixMilli() < cached.until {
 		v.mu.Unlock()
+		if e := contract.CheckCancellation(ctx); e != nil {
+			return nil, e
+		}
 		return cached.principal, nil
 	}
 	delete(v.cache, key)

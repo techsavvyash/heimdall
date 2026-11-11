@@ -72,3 +72,38 @@ cleanup/current grants, refresh/logout orchestration, public factories and audit
 composition remain separate required release gates. A positive provider response
 never clears a local denial. Already-completed authentication may remain in flight;
 this does not fence business transactions after a later revocation.
+
+## Built-in PostgreSQL gate
+
+SessionRecords.identityGate/IdentityGate binds the durable adapter to the
+verifier's immutable product/environment and refuses mismatched scope before
+returning callbacks. Its primary-database identity-denial read runs on every
+verification, including a warm positive cache hit. The verifier checks caller
+cancellation again before returning a cached principal.
+
+For a session, SDK orchestration builds the canonical context
+`session:<opaque-storage-key>:<decimal-revision>` from the record it actually
+loaded and validated. The key is 1–128 ASCII letters/digits/underscore/hyphen;
+the revision is canonical positive decimal within signed int64. Bare tokens use
+exactly `bearer`. Shared identity-context.json vectors reject ambiguous and
+malformed contexts. Never build this context from an arbitrary request header
+or raw browser cookie, and never replace its revision after a negative result.
+
+The gate routes token_inactive for a session to identity/revision-bound deletion.
+A false deletion result is still a denied verification, not permission to delete
+a newer session or clear its replacement cookie. For bearer token negatives it
+performs no session deletion and does not create an account tombstone; the
+verifier evicts the matching token's observations. Independent verifier processes
+retain only the existing bounded identity freshness guarantee.
+
+Explicit identity_inactive/identity_deleted routes to atomic scoped identity
+denial and deletion of that identity's sessions. Deleted remains sticky. Positive
+provider responses never remove this denial. The gate preserves cancellation and
+uncertain dispatched-write errors instead of claiming invalidation committed.
+
+This gate checks identity denial, not cookie validity, session existence, expiry
+or activity. The future session factory must load and validate the session before
+each request and attach its exact context. Provider authentication, required audit,
+refresh/logout, reactivation reconciliation and public factory construction remain
+separate orchestration responsibilities. The gate is an internal connection of
+existing persistence primitives, not a complete session adapter API.

@@ -317,3 +317,28 @@ test("malformed provider Unicode is not repaired", async () => {
   );
   await expect(verifier.verify(raw)).rejects.toThrow("unavailable");
 });
+
+test("cancellation at the warm-cache boundary never releases a principal", async () => {
+  setup();
+  const controller = new AbortController();
+  let armed = false;
+  let afterGate = false;
+  const verifier = new IdentityVerifier(
+    config,
+    async () => "s:e+cret",
+    {
+      check: async () => {
+        if (armed) afterGate = true;
+        return false;
+      },
+      invalidate: async () => {},
+    },
+    () => {
+      if (afterGate) controller.abort();
+      return f.now;
+    },
+  );
+  await verifier.verify(raw);
+  armed = true;
+  await expect(verifier.verify(raw, "bearer", controller.signal)).rejects.toThrow("cancelled");
+});

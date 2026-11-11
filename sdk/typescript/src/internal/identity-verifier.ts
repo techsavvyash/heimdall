@@ -165,8 +165,10 @@ export class IdentityVerifier {
       .digest("hex");
     if (await this.localDenied(token, bounded)) throw new HeimdallError("unauthenticated");
     const cached = this.cache.get(key);
-    if (cached && this.now() >= cached.principal.identityValidatedAt && this.now() < cached.until)
+    if (cached && this.now() >= cached.principal.identityValidatedAt && this.now() < cached.until) {
+      checkCancellation(bounded);
       return cached.principal;
+    }
     this.cache.delete(key);
     const started = this.now();
     const observation = { identity, digest, reason: undefined as Negative["reason"] | undefined };

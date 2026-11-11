@@ -1,0 +1,25 @@
+[
+  { "context": "bearer", "valid": true },
+  {
+    "context": "session:opaque_storage_key:1",
+    "valid": true,
+    "key": "opaque_storage_key",
+    "revision": "1"
+  },
+  {
+    "context": "session:a:9223372036854775807",
+    "valid": true,
+    "key": "a",
+    "revision": "9223372036854775807"
+  },
+  { "context": "", "valid": false },
+  { "context": "session:a:0", "valid": false },
+  { "context": "session:a:01", "valid": false },
+  { "context": "session:a:-1", "valid": false },
+  { "context": "session:a:9223372036854775808", "valid": false },
+  { "context": "session:a:1:extra", "valid": false },
+  { "context": "session::1", "valid": false },
+  { "context": "session:cookie=value:1", "valid": false },
+  { "context": "session:key:1\n", "valid": false },
+  { "context": "SESSION:a:1", "valid": false }
+]

@@ -10,6 +10,8 @@ import (
 	"errors"
 	"github.com/lib/pq"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/identity"
+	"regexp"
 	"strconv"
 	"time"
 )
@@ -252,4 +254,46 @@ func (s *SessionRecords) InvalidateSessionVersion(ctx context.Context, key, revi
 		count, err := result.RowsAffected()
 		return count == 1, err
 	})
+}
+
+var identityDigest = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// IdentityGate binds the durable deny/session adapter to a verifier's immutable scope.
+func (s *SessionRecords) IdentityGate(product, environment string) (identity.Gate, error) {
+	if s == nil || product != s.records.product || environment != s.records.environment {
+		return identity.Gate{}, contract.ErrInvalidArgument
+	}
+	return identity.Gate{
+		Check: func(ctx context.Context, p identity.Identity) (bool, error) {
+			return s.IsIdentityDenied(ctx, p.Issuer, p.Subject)
+		},
+		Invalidate: func(ctx context.Context, n identity.Negative) error {
+			if e := contract.CheckCancellation(ctx); e != nil {
+				return e
+			}
+			scope, e := identity.ParseIdentityContext(n.Context)
+			if e != nil {
+				return e
+			}
+			if !identityDigest.MatchString(n.TokenDigest) {
+				return contract.ErrInvalidArgument
+			}
+			if n.Reason == "token_inactive" {
+				if scope != nil {
+					_, e = s.InvalidateSessionVersion(ctx, scope.Key, scope.Revision, n.Issuer, n.Subject)
+					return e
+				}
+				return nil
+			}
+			if n.Reason != "identity_inactive" && n.Reason != "identity_deleted" {
+				return contract.ErrInvalidArgument
+			}
+			reason := "inactive"
+			if n.Reason == "identity_deleted" {
+				reason = "deleted"
+			}
+			_, e = s.InvalidateIdentity(ctx, n.Issuer, n.Subject, s.records.now(), reason)
+			return e
+		},
+	}, nil
 }

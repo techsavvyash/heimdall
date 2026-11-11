@@ -1,7 +1,9 @@
+import { IdentityVerifier } from "../src/internal/identity-verifier.js";
+import { sessionIdentityContext } from "../src/internal/identity-context.js";
 import { readFileSync } from "node:fs";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { Pool } from "pg";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { RecordCipher } from "../src/internal/envelopes.js";
 import { HeimdallError } from "../src/internal/errors.js";
 import { SessionRecords } from "../src/internal/postgres/sessions.js";
@@ -276,12 +278,18 @@ test.skipIf(!process.env.HEIMDALL_TEST_IDENTITY_COMMIT_LOSS)(
       const healthy = store(direct, "identity-fault-ts");
       await healthy.createSession("fault-session", payload("identity-fault-ts"), fixture.expiresAt);
       await expect(
-        store(fault, "identity-fault-ts").invalidateIdentity(
-          fixture.record.issuer,
-          fixture.record.subject,
-          4000,
-          "inactive",
-        ),
+        store(fault, "identity-fault-ts")
+          .identityGate("identity-fault-ts", "production")
+          .invalidate(
+            {
+              issuer: fixture.record.issuer,
+              subject: fixture.record.subject,
+              context: "bearer",
+              tokenDigest: "a".repeat(64),
+              reason: "identity_inactive",
+            },
+            new AbortController().signal,
+          ),
       ).rejects.toThrow("outcome_unknown");
       expect(await healthy.getSession("fault-session")).toBeNull();
       const state = await direct.query(
@@ -439,12 +447,18 @@ test.skipIf(!process.env.HEIMDALL_TEST_SESSION_DELETE_LOSS)(
         fixture.expiresAt,
       ))!;
       await expect(
-        store(fault, "conditional-fault-ts").invalidateSessionVersion(
-          "fault",
-          record.revision,
-          fixture.record.issuer,
-          fixture.record.subject,
-        ),
+        store(fault, "conditional-fault-ts")
+          .identityGate("conditional-fault-ts", "production")
+          .invalidate(
+            {
+              issuer: fixture.record.issuer,
+              subject: fixture.record.subject,
+              context: sessionIdentityContext("fault", record.revision),
+              tokenDigest: "a".repeat(64),
+              reason: "token_inactive",
+            },
+            new AbortController().signal,
+          ),
       ).rejects.toThrow("outcome_unknown");
       expect(await s.getSession("fault")).toBeNull();
       const replacement = (await s.createSession(
@@ -463,6 +477,168 @@ test.skipIf(!process.env.HEIMDALL_TEST_SESSION_DELETE_LOSS)(
       expect((await s.getSession("fault"))!.revision).toBe(replacement.revision);
     } finally {
       await fault.end();
+      await pool.end();
+    }
+  },
+);
+
+test("identity gate refuses mismatched scope and malformed contexts before storage", async () => {
+  const pool = new Pool();
+  const sessions = store(pool);
+  try {
+    expect(() => sessions.identityGate("support", "production")).toThrow("invalid_argument");
+    expect(() => sessions.identityGate("ledger-identity", "staging")).toThrow("invalid_argument");
+    const gate = sessions.identityGate("ledger-identity", "production");
+    const negative = {
+      issuer: fixture.record.issuer,
+      subject: fixture.record.subject,
+      context: "session:key:0",
+      tokenDigest: "a".repeat(64),
+      reason: "token_inactive" as const,
+    };
+    await expect(gate.invalidate(negative, new AbortController().signal)).rejects.toThrow(
+      "invalid_argument",
+    );
+    await expect(
+      gate.invalidate({ ...negative, context: "bearer" }, AbortSignal.abort()),
+    ).rejects.toThrow("cancelled");
+    await expect(
+      gate.invalidate({ ...negative, context: "bearer" }, new AbortController().signal),
+    ).resolves.toBeUndefined();
+  } finally {
+    await pool.end();
+  }
+});
+test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TEST_READ_PEER)(
+  "identity verifier uses durable session gate",
+  async () => {
+    const f = read("fixtures/token-verification.json");
+    const raw = f.vectors.find((v: { name: string }) => v.name === "valid").token;
+    const cases = read("fixtures/identity-status.json");
+    let current = cases.find((c: { name: string }) => c.name === "active-human");
+    const inactive = cases.find((c: { name: string }) => c.name === "inactive-token");
+    const identityInactive = cases.find(
+      (c: { negativeReason?: string }) => c.negativeReason === "identity_inactive",
+    );
+    const pool = new Pool({
+      connectionString: process.env.HEIMDALL_TEST_DATABASE_URL,
+      options: "-c role=heimdall_identity_runtime",
+    });
+    const sessions = new SessionRecords(
+      pool,
+      cipher,
+      "gate-ts",
+      "production",
+      validate,
+      () => f.now,
+    );
+    let online = 0;
+    let replacement: (() => Promise<void>) | undefined;
+    vi.stubGlobal("fetch", async (input: unknown) => {
+      const url = String(input);
+      if (url.endsWith("/keys")) return Response.json(f.jwks);
+      if (url.endsWith("/introspect")) {
+        online++;
+        if (replacement) {
+          const fn = replacement;
+          replacement = undefined;
+          await fn();
+        }
+        return Response.json(current.introspection, { status: current.introspectionStatus });
+      }
+      return Response.json(current.user, { status: current.userStatus });
+    });
+    const gate = sessions.identityGate("gate-ts", "production");
+    const config = {
+      issuer: f.issuer,
+      audience: f.audience,
+      jwksUri: f.issuer + "/keys",
+      profile: "production" as const,
+      productId: "gate-ts",
+      environment: "production",
+      policyVersion: "p1",
+      clientId: "client",
+    };
+    const fresh = new IdentityVerifier(
+      { ...config, freshnessMs: 0 },
+      async () => "secret",
+      gate,
+      () => f.now,
+    );
+    const warm = new IdentityVerifier(
+      config,
+      async () => "secret",
+      gate,
+      () => f.now,
+    );
+    const value = payload("gate-ts", f.subject, {
+      issuer: f.issuer,
+      accessToken: raw,
+      createdAt: f.now - 1000,
+      lastActivityAt: f.now,
+      identityValidatedAt: f.now,
+      absoluteExpiresAt: f.now + 28800000,
+      idleExpiresAt: f.now + 1800000,
+      accessTokenExpiresAt: f.now + 3600000,
+    });
+    const expires = f.now + 1800000;
+    try {
+      const first = await sessions.createSession("first", value, expires);
+      const other = await sessions.createSession("other", value, expires);
+      if (!first || !other) throw new Error("session creation failed");
+      const firstContext = sessionIdentityContext("first", first.revision);
+      expect((await warm.verify(raw, firstContext)).subject).toBe(f.subject);
+      current = inactive;
+      await expect(fresh.verify(raw, "bearer")).rejects.toThrow("unauthenticated");
+      expect(await sessions.getSession("first")).not.toBeNull();
+      await expect(fresh.verify(raw, firstContext)).rejects.toThrow("unauthenticated");
+      expect(await sessions.getSession("first")).toBeNull();
+      expect(await sessions.getSession("other")).not.toBeNull();
+      expect(await sessions.isIdentityDenied(f.issuer, f.subject)).toBe(false);
+      replacement = async () => {
+        await sessions.compareAndSwapSession("other", other.revision, value, expires);
+      };
+      await expect(
+        fresh.verify(raw, sessionIdentityContext("other", other.revision)),
+      ).rejects.toThrow("unauthenticated");
+      const replaced = await sessions.getSession("other");
+      expect(replaced?.revision).not.toBe(other.revision);
+      expect(replaced).not.toBeNull();
+      const untouched = payload("gate-ts", "unrelated", { issuer: f.issuer });
+      await sessions.createSession("unrelated", untouched, expires);
+      current = identityInactive;
+      await expect(
+        fresh.verify(raw, sessionIdentityContext("other", replaced!.revision)),
+      ).rejects.toThrow("unauthenticated");
+      expect(await sessions.isIdentityDenied(f.issuer, f.subject)).toBe(true);
+      expect(await sessions.getSession("other")).toBeNull();
+      expect(await sessions.getSession("unrelated")).not.toBeNull();
+      await gate.invalidate(
+        {
+          issuer: f.issuer,
+          subject: f.subject,
+          context: "bearer",
+          tokenDigest: "a".repeat(64),
+          reason: "identity_deleted",
+        },
+        new AbortController().signal,
+      );
+      expect(
+        (
+          await pool.query(
+            "SELECT reason FROM heimdall.identity_denials WHERE product_id='gate-ts'",
+          )
+        ).rows[0].reason,
+      ).toBe("deleted");
+      const before = online;
+      current = cases[0];
+      await expect(warm.verify(raw, firstContext)).rejects.toThrow("unauthenticated");
+      expect(online).toBe(before);
+      await expect(sessions.createSession("resurrect", value, expires)).rejects.toThrow(
+        "unauthenticated",
+      );
+    } finally {
+      vi.unstubAllGlobals();
       await pool.end();
     }
   },

@@ -375,3 +375,24 @@ func TestStatusMalformedUnicode(t *testing.T) {
 		t.Fatal(e)
 	}
 }
+
+func TestWarmCacheCancellationBoundary(t *testing.T) {
+	cases := statusCases(t)
+	h := statusSetup(t, &cases[0], 60000)
+	if _, e := h.v.Verify(context.Background(), h.fixture.token("valid"), "bearer"); e != nil {
+		t.Fatal(e)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var afterGate atomic.Bool
+	h.v.gate.Check = func(context.Context, Identity) (bool, error) { afterGate.Store(true); return false, nil }
+	h.v.now = func() time.Time {
+		if afterGate.Load() {
+			cancel()
+		}
+		return time.UnixMilli(h.now.Load())
+	}
+	if p, e := h.v.Verify(ctx, h.fixture.token("valid"), "bearer"); !errors.Is(e, contract.ErrCancelled) || p != nil {
+		t.Fatal("released cached principal after cancellation", e)
+	}
+}
