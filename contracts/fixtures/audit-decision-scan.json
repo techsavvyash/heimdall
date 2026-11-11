@@ -1,0 +1,20 @@
+{
+  "cutoff": 2000,
+  "limit": 2,
+  "requests": [
+    { "decisionId": "z", "requestedAt": 1001 },
+    { "decisionId": "A", "requestedAt": 1001 },
+    { "decisionId": "later", "requestedAt": 1002 },
+    { "decisionId": "resolved", "requestedAt": 1000, "complete": true },
+    { "decisionId": "future", "requestedAt": 3000 }
+  ],
+  "pages": [["A", "z"], ["later"]],
+  "badCursorPatches": [
+    { "productId": "wrong" },
+    { "environment": "wrong" },
+    { "cutoff": 2001 },
+    { "requestedAt": -1 },
+    { "requestedAt": 2001 },
+    { "decisionId": "bad\n" }
+  ]
+}

@@ -228,3 +228,46 @@ read-only connection unnoticed.
 completion, competing terminal rollback, request/terminal COMMIT-loss retries,
 outbox failures and existing audited runners suppressing a late allow. The latter
 uses a competing normal terminal, not a completed recovery administration path.
+
+## Pending decision maintenance pages
+
+Internal TS `scanPendingDecisions` and Go `ScanPendingDecisions` return validated
+pending requests, ordered by requested timestamp then C-collated decision ID.
+The inputs are a nonnegative safe-integer inclusive cutoff, an optional cursor and
+limit 1–100. A cursor carries productId, environment, cutoff, requestedAt and
+decisionId; it must match this configured scope and cutoff and be no newer than
+the cutoff. These are trusted maintenance values, not signed public API tokens.
+The caller must authorize maintenance access before exposing request payloads.
+
+One primary/read-write SQL statement selects pending slots and original requests
+under the same snapshot, with limit+1 lookahead and a 4 MiB aggregate encoded-row
+budget. Both SDKs validate each returned row, including lookahead, against the ha1
+wrapper/digest, full event validator and shared request binding. Broken binding,
+corruption or an oversized first row fails the whole call with audit_unavailable;
+nothing is skipped or turned into an empty success. Dependency or primary-mode
+failures remain unavailable. The five-second budget includes connection and lock
+waits; explicit cancellation preserves the cancellation error.
+
+The result is `{items, next}`. Each item includes decisionId, requestedAt and the
+original validated request event. Next is the last returned position only when
+count or byte lookahead indicates more; otherwise it is null. Byte-limited pages
+may contain fewer than the requested limit with a continuation. All objects are
+returned copies; TS snapshots the input cursor before awaiting database I/O.
+
+A page does not claim, lock or resolve a decision. A returned candidate can become
+terminal immediately; finalization must recheck pending state transactionally.
+Concurrent completion may make a continuation empty. Separate pages are separate
+snapshots; requests inserted behind the cursor are found by a later sweep starting
+at null. Persist scope/cutoff with a restart position, periodically restart sweeps,
+and never treat a completed sweep as proof that all evaluators stopped. Cutoff is
+an operator policy, not an automatic death detector or remote-write fence.
+
+`fixtures/audit-decision-scan.json` defines shared order, cutoff and invalid-cursor
+cases. `tests/integration/audit-decision-scan.py` exercises live pagination,
+reciprocal TS/Go reads, terminal/future exclusion, concurrent completion, corruption,
+byte-limited pages, storage oversized-row refusal, read-only refusal, cancellation
+and connection-pool reuse. The supported SQL caps each event at 1.5 MB; the
+scanner first-row byte-budget refusal is defense against incompatible storage,
+not a branch exercised by that live proof. This port
+remains internal until v2 upgrade/readiness activation. Scheduler, recovery
+administration and capacity/retention policies are still separate requirements.

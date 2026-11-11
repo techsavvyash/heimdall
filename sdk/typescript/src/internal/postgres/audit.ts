@@ -233,6 +233,130 @@ export class PostgresAudit {
       signal,
     );
   }
+  // Internal maintenance cursor, not an authenticated public pagination token.
+  async scanPendingDecisions(
+    cutoff: number,
+    after: {
+      productId: string;
+      environment: string;
+      cutoff: number;
+      requestedAt: number;
+      decisionId: string;
+    } | null,
+    limit: number,
+    signal?: AbortSignal,
+  ) {
+    const timestamp = (v: unknown): v is number =>
+      typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
+    if (
+      !timestamp(cutoff) ||
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 100 ||
+      (after !== null &&
+        (typeof after !== "object" ||
+          after.productId !== this.productId ||
+          after.environment !== this.environment ||
+          after.cutoff !== cutoff ||
+          !timestamp(after.requestedAt) ||
+          after.requestedAt > cutoff ||
+          !token(after.decisionId, 128)))
+    )
+      throw new HeimdallError("invalid_argument");
+    after = after === null ? null : { ...after };
+    const rows = await query<{
+      primary: boolean;
+      total: number;
+      records: {
+        decisionId: string;
+        requestedAt: number;
+        requestEventId: string;
+        recordedAt: number;
+        digest: string;
+        event: Record<string, unknown>;
+      }[];
+    }>(
+      this.pool,
+      `
+WITH selected AS MATERIALIZED (
+ SELECT d.decision_id,d.requested_at,d.request_event_id,e.recorded_at,e.payload_digest,e.event
+ FROM heimdall.audit_decisions d LEFT JOIN heimdall.audit_events e ON e.product_id=d.product_id AND e.environment=d.environment AND e.event_id=d.request_event_id
+ WHERE d.product_id=$1 AND d.environment=$2 AND d.resolution='pending' AND d.requested_at<=$3
+ AND ($4::bigint IS NULL OR (d.requested_at,d.decision_id COLLATE "C")>($4,$5 COLLATE "C"))
+ ORDER BY d.requested_at,d.decision_id COLLATE "C" LIMIT $6
+), encoded AS MATERIALIZED (
+ SELECT decision_id,requested_at,jsonb_build_object('decisionId',decision_id,'requestedAt',requested_at,'requestEventId',request_event_id,'recordedAt',recorded_at,'digest',encode(payload_digest,'hex'),'event',event) AS record FROM selected
+), sized AS (
+ SELECT *,sum(octet_length(record::text)) OVER(ORDER BY requested_at,decision_id COLLATE "C") AS size FROM encoded
+) SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
+ (SELECT count(*)::int FROM selected) AS total,COALESCE(jsonb_agg(record ORDER BY requested_at,decision_id COLLATE "C"),'[]'::jsonb) AS records FROM sized WHERE size<=4194304`,
+      [
+        this.productId,
+        this.environment,
+        cutoff,
+        after?.requestedAt ?? null,
+        after?.decisionId ?? null,
+        limit + 1,
+      ],
+      false,
+      signal,
+    );
+    if (rows.length !== 1 || rows[0]!.primary !== true) throw new HeimdallError("unavailable");
+    const page = rows[0]!;
+    if (
+      !Number.isInteger(page.total) ||
+      page.total < 0 ||
+      page.total > limit + 1 ||
+      !Array.isArray(page.records) ||
+      page.records.length > page.total ||
+      (page.total > 0 && page.records.length === 0)
+    )
+      throw new HeimdallError("audit_unavailable");
+    let previous = after;
+    const items = page.records.map((row) => {
+      if (
+        !token(row.decisionId, 128) ||
+        !timestamp(row.requestedAt) ||
+        row.requestedAt > cutoff ||
+        !token(row.requestEventId, 128) ||
+        !timestamp(row.recordedAt) ||
+        typeof row.digest !== "string" ||
+        !/^[a-f0-9]{64}(?![\s\S])/.test(row.digest) ||
+        (previous !== null &&
+          (row.requestedAt < previous.requestedAt ||
+            (row.requestedAt === previous.requestedAt && row.decisionId <= previous.decisionId)))
+      )
+        throw new HeimdallError("audit_unavailable");
+      const request = this.decodeStored(row.event, row.requestEventId, row.recordedAt, row.digest);
+      const b = bindAuditDecision(this.productId, this.environment, [request]);
+      if (b.decisionId !== row.decisionId || b.requestedAt !== row.requestedAt)
+        throw new HeimdallError("audit_unavailable");
+      previous = {
+        productId: this.productId,
+        environment: this.environment,
+        cutoff,
+        requestedAt: row.requestedAt,
+        decisionId: row.decisionId,
+      };
+      return { decisionId: row.decisionId, requestedAt: row.requestedAt, request };
+    });
+    const more = page.total > limit || page.total > items.length;
+    const selected = items.slice(0, limit);
+    const last = selected.at(-1);
+    return {
+      items: selected,
+      next:
+        more && last
+          ? {
+              productId: this.productId,
+              environment: this.environment,
+              cutoff,
+              requestedAt: last.requestedAt,
+              decisionId: last.decisionId,
+            }
+          : null,
+    };
+  }
   // A read is not a claim/lease. Concurrent workers may select the same records.
   async pending(sink: string, now: number, limit: number, signal?: AbortSignal) {
     if (
