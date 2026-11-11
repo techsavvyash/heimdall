@@ -221,3 +221,15 @@ machine/PAT, proves roleless session creation fails, grants the narrow role usin
 bootstrap authority, and runs the protocol chain with the new credential. User
 reads and self-escalation must fail. Cleanup revokes the instance grant before
 removing the organization. The ordinary Login PAT remains available for cleanup.
+
+## Intent expiry probe
+
+Set HEIMDALL_PROBE_INTENT_EXPIRY_SECONDS=20 alongside the federation probe credentials
+and run once per protocol (with HEIMDALL_PROBE_NARROW_LOGIN=true to include the narrow
+credential checks). Values are integral seconds from 1 through 45; unset or zero
+skips this test. Only the owned Keycloak realm receives short access-token/code
+lifetimes. The probe checks validity before waiting lifetime+2 seconds, requires
+retrieval/session creation to fail afterward, and runs a fresh successful flow.
+No API lifetime change is needed. ZITADEL's MaxIdPIntentLifetime is a fallback when
+the upstream supplies no expiry, not a cap on an explicit upstream expiry. The
+verification API is restored to ZITADEL_SYSTEMDEFAULTS_MAXIDPINTENTLIFETIME=1h.

@@ -100,3 +100,5 @@ The [[evidence/phase-2-oidc|OIDC checkpoint]] now also records live unknown-key 
 [[evidence/phase-2-self-service-evidence|User-scoped session evidence]] verifies user-token reads for password, SAML and OIDC sessions. The session omits provider identity; strict hosted-login integration remains open.
 
 [[evidence/phase-2-federation-credentials|Narrow federation credential]] verifies the complete SAML/OIDC protocol chain with three instance-scoped session permissions and denied user reads/self-escalation. Strict browser integration and expiry remain open.
+
+[[evidence/phase-2-federation-binding|Intent expiry follow-up]] verifies expired retrieval/session rejection and fresh positive controls for SAML/OIDC. Explicit upstream expiry overrides the API fallback lifetime; local transaction deadlines remain independent.

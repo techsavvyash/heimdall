@@ -82,3 +82,30 @@ sequenceDiagram
 Follow-up validation: the full workspace gate passed again (765 Vitest tests and Go race tests, plus checks/builds). Source commit f6f476cea5c94f2882e990db69637e21ab7f90e5 passed GitHub Actions runs 42917964338 and 42917954200. Railway docs deployment 1c98ef9a-c20f-4b18-b21a-6e309fc6446a reached SUCCESS. The public page returned HTTP 200 with both new probe IDs, the follow-up section and Mermaid source. Phase 2 remains open.
 
 The required schema/fixture amendment is now recorded in [[phase-2-enterprise-contract]] with renewed TS/Go conformance and publication proof. This closes the representation gap identified above; live browser/strict-policy enforcement and atomic persistence remain separate gates.
+
+## Intent expiry and upstream lifetime precedence
+
+The expiry probe first retrieves a successful, unused intent and verifies its provider/user. It then waits beyond a short lifetime configured only on the disposable Keycloak realm and tries both retrieval and session creation with the same intent credentials. A new intent subsequently runs the full successful federation chain as a positive control. This distinguishes expiry rejection from a generally broken provider or credential.
+
+An initial run, 44436377-5f8a-4ec0-8860-08b296b6b778, shortened ZITADEL's MaxIdPIntentLifetime to 20 seconds and left the upstream lifetime unchanged. Retrieval still succeeded after 22 seconds, causing the probe to fail. The pinned IDPIntentWriteModel explains why: when the upstream provides an expiry, that value is used directly; the configured maximum is a fallback only when upstream expiry is absent. The test stopped before attempting session creation in this initial run and cleaned up its resources. It does not prove expired intent acceptance.
+
+The temporary API setting was restored to the pinned one-hour default and deployed as 7ef5c76d-4911-4326-97dc-50d5614f2a55. The revised probe uses HEIMDALL_PROBE_INTENT_EXPIRY_SECONDS=20 to set the disposable realm's accessTokenLifespan and accessCodeLifespan, then waits 22 seconds. The pinned Keycloak SAML implementation uses the latter as the default assertion lifetime, while ZITADEL's SAML session returns Conditions.NotOnOrAfter as its expiry. No shared customer provider policy is changed.
+
+```mermaid
+flowchart TD
+  Intent[Successful unused provider intent] --> Read[Read and verify provider and subject]
+  Read --> Wait[Wait past disposable upstream expiry]
+  Wait --> Retrieve[Retrieve same intent]
+  Wait --> Session[Create session from same intent]
+  Retrieve --> Deny[Require rejection without evidence or session]
+  Session --> Deny
+  Deny --> Fresh[Fresh intent and full login must still succeed]
+```
+
+The SDK must enforce its own browser transaction expiry and target policy authentication age. It must not infer a universal intent maximum from the ZITADEL fallback setting, extend local deadlines because an upstream token lives longer, or treat retrieval alone as successful authentication. Session creation and the complete signed product binding still have to succeed before evidence is persisted. This probe does not establish exact-boundary clock behavior, startup-intent expiry before upstream authentication, or callback race/crash safety.
+
+Sources: [pinned intent expiry calculation](https://github.com/zitadel/zitadel/blob/v4.19.4/internal/command/idp_intent_model.go), [retrieval expiry check](https://github.com/zitadel/zitadel/blob/v4.19.4/internal/api/grpc/user/v2/intent.go), [session creation checks](https://github.com/zitadel/zitadel/blob/v4.19.4/internal/command/session.go), [Keycloak SAML lifetimes](https://github.com/keycloak/keycloak/blob/26.8.2/services/src/main/java/org/keycloak/protocol/saml/SamlProtocol.java).
+
+Both final expiry runs passed on the restored API deployment: OIDC 7c176825-ee81-41ab-ae1a-4120f9d249e6 and SAML c51343c4-8706-480c-893f-213a49dc0ee7. Each expired-intent retrieval and session-creation attempt returned HTTP 400/code 9 after a prior successful retrieval and 22-second wait. Fresh intents completed the full signature/subject/provider/session/code chain afterward. Narrow-credential and replay checks also passed; owned resources and temporary instance grants were cleaned up. Sanitized evidence is in tests/integration/evidence/federation-expiry-oidc-2026-11-11.json and federation-expiry-saml-2026-11-11.json. The initial temporary 20-second API deployment was d0fb22f7-be35-4e56-bee3-181696289421; it is no longer the runtime deployment.
+
+Expiry checkpoint validation: full workspace checks passed, including 863 TypeScript tests, Go race tests, formatting/lint/type/Knip/vet, SDK build and 54 Quartz pages.

@@ -9,6 +9,8 @@ const k = process.env.HEIMDALL_PROBE_IDP_URL;
 const pat = process.env.HEIMDALL_PROBE_ZITADEL_PAT;
 const loginPat = process.env.HEIMDALL_PROBE_ZITADEL_LOGIN_PAT;
 const narrowLogin = process.env.HEIMDALL_PROBE_NARROW_LOGIN === "true";
+const expirySeconds = Number(process.env.HEIMDALL_PROBE_INTENT_EXPIRY_SECONDS ?? 0);
+assert(Number.isInteger(expirySeconds) && expirySeconds >= 0 && expirySeconds <= 45);
 let flowPat = loginPat;
 const adminPassword = process.env.HEIMDALL_PROBE_IDP_ADMIN_PASSWORD;
 assert(
@@ -90,6 +92,9 @@ try {
     registrationAllowed: false,
     loginWithEmailAllowed: false,
     resetPasswordAllowed: false,
+    ...(expirySeconds
+      ? { accessTokenLifespan: expirySeconds, accessCodeLifespan: expirySeconds }
+      : {}),
   });
   realmCreated = true;
   if (protocol === "oidc")
@@ -444,6 +449,62 @@ try {
       "Tampered assertion must not return intent credentials",
     );
     observations.push({ tamperedNameId: "rejected at failure callback without intent token" });
+  }
+  if (expirySeconds) {
+    const expired = (await authenticate()).target;
+    assert.equal(expired.origin + expired.pathname, complete);
+    const expiredId = expired.searchParams.get("id");
+    const expiredToken = expired.searchParams.get("token");
+    assert(expiredId && expiredToken);
+    const before = await za(
+      "POST",
+      `/v2/idp_intents/${expiredId}`,
+      { idpIntentToken: expiredToken },
+      flowPat,
+    );
+    assert.equal(before.userId, user.id);
+    assert.equal(before.idpInformation.idpId, provider.id);
+    const waitMs = (expirySeconds + 2) * 1000;
+    console.error(`Waiting ${waitMs}ms for the disposable upstream credential lifetime`);
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+    const rejections = [];
+    for (const [operation, path, body] of [
+      ["retrieve", `/v2/idp_intents/${expiredId}`, { idpIntentToken: expiredToken }],
+      [
+        "create session",
+        "/v2/sessions",
+        {
+          checks: {
+            user: { userId: user.id },
+            idpIntent: { idpIntentId: expiredId, idpIntentToken: expiredToken },
+          },
+        },
+      ],
+    ]) {
+      const response = await fetch(z + path, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${flowPat}` },
+        body: JSON.stringify(body),
+        redirect: "error",
+        signal: AbortSignal.timeout(15000),
+      });
+      const result = await response.json();
+      if (response.status < 300 && result.sessionId) sessions.push(result.sessionId);
+      assert(
+        response.status >= 400 && response.status < 500,
+        `Expired intent ${operation} must fail: HTTP ${response.status}`,
+      );
+      assert(!result.sessionId && !result.idpInformation);
+      rejections.push({ operation, status: response.status, code: result.code });
+    }
+    observations.push({
+      expiredIntent: {
+        upstreamLifetimeSeconds: expirySeconds,
+        waitedMs: waitMs,
+        validBeforeWait: true,
+        rejections,
+      },
+    });
   }
   const { target, page, capturedSamlFields } = await authenticate();
   assert(target.origin + target.pathname === complete, "Federation did not reach success callback");
