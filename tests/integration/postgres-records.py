@@ -21,7 +21,7 @@ def run(args, **kwargs):
 try:
     run(["docker", "run", "--detach", "--name", name, "-e", "POSTGRES_PASSWORD", "-p", "127.0.0.1::5432", IMAGE], env=env, stdout=subprocess.DEVNULL)
     for _ in range(60):
-        ready = subprocess.run(["docker", "exec", name, "pg_isready", "-U", "postgres"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        ready = subprocess.run(["docker", "exec", name, "pg_isready", "-h", "127.0.0.1", "-U", "postgres"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if ready.returncode == 0:
             break
         time.sleep(0.5)
@@ -59,6 +59,7 @@ try:
         raise RuntimeError("lost response did not leave committed ready state")
     subprocess.run(command, cwd=ROOT / "sdk/go", env=recovered_env, check=True)
     admin("CREATE ROLE heimdall_audit_runtime NOLOGIN; GRANT USAGE ON SCHEMA heimdall TO heimdall_audit_runtime; GRANT SELECT ON heimdall.audit_events,heimdall.audit_deliveries TO heimdall_audit_runtime; GRANT INSERT ON heimdall.audit_events,heimdall.audit_deliveries TO heimdall_audit_runtime;")
+    admin("CREATE ROLE heimdall_audit_delivery NOLOGIN; GRANT USAGE ON SCHEMA heimdall TO heimdall_audit_delivery; GRANT SELECT,UPDATE ON heimdall.audit_deliveries TO heimdall_audit_delivery;")
     env["HEIMDALL_TEST_AUDIT_ROLE"] = "heimdall_audit_runtime"
     for peer in (False, True):
         if peer:
@@ -74,6 +75,15 @@ try:
                 subprocess.run(["go", "test", "-race", "-count=1", "./internal/postgres", "-run", "^TestAuditCommitLoss$"], cwd=ROOT / "sdk/go", env=fault_env, check=True)
             if not proxy.dropped.is_set() or proxy.errors:
                 raise RuntimeError(language + " audit COMMIT fault was not verified")
-    print(json.dumps({"run": name, "postgres": IMAGE, "result": "passed", "checks": ["TS and Go CRUD", "8-way CAS single winner", "expiry and product isolation", "delete/recreate revision", "tampered expiry denied", "cancelled blocked write unknown", "pool recovery", "TS reads Go", "Go reads TS", "11 readiness states in both languages", "read-only connection rejected", "missing metadata table rejected", "migration transaction visibility", "concurrent deployment migration processes", "idempotent migration and incompatible state refusal", "mid-migration permission failure rolls back entire schema", "held migration lock deadline and retry", "confirmed COMMIT response loss returns outcome_unknown and safe rerun", "TS and Go atomic audit append rollback race and conflict", "bidirectional audit receipts and original sink routing", "TS and Go audit committed response loss and receipt recovery", "audit append with SELECT INSERT privileges only", "shared U+0000 and Unicode event survives TS write and Go replay"]}))
+    for language in ("ts", "go"):
+        with CommitLossProxy(int(port)) as proxy:
+            fault_env = dict(env, HEIMDALL_TEST_ACK_COMMIT_LOSS=f"postgres://postgres:{password}@127.0.0.1:{proxy.port}/postgres?sslmode=disable")
+            if language == "ts":
+                run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-audit.test.ts", "-t", "acknowledgement committed response loss"], env=fault_env)
+            else:
+                subprocess.run(["go", "test", "-race", "-count=1", "./internal/postgres", "-run", "^TestAcknowledgementCommitLoss$"], cwd=ROOT / "sdk/go", env=fault_env, check=True)
+            if not proxy.dropped.is_set() or proxy.errors:
+                raise RuntimeError(language + " acknowledgement COMMIT fault was not verified")
+    print(json.dumps({"run": name, "postgres": IMAGE, "result": "passed", "checks": ["TS and Go CRUD", "8-way CAS single winner", "expiry and product isolation", "delete/recreate revision", "tampered expiry denied", "cancelled blocked write unknown", "pool recovery", "TS reads Go", "Go reads TS", "11 readiness states in both languages", "read-only connection rejected", "missing metadata table rejected", "migration transaction visibility", "concurrent deployment migration processes", "idempotent migration and incompatible state refusal", "mid-migration permission failure rolls back entire schema", "held migration lock deadline and retry", "confirmed COMMIT response loss returns outcome_unknown and safe rerun", "TS and Go atomic audit append rollback race and conflict", "bidirectional audit receipts and original sink routing", "TS and Go audit committed response loss and receipt recovery", "audit append with SELECT INSERT privileges only", "shared U+0000 and Unicode event survives TS write and Go replay", "both SDKs delivery receipt matrix and atomic partial acknowledgement", "both SDKs acknowledgement committed response loss and idempotent recovery"]}))
 finally:
     subprocess.run(["docker", "rm", "--force", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

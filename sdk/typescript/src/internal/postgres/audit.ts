@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { auditDigest } from "../audit-receipts.js";
+import { auditDigest, validateDeliveryReceipt } from "../audit-receipts.js";
 import { HeimdallError } from "../errors.js";
 import { transaction } from "./query.js";
 const token = (v: unknown, max: number): v is string =>
@@ -106,6 +106,58 @@ export class PostgresAudit {
           recordedAt,
           payloadDigest: originalDigest,
         };
+      },
+      signal,
+    );
+  }
+  // batch is the exact submitted batch; receipt has already passed authenticated
+  // transport/schema validation. deliveredAt is the local acknowledgement time.
+  async acknowledge(
+    batch: Parameters<typeof validateDeliveryReceipt>[0],
+    receipt: Parameters<typeof validateDeliveryReceipt>[1],
+    deliveredAt: number,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const shape = (value: typeof batch) =>
+      token(value.productId, 64) &&
+      token(value.environment, 64) &&
+      token(value.sinkId, 128) &&
+      Array.isArray(value.eventIds) &&
+      value.eventIds.length > 0 &&
+      value.eventIds.length <= 1000 &&
+      value.eventIds.every((id) => token(id, 128)) &&
+      new Set(value.eventIds).size === value.eventIds.length;
+    if (
+      !shape(batch) ||
+      batch.productId !== this.productId ||
+      batch.environment !== this.environment ||
+      !Number.isSafeInteger(deliveredAt) ||
+      deliveredAt < 0
+    )
+      throw new HeimdallError("invalid_argument");
+    if (!shape(receipt)) throw new HeimdallError("unavailable");
+    validateDeliveryReceipt(batch, receipt);
+    const ids = [...receipt.eventIds];
+    const sink = batch.sinkId;
+    await transaction(
+      this.pool,
+      async (client) => {
+        const parameters = [this.productId, this.environment, sink, ids];
+        const rows = await client.query<{ state: string }>(
+          "SELECT state FROM heimdall.audit_deliveries WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=ANY($4::text[]) ORDER BY event_id FOR UPDATE",
+          parameters,
+        );
+        if (
+          rows.rows.length !== ids.length ||
+          rows.rows.some((row) => row.state !== "pending" && row.state !== "delivered")
+        )
+          throw new HeimdallError("unavailable");
+        const updated = await client.query(
+          "UPDATE heimdall.audit_deliveries SET state='delivered',delivered_at=$5 WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=ANY($4::text[]) AND state='pending'",
+          [...parameters, deliveredAt],
+        );
+        if (updated.rowCount !== rows.rows.filter((row) => row.state === "pending").length)
+          throw new HeimdallError("unavailable");
       },
       signal,
     );

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"os"
@@ -201,4 +202,174 @@ func TestAuditCommitLoss(t *testing.T) {
 	if err = direct.QueryRow("SELECT count(*) FROM heimdall.audit_deliveries WHERE event_id=$1", event["eventId"]).Scan(&count); err != nil || count != 2 {
 		t.Fatal("changed routing", err)
 	}
+}
+
+func TestAuditAcknowledgements(t *testing.T) {
+	url := os.Getenv("HEIMDALL_TEST_DATABASE_URL")
+	if url == "" || os.Getenv("HEIMDALL_TEST_READ_PEER") != "" {
+		t.Skip("live acknowledgements")
+	}
+	fixtures, validate := auditFixtureValidator(t)
+	db, err := sql.Open("postgres", url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	deliveryDB, err := sql.Open("postgres", url+"&options=-c%20role%3Dheimdall_audit_delivery")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer deliveryDB.Close()
+	writer, _ := NewAudit(db, "ledger", "production", []string{"siem", "other-sink"}, validate)
+	store, _ := NewAudit(deliveryDB, "ledger", "production", nil, validate)
+	ctx := context.Background()
+	raw, err := os.ReadFile("../../../../contracts/fixtures/audit-delivery-v1.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Name           string
+		Batch, Receipt contract.AuditDelivery
+		Valid          bool
+	}
+	if json.Unmarshal(raw, &cases) != nil {
+		t.Fatal("fixtures")
+	}
+	for index, item := range cases {
+		prefix := fmt.Sprintf("go-ack-%d-", index)
+		ids := []string{prefix + "e1", prefix + "e2"}
+		for _, id := range ids {
+			event := fixtures[0].Event
+			event["eventId"] = id
+			if _, err = writer.Append(ctx, event); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for i, id := range item.Batch.EventIDs {
+			item.Batch.EventIDs[i] = prefix + id
+		}
+		for i, id := range item.Receipt.EventIDs {
+			item.Receipt.EventIDs[i] = prefix + id
+		}
+		err = store.Acknowledge(ctx, item.Batch, item.Receipt, 1000)
+		if (err == nil) != item.Valid {
+			t.Fatalf("%s: %v", item.Name, err)
+		}
+		for _, id := range ids {
+			for _, sink := range []string{"siem", "other-sink"} {
+				want := "pending"
+				if item.Valid && sink == "siem" {
+					for _, acked := range item.Receipt.EventIDs {
+						if acked == id {
+							want = "delivered"
+						}
+					}
+				}
+				var state string
+				if err = db.QueryRow("SELECT state FROM heimdall.audit_deliveries WHERE event_id=$1 AND sink_id=$2", id, sink).Scan(&state); err != nil || state != want {
+					t.Fatalf("%s state %s want %s: %v", item.Name, state, want, err)
+				}
+			}
+		}
+	}
+	ids := []string{"go-ack-atomic-1", "go-ack-atomic-2"}
+	for _, id := range ids {
+		fixtures[0].Event["eventId"] = id
+		if _, err = writer.Append(ctx, fixtures[0].Event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	batch := contract.AuditDelivery{ProductID: "ledger", Environment: "production", SinkID: "siem", EventIDs: ids}
+	if _, err = db.Exec("UPDATE heimdall.audit_deliveries SET state='quarantined' WHERE event_id=$1 AND sink_id='siem'", ids[1]); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Acknowledge(ctx, batch, batch, 2000); !errors.Is(err, contract.ErrUnavailable) {
+		t.Fatal(err)
+	}
+	var state string
+	if err = db.QueryRow("SELECT state FROM heimdall.audit_deliveries WHERE event_id=$1 AND sink_id='siem'", ids[0]).Scan(&state); err != nil || state != "pending" {
+		t.Fatal("partial update", err)
+	}
+	missing := batch
+	missing.EventIDs = []string{ids[0], "missing-route"}
+	if err = store.Acknowledge(ctx, missing, missing, 2000); !errors.Is(err, contract.ErrUnavailable) {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec("UPDATE heimdall.audit_deliveries SET state='pending' WHERE event_id=$1 AND sink_id='siem'", ids[1]); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	results := make(chan error, 8)
+	for range 8 {
+		wg.Add(1)
+		go func() { defer wg.Done(); results <- store.Acknowledge(ctx, batch, batch, 3000) }()
+	}
+	wg.Wait()
+	close(results)
+	for err := range results {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = store.Acknowledge(ctx, batch, batch, 4000); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range ids {
+		var at int64
+		if err = db.QueryRow("SELECT delivered_at FROM heimdall.audit_deliveries WHERE event_id=$1 AND sink_id='siem'", id).Scan(&at); err != nil || at != 3000 {
+			t.Fatal("replay changed timestamp", err)
+		}
+	}
+}
+
+func TestAcknowledgementCommitLoss(t *testing.T) {
+	url := os.Getenv("HEIMDALL_TEST_ACK_COMMIT_LOSS")
+	if url == "" {
+		t.Skip("ack response loss proxy")
+	}
+	fixtures, validate := auditFixtureValidator(t)
+	fault, err := sql.Open("postgres", url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fault.Close()
+	direct, err := sql.Open("postgres", os.Getenv("HEIMDALL_TEST_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer direct.Close()
+	writer, _ := NewAudit(direct, "ledger", "production", []string{"siem"}, validate)
+	store, _ := NewAudit(fault, "ledger", "production", nil, validate)
+	ctx := context.Background()
+	ids := []string{"go-ack-loss-1", "go-ack-loss-2"}
+	for _, id := range ids {
+		fixtures[0].Event["eventId"] = id
+		if _, err = writer.Append(ctx, fixtures[0].Event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	batch := contract.AuditDelivery{ProductID: "ledger", Environment: "production", SinkID: "siem", EventIDs: ids}
+	receipt := batch
+	receipt.EventIDs = []string{ids[0]}
+	if err = store.Acknowledge(ctx, batch, receipt, 1234); !errors.Is(err, contract.ErrOutcomeUnknown) {
+		t.Fatal("lost ack response", err)
+	}
+	verify := func() {
+		t.Helper()
+		for i, id := range ids {
+			var state string
+			var at sql.NullInt64
+			if err = direct.QueryRow("SELECT state,delivered_at FROM heimdall.audit_deliveries WHERE event_id=$1", id).Scan(&state, &at); err != nil {
+				t.Fatal(err)
+			}
+			if i == 0 && (state != "delivered" || !at.Valid || at.Int64 != 1234) || i == 1 && (state != "pending" || at.Valid) {
+				t.Fatal("unexpected acknowledgement state", state, at)
+			}
+		}
+	}
+	verify()
+	if err = writer.Acknowledge(ctx, batch, receipt, 2345); err != nil {
+		t.Fatal(err)
+	}
+	verify()
 }

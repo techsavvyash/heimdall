@@ -144,3 +144,21 @@ original delivery set even if current sink configuration differs; retroactive
 routing requires separate explicit export/replay behavior. This primitive does
 not run deliveries, apply retention, implement backpressure, batch appends or
 verify the database's physical fsync/replication guarantees. Those remain required.
+
+Internal acknowledge/Acknowledge persists a normalized delivery receipt for the
+exact submitted batch. The caller must authenticate the transport and validate
+the wire receipt schema first. The store independently validates bounded IDs,
+unique batches, its product/environment, sink and subset membership. Malformed
+trusted batch arguments return invalid_argument; an invalid receipt returns
+unavailable and advances nothing. deliveredAt comes from the local clock, not the
+untrusted sink's timestamp.
+
+One READ COMMITTED transaction locks every acknowledged delivery row in event-ID
+order. Missing routes or quarantined state reject the whole acknowledgement. Only
+pending rows transition to delivered; previously delivered rows keep their first
+timestamp. The affected-row count must match the locked pending rows. Partial
+receipts leave all other IDs/sinks pending. Replay is idempotent, including after
+an outcome_unknown COMMIT response. This operation never creates routes or changes
+event payloads. Its database role needs SELECT/UPDATE on audit_deliveries only.
+A receipt is evidence from a trusted transport path, not authorization for arbitrary
+callers to mark unsent events delivered; the public exporter remains to be wired.

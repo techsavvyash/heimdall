@@ -97,3 +97,5 @@ Phase 3 migration checkpoint: [[evidence/phase-3-migration-runner]] adds one sha
 The migration checkpoint now includes compiled-runner execution on Railway with verified cleanup, and a PostgreSQL wire-protocol test proving outcome_unknown after a committed response is lost.
 
 Phase 3 audit checkpoint: [[evidence/phase-3-audit-persistence]] adds atomic event/delivery append in TS and Go, replay/conflict handling, lossless payload encoding and lost-COMMIT-response recovery evidence. Protected-operation orchestration and delivery workers remain open.
+
+Phase 3 acknowledgement checkpoint: [[evidence/phase-3-audit-acknowledgements]] records atomic partial delivery receipts, replay timestamp preservation, quarantine/missing-route rejection and committed-response-loss recovery in both SDKs. Delivery transport and scheduling remain open.

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/lib/pq"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"math"
 	"sort"
@@ -129,4 +130,89 @@ func (a *Audit) Append(ctx context.Context, event map[string]any) (contract.Audi
 		return empty, contract.ErrOutcomeUnknown
 	}
 	return receipt, nil
+}
+
+// Acknowledge accepts a validated transport receipt for the exact submitted batch.
+// deliveredAt is the local acknowledgement time, not an untrusted sink timestamp.
+func (a *Audit) Acknowledge(ctx context.Context, batch, receipt contract.AuditDelivery, deliveredAt int64) error {
+	shape := func(v contract.AuditDelivery) bool {
+		if !valid(v.ProductID, 64) || !valid(v.Environment, 64) || !valid(v.SinkID, 128) || len(v.EventIDs) < 1 || len(v.EventIDs) > 1000 {
+			return false
+		}
+		seen := map[string]bool{}
+		for _, id := range v.EventIDs {
+			if !valid(id, 128) || seen[id] {
+				return false
+			}
+			seen[id] = true
+		}
+		return true
+	}
+	if !shape(batch) || batch.ProductID != a.product || batch.Environment != a.environment || deliveredAt < 0 || deliveredAt > maxSafe {
+		return contract.ErrInvalidArgument
+	}
+	if !shape(receipt) {
+		return contract.ErrUnavailable
+	}
+	if err := contract.ValidateDeliveryReceipt(batch, receipt); err != nil {
+		return err
+	}
+	ids := append([]string{}, receipt.EventIDs...)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := contract.CheckCancellation(ctx); err != nil {
+		return err
+	}
+	tx, err := a.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return databaseError(ctx)
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, "SET LOCAL synchronous_commit='on'"); err != nil {
+		return databaseError(ctx)
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT state FROM heimdall.audit_deliveries WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=ANY($4::text[]) ORDER BY event_id FOR UPDATE", a.product, a.environment, batch.SinkID, pq.Array(ids))
+	if err != nil {
+		return databaseError(ctx)
+	}
+	count := 0
+	pending := 0
+	validStates := true
+	for rows.Next() {
+		var state string
+		if err = rows.Scan(&state); err != nil {
+			rows.Close()
+			return databaseError(ctx)
+		}
+		count++
+		if state == "pending" {
+			pending++
+		}
+		if state != "pending" && state != "delivered" {
+			validStates = false
+		}
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return databaseError(ctx)
+	}
+	if count != len(ids) || !validStates {
+		return contract.ErrUnavailable
+	}
+	updated, err := tx.ExecContext(ctx, "UPDATE heimdall.audit_deliveries SET state='delivered',delivered_at=$5 WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=ANY($4::text[]) AND state='pending'", a.product, a.environment, batch.SinkID, pq.Array(ids), deliveredAt)
+	if err != nil {
+		return databaseError(ctx)
+	}
+	changed, err := updated.RowsAffected()
+	if err != nil || changed != int64(pending) {
+		return contract.ErrUnavailable
+	}
+	if err = contract.CheckCancellation(ctx); err != nil {
+		return err
+	}
+	if err = tx.Commit(); err != nil {
+		return contract.ErrOutcomeUnknown
+	}
+	return nil
 }

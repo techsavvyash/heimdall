@@ -167,3 +167,136 @@ test.skipIf(!process.env.HEIMDALL_TEST_AUDIT_COMMIT_LOSS)(
   },
   15000,
 );
+
+test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TEST_READ_PEER)(
+  "delivery acknowledgement matrix and atomicity",
+  async () => {
+    const pool = new Pool({ connectionString: process.env.HEIMDALL_TEST_DATABASE_URL });
+    const deliveryPool = new Pool({
+      connectionString: process.env.HEIMDALL_TEST_DATABASE_URL,
+      options: "-c role=heimdall_audit_delivery",
+    });
+    const writer = new PostgresAudit(
+      pool,
+      "ledger",
+      "production",
+      ["siem", "other-sink"],
+      validate,
+    );
+    const store = new PostgresAudit(deliveryPool, "ledger", "production", [], validate);
+    type Delivery = { productId: string; environment: string; sinkId: string; eventIds: string[] };
+    const cases = JSON.parse(
+      readFileSync(new URL("fixtures/audit-delivery-v1.json", root), "utf8"),
+    ) as { name: string; batch: Delivery; receipt: Delivery; valid: boolean }[];
+    try {
+      for (const [index, item] of cases.entries()) {
+        const prefix = `ts-ack-${index}-`;
+        const ids = [prefix + "e1", prefix + "e2"];
+        for (const eventId of ids) await writer.append({ ...fixtures[0].event, eventId });
+        const batch = { ...item.batch, eventIds: item.batch.eventIds.map((id) => prefix + id) };
+        const receipt = {
+          ...item.receipt,
+          eventIds: item.receipt.eventIds.map((id) => prefix + id),
+        };
+        const result = await store.acknowledge(batch, receipt, 1000).then(
+          () => true,
+          () => false,
+        );
+        expect({ name: item.name, result }).toEqual({ name: item.name, result: item.valid });
+        const rows = await pool.query(
+          "SELECT event_id,sink_id,state FROM heimdall.audit_deliveries WHERE event_id=ANY($1::text[]) ORDER BY event_id,sink_id",
+          [ids],
+        );
+        expect(rows.rows).toEqual(
+          ids.flatMap((event_id) => [
+            { event_id, sink_id: "other-sink", state: "pending" },
+            {
+              event_id,
+              sink_id: "siem",
+              state: item.valid && receipt.eventIds.includes(event_id) ? "delivered" : "pending",
+            },
+          ]),
+        );
+      }
+      const ids = ["ts-ack-atomic-1", "ts-ack-atomic-2"];
+      for (const eventId of ids) await writer.append({ ...fixtures[0].event, eventId });
+      const batch = {
+        productId: "ledger",
+        environment: "production",
+        sinkId: "siem",
+        eventIds: ids,
+      };
+      await pool.query(
+        "UPDATE heimdall.audit_deliveries SET state='quarantined' WHERE event_id=$1 AND sink_id='siem'",
+        [ids[1]],
+      );
+      await expect(store.acknowledge(batch, batch, 2000)).rejects.toThrow("unavailable");
+      expect(
+        (
+          await pool.query(
+            "SELECT state FROM heimdall.audit_deliveries WHERE event_id=$1 AND sink_id='siem'",
+            [ids[0]],
+          )
+        ).rows[0].state,
+      ).toBe("pending");
+      const missing = { ...batch, eventIds: [ids[0]!, "missing-route"] };
+      await expect(store.acknowledge(missing, missing, 2000)).rejects.toThrow("unavailable");
+      await pool.query(
+        "UPDATE heimdall.audit_deliveries SET state='pending' WHERE event_id=$1 AND sink_id='siem'",
+        [ids[1]],
+      );
+      await Promise.all(Array.from({ length: 8 }, () => store.acknowledge(batch, batch, 3000)));
+      await store.acknowledge(batch, batch, 4000);
+      expect(
+        (
+          await pool.query(
+            "SELECT delivered_at::text FROM heimdall.audit_deliveries WHERE event_id=ANY($1::text[]) AND sink_id='siem' ORDER BY event_id",
+            [ids],
+          )
+        ).rows,
+      ).toEqual([{ delivered_at: "3000" }, { delivered_at: "3000" }]);
+    } finally {
+      await deliveryPool.end();
+      await pool.end();
+    }
+  },
+  20000,
+);
+
+test.skipIf(!process.env.HEIMDALL_TEST_ACK_COMMIT_LOSS)(
+  "acknowledgement committed response loss",
+  async () => {
+    const fault = new Pool({ connectionString: process.env.HEIMDALL_TEST_ACK_COMMIT_LOSS });
+    const direct = new Pool({ connectionString: process.env.HEIMDALL_TEST_DATABASE_URL });
+    const writer = new PostgresAudit(direct, "ledger", "production", ["siem"], validate);
+    const store = new PostgresAudit(fault, "ledger", "production", [], validate);
+    const ids = ["ts-ack-loss-1", "ts-ack-loss-2"];
+    const batch = { productId: "ledger", environment: "production", sinkId: "siem", eventIds: ids };
+    const receipt = { ...batch, eventIds: [ids[0]!] };
+    try {
+      for (const eventId of ids) await writer.append({ ...fixtures[0].event, eventId });
+      await expect(store.acknowledge(batch, receipt, 1234)).rejects.toThrow("outcome_unknown");
+      const before = await direct.query(
+        "SELECT event_id,state,delivered_at::text FROM heimdall.audit_deliveries WHERE event_id=ANY($1::text[]) ORDER BY event_id",
+        [ids],
+      );
+      expect(before.rows).toEqual([
+        { event_id: ids[0], state: "delivered", delivered_at: "1234" },
+        { event_id: ids[1], state: "pending", delivered_at: null },
+      ]);
+      await writer.acknowledge(batch, receipt, 2345);
+      expect(
+        (
+          await direct.query(
+            "SELECT event_id,state,delivered_at::text FROM heimdall.audit_deliveries WHERE event_id=ANY($1::text[]) ORDER BY event_id",
+            [ids],
+          )
+        ).rows,
+      ).toEqual(before.rows);
+    } finally {
+      await fault.end();
+      await direct.end();
+    }
+  },
+  15000,
+);
