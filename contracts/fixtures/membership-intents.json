@@ -1,0 +1,19 @@
+{
+  "kinds": [
+    { "kind": "add_member", "roles": ["viewer"], "eventType": "heimdall.membership.intent" },
+    {
+      "kind": "assign_roles",
+      "roles": ["editor", "viewer"],
+      "eventType": "heimdall.membership.intent"
+    },
+    { "kind": "remove_member", "roles": [], "eventType": "heimdall.membership.intent" },
+    { "kind": "transfer_owner", "roles": [], "eventType": "heimdall.ownership.intent" }
+  ],
+  "gates": [
+    { "name": "pending", "lifecycle": "pending", "blocked": false },
+    { "name": "suspended", "lifecycle": "suspended", "blocked": false },
+    { "name": "tombstoned", "lifecycle": "tombstoned", "blocked": false },
+    { "name": "blocked", "lifecycle": "active", "blocked": true }
+  ],
+  "invalidRevisions": ["", "0", "01", "-1", "1\n", "9223372036854775808"]
+}

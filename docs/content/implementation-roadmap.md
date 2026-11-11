@@ -168,3 +168,8 @@ Phase 3 candidate-source checkpoint: [[evidence/phase-3-candidate-pages]] adds
 bounded primary keyset pages with exact bigint positions, scope validation and
 cross-language persistence proof. Rebuild coordination, membership intents and
 operational foundations remain open; public discovery belongs to the next phase.
+
+Phase 3 membership-intent checkpoint: [[evidence/phase-3-membership-intents]] adds
+atomic reservation of existing workspaces, durable membership/ownership intent and
+audit, with idempotency, concurrency and COMMIT-loss proof in both SDKs. Rebuild
+coordination, recovery scanning and operational foundations remain open.

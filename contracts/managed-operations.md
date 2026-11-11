@@ -83,4 +83,48 @@ mutation, last-owner policy, delegation, enrollment or operator recovery.
 Shared scenarios: `fixtures/operation-transitions.json`. PostgreSQL tests cover
 generation races, shared transition sequences, atomic rollback, candidate completion,
 cross-language reads and confirmed dispatch COMMIT-response loss. Candidate reads,
-pagination, rebuild serialization and generic membership intent creation remain open.
+pagination orchestration and rebuild serialization remain open.
+
+## Membership intent reservation
+
+Internal `beginMembership` / `BeginMembership` accepts add_member, remove_member,
+assign_roles and transfer_owner intents, a scoped idempotency key, trusted allocation
+and audit metadata, and the expected workspace revision. The revision is a canonical
+positive signed-bigint decimal string. It is a concurrency precondition, not proof
+of authorization. The intent and allocation must identify the same workspace.
+Creation stays on the separate create entry point; the methods share one validated
+persistence implementation without accepting each other's operation kinds.
+
+Before recording new work, the transaction conditionally updates the scoped workspace
+at the expected revision, requiring active lifecycle, an unset mutation block and
+nonregressing recorded time. The workspace is locked first, its current persisted
+fields are validated, and its mutation block is set. Then the immutable pending
+operation and required audit/outbox records commit together. Existing candidate
+rows are unchanged until confirmed completion. The unfinished-operation uniqueness
+constraint remains a second guard against conflicting journal entries.
+
+Same key and fingerprint returns the existing operation before testing the current
+workspace revision. This preserves retry behavior after reservation, completion,
+cancellation and uncertainty. Changed payload conflicts. Concurrent duplicate
+losers roll back before reading the winner; different-key losers conflict. No
+retry clears a block, rewrites intent, creates an extra audit event or dispatches a
+remote mutation. Ownership uses heimdall.ownership.intent; other kinds use
+heimdall.membership.intent. The action is the operation kind.
+
+Required audit failure rolls back both the reservation and intent. An uncertain
+COMMIT acknowledgement returns outcome_unknown with the allocated operation ID;
+subsequent lookup or same-key retry can recover a committed pending record. The
+five-second budget and cancellation rules are shared with creation. A safe
+pre-dispatch cancellation preserves active lifecycle and releases the block;
+a later new request must use the resulting current revision and a new key.
+
+This port requires trusted orchestration to authenticate the actor, verify current
+membership/delegation and product role definitions, protect ownership invariants,
+and establish remote results. Revision CAS does not fence OpenFGA requests or
+out-of-band changes. Public administration and conservative operator recovery
+remain separate requirements; the storage method must not be exposed as an
+unauthenticated mutation endpoint.
+
+The shared fixture is fixtures/membership-intents.json. Live tests cover all four
+kinds, gates, stale revisions, duplicate and competing races, uncertain reservation,
+audit rollback, cancellation, cross-language retries and confirmed COMMIT loss.

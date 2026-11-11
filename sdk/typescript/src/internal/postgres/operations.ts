@@ -423,10 +423,29 @@ export class OperationRecords {
     }
     return result!;
   }
-  async create(
+  create(
     intentJSON: string,
     key: string,
     allocation: Allocation,
+    caller?: AbortSignal,
+  ): Promise<ManagedOperation> {
+    return this.begin(intentJSON, key, allocation, true, undefined, caller);
+  }
+  beginMembership(
+    intentJSON: string,
+    key: string,
+    allocation: Allocation,
+    expectedRevision: string,
+    caller?: AbortSignal,
+  ): Promise<ManagedOperation> {
+    return this.begin(intentJSON, key, allocation, false, expectedRevision, caller);
+  }
+  private async begin(
+    intentJSON: string,
+    key: string,
+    allocation: Allocation,
+    creating: boolean,
+    expectedRevision: string | undefined,
     caller?: AbortSignal,
   ): Promise<ManagedOperation> {
     const signal = caller
@@ -438,7 +457,13 @@ export class OperationRecords {
       b = this.binding,
       a = { ...allocation };
     if (
-      i.kind !== "create_workspace" ||
+      (creating
+        ? i.kind !== "create_workspace"
+        : i.kind === "create_workspace" ||
+          i.workspaceId !== a.workspaceId ||
+          typeof expectedRevision !== "string" ||
+          !/^[1-9][0-9]{0,18}(?![\s\S])/.test(expectedRevision) ||
+          BigInt(expectedRevision) > 9223372036854775807n) ||
       i.productId !== b.productId ||
       i.environment !== b.environment ||
       i.manifestVersion !== b.manifestVersion ||
@@ -449,7 +474,8 @@ export class OperationRecords {
     const event = {
       schemaVersion: 1,
       eventId: a.eventId,
-      eventType: "heimdall.membership.intent",
+      eventType:
+        i.kind === "transfer_owner" ? "heimdall.ownership.intent" : "heimdall.membership.intent",
       eventVersion: 1,
       occurredAt: a.occurredAt,
       recordedAt: a.recordedAt,
@@ -458,7 +484,7 @@ export class OperationRecords {
       tenantId: a.workspaceId,
       actor: { kind: "user", ...i.actor },
       target: { type: "workspace", id: a.workspaceId },
-      action: "workspace.create",
+      action: creating ? "workspace.create" : i.kind,
       outcome: "requested",
       requestId: a.requestId,
       source: "sdk",
@@ -483,13 +509,34 @@ export class OperationRecords {
       await this.audit.appendWith(
         event,
         async (tx) => {
-          await tx.query(
-            "INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at) VALUES($1,$2,$3,$4,'pending',true,$5,$5)",
-            [b.productId, b.environment, a.workspaceId, i.name, a.recordedAt],
-          );
+          if (creating) {
+            await tx.query(
+              "INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at) VALUES($1,$2,$3,$4,'pending',true,$5,$5)",
+              [b.productId, b.environment, a.workspaceId, i.name, a.recordedAt],
+            );
+          } else {
+            // Workspace-first CAS reserves the mutation slot without holding a network call.
+            const reserved = await tx.query(
+              `UPDATE heimdall_managed.workspaces SET mutation_blocked=true,updated_at=$5
+              WHERE product_id=$1 AND environment=$2 AND workspace_id=$3 AND revision=$4::bigint
+              AND lifecycle='active' AND NOT mutation_blocked AND updated_at<=$5
+              RETURNING NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
+               product_id,environment,workspace_id,name,lifecycle,mutation_blocked,revision::text,created_at::text,updated_at::text`,
+              [b.productId, b.environment, a.workspaceId, expectedRevision, a.recordedAt],
+            );
+            if (reserved.rows.length !== 1) throw new HeimdallError("conflict");
+            if (
+              !decodeWorkspace(reserved.rows[0], {
+                productId: b.productId,
+                environment: b.environment,
+                workspaceId: a.workspaceId,
+              })
+            )
+              throw new HeimdallError("unavailable");
+          }
           await tx.query(
             `INSERT INTO heimdall_managed.operations(product_id,environment,operation_id,workspace_id,kind,actor_hash,target_hash,key_digest,fingerprint,intent_payload,store_id,model_id,model_hash,manifest_version,state,dispatch_count,generation,next_attempt_at,created_at,updated_at)
-      VALUES($1,$2,$3,$4,'create_workspace',$5,$6,$7,$8,$9,$10,$11,$12,$13,'pending',0,1,$14,$14,$14)`,
+      VALUES($1,$2,$3,$4,$15,$5,$6,$7,$8,$9,$10,$11,$12,$13,'pending',0,1,$14,$14,$14)`,
             [
               b.productId,
               b.environment,
@@ -505,6 +552,7 @@ export class OperationRecords {
               Buffer.from(b.modelHash, "hex"),
               b.manifestVersion,
               a.recordedAt,
+              i.kind,
             ],
           );
           const rows = await tx.query<{ primary: boolean; record: Record<string, unknown> | null }>(

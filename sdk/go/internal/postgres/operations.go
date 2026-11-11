@@ -188,6 +188,12 @@ func (o *OperationRecords) Get(ctx context.Context, id string, actor contract.Id
 	return o.read(ctx, o.db, id, hash, false)
 }
 func (o *OperationRecords) Create(ctx context.Context, intentJSON []byte, key string, a OperationAllocation) (*ManagedOperation, error) {
+	return o.begin(ctx, intentJSON, key, a, true, "")
+}
+func (o *OperationRecords) BeginMembership(ctx context.Context, intentJSON []byte, key string, a OperationAllocation, expectedRevision string) (*ManagedOperation, error) {
+	return o.begin(ctx, intentJSON, key, a, false, expectedRevision)
+}
+func (o *OperationRecords) begin(ctx context.Context, intentJSON []byte, key string, a OperationAllocation, creating bool, expectedRevision string) (*ManagedOperation, error) {
 	if ctx == nil {
 		return nil, contract.ErrInvalidArgument
 	}
@@ -205,10 +211,18 @@ func (o *OperationRecords) Create(ctx context.Context, intentJSON []byte, key st
 		return nil, e
 	}
 	b := o.binding
-	if i.Kind != "create_workspace" || i.ProductID != b.ProductID || i.Environment != b.Environment || i.ManifestVersion != b.ManifestVersion || !valid(a.WorkspaceID, 128) || !valid(a.OperationID, 128) || a.OccurredAt < 0 || a.RecordedAt < a.OccurredAt || a.RecordedAt > maxSafe {
+	_, revisionValid := workspaceDecimal(&expectedRevision, 9223372036854775807, true)
+	if (creating && i.Kind != "create_workspace") || (!creating && (i.Kind == "create_workspace" || i.WorkspaceID != a.WorkspaceID || !revisionValid)) || i.ProductID != b.ProductID || i.Environment != b.Environment || i.ManifestVersion != b.ManifestVersion || !valid(a.WorkspaceID, 128) || !valid(a.OperationID, 128) || a.OccurredAt < 0 || a.RecordedAt < a.OccurredAt || a.RecordedAt > maxSafe {
 		return nil, contract.ErrInvalidArgument
 	}
-	event := map[string]any{"schemaVersion": float64(1), "eventId": a.EventID, "eventType": "heimdall.membership.intent", "eventVersion": float64(1), "occurredAt": float64(a.OccurredAt), "recordedAt": float64(a.RecordedAt), "productId": b.ProductID, "environment": b.Environment, "tenantId": a.WorkspaceID, "actor": map[string]any{"kind": "user", "issuer": i.Actor.Issuer, "subject": i.Actor.Subject}, "target": map[string]any{"type": "workspace", "id": a.WorkspaceID}, "action": "workspace.create", "outcome": "requested", "requestId": a.RequestID, "source": "sdk", "sdkVersion": "0.0.0", "attributes": map[string]any{}, "operationId": a.OperationID, "modelId": b.ModelID, "manifestVersion": float64(b.ManifestVersion), "policyVersion": a.PolicyVersion}
+	eventType, action := "heimdall.membership.intent", i.Kind
+	if creating {
+		action = "workspace.create"
+	}
+	if i.Kind == "transfer_owner" {
+		eventType = "heimdall.ownership.intent"
+	}
+	event := map[string]any{"schemaVersion": float64(1), "eventId": a.EventID, "eventType": eventType, "eventVersion": float64(1), "occurredAt": float64(a.OccurredAt), "recordedAt": float64(a.RecordedAt), "productId": b.ProductID, "environment": b.Environment, "tenantId": a.WorkspaceID, "actor": map[string]any{"kind": "user", "issuer": i.Actor.Issuer, "subject": i.Actor.Subject}, "target": map[string]any{"type": "workspace", "id": a.WorkspaceID}, "action": action, "outcome": "requested", "requestId": a.RequestID, "source": "sdk", "sdkVersion": "0.0.0", "attributes": map[string]any{}, "operationId": a.OperationID, "modelId": b.ModelID, "manifestVersion": float64(b.ManifestVersion), "policyVersion": a.PolicyVersion}
 	if e = validateOperationAudit(event); e != nil {
 		return nil, e
 	}
@@ -227,14 +241,37 @@ func (o *OperationRecords) Create(ctx context.Context, intentJSON []byte, key st
 	}
 	var result *ManagedOperation
 	_, e = o.audit.appendWith(ctx, event, func(ctx context.Context, tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, "INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at) VALUES($1,$2,$3,$4,'pending',true,$5,$5)", b.ProductID, b.Environment, a.WorkspaceID, i.Name, a.RecordedAt); err != nil {
-			return err
+		if creating {
+			if _, err := tx.ExecContext(ctx, "INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at) VALUES($1,$2,$3,$4,'pending',true,$5,$5)", b.ProductID, b.Environment, a.WorkspaceID, i.Name, a.RecordedAt); err != nil {
+				return err
+			}
+		} else {
+			var row workspaceRow
+			err := tx.QueryRowContext(ctx, `UPDATE heimdall_managed.workspaces SET mutation_blocked=true,updated_at=$5
+            WHERE product_id=$1 AND environment=$2 AND workspace_id=$3 AND revision=$4::bigint
+            AND lifecycle='active' AND NOT mutation_blocked AND updated_at<=$5
+            RETURNING NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
+             product_id,environment,workspace_id,name,lifecycle,mutation_blocked,revision::text,created_at::text,updated_at::text`,
+				b.ProductID, b.Environment, a.WorkspaceID, expectedRevision, a.RecordedAt).Scan(&row.Primary, &row.Product, &row.Environment, &row.Workspace, &row.Name, &row.Lifecycle, &row.Blocked, &row.Revision, &row.Created, &row.Updated)
+			if errors.Is(err, sql.ErrNoRows) {
+				return contract.ErrConflict
+			}
+			if err != nil {
+				return err
+			}
+			w, err := decodeWorkspace(row, contract.WorkspaceScope{ProductID: b.ProductID, Environment: b.Environment, WorkspaceID: a.WorkspaceID})
+			if err != nil {
+				return err
+			}
+			if w == nil {
+				return contract.ErrUnavailable
+			}
 		}
 		keyDigest, _ := hex.DecodeString(d.KeyDigest)
 		fingerprint, _ := hex.DecodeString(d.Fingerprint)
 		modelHash, _ := hex.DecodeString(b.ModelHash)
 		if _, err := tx.ExecContext(ctx, `INSERT INTO heimdall_managed.operations(product_id,environment,operation_id,workspace_id,kind,actor_hash,target_hash,key_digest,fingerprint,intent_payload,store_id,model_id,model_hash,manifest_version,state,dispatch_count,generation,next_attempt_at,created_at,updated_at)
- VALUES($1,$2,$3,$4,'create_workspace',$5,$6,$7,$8,$9,$10,$11,$12,$13,'pending',0,1,$14,$14,$14)`, b.ProductID, b.Environment, a.OperationID, a.WorkspaceID, actorHash, targetHash, keyDigest, fingerprint, payload, b.StoreID, b.ModelID, modelHash, b.ManifestVersion, a.RecordedAt); err != nil {
+ VALUES($1,$2,$3,$4,$15,$5,$6,$7,$8,$9,$10,$11,$12,$13,'pending',0,1,$14,$14,$14)`, b.ProductID, b.Environment, a.OperationID, a.WorkspaceID, actorHash, targetHash, keyDigest, fingerprint, payload, b.StoreID, b.ModelID, modelHash, b.ManifestVersion, a.RecordedAt, i.Kind); err != nil {
 			return err
 		}
 		var err error
