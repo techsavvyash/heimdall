@@ -535,3 +535,9 @@ Sessions and authorization are not yet exposed.
 [managed-operations.md](managed-operations.md) defines actor-scoped primary journal
 reads and atomic idempotent local creation, including audit and uncertain COMMIT
 semantics. Public managed orchestration and remote transitions remain pending.
+
+## Managed candidate source
+
+[managed-candidates.md](managed-candidates.md) defines bounded primary keyset reads,
+canonical bigint positions and principal/scope binding. These internal hints still
+require authenticated, audited membership checks in the public discovery layer.

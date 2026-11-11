@@ -163,3 +163,8 @@ Phase 3 transition checkpoint: [[evidence/phase-3-operation-transitions]] adds
 generation-checked state changes, lifecycle blocking and atomic candidate completion
 in both SDKs. Candidate reads/rebuilds, membership intents and operational
 foundations remain open; this does not implement remote mutation orchestration.
+
+Phase 3 candidate-source checkpoint: [[evidence/phase-3-candidate-pages]] adds
+bounded primary keyset pages with exact bigint positions, scope validation and
+cross-language persistence proof. Rebuild coordination, membership intents and
+operational foundations remain open; public discovery belongs to the next phase.
