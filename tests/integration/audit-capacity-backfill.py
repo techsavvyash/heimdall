@@ -174,10 +174,24 @@ try:
       recover()
       assert proxy.dropped.is_set() and not proxy.errors
     else:recover()
+  for language in ['go','ts']:
+   for lost in [False,True]:
+    database='recovery_batch_'+language+('_loss' if lost else '')
+    sql('CREATE DATABASE '+database+' TEMPLATE cli_activation')
+    selected=dict(env,HEIMDALL_TEST_RECOVERY_BATCH_URL=dsn(database))
+    def batch():
+     if language=='go':go('^TestRecoveryBatchPostgres$',selected)
+     else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-recovery-batch.test.ts'],env=selected)
+    if lost:
+     with CommitLossProxy(int(port)) as proxy:
+      selected['HEIMDALL_TEST_RECOVERY_BATCH_LOSS']=dsn(database,proxy.port)
+      batch()
+      assert proxy.dropped.is_set() and not proxy.errors
+    else:batch()
   # Isolated port test only: no public compatibility activation.
   sql("UPDATE heimdall_capacity.policy SET state='ready'",'normal')
   go('^TestCapacityBackfillPendingRecovery$',dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
   ts(dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
- print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries']}))
+ print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work']}))
 finally:
  if created:run(['docker','rm','--force',name],stdout=subprocess.DEVNULL)

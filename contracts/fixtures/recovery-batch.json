@@ -1,0 +1,74 @@
+{
+  "cases": [
+    {
+      "name": "confirmed recovery",
+      "writeError": "",
+      "readState": "recovered",
+      "readError": "",
+      "expectedError": ""
+    },
+    {
+      "name": "lost commit resolves to stored recovery",
+      "writeError": "outcome_unknown",
+      "readState": "recovered",
+      "readError": "",
+      "expectedError": ""
+    },
+    {
+      "name": "normal completion wins",
+      "writeError": "conflict",
+      "readState": "completed",
+      "readError": "",
+      "expectedError": ""
+    },
+    {
+      "name": "another recovery wins",
+      "writeError": "conflict",
+      "readState": "recovered",
+      "readError": "",
+      "expectedError": ""
+    },
+    {
+      "name": "uncertain commit remains pending",
+      "writeError": "outcome_unknown",
+      "readState": "pending",
+      "readError": "",
+      "expectedError": "outcome_unknown"
+    },
+    {
+      "name": "conflict without winner",
+      "writeError": "conflict",
+      "readState": "pending",
+      "readError": "",
+      "expectedError": "conflict"
+    },
+    {
+      "name": "uncertain commit and failed read",
+      "writeError": "outcome_unknown",
+      "readState": "recovered",
+      "readError": "unavailable",
+      "expectedError": "outcome_unknown"
+    },
+    {
+      "name": "committed write and failed read",
+      "writeError": "",
+      "readState": "recovered",
+      "readError": "unavailable",
+      "expectedError": "unavailable"
+    },
+    {
+      "name": "write admission failure",
+      "writeError": "unavailable",
+      "readState": "recovered",
+      "readError": "",
+      "expectedError": "unavailable"
+    },
+    {
+      "name": "missing committed resolution",
+      "writeError": "",
+      "readState": "absent",
+      "readError": "",
+      "expectedError": "audit_unavailable"
+    }
+  ]
+}

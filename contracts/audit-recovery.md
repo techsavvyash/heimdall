@@ -552,9 +552,10 @@ unknown outcome. Scanned candidates remain hints, not leases or permission to
 skip finalization checks.
 
 These are internal maintenance ports, not a new public authorization surface.
-The caller must authenticate and authorize the recovery initiator and preserve
-the proposed immutable pair across uncertain results. Bounded scheduling, durable
-restart checkpoints and public maintenance composition remain outstanding.
+The caller must authenticate and authorize the recovery initiator. Exact-pair
+receipt retries preserve their immutable input; bounded maintenance may instead
+observe the stored winner as described below. Public maintenance composition and
+operational scheduling remain outstanding.
 
 ## Immutable recovery proposals
 
@@ -579,14 +580,17 @@ value digest of `{kind: "recovery_proposal", formatVersion: 1, cutoff,
 requestDigest, terminalDigest, administrationDigest}`. The explicit kind separates
 this intent from other digest uses. Independently computed shared fixtures pin
 request and proposal fingerprints. A valid change to the initiator, timestamp or
-other event value changes intent; the journal must reject it under the same key.
+other event value changes intent; any caller-owned proposal journal must reject
+it under the same key.
 A fingerprint is neither authorization nor proof of durable persistence.
 
-The journal integration must commit the full proposal and its fingerprint before
-calling v3 recovery, preserve them across uncertain results, and reload rather
-than regenerate them after restart. Initiator authorization belongs before
-proposal acceptance; validation alone cannot prove it. This checkpoint implements
-the proposal contract, not journal persistence, scheduling or restart durability.
+The original proposal checkpoint required an additional durable proposal journal.
+That implementation requirement is superseded for local audit maintenance by the
+atomic-slot protocol below. Proposal values still cannot change within an exact
+receipt retry. Initiator authorization belongs before proposal acceptance;
+validation alone cannot prove it. A caller-owned workflow requiring a stable
+proposal idempotency key must persist that proposal and fingerprint itself; the
+bounded maintenance invocation exposes no such workflow key.
 
 ## Validated resolution observation
 
@@ -611,3 +615,53 @@ race an in-flight finalization; all later writes still contend on the immutable
 slot in their own transaction. No public maintenance scheduler or durable proposal
 journal is added by this port. Managed remote-write quarantine and verified
 quiescence requirements are unchanged.
+
+## Bounded local maintenance and restart
+
+TS `recoverPendingDecisions` and Go `RecoverPendingDecisions` process one pending
+page of 1–100 candidates with a requested 30-second invocation deadline. The existing scan
+retains its 4 MiB envelope budget. The caller supplies a cutoff and a synchronous,
+bounded proposal callback that authorizes the initiator and constructs the pair.
+The SDK snapshots the candidate away from callback mutation, strictly decodes the
+returned proposal against the original request, and requires the same cutoff.
+Each write still performs current v3 admission and atomic finalization.
+
+There is no second proposal table: the pending decision slots are the durable
+work queue, and terminal events/administration are its immutable completion
+record. Every invocation starts at the head. Completed slots disappear from that
+scan; a failed candidate remains eligible. A crash before commit leaves pending
+work. A crash after commit leaves its original terminal and initiator. An old
+transaction still running after a restart may compete with a newly proposed pair,
+but only one can commit; all losing writes roll back. This argument applies only
+to local transactional audit finalization, not dispatched remote mutations.
+
+After a successful write, conflict or uncertain COMMIT, maintenance reads the
+validated durable resolution. It reports the stored winner, which may be another
+recovery or normal completion, without claiming that this invocation caused it.
+A still-pending result preserves conflict/uncertainty. A failed observation cannot
+convert an uncertain COMMIT into a known failure. Other errors stop the batch;
+already committed candidates remain committed, and no partial success object is
+returned. Restart rescans the queue rather than advancing past a failure. A bad
+head candidate can block progress and requires an operator to resolve the cause;
+there is no silent skip or deletion.
+
+The result contains scoped decision IDs, terminal state and event IDs, not event
+payloads or authorization results. `more` is the scan's advisory continuation
+hint, not a completion guarantee under concurrency. There are no exactly-once
+batch counts, durable batch IDs, implicit scheduling or background workers. Empty
+scans do not attest v3 readiness; each finalization and resolution observation
+checks it. Retention must preserve pending slots and any in-flight retry/read
+obligations. Public authenticated maintenance composition, metrics, process-kill
+proof and scale/retention qualification remain release work.
+
+### Observed driver deadline gap
+
+The pinned Go lib/pq 1.12.3 driver uses the context for dialing, but its startup
+handshake can wait indefinitely when `connect_timeout` is unset. A single-use
+fault proxy reproduced this during resolution reconnection: the new TCP socket
+connected while no server consumed its startup exchange, and the context deadline
+did not release the call. The test was terminated and is not passing evidence.
+Connection establishment must be bounded and tested before claiming the full
+invocation deadline. Separate-connection COMMIT-loss tests isolate atomic recovery
+semantics; they do not close this driver/reconnection gate. This affects other
+caller-supplied Go pools too and remains a Phase 3 requirement.

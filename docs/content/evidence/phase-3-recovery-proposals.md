@@ -45,7 +45,10 @@ budget. Run `heimdall-capacity-backfill-a65bf62a16094e1bad7efa56c0244945` passed
 November 12, 2026; its disposable pinned PostgreSQL 17.11 container was removed.
 The serialization round-trip is format evidence, not a disk-crash durability test.
 
-The journal must persist the full proposal plus fingerprint before finalization,
+This checkpoint originally required a separate proposal journal. That requirement
+is superseded for local audit maintenance by the atomic-slot protocol in
+[[phase-3-recovery-maintenance]]. Caller-owned workflows with stable proposal keys
+still persist the full proposal plus fingerprint before finalization,
 then reload the original proposal on restart or uncertain completion. Authorization
 of its initiator, journal transactions, durable restart checkpoints, scheduling,
 retention and operational qualification remain open in [[phase-3-readiness-audit]].
