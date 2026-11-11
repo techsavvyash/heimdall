@@ -190,8 +190,10 @@ pool or a separate shared primary. They snapshot the plaintext before waiting,
 propagate cancellation, and never encrypt after uncertain reservation commit.
 Failed CAS, uniqueness conflict and identity denial do not refund allowance.
 Pure envelope primitives remain unmetered internal cryptography helpers, not
-production persistence entry points. Operator tooling and complete rotation/restore
-orchestration remain required before release.
+production persistence entry points. `sdk/go/cmd/heimdall-keys` supplies explicit initialization, compatibility status,
+fresh private-file registration and irreversible fingerprint retirement for both
+SDKs. Registration and retirement retries inspect preserved policy after uncertain
+COMMIT. Complete fleet rotation/restore orchestration remains required before release.
 
 All cryptographic fixtures use public synthetic keys and payloads. The shared
 corpus includes a reference vector and captured outputs from both SDK writers,
