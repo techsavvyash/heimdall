@@ -29,9 +29,9 @@ Audit persistence is built before authorization results can be released; enterpr
 
 ## Current phase
 
-**Phases 1 and 2 are complete. Phase 3 is next.**
+**Phases 1 and 2 are complete. Phase 3 is in progress.**
 
-[[evidence/phase-2-acceptance|The current Phase 2 acceptance audit]] consolidates the service proofs and later-phase obligations. The user approved separate tenant-owned accounts, and the final sign-off records passing checks, CI and verified Railway publication. Phase 3 starts after this completion record is published.
+[[evidence/phase-2-acceptance|The current Phase 2 acceptance audit]] consolidates the service proofs and later-phase obligations. The user approved separate tenant-owned accounts, and the final sign-off records passing checks, CI and verified Railway publication. The completion record was published and verified before Phase 3 implementation began.
 
 Phase 1 turns selected semantics into executable schemas and fixtures. Public authentication APIs remain unavailable until implemented and validated; internal contract utilities do not constitute verified authentication.
 
@@ -112,3 +112,5 @@ The [[evidence/phase-2-oidc|OIDC checkpoint]] now also records live unknown-key 
 The lifecycle event checkpoint also records bounded time-window collection across four aggregates, exact replay and saturated-boundary refusal. Moving-watermark visibility remains unproven; an empty page is not a safe wall-clock checkpoint.
 
 The event-visibility follow-up corrects the older builder-comment interpretation and tests the actual SQL advisory-lock drain on Railway. Unrelated open transactions allow reads; an instance writer barrier blocks the reader until release.
+
+[[evidence/phase-3-tenant-model|Phase 3 model compiler checkpoint]] starts shared TS/Go membership-gated model generation and live policy assertions. Delegation/administration and persistence work remain open.

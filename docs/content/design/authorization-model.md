@@ -18,7 +18,7 @@ flowchart LR
 
 ## Candidate model
 
-This model is a design example awaiting an OpenFGA validation run and executable assertions. OpenFGA supports composing permissions from role relations. [OpenFGA roles and permissions](https://openfga.dev/docs/modeling/roles-and-permissions)
+This readable model remains an explanatory sketch. The initial executable TS/Go compiler and its generated relation mapping are documented in [[evidence/phase-3-tenant-model]]; product manifests determine the actual grants. OpenFGA supports composing permissions from role relations. [OpenFGA roles and permissions](https://openfga.dev/docs/modeling/roles-and-permissions)
 
 ```fga
 model

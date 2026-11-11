@@ -25,7 +25,8 @@
     "probe:zitadel": "node tests/integration/zitadel.mjs",
     "probe:openfga-recovery": "node tests/integration/openfga-recovery.mjs",
     "probe:federation-tenants": "node tests/integration/federation-tenants.mjs",
-    "probe:browser-oidc": "node tests/integration/browser-oidc.mjs"
+    "probe:browser-oidc": "node tests/integration/browser-oidc.mjs",
+    "probe:tenant-model": "node tests/integration/tenant-model.mjs"
   },
   "devDependencies": {
     "@types/node": "24.19.1",
