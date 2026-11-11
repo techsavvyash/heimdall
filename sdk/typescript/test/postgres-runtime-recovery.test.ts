@@ -1,3 +1,7 @@
+import {
+  buildRecoveryProposal,
+  decodeRecoveryProposal,
+} from "../src/internal/recovery-proposal.js";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { expect, test } from "vitest";
@@ -39,7 +43,23 @@ test.skipIf(!process.env.HEIMDALL_TEST_RUNTIME_RECOVERY_URL)(
       await admin.query(
         "UPDATE heimdall_capacity.policy SET event_limit=used_events+reserved_events; UPDATE heimdall_capacity.upgrade SET event_limit=(SELECT event_limit FROM heimdall_capacity.policy)",
       );
-      expect((await a.scanPendingDecisions(f.cutoff, null, 1)).items).toHaveLength(1);
+      const page = await a.scanPendingDecisions(f.cutoff, null, 1);
+      expect(page.items).toHaveLength(1);
+      const proposal = decodeRecoveryProposal(
+        page.items[0]!.request,
+        JSON.stringify(
+          buildRecoveryProposal(page.items[0]!.request, {
+            terminalId: f.terminal.eventId,
+            requestId: f.administration.requestId,
+            actor: f.administration.actor,
+            at: f.terminal.recordedAt,
+            cutoff: f.cutoff,
+            sdkVersion: "0.0.0",
+          }),
+        ),
+      );
+      f.terminal = proposal.terminal;
+      f.administration = proposal.administration;
       for (const state of ["migrating", "ready"]) {
         await admin.query("UPDATE heimdall.schema_metadata SET database_version=2,state=$1", [
           state,

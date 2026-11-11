@@ -555,3 +555,35 @@ These are internal maintenance ports, not a new public authorization surface.
 The caller must authenticate and authorize the recovery initiator and preserve
 the proposed immutable pair across uncertain results. Bounded scheduling, durable
 restart checkpoints and public maintenance composition remain outstanding.
+
+## Immutable recovery proposals
+
+TS `buildRecoveryProposal` and Go `BuildRecoveryProposal` construct the exact
+terminal/administration pair from a validated historical request and explicit
+terminal ID, recovery request ID, authorized initiator, recovery timestamp, cutoff
+and emitter SDK version. They consult no clock or random source. They preserve
+historical decision context and actor on the terminal, identify the initiator
+separately on administration, and copy all returned values away from caller-owned
+objects. A request newer than the cutoff is ineligible.
+
+Wire format 1 contains exactly `formatVersion`, `cutoff`, `requestDigest`,
+`terminal` and `administration`. `requestDigest` uses the existing portable audit
+value digest. Decode accepts at most 4500000 UTF-8 bytes, rejects extra top-level
+fields/trailing JSON, and revalidates both event schemas, semantics, request binding
+and recovery-pair invariants against the original digest-verified request.
+Equivalent JSON formatting is allowed; no cross-language JSON-text identity is
+claimed. Changed history or invalid proposals cannot reach finalization.
+
+`recoveryProposalDigest` / `RecoveryProposalDigest` computes the portable audit
+value digest of `{kind: "recovery_proposal", formatVersion: 1, cutoff,
+requestDigest, terminalDigest, administrationDigest}`. The explicit kind separates
+this intent from other digest uses. Independently computed shared fixtures pin
+request and proposal fingerprints. A valid change to the initiator, timestamp or
+other event value changes intent; the journal must reject it under the same key.
+A fingerprint is neither authorization nor proof of durable persistence.
+
+The journal integration must commit the full proposal and its fingerprint before
+calling v3 recovery, preserve them across uncertain results, and reload rather
+than regenerate them after restart. Initiator authorization belongs before
+proposal acceptance; validation alone cannot prove it. This checkpoint implements
+the proposal contract, not journal persistence, scheduling or restart durability.

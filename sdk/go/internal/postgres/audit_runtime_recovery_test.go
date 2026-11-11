@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"os"
@@ -38,6 +39,19 @@ func TestRuntimeRecovery(t *testing.T) {
 	if e != nil || len(page.Items) != 1 {
 		t.Fatal(page, e)
 	}
+	proposal, e := contract.BuildRecoveryProposal(page.Items[0].Request, contract.RecoveryOptions{TerminalID: f.Terminal["eventId"].(string), RequestID: f.Administration["requestId"].(string), SDKVersion: "0.0.0", Actor: f.Administration["actor"].(map[string]any), At: int64(f.Terminal["recordedAt"].(float64)), Cutoff: f.Cutoff})
+	if e != nil {
+		t.Fatal(e)
+	}
+	encoded, e := json.Marshal(proposal)
+	if e != nil {
+		t.Fatal(e)
+	}
+	proposal, e = contract.DecodeRecoveryProposal(page.Items[0].Request, encoded)
+	if e != nil {
+		t.Fatal(e)
+	}
+	f.Terminal, f.Administration = proposal.Terminal, proposal.Administration
 	for _, state := range []string{"migrating", "ready"} {
 		if _, e = admin.Exec("UPDATE heimdall.schema_metadata SET database_version=2,state=$1", state); e != nil {
 			t.Fatal(e)
