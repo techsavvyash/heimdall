@@ -13,6 +13,17 @@ type RetainedEventInspection struct {
 	Event    map[string]any
 }
 
+type retainedRow struct {
+	Ready    bool            `json:"ready"`
+	Present  bool            `json:"present"`
+	Live     bool            `json:"live"`
+	Markers  int             `json:"markers"`
+	Tenant   *string         `json:"tenant_id"`
+	Identity json.RawMessage `json:"identity"`
+	Payload  json.RawMessage `json:"payload"`
+	Valid    bool            `json:"valid"`
+}
+
 // InspectRetainedEvent is prepared primary inspection, never fresh authorization.
 func (a *Audit) InspectRetainedEvent(ctx context.Context, tenant *string, eventID string) (*RetainedEventInspection, error) {
 	return a.inspectRetainedHistory(ctx, tenant, eventID, true)
@@ -54,17 +65,21 @@ func (a *Audit) inspectRetainedHistory(ctx context.Context, tenant *string, even
 	if e := contract.CheckCancellation(ctx); e != nil {
 		return nil, e
 	}
-	var ready, present, live, consistent bool
-	var markers int
-	var storedTenant *string
+	var row retainedRow
 	var identityRaw, payload []byte
-	e := a.db.QueryRowContext(ctx, retainedReadSQL, sessionChecksum, decisionChecksum, capacityUpgradeChecksums[0], capacityUpgradeChecksums[1], a.product, a.environment, eventID).Scan(&ready, &present, &live, &markers, &storedTenant, &identityRaw, &payload, &consistent)
+	e := a.db.QueryRowContext(ctx, retainedReadSQL, sessionChecksum, decisionChecksum, capacityUpgradeChecksums[0], capacityUpgradeChecksums[1], a.product, a.environment, eventID).Scan(&row.Ready, &row.Present, &row.Live, &row.Markers, &row.Tenant, &identityRaw, &payload, &row.Valid)
 	if e != nil {
 		return nil, databaseError(ctx)
 	}
 	if e = contract.CheckCancellation(ctx); e != nil {
 		return nil, e
 	}
+	row.Identity, row.Payload = identityRaw, payload
+	return a.decodeRetainedRow(row, expectedTenant, eventID, filterTenant)
+}
+func (a *Audit) decodeRetainedRow(row retainedRow, expectedTenant *string, eventID string, filterTenant bool) (*RetainedEventInspection, error) {
+	ready, present, live, consistent := row.Ready, row.Present, row.Live, row.Valid
+	markers, storedTenant, identityRaw, payload := row.Markers, row.Tenant, row.Identity, row.Payload
 	if !ready {
 		return nil, contract.ErrUnavailable
 	}

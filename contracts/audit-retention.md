@@ -382,3 +382,35 @@ that business/recovery retry obligations have ended. Authorized SDK orchestratio
 must validate full administrative events and atomically compose the reference,
 identity and hold transition. The prepared SQL still checks indexed references
 only. Runtime grants, v4 publication and automatic integration remain absent.
+
+## Prepared primary eligibility inspection
+
+Internal TS inspectRetentionEligibility and Go InspectRetentionEligibility now
+classify an ordinary event or request-represented decision using one primary SQL
+snapshot. Inputs are exact tenant/event identity, explicit current time and a
+positive retention duration (TS defaults to the shared 30-day constant; Go accepts
+that constant explicitly). Callers cannot supply hold state, retry state or delivery
+acknowledgements. Administrative and retry protections come from the durable hold
+ledger, across all group members. Released rows do not protect the group.
+
+The reader composes existing marker-aware member inspection with full decoded
+history construction. It verifies payload schema/digest, immutable member identity,
+charged routing and source decision/reservation agreement before classifying.
+Corruption still fails even if the group is held. All members, delivery facts and
+protections use the same statement snapshot. At most three group members plus the
+representative are materialized, each capped at 1500000 stored-envelope bytes;
+delivery lists are capped at 33 so a count above the supported 32 is rejected.
+The existing five-second query bound and cancellation behavior apply.
+
+Unknown IDs and other tenants return absent. A terminal or recovery member is not
+a valid group representative. Intentional retired payload returns not_found;
+missing payload without retirement evidence remains audit_unavailable. Readiness
+failure remains unavailable. No payload is returned to the caller and no storage
+is mutated. The port requires the prepared schemas including retry-purpose holds;
+it does not activate v4 or grant public access.
+
+This is advisory inspection, not a reservation or authority to delete. A future
+maintenance transaction must lock and revalidate current history, policy, delivery
+and protection facts before acting. A snapshot classified as candidate can become
+held immediately after the read. Atomic authorized lifecycle orchestration and
+compatible runtime identity writes remain required.

@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"github.com/lib/pq"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"os"
 	"testing"
 )
@@ -87,6 +89,9 @@ func TestRetiredDecisionInspection(t *testing.T) {
 			if e != nil || result == nil || result.State != "retired" || result.Event != nil || result.Identity.EventID != id || result.Identity.DecisionID == nil {
 				t.Fatal(id, result, e)
 			}
+		}
+		if _, err := a.InspectRetentionEligibility(context.Background(), &f.TenantID, "z-request", 4001, 1000); !errors.Is(err, contract.ErrNotFound) {
+			t.Fatal(err)
 		}
 		admin, e := a.InspectRetainedEvent(context.Background(), &f.TenantID, f.AdministrationID)
 		if e != nil || admin == nil || admin.State != "live" || admin.Event == nil {

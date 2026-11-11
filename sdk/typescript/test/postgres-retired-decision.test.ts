@@ -35,6 +35,9 @@ test.skipIf(!process.env.HEIMDALL_TEST_RETIRED_DECISION_URL)(
           expect(result?.identity.eventId).toBe(id);
           expect(result?.identity.decisionId).toBe("decision-1");
         }
+        await expect(
+          a.inspectRetentionEligibility(f.tenantId, "z-request", 4001, 1000),
+        ).rejects.toThrow("not_found");
         const admin = await a.inspectRetainedEvent(f.tenantId, f.administrationId);
         expect(admin?.state).toBe("live");
         expect(admin?.event?.eventId).toBe(f.administrationId);

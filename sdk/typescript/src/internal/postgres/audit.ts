@@ -1,3 +1,4 @@
+import { classifyAuditRetention, defaultAuditRetentionMs } from "../audit-retention.js";
 import { buildRetentionIdentities } from "../retention-identities.js";
 import {
   sessionChecksum,
@@ -23,6 +24,16 @@ import { HeimdallError } from "../errors.js";
 import { transaction, query } from "./query.js";
 const token = (v: unknown, max: number): v is string =>
   typeof v === "string" && v.length > 0 && v.length <= max && !/[^A-Za-z0-9_-]/.test(v);
+type RetainedRow = {
+  ready: boolean;
+  present: boolean;
+  live: boolean;
+  markers: number;
+  tenant_id: string | null;
+  identity: ReturnType<typeof buildRetentionIdentities>[number];
+  payload: Record<string, unknown>;
+  valid: boolean;
+};
 // Internal persistence port. Factory must supply schema + semantic validation;
 // actor verification and event origin remain the authenticated SDK layer's job.
 export class PostgresAudit {
@@ -108,7 +119,7 @@ export class PostgresAudit {
   ) {
     if ((tenantId !== null && !token(tenantId, 128)) || !token(eventId, 128))
       throw new HeimdallError("invalid_argument");
-    const rows = await query(
+    const rows = await query<RetainedRow>(
       this.pool,
       retainedReadSQL,
       [
@@ -124,7 +135,15 @@ export class PostgresAudit {
       signal,
     );
     if (rows.length !== 1 || rows[0]?.ready !== true) throw new HeimdallError("unavailable");
-    const row = rows[0]!;
+    return this.decodeRetainedRow(rows[0]!, tenantId, eventId, filterTenant);
+  }
+  private decodeRetainedRow(
+    row: RetainedRow,
+    tenantId: string | null,
+    eventId: string,
+    filterTenant: boolean,
+  ) {
+    if (!row.ready) throw new HeimdallError("unavailable");
     if (!row.present) {
       if (row.live || row.markers !== 0) throw new HeimdallError("audit_unavailable");
       return null;
@@ -151,6 +170,90 @@ export class PostgresAudit {
     )
       throw new HeimdallError("audit_unavailable");
     return { state: "live" as const, identity, event };
+  }
+  // One primary snapshot; eligibility is advisory and grants no deletion authority.
+  async inspectRetentionEligibility(
+    tenantId: string | null,
+    eventId: string,
+    now: number,
+    retainForMs = defaultAuditRetentionMs,
+    signal?: AbortSignal,
+  ) {
+    if (
+      (tenantId !== null && !token(tenantId, 128)) ||
+      !token(eventId, 128) ||
+      !Number.isSafeInteger(now) ||
+      now < 0 ||
+      !Number.isSafeInteger(retainForMs) ||
+      retainForMs < 1
+    )
+      throw new HeimdallError("invalid_argument");
+    const rows = await query<{
+      root: RetainedRow;
+      bound: boolean;
+      resolution: string;
+      held: boolean;
+      retry: boolean;
+      members: {
+        eventId: string;
+        row: RetainedRow;
+        deliveries: { sinkId: string; state: string; deliveredAt: number | null }[];
+      }[];
+    }>(
+      this.pool,
+      retentionEligibilitySQL,
+      [
+        sessionChecksum,
+        decisionChecksum,
+        capacityChecksum,
+        capacityPreparationChecksum,
+        this.productId,
+        this.environment,
+        eventId,
+      ],
+      false,
+      signal,
+    );
+    if (rows.length !== 1) throw new HeimdallError("unavailable");
+    const r = rows[0]!;
+    const root = this.decodeRetainedRow(r.root, tenantId, eventId, true);
+    if (!root) return null;
+    if (root.state === "retired") throw new HeimdallError("not_found");
+    if (!["ordinary", "request"].includes(root.identity.kind))
+      throw new HeimdallError("invalid_argument");
+    if (!r.bound) throw new HeimdallError("audit_unavailable");
+    const scope = { productId: this.productId, environment: this.environment, tenantId };
+    const sources = [];
+    const events = [];
+    for (const member of r.members) {
+      const result = this.decodeRetainedRow(member.row, tenantId, member.eventId, true);
+      if (!result || result.state !== "live") throw new HeimdallError("audit_unavailable");
+      const i = result.identity;
+      sources.push({
+        event: result.event,
+        digest: i.digest,
+        routing: i.routing,
+        deliveryRows: member.deliveries.length,
+      });
+      events.push({
+        ...scope,
+        eventId: i.eventId,
+        recordedAt: i.recordedAt,
+        deliveries: member.deliveries,
+      });
+    }
+    buildRetentionIdentities(scope, r.resolution, sources);
+    return classifyAuditRetention(
+      scope,
+      {
+        resolution: r.resolution,
+        holdState: r.held ? "held" : "clear",
+        retryState: r.retry ? "protected" : "clear",
+        events,
+      },
+      now,
+      retainForMs,
+    );
   }
   // Prepared deployment port only: callers drain writers and install the pinned
   // identity schema. This does not activate retention or provide a runtime API.
@@ -1155,4 +1258,30 @@ LEFT JOIN heimdall.audit_events e ON e.product_id=$5 AND e.environment=$6 AND e.
 LEFT JOIN heimdall_capacity.event_charges c ON c.product_id=$5 AND c.environment=$6 AND c.event_id=$7
 LEFT JOIN heimdall_retention.decision_identities d ON d.product_id=i.product_id AND d.environment=i.environment AND d.decision_id=i.decision_id
 LEFT JOIN LATERAL (SELECT r.* FROM heimdall_retention.retirements r WHERE r.product_id=$5 AND r.environment=$6 AND r.member_event_ids ? $7 LIMIT 1) m ON true
+`;
+
+const eligibilityReadSQL = retainedReadSQL.replace(
+  "e.event AS payload",
+  "CASE WHEN octet_length(e.event::text)<=1500000 THEN e.event ELSE NULL END AS payload",
+);
+const retentionEligibilitySQL = `SELECT to_jsonb(root) AS root,
+ CASE WHEN root.identity->>'kind'='ordinary' THEN 'ordinary' ELSE d.resolution END AS resolution,
+ coalesce(group_rows.members,'[]'::jsonb) AS members,
+ coalesce(root.identity->>'kind'='ordinary' OR (
+  (d.request_event_id,d.requested_at,d.resolution,d.terminal_event_id,d.resolved_at) IS NOT DISTINCT FROM (source.request_event_id,source.requested_at,source.resolution,source.terminal_event_id,source.resolved_at)
+  AND (d.request_event_id,d.resolution,d.terminal_event_id,d.recovery_event_id) IS NOT DISTINCT FROM (reservation.request_event_id,reservation.resolution,reservation.terminal_event_id,reservation.recovery_event_id)
+  AND source.decision_id IS NOT NULL AND reservation.decision_id IS NOT NULL),false) AS bound,
+ EXISTS(SELECT 1 FROM heimdall_retention.event_holds h WHERE h.product_id=$5 AND h.environment=$6 AND h.event_id=ANY(chosen.ids) AND h.purpose='administrative' AND h.released_at IS NULL) AS held,
+ EXISTS(SELECT 1 FROM heimdall_retention.event_holds h WHERE h.product_id=$5 AND h.environment=$6 AND h.event_id=ANY(chosen.ids) AND h.purpose='retry' AND h.released_at IS NULL) AS retry
+FROM (${eligibilityReadSQL}) root
+LEFT JOIN heimdall_retention.decision_identities d ON d.product_id=$5 AND d.environment=$6 AND d.decision_id=root.identity->>'decisionId'
+LEFT JOIN heimdall.audit_decisions source ON source.product_id=d.product_id AND source.environment=d.environment AND source.decision_id=d.decision_id
+LEFT JOIN heimdall_capacity.reservations reservation ON reservation.product_id=d.product_id AND reservation.environment=d.environment AND reservation.decision_id=d.decision_id
+CROSS JOIN LATERAL (SELECT CASE WHEN root.identity->>'kind'='ordinary' THEN ARRAY[$7::text] WHEN root.identity->>'kind'='request' THEN array_remove(ARRAY[d.request_event_id,d.terminal_event_id,d.recovery_event_id],NULL) ELSE ARRAY[]::text[] END AS ids) chosen
+LEFT JOIN LATERAL (
+ SELECT jsonb_agg(jsonb_build_object('eventId',member.event_id,'row',to_jsonb(history),'deliveries',coalesce(delivery.rows,'[]'::jsonb)) ORDER BY member.event_id COLLATE "C") AS members
+ FROM unnest(chosen.ids) member(event_id)
+ CROSS JOIN LATERAL (${eligibilityReadSQL.replaceAll("$7", "member.event_id")}) history
+ LEFT JOIN LATERAL (SELECT jsonb_agg(jsonb_build_object('sinkId',sink_id,'state',state,'deliveredAt',delivered_at) ORDER BY sink_id COLLATE "C") AS rows FROM (SELECT sink_id,state,delivered_at FROM heimdall.audit_deliveries WHERE product_id=$5 AND environment=$6 AND event_id=member.event_id LIMIT 33) bounded) delivery ON true
+) group_rows ON true
 `;
