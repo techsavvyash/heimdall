@@ -529,3 +529,9 @@ post-commit expiry/freshness refusal in both SDKs.
 [core-runtime.md](core-runtime.md) specifies the implemented development constructors,
 scoped durable ports, five-second startup gate and audited bearer authentication.
 Sessions and authorization are not yet exposed.
+
+## Managed operation persistence
+
+[managed-operations.md](managed-operations.md) defines actor-scoped primary journal
+reads and atomic idempotent local creation, including audit and uncertain COMMIT
+semantics. Public managed orchestration and remote transitions remain pending.

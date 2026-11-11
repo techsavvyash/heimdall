@@ -153,3 +153,8 @@ Phase 3 operation-intent checkpoint: [[evidence/phase-3-operation-intents]] adds
 bounded payload parsing and complete shape/semantic validation in both SDKs,
 plus journal fingerprint/identity/scope binding checks. Durable operation lookup,
 idempotent creation and mutation transitions remain required.
+
+Phase 3 operation-journal checkpoint: [[evidence/phase-3-operation-journal]] adds
+actor-scoped validated primary lookup and atomic idempotent creation in both SDKs.
+Live races, rollback, cross-language retry and COMMIT-loss tests pass. Managed
+transitions, candidates and public orchestration remain required.
