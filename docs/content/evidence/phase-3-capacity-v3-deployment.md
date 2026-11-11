@@ -49,6 +49,11 @@ lost COMMIT responses and failed publication rollback.
 Live run `heimdall-capacity-backfill-f009b7c158d64c3f910d666157036650`
 passed on November 12, 2026 and its disposable container was removed.
 
+CI caught a legacy Go catalog filename assertion that cached local results had
+hidden. Both languages now assert the exact capacity migration path. The workspace
+Go test command uses `-count=1` so changes to shared fixtures outside the Go module
+cannot reuse stale successful test results.
+
 Public TS/Go factories and per-write admission still require v3 integration and
 runtime grants. A successful deployment status is not permission to resume v2
 serving processes. Large-history activation, retention and operational

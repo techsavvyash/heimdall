@@ -24,7 +24,7 @@ Quartz and the TypeScript SDK share the root pnpm workspace and lockfile. The ve
 
 - `pnpm run check:fast` checks formatting, Oxlint, TypeScript, Knip, Go formatting and Go vet.
 - `pnpm test` runs Vitest once. `pnpm run test:watch` runs the watch loop.
-- `pnpm run test:go` runs Go tests with the race detector.
+- `pnpm run test:go` runs Go tests with the race detector and without result caching so changes to shared fixtures outside the Go module are always checked.
 - `pnpm run build` bundles with Rolldown and emits TypeScript declarations with tsc.
 - `pnpm run check:package` verifies the built TypeScript tarball in an isolated consumer, including its declaration and principal type boundary.
 - `pnpm run check` runs all workspace checks and builds Quartz. This is the pre-push and CI gate.

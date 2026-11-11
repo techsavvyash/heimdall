@@ -13,7 +13,7 @@
     "test:watch": "pnpm --filter @heimdall/sdk run test:watch",
     "build": "pnpm --filter @heimdall/sdk run build",
     "check:go": "sh scripts/check-go.sh",
-    "test:go": "cd sdk/go && go test -race ./...",
+    "test:go": "cd sdk/go && go test -race -count=1 ./...",
     "docs:build": "pnpm --filter @jackyzha0/quartz run build",
     "docs:dev": "pnpm --filter @jackyzha0/quartz run dev",
     "check:fast": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run knip && pnpm run check:go",
