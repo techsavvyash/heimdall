@@ -21,8 +21,8 @@ any ticket. Later-phase capabilities remain mandatory in both SDKs.
 | Public authorization rejects fabricated principals (#34) | Public exports currently expose bearer verification only | Not yet verifiable; the Phase 4 authorization boundary is absent, so #34 cannot be closed wholesale |
 | Shared immutable SQL, migration serialization and runtime no-DDL (#52) | Session-v1 checksum/catalog, [[phase-3-migration-runner]], [[phase-3-storage-readiness]] | Session/audit schema implemented and tested |
 | Scoped encrypted records, expiry and non-repeating CAS (#52) | [[phase-3-postgres-records]], [[phase-3-identity-sessions]], [[phase-3-session-version-invalidation]] | Session/login primitives and cross-language storage proof exist |
-| Managed workspace, operation and candidate-index transactional storage (#52) | [[phase-3-managed-schema]] adds a separate checksum-pinned physical schema and SQL proofs | Physical schema exists; managed migration/readiness and TS/Go storage adapters remain missing |
-| Explicit deployment migration and status commands (#52) | Go migration CLI requires initialization flag and SQL path | Initialization exists; separate read-only status mode is missing |
+| Managed workspace, operation and candidate-index transactional storage (#52) | [[phase-3-managed-schema]] adds a separate checksum-pinned physical schema and SQL proofs | [[phase-3-managed-migrations]] adds migration/readiness; TS/Go managed record adapters remain missing |
+| Explicit deployment migration and status commands (#52) | [[phase-3-managed-migrations]] adds explicit session/managed initialization and read-only status modes | Implemented and verified; upgrade orchestration beyond v1 remains open |
 | Expand/contract, sanitized export, bounded cleanup and restore procedures (#52) | Compatibility fixtures/readiness and initial migration fault tests | Operational implementation and complete restore proof are missing; initial-install tests are insufficient |
 | Atomic audit/outbox append, receipt/idempotency/conflict (#46 foundation) | [[phase-3-audit-persistence]], [[phase-3-audited-decisions]], [[phase-3-audited-authentication]] | Implemented primitives and commit-loss proof exist |
 | Required local audit failure prevents result release (#46 foundation) | Audited decision/authentication tests and lost-COMMIT regression | Implemented primitive behavior; every future public decision/mutation must compose it |
@@ -36,13 +36,12 @@ differ from early ticket sketches; required behavior does not.
 
 ## Work before Phase 3 acceptance
 
-1. Complete the managed persistence foundation: deployment migration/readiness
-   for the separate schema, scoped TS/Go workspace/operation/candidate adapters, atomic
-   transaction boundaries, and shared TS/Go concurrency/rollback tests. This must
+1. Complete scoped TS/Go workspace/operation/candidate adapters, atomic
+   transaction boundaries, and shared TS/Go concurrency/rollback tests. Deployment
+   migration and readiness for the separate managed schema are now tested. This must
    preserve quarantine of uncertain dispatched operations, not introduce an
    automatic replay or lease-fencing claim.
-2. Finish deployment/storage operational foundations: read-only status, bounded
-   cleanup/export interfaces, key-usage and audit-capacity safety, and explicit
+2. Finish deployment/storage operational foundations: bounded cleanup/export interfaces, key-usage and audit-capacity safety, and explicit
    restore/compatibility evidence. Distinguish implemented recovery controls from
    procedures that still depend on future managed lifecycle orchestration.
 3. Re-audit the phase matrix against current source, test outputs, recorded

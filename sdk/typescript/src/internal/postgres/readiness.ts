@@ -19,3 +19,17 @@ export async function checkReadiness(pool: Pool, signal?: AbortSignal): Promise<
   const rows = await query<{ ready: boolean }>(pool, sql, [checksum], false, signal);
   if (rows.length !== 1 || rows[0]?.ready !== true) throw new HeimdallError("unavailable");
 }
+
+const managedChecksum = "3df4dc62f6271691c56ac605c51012a97301b98c70454af62984cf253c066c55";
+// Both schema families are observed in one statement snapshot, never two pool reads.
+const managedSQL = `SELECT base.ready AND managed.ready AS ready FROM (${sql}) base CROSS JOIN (${sql.replaceAll("heimdall.", "heimdall_managed.").replaceAll("$1", "$2")}) managed`;
+export async function checkManagedReadiness(pool: Pool, signal?: AbortSignal): Promise<void> {
+  const rows = await query<{ ready: boolean }>(
+    pool,
+    managedSQL,
+    [checksum, managedChecksum],
+    false,
+    signal,
+  );
+  if (rows.length !== 1 || rows[0]?.ready !== true) throw new HeimdallError("unavailable");
+}

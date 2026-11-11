@@ -90,9 +90,9 @@ Machine-readable evidence is in
 
 ## Next implementation
 
-The existing deployment CLI and runtime readiness still cover only session v1.
-Next, integrate managed migration coordination and compatibility checks, then build
-TS/Go managed record adapters with shared transaction, CAS and corruption tests.
+The subsequent [[phase-3-managed-migrations]] checkpoint adds managed installation
+and combined readiness. Next, build TS/Go managed record adapters with shared
+transaction, CAS and corruption tests.
 No public managed constructor or placeholder operation API is introduced here.
 Cleanup, restore, audit capacity/recovery and key-usage foundations remain open in
 [[phase-3-readiness-audit]]. Phase 3 remains in progress.

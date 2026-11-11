@@ -136,3 +136,6 @@ Current Phase 3 readiness review: [[evidence/phase-3-readiness-audit]] records t
 
 
 Phase 3 managed schema checkpoint: [[evidence/phase-3-managed-schema]] adds independent SQL metadata, scoped workspace/operation/candidate tables and database constraints, with local TS/Go driver tests and Railway SQL evidence. Managed migration/readiness integration and SDK adapters remain open.
+
+
+Phase 3 managed deployment checkpoint: [[evidence/phase-3-managed-migrations]] adds explicit managed initialization after session readiness, combined TS/Go compatibility checks and read-only status modes in the existing CLI. Managed record adapters and operational foundations remain open.

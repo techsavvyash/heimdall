@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
+	"strings"
 	"time"
 )
 
@@ -21,7 +22,20 @@ const readinessSQL = `SELECT NOT pg_is_in_recovery()
 // CheckReadiness checks the bundled v1 policy in one primary database snapshot.
 // It performs no DDL, initialization or recovery, and does not fence later migrations.
 func CheckReadiness(ctx context.Context, db *sql.DB) error {
-	if db == nil {
+	return checkReadiness(ctx, db, readinessSQL, sessionChecksum)
+}
+
+const managedChecksum = "3df4dc62f6271691c56ac605c51012a97301b98c70454af62984cf253c066c55"
+
+var managedOnlyReadinessSQL = strings.ReplaceAll(readinessSQL, "heimdall.", "heimdall_managed.")
+var managedReadinessSQL = "SELECT base.ready AND managed.ready AS ready FROM (" + readinessSQL + ") base CROSS JOIN (" + strings.ReplaceAll(managedOnlyReadinessSQL, "$1", "$2") + ") managed"
+
+// CheckManagedReadiness observes both families in one primary statement snapshot.
+func CheckManagedReadiness(ctx context.Context, db *sql.DB) error {
+	return checkReadiness(ctx, db, managedReadinessSQL, sessionChecksum, managedChecksum)
+}
+func checkReadiness(ctx context.Context, db *sql.DB, query string, args ...any) error {
+	if db == nil || ctx == nil {
 		return contract.ErrInvalidArgument
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -30,7 +44,7 @@ func CheckReadiness(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	var ready bool
-	err := db.QueryRowContext(ctx, readinessSQL, sessionChecksum).Scan(&ready)
+	err := db.QueryRowContext(ctx, query, args...).Scan(&ready)
 	if cancelled := contract.CheckCancellation(ctx); cancelled != nil {
 		return cancelled
 	}

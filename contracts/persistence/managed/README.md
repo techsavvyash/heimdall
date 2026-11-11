@@ -7,11 +7,45 @@ A managed composition requires both in the same application database so workspac
 operation, candidate and audit/outbox writes can share a transaction. Session-only
 installation does not create managed tables. No service internal database is used.
 
-This checkpoint supplies SQL and constraint tests, not a managed SDK adapter or
-production installer. The existing migration CLI/readiness checks still cover only
-session v1. Managed migration coordination, metadata validation and runtime CRUD/CAS
-must be implemented before exposing a managed factory. The proof harness installs
-SQL and metadata in an explicit transaction; it is not deployment tooling.
+The deployment CLI now installs this family explicitly after verifying session v1.
+Both SDKs expose internal combined readiness checks, observing both families in one
+statement snapshot. Managed CRUD/CAS adapters remain pending; there is no managed
+public factory yet.
+
+From `sdk/go`, with `HEIMDALL_MIGRATION_DATABASE_URL` set to the selected application
+database by deployment configuration:
+
+```sh
+go run ./cmd/heimdall-migrate -initialize-session-schema -sql ../../contracts/persistence/session/0001.sql
+go run ./cmd/heimdall-migrate -initialize-managed-schema -sql ../../contracts/persistence/managed/0001.sql
+go run ./cmd/heimdall-migrate -status session
+go run ./cmd/heimdall-migrate -status managed
+```
+
+Choose exactly one mode. Status rejects SQL paths and initialization flags, reads
+metadata only, and returns ready or a typed failure. It checks compatibility for a
+writer on the primary, so a read-only transaction/replica is not ready even though
+the status operation itself does not write. A SELECT-only role can run status.
+
+Managed installation validates exact SQL bytes before I/O, takes the existing
+exclusive deployment lock, requires session/audit readiness, and atomically applies
+managed DDL/ledger/metadata with synchronous_commit=on. It does not install a missing
+base, adopt an incomplete schema, repair metadata, or upgrade unknown versions.
+Existing compatible installations are verified without reapplying SQL. Session-only
+readiness does not depend on managed readiness. Runtime checks never migrate.
+
+Both families share the database-scoped advisory lock so cooperating installers
+serialize. The transaction uses READ COMMITTED deliberately: a waiting installer
+sees its predecessor's commit. The overall deadline is 30 seconds, lock timeout
+5 seconds and statement timeout 20 seconds; caller cancellation may end earlier.
+A lost COMMIT response returns outcome_unknown. An exact rerun rechecks the ledger
+under the lock; it does not infer rollback from a disconnected client.
+
+Combined runtime readiness has a five-second deadline and rejects missing or
+incompatible metadata/ledgers, unknown checksums, recovery replicas and read-only
+transactions. It is a snapshot check, not a fence against later migrations or an
+exhaustive table/permission audit. Operators still coordinate/drain incompatible
+running versions and must not mutate metadata outside the deployment protocol.
 
 ## Physical representation
 

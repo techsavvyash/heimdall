@@ -35,7 +35,8 @@ def sql(statement, database=DATABASE):
     command = "psql -X -U heimdall_probe -d " + shlex.quote(database) + " -Atq -v ON_ERROR_STOP=1 -c " + shlex.quote(statement)
     return remote(command).stdout.decode().strip()
 
-created = uploaded = False
+created = uploaded = role_created = False
+ROLE = "heimdall_status_"+RUN
 try:
     architecture = remote("uname -m").stdout.decode().strip()
     if architecture != "x86_64":
@@ -50,6 +51,7 @@ try:
         with tarfile.open(fileobj=archive, mode="w:gz") as tar:
             tar.add(binary, arcname="heimdall-migrate")
             tar.add(migration, arcname="0001.sql")
+            tar.add(ROOT/"contracts/persistence/managed/0001.sql",arcname="managed-0001.sql")
         remote("mkdir -m 700 " + REMOTE)
         uploaded = True
         remote("tar -xz -C " + REMOTE, archive.getvalue())
@@ -62,6 +64,11 @@ try:
     # configuration. No production credential is copied into an artifact.
     dsn = "host=/var/run/postgresql user=heimdall_probe dbname=" + DATABASE + " sslmode=disable"
     command = "HEIMDALL_MIGRATION_DATABASE_URL=" + shlex.quote(dsn) + " " + REMOTE + "/heimdall-migrate -initialize-session-schema -sql " + REMOTE + "/0001.sql"
+    prefix=command.split(" -initialize-session-schema")[0]
+    managed_command=prefix+" -initialize-managed-schema -sql "+REMOTE+"/managed-0001.sql"
+    missing=remote(managed_command,success=False)
+    if missing.returncode==0 or "unavailable" not in missing.stderr.decode():raise RuntimeError("managed prerequisite refusal failed")
+    if sql("SELECT count(*) FROM pg_namespace WHERE nspname IN ('heimdall','heimdall_managed')")!="0":raise RuntimeError("implicit schema installation")
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         futures = [executor.submit(remote, command) for _ in range(2)]
         results = [future.result().stdout.decode().strip() for future in futures]
@@ -82,15 +89,37 @@ try:
         raise RuntimeError("runner repaired incompatible state")
     sql("UPDATE heimdall.schema_metadata SET state='ready'")
     remote(command)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        results=list(executor.map(lambda _:remote(managed_command).stdout.decode().strip(),range(2)))
+    if results!=["managed schema v1 ready"]*2:raise RuntimeError("managed runner receipt")
+    managed_checksum=json.loads((ROOT/"contracts/persistence/catalog.json").read_text())["managed"][0]["checksum"]
+    if sql("SELECT version::text||':'||checksum FROM heimdall_managed.migrations")!="1:"+managed_checksum:raise RuntimeError("managed ledger")
+    if sql("SELECT database_version::text||':'||state FROM heimdall_managed.schema_metadata")!="1:ready":raise RuntimeError("managed metadata")
+    for family in ("session","managed"):
+        if remote(prefix+" -status "+family).stdout.decode().strip()!=family+" schema v1 ready":raise RuntimeError("status receipt")
+    sql("CREATE ROLE "+ROLE+" NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT","postgres");role_created=True
+    sql("GRANT USAGE ON SCHEMA heimdall,heimdall_managed TO "+ROLE+"; GRANT SELECT ON heimdall.schema_metadata,heimdall.migrations,heimdall_managed.schema_metadata,heimdall_managed.migrations TO "+ROLE)
+    status_dsn=dsn+" options='-c role="+ROLE+"'"
+    remote("HEIMDALL_MIGRATION_DATABASE_URL="+shlex.quote(status_dsn)+" "+REMOTE+"/heimdall-migrate -status managed")
+    for schema in ("heimdall","heimdall_managed"):
+        sql("UPDATE "+schema+".schema_metadata SET state='migrating'")
+        for check in (managed_command,prefix+" -status managed"):
+            rejected=remote(check,success=False)
+            if rejected.returncode==0 or "unavailable" not in rejected.stderr.decode():raise RuntimeError("managed prerequisite compatibility failure")
+        if sql("SELECT state FROM "+schema+".schema_metadata")!="migrating":raise RuntimeError("managed runner repaired metadata")
+        sql("UPDATE "+schema+".schema_metadata SET state='ready'")
+    remote(managed_command)
     proof = {"runId": RUN, "projectId": PROJECT, "environmentId": ENVIRONMENT,
-        "serviceId": SERVICE, "binarySha256": binary_digest, "migrationSha256": checksum,
-        "checks": ["uploaded compiled Linux binary checksum", "two independent runner invocations", "exact ledger and ready metadata", "six shared schema tables", "incompatible state rejected without repair", "idempotent rerun"],
+        "serviceId": SERVICE, "binarySha256": binary_digest, "migrationSha256": checksum, "managedMigrationSha256":managed_checksum,
+        "checks": ["uploaded compiled Linux binary checksum", "two independent runner invocations", "exact ledger and ready metadata", "six shared schema tables", "incompatible state rejected without repair", "idempotent rerun", "managed initialization refuses missing prerequisite without implicit installation", "two managed installers serialize", "exact managed ledger and metadata", "session and managed read-only status", "managed status with SELECT-only role", "either incompatible family blocks managed initialization/status without repair"],
         "result": "passed"}
 finally:
     try:
         if created:
             sql("DROP DATABASE " + DATABASE + " WITH (FORCE)", "postgres")
     finally:
+        if role_created:
+            sql("DROP ROLE "+ROLE,"postgres")
         if uploaded:
             remote("rm -rf " + REMOTE)
 if sql("SELECT count(*) FROM pg_database WHERE datname='" + DATABASE + "'", "postgres") != "0":
