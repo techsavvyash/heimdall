@@ -91,3 +91,5 @@ See [[design/task-list|Design backlog]], [[design/project-structure|Code ownersh
 Phase 3 record-storage checkpoint: [[evidence/phase-3-postgres-records]] records encrypted TS/Go CRUD, concurrent CAS and bidirectional live PostgreSQL interoperability. Session lifecycle and durable audit composition remain open.
 
 Phase 3 readiness checkpoint: [[evidence/phase-3-storage-readiness]] records primary-database startup compatibility checks in both SDKs, shared negative cases and transaction visibility. Public adapter construction and the deployment migration runner remain open.
+
+Phase 3 migration checkpoint: [[evidence/phase-3-migration-runner]] adds one shared deployment command, atomic v1 installation, checksum verification and exclusive locking. Runtime credential provisioning and audit composition remain open.

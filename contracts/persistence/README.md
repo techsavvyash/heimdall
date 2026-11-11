@@ -14,8 +14,9 @@ The deployment runner must acquire its exclusive migration lock and apply SQL,
 ledger insertion and compatible metadata in one transaction. catalog.json checksums
 cover only SQL bytes, not runner-generated ledger/metadata statements. The initial
 protocol ranges are 1–1. Runtime gets read-only metadata access and no schema CREATE,
-ledger write or sequence reset permission. The production runner and credentials
-are still being implemented; the integration probe demonstrates those boundaries.
+ledger write or sequence reset permission. The deployment runner below installs v1; runtime credential provisioning and
+complete deployment integration remain open. The integration probe demonstrates
+the privilege boundaries.
 
 records stores session/login envelope text, key ID, hashed opaque key, expiry in
 integer epoch milliseconds, optional identity hash and a database-issued bigint CAS
@@ -91,3 +92,21 @@ They perform no DDL and do not fence running processes. The eventual adapter
 factory must invoke them before exposing session operations; the current low-level
 record constructor remains a composition primitive. Metadata compatibility does
 not itself prove table/index completeness or runtime privilege coverage.
+
+Deployment command (run from sdk/go with HEIMDALL_MIGRATION_DATABASE_URL supplied
+by the deployment secret environment):
+
+go run ./cmd/heimdall-migrate -initialize-session-schema -sql ../../contracts/persistence/session/0001.sql
+
+This one-shot Go tool is shared deployment infrastructure for both SDK languages,
+not an authentication service. Package the built binary and the exact SQL artifact
+together. It validates the pinned checksum before connecting, then uses a READ
+COMMITTED transaction and advisory transaction lock 74162401. SQL, ledger and ready
+metadata commit together. An existing namespace must pass v1 readiness; the runner
+never adopts, repairs or upgrades an unknown namespace. An existing valid v1 is a
+no-op. A five-second lock timeout, twenty-second statement timeout and thirty-second
+operation deadline bound execution. COMMIT response loss is outcome_unknown; rerun
+the exact tool to inspect committed metadata under the lock, not to force recovery.
+A migration operator must still target the dedicated application database and
+coordinate/drain incompatible runtimes. The command does not provision runtime
+credentials or claim future-schema rolling-upgrade support.
