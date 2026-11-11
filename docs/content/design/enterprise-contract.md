@@ -87,3 +87,7 @@ Correlate ZITADEL identity/configuration events with product audit using verifie
 [[evidence/phase-2-federation-credentials]] verifies a narrower instance-scoped session role for SDK-controlled intent/session/OIDC flows. The broad Login client role is unnecessary for that measured chain, but browser binding and strict integration remain open. A server-side SDK credential is still required; this does not introduce a companion service or tenant-isolated infrastructure authority.
 
 Provider intent expiry must not substitute for the local browser-transaction deadline. The pinned ZITADEL implementation uses explicit upstream expiry ahead of its fallback lifetime; see [[evidence/phase-2-federation-binding]]. Require successful, unexpired session creation and signed binding before persisting evidence, while independently enforcing local transaction expiry and target policy age.
+
+## Pinned event collection constraint
+
+[[evidence/phase-2-lifecycle-events]] verifies aggregate-local event sequences and an instance-scoped reader. Never use one numeric sequence across users or organizations. Known-identity lifecycle checks can reconcile authoritative state with per-aggregate checkpoints; complete discovery/export still requires verified gap handling. Historical activation events cannot override a current inactive/deleted authoritative state.

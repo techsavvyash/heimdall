@@ -246,3 +246,12 @@ JSON only after all assertions and cleanup pass. The result page remains for one
 minute after completion. This HTTP/in-memory harness is not a production adapter.
 Cleanup obtains a fresh Keycloak administrator token because interactive login can
 outlast the original fixture token. See the browser-federation evidence in Quartz.
+
+## Lifecycle event probe
+
+Set HEIMDALL_PROBE_EVENTS=true when running tests/integration/scim.mjs to add
+instance-viewer event reads after the SCIM lifecycle regression. It creates and
+explicitly removes a disposable IAM_OWNER_VIEWER grant. This role has broader
+read authority than events alone. The probe verifies per-user cursor replay,
+overlapping sequences across users, unsafe cross-user cursor omission, filters,
+and denied SCIM-reader event access. It does not prove gap-free global export.

@@ -1,0 +1,134 @@
+{
+  "suite": "zitadel-scim-minimum-role-v3",
+  "runId": "5065dc82-21df-4a73-9f89-922e5f2c6216",
+  "observedAt": "2026-11-11T00:19:20.163Z",
+  "issuer": "https://capability-zitadel-verification.up.railway.app",
+  "observations": [
+    {
+      "active": false,
+      "authoritativeReadMs": 139,
+      "mutationAndObservationMs": 419
+    },
+    {
+      "active": false,
+      "authoritativeReadMs": 140,
+      "mutationAndObservationMs": 418
+    },
+    {
+      "active": true,
+      "authoritativeReadMs": 139,
+      "mutationAndObservationMs": 420
+    },
+    {
+      "active": false,
+      "authoritativeReadMs": 143,
+      "mutationAndObservationMs": 418
+    },
+    {
+      "deleted": true,
+      "authoritativeReadMs": 140
+    },
+    {
+      "lifecycleEvents": {
+        "scimCredentialEventsStatus": 403,
+        "collectorRole": "IAM_OWNER_VIEWER",
+        "collectorScope": "instance-wide; resourceOwner is a filter, not a credential boundary",
+        "viewerMutationStatus": 403,
+        "pages": 6,
+        "events": [
+          {
+            "sequence": "1",
+            "type": "user.human.added"
+          },
+          {
+            "sequence": "2",
+            "type": "user.human.email.verified"
+          },
+          {
+            "sequence": "3",
+            "type": "user.metadata.set"
+          },
+          {
+            "sequence": "4",
+            "type": "user.metadata.set"
+          },
+          {
+            "sequence": "5",
+            "type": "user.human.phone.removed"
+          },
+          {
+            "sequence": "6",
+            "type": "user.deactivated"
+          },
+          {
+            "sequence": "7",
+            "type": "user.human.phone.removed"
+          },
+          {
+            "sequence": "8",
+            "type": "user.human.phone.removed"
+          },
+          {
+            "sequence": "9",
+            "type": "user.reactivated"
+          },
+          {
+            "sequence": "10",
+            "type": "user.human.phone.removed"
+          },
+          {
+            "sequence": "11",
+            "type": "user.deactivated"
+          },
+          {
+            "sequence": "12",
+            "type": "user.removed"
+          }
+        ],
+        "exclusiveCursorReplayMatched": true,
+        "wrongOwnerEmpty": true,
+        "otherOrganizationVisible": true,
+        "overlappingSequences": ["1", "2"],
+        "crossAggregateCursorSkippedKnownEvents": true,
+        "historicalActivationCurrentState": "deleted",
+        "payloadsOmitted": true
+      }
+    }
+  ],
+  "credentialChecks": [
+    {
+      "method": "GET",
+      "target": "other organization user",
+      "status": 404
+    },
+    {
+      "method": "PATCH",
+      "target": "other organization user",
+      "status": 404
+    },
+    {
+      "method": "DELETE",
+      "target": "other organization user",
+      "status": 404
+    },
+    {
+      "method": "POST",
+      "target": "administrator grant",
+      "status": 403
+    },
+    {
+      "target": "other organization user through v2 user API",
+      "status": 404
+    },
+    {
+      "provisioningDomain": "directory external ID not exposed through unconfigured bootstrap domain"
+    }
+  ],
+  "cleanedUpOrganizations": ["399063450417903381", "399063451709749013"],
+  "limitations": [
+    "custom role permits organization user lifecycle across APIs; not SCIM-endpoint-only",
+    "single sequential sample; not a latency guarantee",
+    "no SDK workers, sessions or tuple reconciliation tested",
+    "selected user read/write/delete and administrator-grant boundaries tested; not an exhaustive permission audit"
+  ]
+}

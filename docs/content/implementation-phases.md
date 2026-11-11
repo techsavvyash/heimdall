@@ -104,3 +104,5 @@ The [[evidence/phase-2-oidc|OIDC checkpoint]] now also records live unknown-key 
 [[evidence/phase-2-federation-binding|Intent expiry follow-up]] verifies expired retrieval/session rejection and fresh positive controls for SAML/OIDC. Explicit upstream expiry overrides the API fallback lifetime; local transaction deadlines remain independent.
 
 [[evidence/phase-2-browser-federation|Browser federation callback checkpoint]] verifies real SAML/OIDC logins with a bound one-time loopback callback, negative cookie/state/intent/replay checks and the downstream HTTP evidence chain. Durable production callbacks and tenant-policy switching remain open.
+
+[[evidence/phase-2-lifecycle-events|Lifecycle event collection checkpoint]] verifies per-aggregate event pagination and replay after SCIM deletion. Aggregate-local sequence numbers make a global sequence checkpoint unsafe; complete upstream event export remains a verification gate.

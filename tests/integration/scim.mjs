@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { probeLifecycleEvents } from "./lifecycle-events.mjs";
 
 const issuer = process.env.HEIMDALL_PROBE_ZITADEL_ISSUER;
 const pat = process.env.HEIMDALL_PROBE_ZITADEL_PAT;
@@ -185,6 +186,17 @@ try {
     authoritativeReadMs: await stateWithin(users[0], "deleted", acmeToken),
   });
   assert.equal((await ok("GET", `${paths[1]}/${users[1]}`)).active, true);
+  if (process.env.HEIMDALL_PROBE_EVENTS === "true")
+    observations.push({
+      lifecycleEvents: await probeLifecycleEvents({
+        ok,
+        request,
+        orgs,
+        users,
+        scopedToken: acmeToken,
+        runId,
+      }),
+    });
 } finally {
   const results = await Promise.allSettled(
     orgs.map((organizationId) => ok("DELETE", `/v2/organizations/${organizationId}`)),
