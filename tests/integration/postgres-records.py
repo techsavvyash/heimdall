@@ -64,6 +64,13 @@ try:
     admin("CREATE ROLE heimdall_public_runtime NOLOGIN; GRANT USAGE ON SCHEMA heimdall TO heimdall_public_runtime; GRANT SELECT ON heimdall.schema_metadata,heimdall.migrations,heimdall.identity_denials,heimdall.records,heimdall.audit_events,heimdall.audit_deliveries TO heimdall_public_runtime; GRANT INSERT,UPDATE ON heimdall.identity_denials TO heimdall_public_runtime; GRANT DELETE ON heimdall.records TO heimdall_public_runtime; GRANT INSERT ON heimdall.audit_events,heimdall.audit_deliveries TO heimdall_public_runtime;")
     run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/runtime.test.ts"], env=env)
     subprocess.run(["go", "test", "-race", "-count=1", ".", "-run", "TestPublicPostgresRuntime|TestPostgresFactory"], cwd=ROOT / "sdk/go", env=env, check=True)
+    if os.environ.get("HEIMDALL_PROBE_DURABLE_RUNTIME") == "1":
+        live_env = dict(env, HEIMDALL_PROBE_SDK_RUNTIME="1", HEIMDALL_TEST_RUNTIME_DATABASE_URL=env["HEIMDALL_TEST_DATABASE_URL"])
+        live = subprocess.run(["node", "tests/integration/oidc.mjs"], cwd=ROOT, env=live_env, capture_output=True, text=True, timeout=240)
+        if live.returncode != 0:
+            # Never emit child assertions or environment containing tokens/credentials.
+            raise RuntimeError("combined live runtime verification failed")
+        print(json.dumps({"liveRuntime": json.loads(live.stdout)}), flush=True)
     env["HEIMDALL_TEST_AUDIT_ROLE"] = "heimdall_audit_runtime"
     for peer in (False, True):
         if peer:

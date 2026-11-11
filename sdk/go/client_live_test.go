@@ -2,17 +2,21 @@ package heimdall_test
 
 import (
 	"context"
+	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	heimdall "github.com/techsavvyash/heimdall/sdk/go"
+	postgres "github.com/techsavvyash/heimdall/sdk/go/postgres"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 )
 
 func TestLiveRuntime(t *testing.T) {
 	raw := os.Getenv("HEIMDALL_TEST_RUNTIME")
-	if raw == "" {
+	if raw == "" || os.Getenv("HEIMDALL_TEST_RUNTIME_DATABASE_URL") != "" {
 		t.Skip("optional live runtime")
 	}
 	var c struct {
@@ -50,5 +54,94 @@ func TestLiveRuntime(t *testing.T) {
 	defer mu.Unlock()
 	if len(outcomes) != 2 || outcomes[0] != "succeeded" || outcomes[1] != "deny" {
 		t.Fatal("audit outcomes")
+	}
+}
+
+func TestLivePostgresRuntime(t *testing.T) {
+	raw, url := os.Getenv("HEIMDALL_TEST_RUNTIME"), os.Getenv("HEIMDALL_TEST_RUNTIME_DATABASE_URL")
+	if raw == "" || url == "" {
+		t.Skip("optional live durable runtime")
+	}
+	var c struct {
+		Config                       map[string]any
+		Manifest                     json.RawMessage
+		ClientSecret, Token, Subject string
+	}
+	if json.Unmarshal([]byte(raw), &c) != nil {
+		t.Fatal("runtime input")
+	}
+	product, environment := c.Config["productId"].(string), c.Config["environment"].(string)+"-go"
+	c.Config["environment"] = environment
+	config, e := json.Marshal(c.Config)
+	if e != nil {
+		t.Fatal(e)
+	}
+	db, e := sql.Open("postgres", url+"&options=-c%20role%3Dheimdall_public_runtime")
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer db.Close()
+	storage, e := postgres.NewStorage(db, postgres.StorageOptions{ProductID: product, Environment: environment, AuditSinks: []string{"siem"}})
+	if e != nil {
+		t.Fatal(e)
+	}
+	ctx := context.Background()
+	client, e := heimdall.New(ctx, config, c.Manifest, heimdall.Options{PolicyVersion: "runtime-v1", Credentials: heimdall.Credentials{ClientSecret: func(context.Context) (string, error) { return c.ClientSecret, nil }, OpenFGAKey: func(context.Context) (string, error) { return os.Getenv("HEIMDALL_PROBE_OPENFGA_KEY"), nil }}, Storage: storage})
+	if e != nil {
+		t.Fatal(e)
+	}
+	principal, e := client.Tokens().Verify(ctx, c.Token)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if principal.Identity().Subject != c.Subject {
+		t.Fatal("subject mismatch")
+	}
+	if _, e = client.Tokens().Verify(ctx, "invalid"); !errors.Is(e, heimdall.ErrUnauthenticated) {
+		t.Fatal(e)
+	}
+	if e = storage.Identity.Invalidate(ctx, heimdall.IdentityNegative{Identity: principal.Identity(), Context: "bearer", TokenDigest: strings.Repeat("a", 64), Reason: "identity_inactive"}); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = client.Tokens().Verify(ctx, c.Token); !errors.Is(e, heimdall.ErrUnauthenticated) {
+		t.Fatal(e)
+	}
+	rows, e := db.QueryContext(ctx, "SELECT event FROM heimdall.audit_events WHERE product_id=$1 AND environment=$2", product, environment)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer rows.Close()
+	outcomes := map[string]int{}
+	for rows.Next() {
+		var raw []byte
+		if rows.Scan(&raw) != nil {
+			t.Fatal("row")
+		}
+		var wrapper struct{ Payload string }
+		if json.Unmarshal(raw, &wrapper) != nil {
+			t.Fatal("wrapper")
+		}
+		decoded, e := base64.RawURLEncoding.DecodeString(wrapper.Payload)
+		if e != nil {
+			t.Fatal("payload")
+		}
+		var event struct{ ProductID, Environment, Outcome string }
+		if json.Unmarshal(decoded, &event) != nil {
+			t.Fatal("event")
+		}
+		if event.ProductID != product || event.Environment != environment {
+			t.Fatal("scope")
+		}
+		outcomes[event.Outcome]++
+	}
+	if rows.Err() != nil {
+		t.Fatal("read audit")
+	}
+	if len(outcomes) != 2 || outcomes["succeeded"] != 1 || outcomes["deny"] != 2 {
+		t.Fatal("audit outcomes")
+	}
+	var count int
+	if e = db.QueryRowContext(ctx, "SELECT count(*) FROM heimdall.audit_deliveries WHERE product_id=$1 AND environment=$2 AND sink_id='siem'", product, environment).Scan(&count); e != nil || count != 3 {
+		t.Fatal("delivery count")
 	}
 }

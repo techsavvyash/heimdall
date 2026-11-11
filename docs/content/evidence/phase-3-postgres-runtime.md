@@ -127,3 +127,57 @@ Railway provider proof used recording storage; this checkpoint uses actual stora
 with fixture services. A combined live-provider/durable-storage run remains open.
 Sessions, public authorization, managed lifecycle, backpressure, custom audit and
 SIEM delivery remain required release work. Phase 3 remains open.
+
+
+## Combined live-provider and durable-storage proof
+
+Run `482f31b4-681a-4f70-8ad6-25307258d971`, observed
+`2026-11-11T12:55:10.217Z`, exercised both public SDKs for both Ledger and Support
+against the existing Railway ZITADEL and OpenFGA verification services. Storage
+was disposable local PostgreSQL 17.11 using the restricted public-runtime role,
+not recording callbacks. The database was an application database, separate from
+both services' internal databases. Each language used its own verification
+environment within each product.
+
+```mermaid
+flowchart LR
+  Probe[Disposable test harness] --> TS[Public TypeScript runtime]
+  Probe --> Go[Public Go runtime]
+  TS --> Z[Railway ZITADEL]
+  Go --> Z
+  TS --> F[Railway pinned OpenFGA models]
+  Go --> F
+  TS --> PG[(Local application PostgreSQL)]
+  Go --> PG
+  PG --> Evidence[Committed events and delivery rows]
+```
+
+For all four product/language combinations, startup checked storage readiness,
+issuer discovery and the exact pinned model. A real issued token authenticated its
+expected human. A malformed token was denied and audited. The test then applied
+an explicit local identity-denial observation through the storage gate; verifying
+the same token was denied despite the positive cache. It decoded persisted event
+envelopes and checked scope, one succeeded outcome, two denied outcomes and three
+SIEM delivery rows. This denial step proves the local gate, not a SCIM worker or
+provider-to-product fan-out implementation.
+
+The encompassing PostgreSQL run
+`heimdall-records-44877030c76d4a2c8214162d59b4afc9` also passed the complete existing
+storage/fault harness. The OIDC probe removed its temporary organization, sessions
+and OpenFGA stores; the harness removed its disposable database container. Tests
+receive secrets via environment, suppress child assertions on failure, and publish
+only sanitized service observations. Evidence is committed in
+`tests/integration/evidence/durable-live-runtime-2026-11-11.json`.
+
+Reproduce with the existing verification issuer, bootstrap/login credentials and
+OpenFGA endpoint/key set in the environment, then run
+`HEIMDALL_PROBE_DURABLE_RUNTIME=1 python3 tests/integration/postgres-records.py`
+under the repository Node/pnpm/Go toolchain. Without that flag, the local storage
+suite requires no external service credentials. The ordinary full gate passes
+1,258 TS tests and skips 28 optional live cases; this separate run executes the
+new durable live cases.
+
+This closes the combined provider/storage evidence gap described above. It does
+not deploy a product backend, exercise browser session routes, establish SIEM
+transport compatibility, or complete Phase 3. See [[phase-3-readiness-audit]] for
+remaining requirements.

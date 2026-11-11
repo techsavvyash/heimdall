@@ -83,7 +83,7 @@ async function sdkRuntime(client, c) {
               "run",
               "test/runtime.live.test.ts",
             ]
-          : ["go", "test", "-race", "-count=1", ".", "-run", "^TestLiveRuntime$"];
+          : ["go", "test", "-race", "-count=1", ".", "-run", "^TestLive(Postgres)?Runtime$"];
       const child = spawnSync(command[0], command.slice(1), {
         env,
         cwd: new URL(language === "ts" ? "../../" : "../../sdk/go/", import.meta.url),
@@ -115,7 +115,9 @@ async function sdkRuntime(client, c) {
           "authoritative human bearer verification",
           "invalid token audited rejection",
         ],
-        storage: "recording fixture only; not a durability proof",
+        storage: process.env.HEIMDALL_TEST_RUNTIME_DATABASE_URL
+          ? "restricted PostgreSQL role, public factory, three committed events and delivery rows per language, persistent denial blocks warm cache"
+          : "recording fixture only; not a durability proof",
       },
     });
   } finally {
@@ -739,7 +741,9 @@ console.log(
         "Login client API performs password check; browser Login UI not exercised",
         "strict upstream SAML/OIDC evidence not verified",
         process.env.HEIMDALL_PROBE_SDK_RUNTIME === "1"
-          ? "Public runtime exercised with recording storage fixture; full production adapter assembly remains pending"
+          ? process.env.HEIMDALL_TEST_RUNTIME_DATABASE_URL
+            ? "Public runtime with real PostgreSQL exercised; browser sessions, authorization and enterprise workers remain pending"
+            : "Public runtime exercised with recording storage fixture; durable storage not exercised in this run"
           : process.env.HEIMDALL_PROBE_SDK_STATUS === "1"
             ? "SDK signature and online identity status exercised; durable gate and public flow composition still pending"
             : process.env.HEIMDALL_PROBE_SDK_IDENTITY === "1"

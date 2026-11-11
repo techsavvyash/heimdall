@@ -1,0 +1,204 @@
+{
+  "sourceBase": "3816fa4de93d8b5aef5aeca89da6c4b41a2d534d",
+  "testChanges": "public live runtime tests and optional PostgreSQL harness orchestration in this evidence commit",
+  "liveRuntime": {
+    "suite": "zitadel-human-oidc-v1",
+    "runId": "482f31b4-681a-4f70-8ad6-25307258d971",
+    "observedAt": "2026-11-11T12:55:10.217Z",
+    "issuer": "https://capability-zitadel-verification.up.railway.app",
+    "observations": [
+      {
+        "product": "ledger",
+        "publicRuntime": {
+          "typescript": "passed",
+          "go": "passed",
+          "checks": [
+            "discovery and pinned model startup",
+            "authoritative human bearer verification",
+            "invalid token audited rejection"
+          ],
+          "storage": "restricted PostgreSQL role, public factory, three committed events and delivery rows per language, persistent denial blocks warm cache"
+        }
+      },
+      {
+        "product": "ledger",
+        "selfServiceEvidence": {
+          "productOnlySessionStatus": 401,
+          "apiAudienceOwnSessionStatus": 200,
+          "anotherUserSessionStatus": 404,
+          "ownIdentityStatus": 200,
+          "otherProductIntrospectionActive": false,
+          "credential": "user access token; no PAT or session token"
+        }
+      },
+      {
+        "product": "ledger",
+        "signatureIssuerAudienceNonce": "verified",
+        "subject": "same human",
+        "amr": ["pwd"],
+        "accessAudiences": ["399139509523986197", "399139509221996309"],
+        "introspectionActive": true,
+        "keyRejections": [
+          {
+            "scenario": "unknown signing key",
+            "localValidation": "rejected",
+            "introspectionStatus": 200,
+            "active": false
+          },
+          {
+            "scenario": "known key ID with untrusted signature",
+            "localValidation": "rejected",
+            "introspectionStatus": 200,
+            "active": false
+          }
+        ],
+        "otherProductIntrospectionActive": false,
+        "refreshBeforeDeactivation": "succeeded"
+      },
+      {
+        "product": "support",
+        "publicRuntime": {
+          "typescript": "passed",
+          "go": "passed",
+          "checks": [
+            "discovery and pinned model startup",
+            "authoritative human bearer verification",
+            "invalid token audited rejection"
+          ],
+          "storage": "restricted PostgreSQL role, public factory, three committed events and delivery rows per language, persistent denial blocks warm cache"
+        }
+      },
+      {
+        "product": "support",
+        "selfServiceEvidence": {
+          "productOnlySessionStatus": 401,
+          "apiAudienceOwnSessionStatus": 200,
+          "anotherUserSessionStatus": 404,
+          "ownIdentityStatus": 200,
+          "otherProductIntrospectionActive": false,
+          "credential": "user access token; no PAT or session token"
+        }
+      },
+      {
+        "product": "support",
+        "signatureIssuerAudienceNonce": "verified",
+        "subject": "same human",
+        "amr": ["pwd"],
+        "accessAudiences": ["399139509976971029", "399139509725312789"],
+        "introspectionActive": true,
+        "keyRejections": [
+          {
+            "scenario": "unknown signing key",
+            "localValidation": "rejected",
+            "introspectionStatus": 200,
+            "active": false
+          },
+          {
+            "scenario": "known key ID with untrusted signature",
+            "localValidation": "rejected",
+            "introspectionStatus": 200,
+            "active": false
+          }
+        ],
+        "otherProductIntrospectionActive": false,
+        "refreshBeforeDeactivation": "succeeded"
+      },
+      {
+        "providerSessionDeletion": {
+          "introspectionActive": false,
+          "refreshStatus": 200,
+          "refreshedAccessTokenActive": true,
+          "explicitRefreshRevocationStatus": 200,
+          "accessActiveAfterRefreshRevocation": false,
+          "explicitAccessRevocationStatus": 200,
+          "accessActiveAfterBothRevocations": false,
+          "refreshAfterExplicitRevocationStatus": 400,
+          "refreshAfterExplicitRevocationError": "invalid_request"
+        }
+      },
+      {
+        "product": "ledger",
+        "afterDeactivation": {
+          "authoritativeUserState": "USER_STATE_INACTIVE",
+          "introspectionActive": false,
+          "refreshStatus": 400,
+          "refreshError": "invalid_request"
+        }
+      },
+      {
+        "product": "support",
+        "afterDeactivation": {
+          "authoritativeUserState": "USER_STATE_INACTIVE",
+          "introspectionActive": false,
+          "refreshStatus": 400,
+          "refreshError": "invalid_request"
+        }
+      },
+      {
+        "afterDeletion": "user API 404; both product tokens introspect inactive"
+      }
+    ],
+    "wrongPKCE": "invalid_grant",
+    "cleanedUpOrganization": "399139506655082261",
+    "limitations": [
+      "Login client API performs password check; browser Login UI not exercised",
+      "strict upstream SAML/OIDC evidence not verified",
+      "Public runtime with real PostgreSQL exercised; browser sessions, authorization and enterprise workers remain pending",
+      "deactivation samples are not a revocation latency guarantee"
+    ]
+  },
+  "postgres": {
+    "run": "heimdall-records-44877030c76d4a2c8214162d59b4afc9",
+    "postgres": "postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac",
+    "result": "passed",
+    "checks": [
+      "public TS and Go runtime with restricted PostgreSQL role, durable audit, captured sink routing and warm-cache denial",
+      "TS and Go CRUD",
+      "8-way CAS single winner",
+      "expiry and product isolation",
+      "delete/recreate revision",
+      "tampered expiry denied",
+      "cancelled blocked write unknown",
+      "pool recovery",
+      "TS reads Go",
+      "Go reads TS",
+      "11 readiness states in both languages",
+      "read-only connection rejected",
+      "missing metadata table rejected",
+      "migration transaction visibility",
+      "concurrent deployment migration processes",
+      "idempotent migration and incompatible state refusal",
+      "mid-migration permission failure rolls back entire schema",
+      "held migration lock deadline and retry",
+      "confirmed COMMIT response loss returns outcome_unknown and safe rerun",
+      "TS and Go atomic audit append rollback race and conflict",
+      "both SDKs decision request commits before evaluation and terminal receipt before release",
+      "both SDKs request and terminal audit COMMIT loss block decision release",
+      "bidirectional audit receipts and original sink routing",
+      "TS and Go audit committed response loss and receipt recovery",
+      "audit append with SELECT INSERT privileges only",
+      "shared U+0000 and Unicode event survives TS write and Go replay",
+      "both SDKs delivery receipt matrix and atomic partial acknowledgement",
+      "both SDKs acknowledgement committed response loss and idempotent recovery",
+      "pending selection scope time count and byte budgets",
+      "invalid payload and cross-scope corruption withheld",
+      "pending readers decode both language writers",
+      "delivery attempt races stale callbacks defer and quarantine",
+      "explicit quarantine unblocks healthy backlog without deletion",
+      "both SDKs claim defer quarantine COMMIT response loss",
+      "identity-bound session cross-language reads and shared advisory lock",
+      "both SDKs verified token and fixture provider status feed standalone durable identity gate without session cipher",
+      "both SDKs authentication results wait for committed audit receipts with six events and outbox rows per scope",
+      "token-negative gate preserves bearer sessions and replacement revisions",
+      "identity-negative gate persists denial and blocks warm verifier cache",
+      "identity gate COMMIT response loss preserves uncertain outcome",
+      "session creation versus invalidation race and persistent denial",
+      "identity and product isolation with generic CRUD bypass prevention",
+      "both SDKs identity invalidation COMMIT response loss and safe replay",
+      "identity and revision bound session invalidation",
+      "CAS versus conditional invalidation single winner in both SDKs",
+      "Go conditionally invalidates TS session",
+      "both SDKs conditional deletion COMMIT loss and replacement preservation"
+    ]
+  }
+}
