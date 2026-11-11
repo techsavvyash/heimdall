@@ -450,9 +450,12 @@ recovery-administration records cannot be inserted individually through this pat
 the retained recovery-pair transaction below handles them together. Already retained records of
 those kinds may be resolved as immutable receipt-only retries. Five-second operation
 bounds, synchronous commit, cancellation and conservative unknown-COMMIT behavior
-are preserved. Dedicated lost-response and cross-language handoff proof for normal retained
-appends remains required before activation; the recovery composition has its own
-proof below.
+are preserved. Reciprocal lost-response tests now cover ordinary, request and normal-completion
+appends. Each first writer reports unknown after a confirmed COMMIT response is
+dropped; the other SDK resolves the exact original receipt. Payload and metadata
+used/reserved counters must change by the expected amounts only once, and the
+peer retry must preserve the complete database snapshot even with a changed sink
+configuration. The recovery composition has its own proof below.
 
 ## Prepared atomic retained recovery
 

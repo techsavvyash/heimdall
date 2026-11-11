@@ -1,0 +1,25 @@
+[
+  {
+    "name": "ordinary",
+    "base": "ordinary",
+    "patch": {
+      "eventId": "loss-ordinary"
+    },
+    "delta": [1, 0, 1, 0]
+  },
+  {
+    "name": "request",
+    "base": "request",
+    "patch": {
+      "eventId": "loss-request",
+      "decisionId": "loss-decision"
+    },
+    "delta": [1, 2, 2, 2]
+  },
+  {
+    "name": "completion",
+    "base": "normal",
+    "patch": {},
+    "delta": [1, -2, 1, -2]
+  }
+]

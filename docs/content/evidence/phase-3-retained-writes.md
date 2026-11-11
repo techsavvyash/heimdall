@@ -56,8 +56,50 @@ the final committed tree again.
 ## Remaining boundary
 
 Prepared schemas and existing v3 admission are prerequisites, not a production
-compatibility gate. Catalog validation, backfill/publication, old-writer drain,
-atomic retained recovery pairs, lost-response/handoff qualification and authorized
-maintenance remain required. Maintenance must share admission and lock ordering.
+compatibility gate. Catalog validation, backfill/publication, old-writer drain and authorized
+maintenance remain required. [[phase-3-retained-recovery]] now provides atomic
+retained recovery pairs and their own lost-response proof. Maintenance must share admission and lock ordering.
 Public storage continues to use its existing v3 path; no purge is enabled. See
 [[phase-3-readiness-audit]].
+
+## Reciprocal normal-write COMMIT loss
+
+The extended harness covers ordinary events, new requests and normal completions.
+Each case drops a confirmed COMMIT response from Go and retries in TS, then repeats
+from TS to Go in an independent database. The first SDK must return
+`outcome_unknown`; a healthy primary read must recover the exact original receipt.
+The peer must return that same receipt after process handoff.
+
+```mermaid
+sequenceDiagram
+  participant First as First SDK process
+  participant Fault as COMMIT response proxy
+  participant DB as Primary PostgreSQL
+  participant Peer as Other SDK process
+  First->>DB: Write retained event transaction
+  First->>Fault: COMMIT
+  Fault->>DB: Forward COMMIT
+  DB-->>Fault: Confirm commit
+  Note over Fault,First: Drop response and report outcome_unknown
+  Peer->>DB: Retry identical event with changed sink configuration
+  DB-->>Peer: Original receipt without duplicate mutation
+```
+
+Expected counter deltas are checked immediately after the first commit:
+
+| Write | Used payload events | Reserved payload events | Used metadata rows | Reserved metadata rows |
+| --- | --- | --- | --- | --- |
+| Ordinary | +1 | 0 | +1 | 0 |
+| Request | +1 | +2 | +2 | +2 |
+| Normal completion | +1 | -2 | +1 | -2 |
+
+The peer retry must leave every payload, delivery, source decision, charge,
+reservation, retained identity and capacity row unchanged. The original sink
+routing remains intact despite the peer's changed configuration. This is an exact
+retry of local audit storage, not a fresh authorization or a business-operation
+retry.
+
+Pinned PostgreSQL 17.11 run
+`heimdall-capacity-backfill-d921edcd944b42368e320cc8cfd60555` passed all six reciprocal fault
+cases and the complete surrounding migration, recovery and retention harness.
+The disposable container was removed. The full workspace gate passed.

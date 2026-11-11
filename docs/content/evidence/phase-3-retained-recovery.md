@@ -58,6 +58,6 @@ scenarios in both SDKs, reciprocal lost-COMMIT retries, retired-pair inspection
 and the surrounding migration/capacity/retention regressions. The disposable
 container was removed. The full `pnpm run check` gate passed.
 
-Normal retained append COMMIT-loss/handoff qualification, compatible migration and
-catalog validation, v4 publication and authorized lifecycle integration remain
-required. Phase 3 is still incomplete; see [[phase-3-readiness-audit]].
+[[phase-3-retained-writes]] now also proves normal retained append COMMIT-loss
+and cross-language handoff. Compatible migration and catalog validation, v4
+publication and authorized lifecycle integration remain required. Phase 3 is still incomplete; see [[phase-3-readiness-audit]].
