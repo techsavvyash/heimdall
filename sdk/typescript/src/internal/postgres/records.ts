@@ -1,7 +1,8 @@
+import { query } from "./query.js";
 import { createHash } from "node:crypto";
-import type { Pool, PoolClient } from "pg";
+import type { Pool } from "pg";
 import type { RecordCipher } from "../envelopes.js";
-import { HeimdallError, checkCancellation } from "../errors.js";
+import { HeimdallError } from "../errors.js";
 
 type Kind = "session" | "login";
 type Row = { revision: string; envelope: string; expires_at: string; key_id: string };
@@ -78,66 +79,6 @@ export class PostgresRecords {
       throw new HeimdallError("unavailable");
     }
   }
-  private async query(
-    text: string,
-    values: unknown[],
-    write: boolean,
-    caller?: AbortSignal,
-  ): Promise<Row[]> {
-    const signal = caller
-      ? AbortSignal.any([caller, AbortSignal.timeout(5000)])
-      : AbortSignal.timeout(5000);
-    checkCancellation(signal);
-    let client: PoolClient | undefined;
-    let released = false;
-    let dispatched = false;
-    const release = (destroy = false) => {
-      if (client && !released) {
-        released = true;
-        client.release(destroy);
-      }
-    };
-    let abort!: () => void;
-    const cancelled = new Promise<never>((_, reject) => {
-      abort = () => {
-        release(true);
-        try {
-          checkCancellation(signal);
-        } catch (error) {
-          reject(dispatched && write ? new HeimdallError("outcome_unknown") : error);
-        }
-      };
-      signal.addEventListener("abort", abort, { once: true });
-    });
-    try {
-      client = await Promise.race([
-        this.pool.connect().then((c) => {
-          if (signal.aborted) {
-            c.release(true);
-            checkCancellation(signal);
-          }
-          return c;
-        }),
-        cancelled,
-      ]);
-      checkCancellation(signal);
-      dispatched = true;
-      const result = await Promise.race([client.query<Row>(text, values), cancelled]);
-      checkCancellation(signal);
-      return result.rows;
-    } catch (error) {
-      if (error instanceof HeimdallError) {
-        if (dispatched && write && signal.aborted) throw new HeimdallError("outcome_unknown");
-        throw error;
-      }
-      if (typeof error === "object" && error !== null && "code" in error && error.code === "23505")
-        throw new HeimdallError("conflict");
-      throw new HeimdallError(dispatched && write ? "outcome_unknown" : "unavailable");
-    } finally {
-      signal.removeEventListener("abort", abort);
-      release();
-    }
-  }
   async create(
     kind: Kind,
     key: string,
@@ -147,7 +88,8 @@ export class PostgresRecords {
   ) {
     const hash = this.key(kind, key);
     const sealed = this.seal(kind, hash, value, expiresAt);
-    const rows = await this.query(
+    const rows = await query<Row>(
+      this.pool,
       `INSERT INTO heimdall.records(product_id,environment,kind,key_hash,key_id,envelope,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING ${columns}`,
       [this.productId, this.environment, kind, hash, sealed.keyId, sealed.envelope, expiresAt],
       true,
@@ -157,7 +99,8 @@ export class PostgresRecords {
   }
   async get(kind: Kind, key: string, signal?: AbortSignal) {
     const hash = this.key(kind, key);
-    const rows = await this.query(
+    const rows = await query<Row>(
+      this.pool,
       `SELECT ${columns} FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind=$3 AND key_hash=$4 AND expires_at>$5`,
       [this.productId, this.environment, kind, hash, this.now()],
       false,
@@ -177,7 +120,8 @@ export class PostgresRecords {
       throw new HeimdallError("invalid_argument");
     const hash = this.key(kind, key);
     const sealed = this.seal(kind, hash, value, expiresAt);
-    const rows = await this.query(
+    const rows = await query<Row>(
+      this.pool,
       `UPDATE heimdall.records SET key_id=$5,envelope=$6,expires_at=$7 WHERE product_id=$1 AND environment=$2 AND kind=$3 AND key_hash=$4 AND revision=$8 AND expires_at>$9 RETURNING ${columns}`,
       [
         this.productId,
@@ -197,7 +141,8 @@ export class PostgresRecords {
   }
   async delete(kind: Kind, key: string, signal?: AbortSignal): Promise<void> {
     const hash = this.key(kind, key);
-    await this.query(
+    await query<Row>(
+      this.pool,
       "DELETE FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind=$3 AND key_hash=$4",
       [this.productId, this.environment, kind, hash],
       true,

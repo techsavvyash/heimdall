@@ -1,0 +1,41 @@
+[
+  { "name": "ready v1", "sql": [], "ready": true },
+  {
+    "name": "compatible wider protocols",
+    "sql": ["UPDATE heimdall.schema_metadata SET reader_max=2,writer_max=2"],
+    "ready": true
+  },
+  { "name": "missing metadata", "sql": ["DELETE FROM heimdall.schema_metadata"], "ready": false },
+  {
+    "name": "migrating",
+    "sql": ["UPDATE heimdall.schema_metadata SET state='migrating'"],
+    "ready": false
+  },
+  {
+    "name": "future database",
+    "sql": ["UPDATE heimdall.schema_metadata SET database_version=2"],
+    "ready": false
+  },
+  {
+    "name": "new reader only",
+    "sql": ["UPDATE heimdall.schema_metadata SET reader_min=2,reader_max=2"],
+    "ready": false
+  },
+  {
+    "name": "new writer only",
+    "sql": ["UPDATE heimdall.schema_metadata SET writer_min=2,writer_max=2"],
+    "ready": false
+  },
+  { "name": "missing ledger", "sql": ["DELETE FROM heimdall.migrations"], "ready": false },
+  {
+    "name": "changed checksum",
+    "sql": ["UPDATE heimdall.migrations SET checksum=repeat('0',64)"],
+    "ready": false
+  },
+  {
+    "name": "extra ledger",
+    "sql": ["INSERT INTO heimdall.migrations(version,checksum) VALUES(2,repeat('0',64))"],
+    "ready": false
+  },
+  { "name": "ledger gap", "sql": ["UPDATE heimdall.migrations SET version=2"], "ready": false }
+]

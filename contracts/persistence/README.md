@@ -83,3 +83,11 @@ for a fresh pinned local database, concurrent CAS, encryption/scope checks,
 cancellation and actual bidirectional TS/Go reads. The disposable port binds only
 127.0.0.1. Live tests skip without HEIMDALL_TEST_DATABASE_URL; the harness runs both
 writer and peer-reader passes. Regular unit tests do not substitute for this proof.
+
+Internal checkReadiness/CheckReadiness helpers read v1 metadata and ledger in one
+SQL snapshot, require a writable primary connection and reject unknown history.
+The bundled checksum is tested against the actual catalog in both languages.
+They perform no DDL and do not fence running processes. The eventual adapter
+factory must invoke them before exposing session operations; the current low-level
+record constructor remains a composition primitive. Metadata compatibility does
+not itself prove table/index completeness or runtime privilege coverage.

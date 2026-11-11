@@ -1,0 +1,20 @@
+{
+  "run": "heimdall-records-e272f15fc3fa4d0587501258c017f00b",
+  "postgres": "postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac",
+  "result": "passed",
+  "checks": [
+    "TS and Go CRUD",
+    "8-way CAS single winner",
+    "expiry and product isolation",
+    "delete/recreate revision",
+    "tampered expiry denied",
+    "cancelled blocked write unknown",
+    "pool recovery",
+    "TS reads Go",
+    "Go reads TS",
+    "11 readiness states in both languages",
+    "read-only connection rejected",
+    "missing metadata table rejected",
+    "migration transaction visibility"
+  ]
+}
