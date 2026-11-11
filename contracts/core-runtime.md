@@ -112,6 +112,20 @@ connection limits, TLS configuration and pool shutdown. Unactivated v1, v2 or mi
 storage is refused by the public factory's readiness and audit append ports.
 No DDL or background delivery runs on construction or verification.
 
+Go `postgres.NewConnector(dsn)` is the recommended connection entry point. It
+snapshots lib/pq configuration without opening a database connection; `sql.OpenDB(connector)` gives the
+application its ordinary pool. Every new connection is bounded by five seconds
+or earlier caller cancellation, including TLS and PostgreSQL startup. A shorter
+DSN `connect_timeout` remains shorter. Cancellation closes the startup socket;
+watchers are stopped and joined before handing a healthy connection to the pool.
+DSN credentials and TLS settings are preserved, and driver errors are sanitized.
+Both deployment CLIs use this connector. NewStorage still accepts caller-owned
+pools but cannot retrofit their driver: custom pools must independently provide
+bounded startup and cancellation. Bare lib/pq sql.Open without connect_timeout
+fails that requirement; even a static timeout alone does not prove prompt caller
+cancellation during startup. This is a Go driver correction, not a new service or
+change to TypeScript storage semantics.
+
 The pool role needs schema USAGE; SELECT on schema_metadata, migrations,
 identity_denials, records, audit_events and audit_deliveries; INSERT and UPDATE on
 identity_denials; DELETE on records; INSERT on audit_events/audit_deliveries; and
@@ -155,6 +169,10 @@ const h = await createHeimdall(
 ```
 
 ```go
+connector, err := postgres.NewConnector(databaseDSN)
+if err != nil { return err }
+db := sql.OpenDB(connector)
+defer db.Close() // application lifetime, not each request
 storage, err := postgres.NewStorage(db, postgres.StorageOptions{
     ProductID: "ledger", Environment: "production", AuditSinks: []string{"siem"},
 })

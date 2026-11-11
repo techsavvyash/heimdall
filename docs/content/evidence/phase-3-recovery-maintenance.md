@@ -58,7 +58,8 @@ return an empty second invocation without calling the proposer again. This is
 explicit invocation/reconnection evidence, not a process-kill restart test.
 
 The connection gap remains explicit in [[phase-3-readiness-audit]]: lib/pq startup
-without `connect_timeout` can outlive the operation context. The deadline is not
-fully qualified until that case is fixed and tested. Process-kill restart,
+without `connect_timeout` can outlive the operation context. [[phase-3-go-connection-deadlines]] subsequently fixes and tests that startup
+case for the SDK connector and deployment commands; arbitrary custom pools remain
+the caller’s responsibility. Process-kill restart,
 multi-candidate interruption, retention, operational scale and public maintenance
 composition also remain open. Phase 3 is incomplete.

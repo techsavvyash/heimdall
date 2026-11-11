@@ -109,11 +109,12 @@ func run() int {
 			}
 		}
 	}
-	db, err := sql.Open("postgres", dsn)
+	connector, err := postgres.NewConnector(dsn)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "invalid database configuration")
 		return 1
 	}
+	db := sql.OpenDB(connector)
 	defer db.Close()
 	db.SetMaxOpenConns(1)
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

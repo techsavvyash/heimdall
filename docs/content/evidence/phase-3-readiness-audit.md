@@ -34,15 +34,18 @@ Railway services. Their historical test counts are checkpoint observations, not
 claims that all later requirements were already met. Implementation filenames may
 differ from early ticket sketches; required behavior does not.
 
-## Newly observed connection deadline gap
+## Connection deadline correction
 
 Pinned Go lib/pq 1.12.3 can block in startup after TCP connect when
 `connect_timeout` is unset, despite the operation context deadline. The local
 recovery maintenance fault run exposed this through a one-connection proxy that
 left a subsequent connection unserviced. That run was stopped; it is not passing
 reconnection evidence. Bounded connection establishment and a stalled-handshake
-regression are required before Phase 3 acceptance. Separate-connection
-COMMIT-loss proof does not establish this property.
+regression were required before Phase 3 acceptance. [[phase-3-go-connection-deadlines]]
+now provides that fix and proof for Go postgres.NewConnector and both deployment
+commands. Custom caller-owned pools must independently satisfy the same property;
+NewStorage cannot retrofit their drivers. Separate-connection COMMIT-loss proof
+alone does not establish it.
 
 ## Work before Phase 3 acceptance
 

@@ -664,4 +664,7 @@ did not release the call. The test was terminated and is not passing evidence.
 Connection establishment must be bounded and tested before claiming the full
 invocation deadline. Separate-connection COMMIT-loss tests isolate atomic recovery
 semantics; they do not close this driver/reconnection gate. This affects other
-caller-supplied Go pools too and remains a Phase 3 requirement.
+caller-supplied Go pools too. Go postgres.NewConnector now closes startup sockets
+on cancellation and bounds total establishment to five seconds, with loopback
+stall and live pool-reuse proof. Both deployment CLIs use it. See core-runtime.md;
+custom pools still must independently satisfy this requirement.
