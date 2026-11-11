@@ -52,31 +52,10 @@ func (a *Audit) appendFinalized(ctx context.Context, event map[string]any, mutat
 	if ctx == nil || mutate == nil {
 		return empty, contract.ErrInvalidArgument
 	}
-	digest, err := contract.AuditDigest(event)
+	prepared, err := a.prepare(event)
 	if err != nil {
 		return empty, err
 	}
-	encoded, err := json.Marshal(event)
-	if err != nil {
-		return empty, contract.ErrInvalidArgument
-	}
-	var snapshot map[string]any
-	if json.Unmarshal(encoded, &snapshot) != nil {
-		return empty, contract.ErrInvalidArgument
-	}
-	if err = a.validate(snapshot); err != nil {
-		return empty, err
-	}
-	clonedDigest, err := contract.AuditDigest(snapshot)
-	if err != nil || clonedDigest != digest {
-		return empty, contract.ErrInvalidArgument
-	}
-	eventID, ok := snapshot["eventId"].(string)
-	at, number := snapshot["recordedAt"].(float64)
-	if !ok || !valid(eventID, 128) || !number || math.Trunc(at) != at || at < 0 || at > maxSafe || snapshot["productId"] != a.product || snapshot["environment"] != a.environment {
-		return empty, contract.ErrInvalidArgument
-	}
-	receipt := contract.AuditReceipt{ProductID: a.product, Environment: a.environment, EventID: eventID, RecordedAt: int64(at), PayloadDigest: digest}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err = contract.CheckCancellation(ctx); err != nil {
@@ -110,39 +89,10 @@ func (a *Audit) appendFinalized(ctx context.Context, event map[string]any, mutat
 		}
 		return empty, databaseError(ctx)
 	}
-	storageEnvelope, _ := json.Marshal(map[string]any{"format": "ha1", "productId": a.product, "environment": a.environment, "eventId": eventID, "recordedAt": receipt.RecordedAt, "payload": base64.RawURLEncoding.EncodeToString(encoded)})
-	digestBytes, _ := hex.DecodeString(digest)
-	inserted, err := tx.ExecContext(ctx, "INSERT INTO heimdall.audit_events(product_id,environment,event_id,payload_digest,recorded_at,event) VALUES($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT DO NOTHING", a.product, a.environment, eventID, digestBytes, receipt.RecordedAt, string(storageEnvelope))
-	if err != nil {
-		return empty, databaseError(ctx)
-	}
-	var storedDigest, storedEvent []byte
-	var recordedAt int64
-	err = tx.QueryRowContext(ctx, "SELECT payload_digest,recorded_at,event FROM heimdall.audit_events WHERE product_id=$1 AND environment=$2 AND event_id=$3", a.product, a.environment, eventID).Scan(&storedDigest, &recordedAt, &storedEvent)
-	if err != nil {
-		return empty, databaseError(ctx)
-	}
-	if hex.EncodeToString(storedDigest) != digest {
-		return empty, contract.ErrConflict
-	}
-	if recordedAt != receipt.RecordedAt {
-		return empty, contract.ErrAuditUnavailable
-	}
-	if _, err = a.decodeStored(storedEvent, eventID, recordedAt, digest); err != nil {
+	if err = a.writePrepared(ctx, tx, prepared, false); err != nil {
 		return empty, err
 	}
-	count, err := inserted.RowsAffected()
-	if err != nil {
-		return empty, contract.ErrUnavailable
-	}
-	if count == 1 {
-		for _, sink := range a.sinks {
-			if _, err = tx.ExecContext(ctx, "INSERT INTO heimdall.audit_deliveries(product_id,environment,event_id,sink_id) VALUES($1,$2,$3,$4)", a.product, a.environment, eventID, sink); err != nil {
-				return empty, databaseError(ctx)
-			}
-		}
-	}
-	if err = finalize(ctx, tx, snapshot); err != nil {
+	if err = finalize(ctx, tx, prepared.snapshot); err != nil {
 		return empty, err
 	}
 	if err = contract.CheckCancellation(ctx); err != nil {
@@ -151,7 +101,7 @@ func (a *Audit) appendFinalized(ctx context.Context, event map[string]any, mutat
 	if err = tx.Commit(); err != nil {
 		return empty, contract.ErrOutcomeUnknown
 	}
-	return receipt, nil
+	return prepared.receipt, nil
 }
 
 // Acknowledge accepts a validated transport receipt for the exact submitted batch.
@@ -382,4 +332,90 @@ func (a *Audit) Quarantine(ctx context.Context, sink, eventID string, expectedAt
 	}
 	result, err := a.deliveryTransition(ctx, "UPDATE heimdall.audit_deliveries SET state='quarantined' WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=$4 AND attempts=$5 AND state IN ('pending','quarantined') RETURNING attempts", args)
 	return result != nil, err
+}
+
+type preparedAudit struct {
+	snapshot map[string]any
+	encoded  []byte
+	receipt  contract.AuditReceipt
+}
+
+func (a *Audit) prepare(event map[string]any) (*preparedAudit, error) {
+	digest, err := contract.AuditDigest(event)
+	if err != nil {
+		return nil, err
+	}
+	encoded, err := json.Marshal(event)
+	if err != nil {
+		return nil, contract.ErrInvalidArgument
+	}
+	var snapshot map[string]any
+	if json.Unmarshal(encoded, &snapshot) != nil {
+		return nil, contract.ErrInvalidArgument
+	}
+	if err = a.validate(snapshot); err != nil {
+		return nil, err
+	}
+	clonedDigest, err := contract.AuditDigest(snapshot)
+	if err != nil || clonedDigest != digest {
+		return nil, contract.ErrInvalidArgument
+	}
+	eventID, ok := snapshot["eventId"].(string)
+	at, number := snapshot["recordedAt"].(float64)
+	if !ok || !valid(eventID, 128) || !number || math.Trunc(at) != at || at < 0 || at > maxSafe || snapshot["productId"] != a.product || snapshot["environment"] != a.environment {
+		return nil, contract.ErrInvalidArgument
+	}
+	receipt := contract.AuditReceipt{ProductID: a.product, Environment: a.environment, EventID: eventID, RecordedAt: int64(at), PayloadDigest: digest}
+
+	return &preparedAudit{snapshot, encoded, receipt}, nil
+}
+func (a *Audit) writePrepared(ctx context.Context, tx *sql.Tx, prepared *preparedAudit, existingOnly bool) error {
+	receipt := prepared.receipt
+	eventID := receipt.EventID
+	digest := receipt.PayloadDigest
+	encoded := prepared.encoded
+	storageEnvelope, _ := json.Marshal(map[string]any{"format": "ha1", "productId": a.product, "environment": a.environment, "eventId": eventID, "recordedAt": receipt.RecordedAt, "payload": base64.RawURLEncoding.EncodeToString(encoded)})
+	digestBytes, _ := hex.DecodeString(digest)
+	var inserted sql.Result
+	var err error
+	if !existingOnly {
+		inserted, err = tx.ExecContext(ctx, "INSERT INTO heimdall.audit_events(product_id,environment,event_id,payload_digest,recorded_at,event) VALUES($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT DO NOTHING", a.product, a.environment, eventID, digestBytes, receipt.RecordedAt, string(storageEnvelope))
+		if err != nil {
+			return databaseError(ctx)
+		}
+	}
+	var storedDigest, storedEvent []byte
+	var recordedAt int64
+	err = tx.QueryRowContext(ctx, "SELECT payload_digest,recorded_at,event FROM heimdall.audit_events WHERE product_id=$1 AND environment=$2 AND event_id=$3", a.product, a.environment, eventID).Scan(&storedDigest, &recordedAt, &storedEvent)
+	if err == sql.ErrNoRows {
+		return contract.ErrAuditUnavailable
+	}
+	if err != nil {
+		return databaseError(ctx)
+	}
+	if hex.EncodeToString(storedDigest) != digest {
+		return contract.ErrConflict
+	}
+	if recordedAt != receipt.RecordedAt {
+		return contract.ErrAuditUnavailable
+	}
+	if _, err = a.decodeStored(storedEvent, eventID, recordedAt, digest); err != nil {
+		return err
+	}
+	count := int64(0)
+	if inserted != nil {
+		count, err = inserted.RowsAffected()
+	}
+	if err != nil {
+		return contract.ErrUnavailable
+	}
+	if count == 1 {
+		for _, sink := range a.sinks {
+			if _, err = tx.ExecContext(ctx, "INSERT INTO heimdall.audit_deliveries(product_id,environment,event_id,sink_id) VALUES($1,$2,$3,$4)", a.product, a.environment, eventID, sink); err != nil {
+				return databaseError(ctx)
+			}
+		}
+	}
+
+	return nil
 }

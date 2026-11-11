@@ -271,3 +271,59 @@ scanner first-row byte-budget refusal is defense against incompatible storage,
 not a branch exercised by that live proof. This port
 remains internal until v2 upgrade/readiness activation. Scheduler, recovery
 administration and capacity/retention policies are still separate requirements.
+
+## Atomic recovery writer
+
+Internal TS `recoverDecision` and Go `RecoverDecision` now accept a proposed
+outcome_unknown authorization terminal, a recovery administration event and an
+inclusive request-time cutoff. Both events are copied and fully validated before
+I/O. The caller must authenticate and authorize the maintenance initiator; event
+validation cannot establish that authority. No historical authorization check or
+remote mutation is executed by this port.
+
+The terminal retains the original decision context/actor and passes the shared
+request/outcome binding validator. Its occurredAt equals recordedAt, representing
+recovery time rather than pretending to know evaluation time. The administration
+event has type heimdall.recovery.completed, outcome succeeded, source sdk, a known
+user/system actor identifying the recovery initiator, the same scope/tenant and
+decisionId, target `{type: "authorization_decision", id: decisionId}` and action
+`authorization.recover`. Its occurred/recorded time equals the terminal time.
+Its requestId belongs to the recovery request; the historical terminal preserves
+the original requestId. Both retain ordinary event schema/semantic restrictions.
+The terminal time must be at least the cutoff; stored requestedAt must be no later
+than it. Too-recent candidates conflict without writes. A cutoff is an eligibility
+policy, not proof an evaluator is dead.
+
+There is exactly one possible administration event ID for a scoped terminal:
+`recovery-` plus lowercase SHA-256 hex over UTF-8 bytes of
+`heimdall.recovery.v1\0{productId}\0{environment}\0{terminalEventId}`.
+The separators are NUL bytes; configured scope/event IDs cannot contain NUL. The
+terminal and administration IDs must differ. This deterministic binding prevents a
+retry from selecting another administration ID or silently changing the initiator.
+The shared fixture pins an independently calculated ID. Retention must treat this
+linked administration event as part of the decision pair; it is not independently
+purgeable while recovery receipt/retry obligations remain. No retention DELETE is
+added here.
+
+The transaction writes/verifies the terminal and original sink deliveries, locks
+and validates the original request/slot, installs recovered only from pending,
+and writes/verifies the administration event and its deliveries. It releases both
+receipts only after COMMIT. Failure in any part rolls back the whole attempt.
+Normal completion and other recoveries use the same slot. A different winner
+returns conflict and leaves no losing event or administration record. An exact
+retry verifies both original payloads and returns both receipts without duplicates.
+A changed administration payload conflicts. If a matching already-recovered slot
+has no administration event, recovery fails audit_unavailable rather than creating
+one retroactively. Imported historical unknown outcomes therefore do not acquire
+fabricated proof of a recovery initiator.
+
+Lost COMMIT returns outcome_unknown; retry the same pair and inspect durable
+receipts, never rerun the old evaluation. The existing audited runners fail closed
+when recovery wins before their normal finalization; no late allow is released.
+This is local result gating, not a fence for previously dispatched remote writes.
+
+`fixtures/audit-recovery-write.json` and
+`tests/integration/audit-recovery-write.py` prove pair validation, normal/recovery
+race orders, competing recoveries, rollback, exact retries, missing-administration
+refusal, cross-language recovery and committed-response loss. Factory selection,
+v2 deployment upgrade/readiness, scheduling, capacity and retention remain open.

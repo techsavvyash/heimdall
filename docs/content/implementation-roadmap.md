@@ -197,3 +197,5 @@ Phase 3 audit backfill: [[evidence/phase-3-audit-backfill]] records bounded two-
 Phase 3 decision writes: [[evidence/phase-3-audit-decision-writes]] records atomic request/terminal binding, competing-result rollback, cross-language completion and audited-runner late-result suppression. Upgrade activation and recovery administration/scanning remain required.
 
 Phase 3 unresolved scans: [[evidence/phase-3-audit-decision-scan]] records bounded pending-request pages, scope/cutoff cursors, corruption refusal and TS/Go live persistence proof. Recovery administration and upgrade activation remain required; pages are not claims or writer fences.
+
+Phase 3 recovery finalization: [[evidence/phase-3-audit-recovery-write]] records atomic unknown-outcome and administration pairs, both normal/recovery race orders, late-allow suppression and commit-loss retries. Explicit upgrade/readiness activation and storage capacity/retention remain required.

@@ -1,3 +1,4 @@
+import { validateRecoveryPair } from "../audit-recovery.js";
 import { sessionChecksum } from "./readiness.js";
 import { bindAuditDecision } from "../audit-decision-binding.js";
 import type { Pool, PoolClient } from "pg";
@@ -422,6 +423,26 @@ WITH selected AS MATERIALIZED (
     signal?: AbortSignal,
   ) {
     if (typeof mutate !== "function") throw new HeimdallError("invalid_argument");
+    const prepared = this.prepare(event);
+    return transaction(
+      this.pool,
+      async (client) => {
+        await mutate(client);
+        const { snapshot, eventId, recordedAt, originalDigest } = prepared;
+        await this.writePrepared(client, prepared);
+        await finalize(client, snapshot);
+        return {
+          productId: this.productId,
+          environment: this.environment,
+          eventId,
+          recordedAt,
+          payloadDigest: originalDigest,
+        };
+      },
+      signal,
+    );
+  }
+  private prepare(event: Record<string, unknown>) {
     // Snapshot before the first await; never let caller mutation change dispatched data.
     const originalDigest = auditDigest(event);
     const encoded = JSON.stringify(event);
@@ -446,47 +467,41 @@ WITH selected AS MATERIALIZED (
       recordedAt,
       payload: Buffer.from(encoded, "utf8").toString("base64url"),
     });
-    return transaction(
-      this.pool,
-      async (client) => {
-        await mutate(client);
-        const parameters = [this.productId, this.environment, eventId];
-        const inserted = await client.query(
+    return { snapshot, eventId, recordedAt, originalDigest, storedEnvelope };
+  }
+  private async writePrepared(
+    client: PoolClient,
+    prepared: ReturnType<PostgresAudit["prepare"]>,
+    existingOnly = false,
+  ) {
+    const { eventId, recordedAt, originalDigest, storedEnvelope } = prepared;
+    const parameters = [this.productId, this.environment, eventId];
+    const inserted = existingOnly
+      ? { rowCount: 0 }
+      : await client.query(
           "INSERT INTO heimdall.audit_events(product_id,environment,event_id,payload_digest,recorded_at,event) VALUES($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT DO NOTHING RETURNING event_id",
           [...parameters, Buffer.from(originalDigest, "hex"), recordedAt, storedEnvelope],
         );
-        const existing = await client.query<{
-          payload_digest: Buffer;
-          recorded_at: string;
-          event: Record<string, unknown>;
-        }>(
-          "SELECT payload_digest,recorded_at::text,event FROM heimdall.audit_events WHERE product_id=$1 AND environment=$2 AND event_id=$3",
-          parameters,
-        );
-        const row = existing.rows[0];
-        if (!row) throw new HeimdallError("audit_unavailable");
-        if (row.payload_digest.toString("hex") !== originalDigest)
-          throw new HeimdallError("conflict");
-        if (row.recorded_at !== String(recordedAt)) throw new HeimdallError("audit_unavailable");
-        this.decodeStored(row.event, eventId, recordedAt, originalDigest);
-        if (inserted.rowCount === 1) {
-          for (const sink of this.sinks)
-            await client.query(
-              "INSERT INTO heimdall.audit_deliveries(product_id,environment,event_id,sink_id) VALUES($1,$2,$3,$4)",
-              [...parameters, sink],
-            );
-        }
-        await finalize(client, snapshot);
-        return {
-          productId: this.productId,
-          environment: this.environment,
-          eventId,
-          recordedAt,
-          payloadDigest: originalDigest,
-        };
-      },
-      signal,
+    const existing = await client.query<{
+      payload_digest: Buffer;
+      recorded_at: string;
+      event: Record<string, unknown>;
+    }>(
+      "SELECT payload_digest,recorded_at::text,event FROM heimdall.audit_events WHERE product_id=$1 AND environment=$2 AND event_id=$3",
+      parameters,
     );
+    const row = existing.rows[0];
+    if (!row) throw new HeimdallError("audit_unavailable");
+    if (row.payload_digest.toString("hex") !== originalDigest) throw new HeimdallError("conflict");
+    if (row.recorded_at !== String(recordedAt)) throw new HeimdallError("audit_unavailable");
+    this.decodeStored(row.event, eventId, recordedAt, originalDigest);
+    if (inserted.rowCount === 1) {
+      for (const sink of this.sinks)
+        await client.query(
+          "INSERT INTO heimdall.audit_deliveries(product_id,environment,event_id,sink_id) VALUES($1,$2,$3,$4)",
+          [...parameters, sink],
+        );
+    }
   }
   // Prepared v2 port: factory/readiness activation is a separate deployment gate.
   async appendDecision(event: Record<string, unknown>, signal?: AbortSignal) {
@@ -500,60 +515,98 @@ WITH selected AS MATERIALIZED (
     return this.appendFinalized(
       event,
       async () => {},
-      async (client, snapshot) => {
-        const scope = [this.productId, this.environment, snapshot.decisionId];
-        if (snapshot.eventType === "heimdall.authorization.requested") {
-          const b = bindAuditDecision(this.productId, this.environment, [snapshot]);
-          await client.query(
-            "INSERT INTO heimdall.audit_decisions(product_id,environment,decision_id,request_event_id,requested_at) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING",
-            [...scope, b.requestEventId, b.requestedAt],
-          );
-          const rows = await client.query(
-            "SELECT request_event_id,requested_at::text FROM heimdall.audit_decisions WHERE product_id=$1 AND environment=$2 AND decision_id=$3 FOR UPDATE",
-            scope,
-          );
-          if (
-            rows.rows.length !== 1 ||
-            rows.rows[0].request_event_id !== b.requestEventId ||
-            rows.rows[0].requested_at !== String(b.requestedAt)
-          )
-            throw new HeimdallError("conflict");
-          return;
-        }
-        const rows = await client.query(
-          "SELECT d.request_event_id,d.requested_at::text,d.resolution,d.terminal_event_id,d.resolved_at::text,e.recorded_at::text,e.payload_digest,e.event FROM heimdall.audit_decisions d JOIN heimdall.audit_events e ON e.product_id=d.product_id AND e.environment=d.environment AND e.event_id=d.request_event_id WHERE d.product_id=$1 AND d.environment=$2 AND d.decision_id=$3 FOR UPDATE OF d",
-          scope,
-        );
-        if (rows.rows.length !== 1) throw new HeimdallError("audit_unavailable");
-        const r = rows.rows[0];
-        const request = this.decodeStored(
-          r.event,
-          r.request_event_id,
-          Number(r.recorded_at),
-          r.payload_digest.toString("hex"),
-        );
-        const b = bindAuditDecision(this.productId, this.environment, [request, snapshot]);
-        if (r.requested_at !== String(b.requestedAt)) throw new HeimdallError("audit_unavailable");
-        if (r.resolution !== "pending") {
-          if (
-            r.resolution !== b.resolution ||
-            r.terminal_event_id !== b.terminalEventId ||
-            r.resolved_at !== String(b.resolvedAt)
-          )
-            throw new HeimdallError("conflict");
-          return;
-        }
-        if (r.terminal_event_id !== null || r.resolved_at !== null)
-          throw new HeimdallError("audit_unavailable");
-        const updated = await client.query(
-          "UPDATE heimdall.audit_decisions SET resolution=$4,terminal_event_id=$5,resolved_at=$6 WHERE product_id=$1 AND environment=$2 AND decision_id=$3 AND resolution='pending'",
-          [...scope, b.resolution, b.terminalEventId, b.resolvedAt],
-        );
-        if (updated.rowCount !== 1) throw new HeimdallError("audit_unavailable");
-      },
+      (client, snapshot) => this.persistDecision(client, snapshot).then(() => {}),
       signal,
     );
   }
+  // Actor authentication and maintenance authorization belong to the caller.
+  async recoverDecision(
+    terminal: Record<string, unknown>,
+    administration: Record<string, unknown>,
+    cutoff: number,
+    signal?: AbortSignal,
+  ) {
+    const completion = this.prepare(terminal),
+      recovery = this.prepare(administration);
+    validateRecoveryPair(completion.snapshot, recovery.snapshot, cutoff);
+    const receipt = await this.appendFinalized(
+      completion.snapshot,
+      async () => {},
+      async (client, snapshot) => {
+        const changed = await this.persistDecision(client, snapshot, cutoff);
+        await this.writePrepared(client, recovery, !changed);
+      },
+      signal,
+    );
+    return {
+      terminal: receipt,
+      administration: {
+        productId: this.productId,
+        environment: this.environment,
+        eventId: recovery.eventId,
+        recordedAt: recovery.recordedAt,
+        payloadDigest: recovery.originalDigest,
+      },
+    };
+  }
+  private async persistDecision(
+    client: PoolClient,
+    snapshot: Record<string, unknown>,
+    cutoff?: number,
+  ) {
+    const scope = [this.productId, this.environment, snapshot.decisionId];
+    if (snapshot.eventType === "heimdall.authorization.requested") {
+      const b = bindAuditDecision(this.productId, this.environment, [snapshot]);
+      await client.query(
+        "INSERT INTO heimdall.audit_decisions(product_id,environment,decision_id,request_event_id,requested_at) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING",
+        [...scope, b.requestEventId, b.requestedAt],
+      );
+      const rows = await client.query(
+        "SELECT request_event_id,requested_at::text FROM heimdall.audit_decisions WHERE product_id=$1 AND environment=$2 AND decision_id=$3 FOR UPDATE",
+        scope,
+      );
+      if (
+        rows.rows.length !== 1 ||
+        rows.rows[0].request_event_id !== b.requestEventId ||
+        rows.rows[0].requested_at !== String(b.requestedAt)
+      )
+        throw new HeimdallError("conflict");
+      return false;
+    }
+    const rows = await client.query(
+      "SELECT d.request_event_id,d.requested_at::text,d.resolution,d.terminal_event_id,d.resolved_at::text,e.recorded_at::text,e.payload_digest,e.event FROM heimdall.audit_decisions d JOIN heimdall.audit_events e ON e.product_id=d.product_id AND e.environment=d.environment AND e.event_id=d.request_event_id WHERE d.product_id=$1 AND d.environment=$2 AND d.decision_id=$3 FOR UPDATE OF d",
+      scope,
+    );
+    if (rows.rows.length !== 1) throw new HeimdallError("audit_unavailable");
+    const r = rows.rows[0];
+    const request = this.decodeStored(
+      r.event,
+      r.request_event_id,
+      Number(r.recorded_at),
+      r.payload_digest.toString("hex"),
+    );
+    const b = bindAuditDecision(this.productId, this.environment, [request, snapshot]);
+    if (cutoff !== undefined && b.requestedAt > cutoff) throw new HeimdallError("conflict");
+    if (r.requested_at !== String(b.requestedAt)) throw new HeimdallError("audit_unavailable");
+    if (r.resolution !== "pending") {
+      if (
+        r.resolution !== b.resolution ||
+        r.terminal_event_id !== b.terminalEventId ||
+        r.resolved_at !== String(b.resolvedAt)
+      )
+        throw new HeimdallError("conflict");
+      return false;
+    }
+    if (r.terminal_event_id !== null || r.resolved_at !== null)
+      throw new HeimdallError("audit_unavailable");
+    const updated = await client.query(
+      "UPDATE heimdall.audit_decisions SET resolution=$4,terminal_event_id=$5,resolved_at=$6 WHERE product_id=$1 AND environment=$2 AND decision_id=$3 AND resolution='pending'",
+      [...scope, b.resolution, b.terminalEventId, b.resolvedAt],
+    );
+    if (updated.rowCount !== 1) throw new HeimdallError("audit_unavailable");
+    return true;
+  }
+
   // batch is the exact submitted batch; receipt has already passed authenticated
   // transport/schema validation. deliveredAt is the local acknowledgement time.
   async acknowledge(
