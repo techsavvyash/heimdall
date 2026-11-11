@@ -117,3 +117,5 @@ Phase 3 pinned-model checkpoint: [[evidence/phase-3-model-binding]] records comp
 Phase 3 audited-decision checkpoint: [[evidence/phase-3-audited-decisions]] records enforced request/evaluation/terminal ordering, receipt verification, cancellation and lost-COMMIT refusal in both SDKs. Public identity/authorization composition and unresolved-decision recovery remain open.
 
 Phase 3 durable-identity checkpoint: [[evidence/phase-3-durable-identity-gate]] connects verified identity status to scoped PostgreSQL denial and revision-safe session invalidation in both SDKs. Public factory/session/audit composition remains open.
+
+Phase 3 configuration checkpoint: [[evidence/phase-3-runtime-configuration]] records bounded configuration/manifest loading, policy validation, detached snapshots and Railway model verification from those snapshots in TS and Go. Public runtime factory composition remains open.

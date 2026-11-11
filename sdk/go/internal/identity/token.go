@@ -13,11 +13,9 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 )
 
 type Config struct{ Issuer, Audience, JWKSURI, Profile string }
@@ -272,42 +270,4 @@ func validKid(kid string) bool {
 }
 
 // encoding/json replaces unpaired surrogate escapes; reject instead of changing identity.
-func validSubjectJSON(raw []byte) bool {
-	if !utf8.Valid(raw) {
-		return false
-	}
-	for i := 0; i < len(raw); i++ {
-		if raw[i] != '\\' {
-			continue
-		}
-		i++
-		if i >= len(raw) {
-			return false
-		}
-		if raw[i] != 'u' {
-			continue
-		}
-		if i+4 >= len(raw) {
-			return false
-		}
-		n, e := strconv.ParseUint(string(raw[i+1:i+5]), 16, 16)
-		if e != nil {
-			return false
-		}
-		i += 4
-		if n >= 0xdc00 && n <= 0xdfff {
-			return false
-		}
-		if n >= 0xd800 && n <= 0xdbff {
-			if i+6 >= len(raw) || string(raw[i+1:i+3]) != "\\u" {
-				return false
-			}
-			low, e := strconv.ParseUint(string(raw[i+3:i+7]), 16, 16)
-			if e != nil || low < 0xdc00 || low > 0xdfff {
-				return false
-			}
-			i += 6
-		}
-	}
-	return true
-}
+func validSubjectJSON(raw []byte) bool { return contract.ValidJSONUnicode(raw) }

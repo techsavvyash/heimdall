@@ -3,6 +3,7 @@ package modelbinding
 import (
 	"context"
 	"encoding/json"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/configuration"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"net/http"
 	"net/http/httptest"
@@ -97,7 +98,27 @@ func TestLiveBinding(t *testing.T) {
 		if f.Name != config.Name {
 			continue
 		}
-		p, e := New(Config{config.URL, config.StoreID, config.ModelID, "production"}, f.Manifest, f.Binding, f.Expected, func(context.Context) (string, error) { return os.Getenv("HEIMDALL_PROBE_OPENFGA_KEY"), nil })
+		data, e := os.ReadFile("../../../../contracts/fixtures/configuration-v1.json")
+		if e != nil {
+			t.Fatal(e)
+		}
+		var base struct{ Config map[string]any }
+		if e = json.Unmarshal(data, &base); e != nil {
+			t.Fatal(e)
+		}
+		base.Config["productId"] = f.Manifest.ProductID
+		base.Config["manifestVersion"] = f.Binding.ManifestVersion
+		base.Config["clientKey"] = f.Binding.ClientKey
+		base.Config["openfga"] = map[string]any{"url": config.URL, "storeId": config.StoreID, "modelId": config.ModelID}
+		configJSON, _ := json.Marshal(base.Config)
+		manifestJSON, _ := json.Marshal(f.Manifest)
+		deployment, e := configuration.Parse(configJSON, manifestJSON)
+		if e != nil {
+			t.Fatal(e)
+		}
+		bound := deployment.Config()
+		binding := contract.Binding{ProductID: bound.ProductID, ManifestVersion: bound.ManifestVersion, ClientKey: bound.ClientKey, TransportProfile: bound.TransportProfile}
+		p, e := New(Config{bound.OpenFGA.URL, bound.OpenFGA.StoreID, bound.OpenFGA.ModelID, "production"}, deployment.Manifest(), binding, deployment.Artifact(), func(context.Context) (string, error) { return os.Getenv("HEIMDALL_PROBE_OPENFGA_KEY"), nil })
 		if e != nil {
 			t.Fatal(e)
 		}

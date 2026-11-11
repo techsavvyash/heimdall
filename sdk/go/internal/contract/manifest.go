@@ -1,23 +1,23 @@
 package contract
 
 type Manifest struct {
-	SchemaVersion int
-	ProductID     string
-	Version       int
+	SchemaVersion int    `json:"schemaVersion"`
+	ProductID     string `json:"productId"`
+	Version       int    `json:"version"`
 	Clients       map[string]struct {
-		RedirectURIs     []string
-		TransportProfile string
-	}
-	Permissions []string
-	Roles       map[string][]string
-	OwnerRole   string
-	Delegation  map[string][]string
+		RedirectURIs     []string `json:"redirectUris"`
+		TransportProfile string   `json:"transportProfile,omitempty"`
+	} `json:"clients"`
+	Permissions []string            `json:"permissions"`
+	Roles       map[string][]string `json:"roles"`
+	OwnerRole   string              `json:"ownerRole"`
+	Delegation  map[string][]string `json:"delegation"`
 }
 type Binding struct {
-	ProductID        string
-	ManifestVersion  int
-	ClientKey        string
-	TransportProfile string
+	ProductID        string `json:"productId"`
+	ManifestVersion  int    `json:"manifestVersion"`
+	ClientKey        string `json:"clientKey"`
+	TransportProfile string `json:"transportProfile,omitempty"`
 }
 
 // ValidateManifestBinding checks cross references after structural validation.

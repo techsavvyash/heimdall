@@ -482,3 +482,9 @@ orchestration, role mutation, model activation, or tuple migration.
 runner's durable ordering, fresh invocation IDs, cancellation finalization budget,
 receipt verification and uncertainty behavior. It requires trusted SDK metadata;
 it does not authenticate actors or implement public authorization by itself.
+
+## Runtime configuration
+
+[runtime-configuration.md](runtime-configuration.md) defines bounded deployment
+loading, structural and semantic policy checks, immutable/detached snapshots,
+and the boundary between locally valid settings and remote readiness.
