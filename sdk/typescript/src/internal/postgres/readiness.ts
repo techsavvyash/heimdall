@@ -36,7 +36,7 @@ export async function checkManagedReadiness(pool: Pool, signal?: AbortSignal): P
 
 // Activated decision-aware protocol. Kept separate from legacy v1 readers.
 export const decisionChecksum = "f7e859c78a6d099ad4a4d35c96e553ba10a53e3ae7e23440237c769efcd50722";
-export const auditSQL = `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'
+const auditSQL = `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'
  AND (SELECT count(*) FROM heimdall.schema_metadata)=1
  AND EXISTS(SELECT 1 FROM heimdall.schema_metadata WHERE singleton AND database_version=2 AND state='ready' AND reader_min=2 AND reader_max=2 AND writer_min=2 AND writer_max=2)
  AND (SELECT count(*) FROM heimdall.migrations)=2
@@ -80,7 +80,7 @@ export async function checkKeyUsageReadiness(pool: Pool, signal?: AbortSignal): 
 }
 
 export const capacityChecksum = "15da3b2fa8a64b285516dc554a9c1cb7268fec5427046722ab9854cc0710e492";
-const capacityPreparationChecksum =
+export const capacityPreparationChecksum =
   "60366da3390b8255dcabc6d1308a4fdfe22f012ee2e7e93a4434afb19c40ab86";
 export const capacitySQL = `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'
  AND (SELECT count(*) FROM heimdall.schema_metadata)=1

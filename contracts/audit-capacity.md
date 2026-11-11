@@ -281,8 +281,7 @@ The operation has a 30-second overall deadline, a 5-second lock timeout and a
 20-second statement timeout. Its full historical scan is not resumable and remains
 unqualified for large histories. External writer drain remains required.
 This primitive is internal. The deployment CLI and readiness policy below now
-expose its storage protocol; public TS/Go runtime composition is still required
-before operators can use this as a supported serving upgrade. Existing public v2
+expose its storage protocol; public TS/Go composition below now requires v3. Legacy v2
 factories reject v3.
 
 ## Deployment CLI and v3 readiness
@@ -311,7 +310,9 @@ base protocol. The shared catalog now records migration 3 as
 `session/0003-capacity.sql`; its preparation extension remains checksum-bound by
 the upgrade receipt. SQL files are immutable.
 
-Public factories still use v2 at this checkpoint. Operators must not activate a
-serving deployment until the public v3 integration and its required runtime grants
-are available. The CLI/status success reports storage compatibility, not release
-readiness or completed integration of the product's serving processes.
+Public factories now require v3 at startup and for each audit append, including
+exact receipt retries. They hold shared deployment admission through COMMIT and
+use the capacity-accounted request/completion path. New ordinary events are also
+charged. Recovery-pair ports remain internal pending maintenance orchestration.
+See core-runtime.md for the runtime grants and public-runtime-v3.py for live proof.
+Storage readiness is not complete product release qualification.

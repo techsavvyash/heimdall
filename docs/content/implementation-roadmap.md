@@ -209,3 +209,7 @@ Phase 3 schema gate: [[evidence/phase-3-audit-upgrade-schema]] records pinned st
 Phase 3 activation: [[evidence/phase-3-audit-activation]] records final history/binding validation, atomic v2 metadata publication, ambiguous-COMMIT retry and TS/Go readiness parity. Public/managed storage wiring and scale qualification remain required before using activated storage in a serving product.
 
 Phase 3 public audit selection: [[evidence/phase-3-public-audit-v2]] records TS/Go factories on activated v2, atomic decision routing, transactional deployment admission, mixed-schema readiness and restricted-role/COMMIT-loss proof. Phase 3 capacity, retention, key-usage and operational qualification remain open.
+
+Phase 3 public capacity: [[evidence/phase-3-public-capacity]] supersedes public v2
+selection with v3 admission, atomic charges/reservations and restricted-role proof.
+Retention, maintenance and operational qualification remain open.

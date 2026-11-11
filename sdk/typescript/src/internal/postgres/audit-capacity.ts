@@ -1,8 +1,14 @@
+import {
+  capacitySQL,
+  sessionChecksum,
+  decisionChecksum,
+  capacityChecksum,
+  capacityPreparationChecksum,
+} from "./readiness.js";
 import type { PoolClient } from "pg";
 import { HeimdallError } from "../errors.js";
 
-// Prepared internal transaction helpers. Deployment must account all history and
-// fence legacy writers before a future public protocol can use this ledger.
+// Internal transaction helpers. Public admission additionally checks activated v3.
 export async function lockAuditCapacity(client: PoolClient) {
   await client.query("SELECT pg_advisory_xact_lock_shared(74162401)");
   const result = await client.query(
@@ -103,4 +109,17 @@ export async function checkAuditReservation(
     [...scope, event.decisionId, request, event.eventId, recoveryId],
   );
   if (result.rows[0]?.valid !== true) throw new HeimdallError("audit_unavailable");
+}
+
+export async function lockRuntimeCapacity(client: PoolClient) {
+  await client.query("SELECT pg_advisory_xact_lock_shared(74162401)");
+  const result = await client.query<{ ready: boolean }>(capacitySQL, [
+    sessionChecksum,
+    decisionChecksum,
+    capacityChecksum,
+    capacityPreparationChecksum,
+  ]);
+  if (result.rows.length !== 1 || result.rows[0]?.ready !== true)
+    throw new HeimdallError("unavailable");
+  await lockAuditCapacity(client);
 }

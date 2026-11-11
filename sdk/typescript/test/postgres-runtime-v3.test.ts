@@ -24,7 +24,7 @@ test("managed v2 readiness preserves pre-aborted cancellation", async () => {
   }
 });
 test.skipIf(!process.env.HEIMDALL_TEST_FACTORY_URL)(
-  "public v2 factory gates writes and persists decision slots",
+  "public v3 factory gates writes and persists decision slots",
   async () => {
     const pool = new Pool({ connectionString: process.env.HEIMDALL_TEST_FACTORY_URL });
     const port = storage(pool, "factory-ts");
@@ -64,11 +64,19 @@ test.skipIf(!process.env.HEIMDALL_TEST_FACTORY_URL)(
       for (const statement of [
         "UPDATE heimdall.schema_metadata SET state='migrating'",
         "DELETE FROM heimdall.audit_decisions",
+        "DELETE FROM heimdall_capacity.event_charges",
+        "DELETE FROM heimdall_capacity.reservations",
+        "UPDATE heimdall_capacity.policy SET event_limit=event_limit+1",
+        "UPDATE heimdall_capacity.upgrade SET event_limit=event_limit+1",
         "UPDATE heimdall.audit_events SET recorded_at=recorded_at",
         "CREATE TABLE heimdall.forbidden(id int)",
       ])
         await expect(pool.query(statement)).rejects.toThrow("permission denied");
-      for (const key of ["HEIMDALL_TEST_FACTORY_V1", "HEIMDALL_TEST_FACTORY_MIGRATING"]) {
+      for (const key of [
+        "HEIMDALL_TEST_FACTORY_V1",
+        "HEIMDALL_TEST_FACTORY_V2",
+        "HEIMDALL_TEST_FACTORY_MIGRATING",
+      ]) {
         const other = new Pool({ connectionString: process.env[key] });
         try {
           const blocked = storage(other, "factory-ts");
@@ -105,10 +113,10 @@ test.skipIf(!process.env.HEIMDALL_TEST_FACTORY_URL)(
   },
   15000,
 );
-test.skipIf(!process.env.HEIMDALL_TEST_FACTORY_ADMIN)(
+test.skipIf(!process.env.HEIMDALL_TEST_MANAGED_V2_ADMIN)(
   "managed readiness observes audit v2 and managed v1 coherently",
   async () => {
-    const pool = new Pool({ connectionString: process.env.HEIMDALL_TEST_FACTORY_ADMIN, max: 1 });
+    const pool = new Pool({ connectionString: process.env.HEIMDALL_TEST_MANAGED_V2_ADMIN, max: 1 });
     const cases = JSON.parse(
       readFileSync(new URL("managed-audit-readiness.json", root), "utf8"),
     ) as { name: string; sql: string[]; ready: boolean }[];
@@ -127,7 +135,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_FACTORY_ADMIN)(
         }
       }
       const readonly = new Pool({
-        connectionString: process.env.HEIMDALL_TEST_FACTORY_ADMIN,
+        connectionString: process.env.HEIMDALL_TEST_MANAGED_V2_ADMIN,
         options: "-c default_transaction_read_only=on",
       });
       try {
@@ -141,7 +149,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_FACTORY_ADMIN)(
   },
 );
 test.skipIf(!process.env.HEIMDALL_TEST_FACTORY_LOSS)(
-  "public v2 request COMMIT loss recovers event and slot",
+  "public v3 request COMMIT loss recovers event and slot",
   async () => {
     const faulty = new Pool({ connectionString: process.env.HEIMDALL_TEST_FACTORY_LOSS });
     const direct = new Pool({ connectionString: process.env.HEIMDALL_TEST_FACTORY_URL });

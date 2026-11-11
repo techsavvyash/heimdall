@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func v2Events(t *testing.T, environment string) []map[string]any {
+func v3Events(t *testing.T, environment string) []map[string]any {
 	t.Helper()
 	raw, e := os.ReadFile("../../../contracts/fixtures/audit-backfill.json")
 	if e != nil {
@@ -26,7 +26,7 @@ func v2Events(t *testing.T, environment string) []map[string]any {
 	}
 	return f.Events
 }
-func v2Storage(t *testing.T, dsn, environment string) (*sql.DB, heimdall.RuntimeStorage) {
+func v3Storage(t *testing.T, dsn, environment string) (*sql.DB, heimdall.RuntimeStorage) {
 	t.Helper()
 	db, e := sql.Open("postgres", dsn)
 	if e != nil {
@@ -38,18 +38,18 @@ func v2Storage(t *testing.T, dsn, environment string) (*sql.DB, heimdall.Runtime
 	}
 	return db, storage
 }
-func TestFactoryV2(t *testing.T) {
+func TestFactoryV3(t *testing.T) {
 	dsn := os.Getenv("HEIMDALL_TEST_FACTORY_URL")
 	if dsn == "" {
 		t.Skip("live PostgreSQL required")
 	}
-	db, storage := v2Storage(t, dsn, "factory-go")
+	db, storage := v3Storage(t, dsn, "factory-go")
 	defer db.Close()
 	ctx := context.Background()
 	if e := storage.Ready(ctx); e != nil {
 		t.Fatal(e)
 	}
-	events := v2Events(t, "factory-go")
+	events := v3Events(t, "factory-go")
 	for _, i := range []int{0, 1, 2, 3, 0, 1} {
 		if _, e := storage.AppendAudit(ctx, events[i]); e != nil {
 			t.Fatal(e)
@@ -59,7 +59,7 @@ func TestFactoryV2(t *testing.T) {
 	if e := db.QueryRow("SELECT count(*) FROM heimdall.audit_decisions WHERE environment='factory-go'").Scan(&count); e != nil || count != 2 {
 		t.Fatal(count, e)
 	}
-	terminal := v2Events(t, "factory-go")[1]
+	terminal := v3Events(t, "factory-go")[1]
 	terminal["eventId"] = "loser"
 	if _, e := storage.AppendAudit(ctx, terminal); !errors.Is(e, heimdall.ErrConflict) {
 		t.Fatal(e)
@@ -68,13 +68,13 @@ func TestFactoryV2(t *testing.T) {
 	if _, e := storage.AppendAudit(ctx, terminal); !errors.Is(e, heimdall.ErrInvalidArgument) {
 		t.Fatal(e)
 	}
-	terminal = v2Events(t, "factory-go")[1]
+	terminal = v3Events(t, "factory-go")[1]
 	terminal["eventId"] = "orphan"
 	terminal["decisionId"] = "missing"
 	if _, e := storage.AppendAudit(ctx, terminal); !errors.Is(e, heimdall.ErrAuditUnavailable) {
 		t.Fatal(e)
 	}
-	broken := v2Events(t, "factory-go")[0]
+	broken := v3Events(t, "factory-go")[0]
 	broken["eventId"] = "broken-request"
 	broken["decisionId"] = "broken"
 	if _, e := storage.AppendAudit(ctx, broken); !errors.Is(e, heimdall.ErrUnavailable) {
@@ -83,13 +83,13 @@ func TestFactoryV2(t *testing.T) {
 	if e := db.QueryRow("SELECT count(*) FROM heimdall.audit_events WHERE environment='factory-go'").Scan(&count); e != nil || count != 4 {
 		t.Fatal("failed append leaked", count, e)
 	}
-	for _, statement := range []string{"UPDATE heimdall.schema_metadata SET state='migrating'", "DELETE FROM heimdall.audit_decisions", "UPDATE heimdall.audit_events SET recorded_at=recorded_at", "CREATE TABLE heimdall.forbidden(id int)"} {
+	for _, statement := range []string{"UPDATE heimdall.schema_metadata SET state='migrating'", "DELETE FROM heimdall.audit_decisions", "DELETE FROM heimdall_capacity.event_charges", "DELETE FROM heimdall_capacity.reservations", "UPDATE heimdall_capacity.policy SET event_limit=event_limit+1", "UPDATE heimdall_capacity.upgrade SET event_limit=event_limit+1", "UPDATE heimdall.audit_events SET recorded_at=recorded_at", "CREATE TABLE heimdall.forbidden(id int)"} {
 		if _, e := db.Exec(statement); e == nil {
 			t.Fatal("runtime privilege", statement)
 		}
 	}
-	for _, key := range []string{"HEIMDALL_TEST_FACTORY_V1", "HEIMDALL_TEST_FACTORY_MIGRATING"} {
-		other, port := v2Storage(t, os.Getenv(key), "factory-go")
+	for _, key := range []string{"HEIMDALL_TEST_FACTORY_V1", "HEIMDALL_TEST_FACTORY_V2", "HEIMDALL_TEST_FACTORY_MIGRATING"} {
+		other, port := v3Storage(t, os.Getenv(key), "factory-go")
 		if e := port.Ready(ctx); !errors.Is(e, heimdall.ErrUnavailable) {
 			t.Fatal(e)
 		}
@@ -130,32 +130,32 @@ func TestFactoryV2(t *testing.T) {
 		t.Fatal("pool reuse", e)
 	}
 }
-func TestFactoryV2Peer(t *testing.T) {
+func TestFactoryV3Peer(t *testing.T) {
 	dsn := os.Getenv("HEIMDALL_TEST_FACTORY_URL")
 	if dsn == "" {
 		t.Skip("live PostgreSQL required")
 	}
-	db, storage := v2Storage(t, dsn, "factory-ts")
+	db, storage := v3Storage(t, dsn, "factory-ts")
 	defer db.Close()
-	for _, event := range v2Events(t, "factory-ts") {
+	for _, event := range v3Events(t, "factory-ts") {
 		if _, e := storage.AppendAudit(context.Background(), event); e != nil {
 			t.Fatal(e)
 		}
 	}
 }
-func TestFactoryV2Loss(t *testing.T) {
+func TestFactoryV3Loss(t *testing.T) {
 	dsn := os.Getenv("HEIMDALL_TEST_FACTORY_LOSS")
 	if dsn == "" {
 		t.Skip("commit proxy required")
 	}
-	db, storage := v2Storage(t, dsn, "factory-loss-go")
+	db, storage := v3Storage(t, dsn, "factory-loss-go")
 	defer db.Close()
 	ctx := context.Background()
-	event := v2Events(t, "factory-loss-go")[0]
+	event := v3Events(t, "factory-loss-go")[0]
 	if _, e := storage.AppendAudit(ctx, event); !errors.Is(e, heimdall.ErrOutcomeUnknown) {
 		t.Fatal(e)
 	}
-	direct, port := v2Storage(t, os.Getenv("HEIMDALL_TEST_FACTORY_URL"), "factory-loss-go")
+	direct, port := v3Storage(t, os.Getenv("HEIMDALL_TEST_FACTORY_URL"), "factory-loss-go")
 	defer direct.Close()
 	var n int
 	if e := direct.QueryRow("SELECT count(*) FROM heimdall.audit_decisions WHERE environment='factory-loss-go'").Scan(&n); e != nil || n != 1 {

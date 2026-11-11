@@ -107,15 +107,20 @@ readiness check. Readiness is not an exhaustive privilege audit and does not fen
 later schema or permission changes. Storage operations fail closed if privileges
 or availability subsequently fail. The caller supplies one existing Pool/*sql.DB,
 initializes the immutable session-v1 schema and explicitly prepares/backfills/
-activates audit v2 with deployment commands beforehand. It retains ownership of
-connection limits, TLS configuration and pool shutdown. Unactivated v1 or migrating
+activates audit v2 and then prepares/accounts/activates capacity v3 with deployment commands beforehand. It retains ownership of
+connection limits, TLS configuration and pool shutdown. Unactivated v1, v2 or migrating
 storage is refused by the public factory's readiness and audit append ports.
 No DDL or background delivery runs on construction or verification.
 
 The pool role needs schema USAGE; SELECT on schema_metadata, migrations,
 identity_denials, records, audit_events and audit_deliveries; INSERT and UPDATE on
 identity_denials; DELETE on records; INSERT on audit_events/audit_deliveries; and
-SELECT, INSERT and UPDATE on audit_decisions. It does not need decision DELETE,
+SELECT, INSERT and UPDATE on audit_decisions. Capacity additionally requires USAGE
+on heimdall_capacity; SELECT on policy, upgrade and backfill; SELECT/INSERT on
+event_charges; SELECT/INSERT/UPDATE on reservations; and UPDATE only on the six
+used/reserved counter columns of policy. Triggers derive counters; direct counter
+changes are refused. Do not grant accounting DELETE, receipt writes or limit/state
+updates to runtime. It does not need decision DELETE,
 metadata writes, schema-changing privileges, audit UPDATE/DELETE or session
 INSERT/UPDATE for this bearer-only composition. This is a shared trusted backend
 scope, not database row-level isolation against a hostile product process.
@@ -168,10 +173,10 @@ SIEM delivery, backpressure policy, retention, session orchestration, authorizat
 and managed lifecycle composition remain release work, not implicit guarantees of
 this development factory.
 
-## Activated v2 audit admission
+## Activated v3 audit admission
 
 Public audit append uses a shared deployment advisory transaction lock and checks
-v2 metadata/ledger inside the same transaction before writing. The coordinated
+v3 metadata/ledger and capacity policy inside the same transaction before writing. The coordinated
 deployment commands take that lock exclusively. A factory that previously passed
 startup does not cache audit-write admission: migrating or incompatible state
 rejects even an exact receipt retry, with no new event/slot/outbox writes. Five-second
@@ -180,15 +185,18 @@ coordinates SDK audit writes with deployment; it does not fence identity/session
 writes, direct SQL, old processes or remote requests, so external drain is required.
 
 Authorization requested/completed events use atomic decision-slot persistence.
-Ordinary authentication and other supported SDK events remain event/outbox writes.
+Every new event gets one server-derived capacity charge. Requests also reserve
+the full recovery allowance; completion releases it atomically. Ordinary
+authentication and other supported SDK events also consume capacity. Exhaustion
+returns audit_unavailable and rolls back event/slot/outbox/accounting together.
 The public append port rejects authorization outcome_unknown, which requires the
 separate recovery administration pair. Actor verification and event origin remain
 trusted SDK/product-layer responsibilities; this is not a public permission API.
 
-Managed installations can be initialized against recognized ready audit v1 or v2.
-`--status managed-v2` (internal CheckManagedAuditReadiness/checkManagedAuditReadiness)
-checks audit v2 and managed v1 metadata/ledgers in one primary SQL snapshot.
+Managed installations can be initialized against recognized ready audit v1, v2 or v3.
+`--status managed-v3` (internal CheckManagedCapacityReadiness/checkManagedCapacityReadiness)
+checks audit v3 and managed v1 metadata/ledgers in one primary SQL snapshot.
 Legacy `--status session` and `--status managed` deliberately retain v1 semantics
 for deployment compatibility; they are not the current public factory's readiness.
-Use `--status audit-v2` for the public bearer storage composition. A read-only
+Use `--status audit-v3` for the public bearer storage composition. A read-only
 connection is rejected before migration starts a read/write transaction.

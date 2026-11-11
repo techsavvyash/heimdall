@@ -8,13 +8,15 @@ import (
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 )
 
-// Prepared capacity path. Public composition requires drained historical backfill
-// and a new compatibility protocol; this does not activate a deployment.
+// Internal prepared port used by migration tests; public writes require v3.
 func (a *Audit) AppendCapacity(ctx context.Context, event map[string]any) (contract.AuditReceipt, error) {
+	return a.appendCapacityWith(ctx, event, lockAuditCapacity)
+}
+func (a *Audit) appendCapacityWith(ctx context.Context, event map[string]any, admit func(context.Context, *sql.Tx) error) (contract.AuditReceipt, error) {
 	if event["eventType"] == "heimdall.authorization.completed" && event["outcome"] == "outcome_unknown" {
 		return contract.AuditReceipt{}, contract.ErrInvalidArgument
 	}
-	return a.appendFinalized(ctx, event, lockAuditCapacity, func(ctx context.Context, tx *sql.Tx, snapshot map[string]any, inserted bool) error {
+	return a.appendFinalized(ctx, event, admit, func(ctx context.Context, tx *sql.Tx, snapshot map[string]any, inserted bool) error {
 		request := snapshot["eventType"] == "heimdall.authorization.requested"
 		completion := snapshot["eventType"] == "heimdall.authorization.completed"
 		if request || completion {
@@ -160,4 +162,15 @@ func (a *Audit) checkAuditReservation(ctx context.Context, tx *sql.Tx, event map
 		return contract.ErrAuditUnavailable
 	}
 	return nil
+}
+
+func lockRuntimeCapacity(ctx context.Context, tx *sql.Tx) error {
+	if _, e := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock_shared(74162401)"); e != nil {
+		return databaseError(ctx)
+	}
+	var ready bool
+	if e := tx.QueryRowContext(ctx, capacityReadinessSQL, sessionChecksum, decisionChecksum, capacityUpgradeChecksums[0], capacityUpgradeChecksums[1]).Scan(&ready); e != nil || !ready {
+		return databaseError(ctx)
+	}
+	return lockAuditCapacity(ctx, tx)
 }

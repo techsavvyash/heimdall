@@ -1,11 +1,12 @@
+import { sessionChecksum } from "./readiness.js";
 import {
   lockAuditCapacity,
+  lockRuntimeCapacity,
   chargeAuditEvent,
   reserveAuditDecision,
   resolveAuditCapacity,
   checkAuditReservation,
 } from "./audit-capacity.js";
-import { auditSQL, sessionChecksum, decisionChecksum } from "./readiness.js";
 import { validateRecoveryPair } from "../audit-recovery.js";
 import { bindAuditDecision } from "../audit-decision-binding.js";
 import type { Pool, PoolClient } from "pg";
@@ -411,9 +412,15 @@ WITH selected AS MATERIALIZED (
       return { eventId: row.event_id, attempts: row.attempts, event };
     });
   }
-  // Prepared capacity path, deliberately not wired into the public factory until
-  // drained migration/backfill and a new compatibility protocol are implemented.
+  // Internal prepared port used by migration tests; public writes require v3.
   async appendCapacity(event: Record<string, unknown>, signal?: AbortSignal) {
+    return this.appendCapacityWith(event, lockAuditCapacity, signal);
+  }
+  private async appendCapacityWith(
+    event: Record<string, unknown>,
+    admit: (client: PoolClient) => Promise<void>,
+    signal?: AbortSignal,
+  ) {
     if (
       event?.eventType === "heimdall.authorization.completed" &&
       event.outcome === "outcome_unknown"
@@ -422,7 +429,7 @@ WITH selected AS MATERIALIZED (
     const scope = [this.productId, this.environment];
     return this.appendFinalized(
       event,
-      lockAuditCapacity,
+      admit,
       async (client, snapshot, inserted) => {
         const request = snapshot.eventType === "heimdall.authorization.requested";
         const completion = snapshot.eventType === "heimdall.authorization.completed";
@@ -471,35 +478,9 @@ WITH selected AS MATERIALIZED (
       },
     };
   }
-  // Public v2 writes hold shared deployment admission through COMMIT.
+  // Public writes hold v3 admission and capacity accounting through COMMIT.
   async appendRuntime(event: Record<string, unknown>, signal?: AbortSignal) {
-    if (
-      ["heimdall.authorization.requested", "heimdall.authorization.completed"].includes(
-        String(event?.eventType),
-      ) &&
-      event?.outcome === "outcome_unknown"
-    )
-      throw new HeimdallError("invalid_argument");
-    return this.appendFinalized(
-      event,
-      async (client) => {
-        await client.query("SELECT pg_advisory_xact_lock_shared(74162401)");
-        const result = await client.query<{ ready: boolean }>(auditSQL, [
-          sessionChecksum,
-          decisionChecksum,
-        ]);
-        if (result.rows.length !== 1 || result.rows[0]?.ready !== true)
-          throw new HeimdallError("unavailable");
-      },
-      async (client, snapshot) => {
-        if (
-          snapshot.eventType === "heimdall.authorization.requested" ||
-          snapshot.eventType === "heimdall.authorization.completed"
-        )
-          await this.persistDecision(client, snapshot);
-      },
-      signal,
-    );
+    return this.appendCapacityWith(event, lockRuntimeCapacity, signal);
   }
   async append(event: Record<string, unknown>, signal?: AbortSignal) {
     return this.appendWith(event, async () => {}, signal);

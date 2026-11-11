@@ -9,7 +9,7 @@ import (
 )
 
 func TestManagedAuditReadiness(t *testing.T) {
-	dsn := os.Getenv("HEIMDALL_TEST_FACTORY_ADMIN")
+	dsn := os.Getenv("HEIMDALL_TEST_MANAGED_V2_ADMIN")
 	if dsn == "" {
 		t.Skip("live PostgreSQL required")
 	}

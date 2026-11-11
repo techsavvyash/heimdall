@@ -4,8 +4,8 @@ date: 2026-11-12
 ---
 
 The shared deployment executable now exposes capacity activation and status.
-Both SDKs have matching internal v3 readiness checks. Public serving composition
-remains the next step; Phase 3 is incomplete.
+Both SDKs have matching internal v3 readiness checks. The subsequent [[phase-3-public-capacity]] checkpoint connects public serving
+composition. Phase 3 remains incomplete.
 
 ```mermaid
 flowchart LR

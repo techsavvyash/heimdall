@@ -51,7 +51,7 @@ func NewStorage(db *sql.DB, options StorageOptions) (heimdall.RuntimeStorage, er
 			if ctx == nil {
 				return heimdall.ErrInvalidArgument
 			}
-			return internal.CheckAuditReadiness(ctx, db)
+			return internal.CheckCapacityReadiness(ctx, db)
 		},
 		Identity: heimdall.IdentityGate{
 			Check: func(ctx context.Context, value heimdall.Identity) (bool, error) {

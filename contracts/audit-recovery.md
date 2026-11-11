@@ -4,7 +4,7 @@ This is the implementation protocol for the existing requirement to reconcile
 unresolved authorization attempts without inventing historical results. The
 prepared `persistence/session/0002.sql` implements its physical decision slot.
 It is registered as session version 2, activated only through the explicit offline
-workflow below. Public SDK storage factories require activated v2 and route authorization audit
+workflow below. Public SDK storage factories now require capacity v3 (see audit-capacity.md) and route authorization audit
 writes through atomic decision-slot persistence. Do not apply this
 file manually to a serving application and claim recovery is enabled.
 
@@ -368,7 +368,7 @@ The command explicitly prints that runtime remains unavailable. It does not
 register scopes, run backfill, publish v2 compatibility or start writers. The v1
 runtime/status checks refuse migrating state; already-running old processes still
 require the external drain. Preparation itself leaves v1 metadata unchanged apart
-from migrating state; public SDK factories require activated ready v2. SQL checksum vectors and live evidence are in
+from migrating state; public SDK factories require activated capacity v3. SQL checksum vectors and live evidence are in
 fixtures/audit-upgrade-prepare.json and tests/integration/audit-upgrade-prepare.py.
 
 ## Deployment scope coordinator
@@ -413,7 +413,7 @@ requirement, not a supported shortcut for custom events.
 Shared scope vectors live in fixtures/audit-upgrade-scopes.json. The live harness
 is tests/integration/audit-upgrade-backfill.py. This deployment orchestration is a
 single Go command for both SDKs; the underlying event-page/checkpoint format is
-implemented in both languages. Public factories require v2; explicit activation/readiness is described below.
+implemented in both languages. Public factories now require capacity v3; explicit activation/readiness is described below.
 
 ## Pinned structural schema gate
 
@@ -500,19 +500,21 @@ pages, not production throughput or arbitrary-scale upgrade time.
 
 Internal TS checkAuditReadiness and Go CheckAuditReadiness require activated v2
 metadata and the exact two-entry ledger in one primary snapshot. Legacy v1
-readiness refuses v2. Public storage factories require v2 and use the transactional
-admission path below. The explicit combined managed-v2 checker observes audit v2
+readiness refuses v2. Public storage factories now require capacity v3; the v2 checker remains for
+deployment compatibility. The explicit combined managed-v2 checker observes audit v2
 and managed v1 together. Capacity, retention and other Phase 3 acceptance remain open.
 Shared cases and live proof: fixtures/audit-activation.json and
 tests/integration/audit-activation.py.
 
 ## Public factory selection
 
-TS createPostgresStorage and Go postgres.NewStorage now require activated audit v2.
-Their audit callback takes the shared deployment advisory lock and rechecks v2
+TS createPostgresStorage and Go postgres.NewStorage now require activated capacity v3.
+Their audit callback takes the shared deployment advisory lock and rechecks v3
 readiness inside the event transaction. Normal authorization requests/completions
 write or verify their decision slot through the existing shared finalizer; ordinary
-events use the same atomic event/outbox writer without a decision slot. Both paths
+events use the same atomic event/outbox writer without a decision slot. Both
+paths charge capacity; requests reserve future recovery capacity and terminal
+completion releases it atomically. Both paths
 use captured, validated event snapshots. Authorization outcome_unknown remains
 invalid here and must use the recovery pair port. Cross-language replay preserves
 original event receipts and sink routing.
@@ -525,8 +527,8 @@ decision DELETE. Startup/readiness does not attest all privileges, and this audi
 admission protocol does not fence unrelated record/identity writes or uncooperative
 processes. External stop/drain requirements remain unchanged.
 
-See core-runtime.md for current grants and mixed audit-v2/managed-v1 readiness.
+See core-runtime.md for current grants and mixed audit-v3/managed-v1 readiness.
 The underlying v1 primitives and deployment compatibility checks remain tested;
-they are not an option to bypass v2 in public factories. Live public-factory proof
-is tests/integration/public-runtime-v2.py; legacy and bearer-runtime regressions
-use separate v1 and activated-v2 databases in postgres-records.py.
+they are not an option to bypass v3 in public factories. Live public-factory proof
+is tests/integration/public-runtime-v3.py; legacy and bearer-runtime regressions
+use separate v1 and activated-v3 databases in postgres-records.py.

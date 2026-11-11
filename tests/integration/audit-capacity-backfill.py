@@ -157,6 +157,9 @@ try:
   ready_env=dict(env,HEIMDALL_TEST_CAPACITY_READY_URL=dsn('cli_activation'))
   go('^TestCapacityReadiness$',ready_env)
   run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-capacity-readiness.test.ts'],env=ready_env)
+  sql("CREATE ROLE public_capacity_runtime; GRANT USAGE ON SCHEMA heimdall,heimdall_capacity TO public_capacity_runtime; GRANT SELECT ON heimdall.schema_metadata,heimdall.migrations,heimdall_capacity.policy,heimdall_capacity.upgrade,heimdall_capacity.backfill TO public_capacity_runtime; GRANT SELECT,INSERT ON heimdall.audit_events,heimdall.audit_deliveries,heimdall_capacity.event_charges TO public_capacity_runtime; GRANT SELECT,INSERT,UPDATE ON heimdall.audit_decisions,heimdall_capacity.reservations TO public_capacity_runtime; GRANT UPDATE(used_events,used_bytes,used_deliveries,reserved_events,reserved_bytes,reserved_deliveries) ON heimdall_capacity.policy TO public_capacity_runtime",'cli_activation')
+  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-public-capacity.test.ts'],env=ready_env)
+  subprocess.run(['go','test','-race','-count=1','.', '-run','^TestPublicCapacity$'],cwd=ROOT/'sdk/go',env=ready_env,check=True)
   # Isolated port test only: no public compatibility activation.
   sql("UPDATE heimdall_capacity.policy SET state='ready'",'normal')
   go('^TestCapacityBackfillPendingRecovery$',dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))

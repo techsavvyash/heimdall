@@ -2,7 +2,7 @@ import type { Pool } from "pg";
 import type { RuntimeStorage } from "./runtime.js";
 import { IdentityRecords } from "./internal/postgres/identity.js";
 import { PostgresAudit } from "./internal/postgres/audit.js";
-import { checkAuditReadiness } from "./internal/postgres/readiness.js";
+import { checkCapacityReadiness } from "./internal/postgres/readiness.js";
 import { validateAuditShape } from "./internal/audit-shape.js";
 import { validateAuditEvent } from "./internal/audit.js";
 
@@ -25,7 +25,7 @@ export function createPostgresStorage(pool: Pool, options: PostgresStorageOption
   return Object.freeze({
     productId,
     environment,
-    ready: (signal: AbortSignal) => checkAuditReadiness(pool, signal),
+    ready: (signal: AbortSignal) => checkCapacityReadiness(pool, signal),
     identity: Object.freeze(identities.identityGate(productId, environment)),
     appendAudit: audit.appendRuntime.bind(audit),
   });
