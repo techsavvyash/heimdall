@@ -20,7 +20,11 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
+  "dependencies": {
+    "pg": "8.23.1"
+  },
   "devDependencies": {
+    "@types/pg": "8.23.1",
     "ajv": "8.20.0",
     "rolldown": "1.2.13",
     "vitest": "5.0.3"

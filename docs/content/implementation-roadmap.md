@@ -87,3 +87,5 @@ SDK tickets cover both languages and shared fixtures unless scoped to the single
 Docker image builds are outside the current delivery gates. Reproducible tests against ZITADEL and OpenFGA are still required, using existing service images or configured endpoints.
 
 See [[design/task-list|Design backlog]], [[design/project-structure|Code ownership]] and [[development-workspace|Workspace checks]] for context.
+
+Phase 3 record-storage checkpoint: [[evidence/phase-3-postgres-records]] records encrypted TS/Go CRUD, concurrent CAS and bidirectional live PostgreSQL interoperability. Session lifecycle and durable audit composition remain open.

@@ -1,0 +1,9 @@
+{
+  "productId": "ledger",
+  "environment": "test",
+  "keyId": "test-key",
+  "keyByte": 7,
+  "expiresAt": 4102444800000,
+  "value": "shared payload: café 日本語",
+  "kind": "session"
+}

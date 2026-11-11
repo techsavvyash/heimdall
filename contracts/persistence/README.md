@@ -51,3 +51,35 @@ Verification: python3 tests/integration/persistence-schema-railway.py
 SSH key. Exact project/environment/service IDs are pinned in the probe. It creates
 and finally drops only its random application database and NOLOGIN runtime test role.
 The probe uses SET ROLE to check privileges, not a production login configuration.
+
+Internal record adapters now share the following v1 payload wrapper inside hr1:
+UTF-8 JSON [expiresAtMillis, unpaddedBase64urlPayload]. Maximum caller payload is
+700000 bytes. The opaque ASCII key is SHA-256 hashed; its lowercase hex digest is
+the RecordCipher recordKey associated-data field, and its raw digest is key_hash.
+Expiry from the decrypted wrapper must exactly match the indexed expiry column.
+This is a storage encoding, not a validated session schema. Key rotation reads old
+key IDs from the configured ring and writes the active key; no background rewrite.
+
+Create reports conflict for an existing scoped key, including an expired row.
+Get returns absent for expired/missing records. CAS requires the exact positive
+int64 decimal revision and an unexpired row; stale/missing/expired returns absent.
+Delete is scoped and idempotent. A record expiring between SQL and decryption also
+returns absent; successful persistence never implies a usable authenticated session.
+There is no automatic retry. A caller cancellation or five-second deadline before
+connection acquisition/dispatch returns cancelled/deadline_exceeded. An interrupted
+or otherwise failed dispatched write is conservatively outcome_unknown (except a
+known unique constraint rejection). Reads fail closed. TS destroys the checked-out
+connection on cancellation; Go uses database/sql context cancellation through pq.
+Neither connection close nor cancellation is a proof that a dispatched write rolled
+back. Pool acquisition remains subject to the driver's own queue lifecycle.
+
+The caller owns the pool, TLS settings, pool sizing/error monitoring and encryption
+key ring. Runtime readiness, credential construction, payload schema validation,
+identity denials, audit transactions and higher-level adapter composition remain
+required. No public SDK export is added at this checkpoint.
+
+Run python3 tests/integration/postgres-records.py with Docker, pnpm and Go on PATH
+for a fresh pinned local database, concurrent CAS, encryption/scope checks,
+cancellation and actual bidirectional TS/Go reads. The disposable port binds only
+127.0.0.1. Live tests skip without HEIMDALL_TEST_DATABASE_URL; the harness runs both
+writer and peer-reader passes. Regular unit tests do not substitute for this proof.
