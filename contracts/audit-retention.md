@@ -350,3 +350,35 @@ unchanged event/outbox/metadata snapshots after both SDK suites. Public append
 integration must call this logic within the compatible atomic write protocol;
 this standalone internal resolver does not itself make a subsequent insert safe
 against a concurrent writer or publish v4.
+
+## Prepared explicit retry obligations
+
+`0004-retention-retry-holds.sql` extends the existing hold ledger with immutable
+purpose: `administrative` (including adopted historical holds) or `retry`. A retry
+obligation is a durable payload hold, identified by the same scoped hold ID and
+bound to an exact event/tenant. It protects the complete decision when placed on
+any member. The two purposes share the existing identity-lock protocol, original
+placement/release audit references, immutable history, foreign keys and one fixed
+8192-byte metadata slot. No duplicate protection table or extra accounting pool
+is introduced. Adoption validates every expanded row against that slot size.
+
+A retry obligation remains active until its explicit release commits. There is no
+TTL, lease expiry, clock-based release or inference from a missing caller process.
+Independent obligations need distinct hold IDs; releasing one does not release
+another. Purpose cannot change, even after release. Exact release retries remain
+no-ops and consume no extra quota. Release at full metadata capacity is possible
+because the row's existing slot covers the transition; it refunds no history.
+
+Retirement's immediate and deferred guards already examine every active hold,
+regardless of purpose. Therefore retry acquisition competes on the same retained
+member lock, prevents retirement of the group, and refuses after payload removal.
+Future eligibility readers must distinguish active administrative holds from
+active retry holds to populate the classifier's held and retry-protected states;
+neither state can be inferred from caller flags. Compact identities continue to
+protect receipt-only retries after all payload obligations are explicitly released.
+
+This preparation does not determine who may acquire/release obligations or prove
+that business/recovery retry obligations have ended. Authorized SDK orchestration
+must validate full administrative events and atomically compose the reference,
+identity and hold transition. The prepared SQL still checks indexed references
+only. Runtime grants, v4 publication and automatic integration remain absent.

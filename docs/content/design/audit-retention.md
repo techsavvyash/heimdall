@@ -6,7 +6,7 @@ date: 2026-11-12
 Retention must reclaim delivered payloads without breaking immutable event IDs,
 receipts or authorization history. The TS and Go **eligibility classifier is
 implemented and fixture-tested**. [[evidence/phase-3-retention-identities]] adds prepared compact storage constraints;
-runtime integration, durable holds and atomic deletion are still required; no purge is enabled by this work.
+prepared holds, metadata quotas and retirement guards now have live SQL proof. Runtime integration and authorized atomic deletion remain required; no purge is enabled.
 
 ## Selection and age
 
@@ -74,10 +74,16 @@ unresolved/retry-protected groups, poisoned delivery, scope isolation, corruptio
 group completeness and safe-integer limits. TypeScript additionally checks the
 default and noninteger inputs. Classification is pure and leaves input unchanged.
 
-A candidate grants no deletion authority. The persistence implementation still
-needs durable holds, compact identities, identity-capacity accounting, atomic
-retirement/audit, compatible migration/backfill, bounded scheduling, and concurrent
-hold/retry/COMMIT-loss tests. Current v3 storage is not sufficient to enable purge.
+A candidate grants no deletion authority. Prepared persistence now includes compact
+identities, holds, metadata quotas and marker-aware inspection. Explicit retry
+obligations use immutable `retry`-purpose holds in that same ledger; see
+[[evidence/phase-3-retry-holds]]. A retry hold protects its whole decision and has
+no lease or time-based expiry. Its explicit audited release must commit before
+retirement; releasing one obligation leaves other obligations active.
+
+Authorized atomic retirement/audit, runtime integration, compatible
+migration/backfill, bounded scheduling and complete lifecycle fault tests remain
+required. Current v3 storage is not sufficient to enable purge.
 The detailed implementation protocol is `contracts/audit-retention.md` in the
 repository. [[audit-contract]] remains the product audit contract, and
 [[evidence/phase-3-readiness-audit]] tracks the incomplete Phase 3 gate.

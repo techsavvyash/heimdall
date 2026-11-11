@@ -275,6 +275,24 @@ try:
   # A hold on the request protects a resolved decision's whole group, not only its target row.
   assert sql("SELECT EXISTS(SELECT 1 FROM heimdall_retention.event_holds h JOIN heimdall_retention.event_identities i USING(product_id,environment,event_id) WHERE h.product_id='ledger' AND h.environment='staging' AND i.decision_id='decision-1' AND h.released_at IS NULL)",hold_db)=='t'
   assert sql("SELECT has_table_privilege('public_capacity_runtime','heimdall_retention.event_holds','INSERT')",hold_db)=='f'
+  retry_fixture=json.loads((ROOT/'contracts/fixtures/audit-retention-retry-holds.json').read_text())
+  retry_sql=(ROOT/'contracts/persistence'/retry_fixture['path']).read_text()
+  assert hashlib.sha256(retry_sql.encode()).hexdigest()==retry_fixture['checksum']
+  sql('BEGIN;'+retry_sql+'ROLLBACK;',hold_db)
+  assert sql("SELECT count(*) FROM information_schema.columns WHERE table_schema='heimdall_retention' AND table_name='event_holds' AND column_name='purpose'",hold_db)=='0'
+  sql(retry_sql,hold_db)
+  assert sql("SELECT bool_and(purpose='administrative') FROM heimdall_retention.event_holds",hold_db)=='t'
+  retry_place=place.replace('placement_event_id)',"placement_event_id,purpose)").replace("1001,'ordinary')","1001,'ordinary','retry')").replace('hold-1','retry-1')
+  sql(retry_place+';'+retry_place.replace('retry-1','retry-2'),hold_db)
+  for statement in [retry_place.replace('retry-1','invalid').replace("'retry'","'unknown'"),"UPDATE heimdall_retention.event_holds SET purpose='retry' WHERE hold_id='hold-1'","UPDATE heimdall_retention.event_holds SET purpose='administrative' WHERE hold_id='retry-1'","DELETE FROM heimdall_retention.event_holds WHERE hold_id='retry-1'"]:
+   reject_hold(statement)
+  retry_release=release.replace('hold-1','retry-1')
+  sql(retry_release,hold_db)
+  retry_snapshot=sql("SELECT jsonb_agg(to_jsonb(h) ORDER BY hold_id) FROM heimdall_retention.event_holds h",hold_db)
+  sql(retry_release,hold_db)
+  assert sql("SELECT jsonb_agg(to_jsonb(h) ORDER BY hold_id) FROM heimdall_retention.event_holds h",hold_db)==retry_snapshot
+  assert sql("SELECT count(*) FROM heimdall_retention.event_holds WHERE purpose='retry' AND released_at IS NULL",hold_db)=='1'
+  reject_hold("UPDATE heimdall_retention.event_holds SET released_at=NULL,release_event_id=NULL WHERE hold_id='retry-1'")
   quota_fixture=json.loads((ROOT/'contracts/fixtures/audit-retention-capacity.json').read_text())
   quota_sql=(ROOT/'contracts/persistence'/quota_fixture['path']).read_text()
   assert hashlib.sha256(quota_sql.encode()).hexdigest()==quota_fixture['checksum']
@@ -293,9 +311,11 @@ try:
   sql("UPDATE heimdall_retention.capacity SET row_limit=used_rows+reserved_rows,byte_limit=(used_rows+reserved_rows)*8192",quota_db)
   before=sql("SELECT used_rows||':'||reserved_rows FROM heimdall_retention.capacity",quota_db)
   reject_quota(place.replace('hold-1','full'))
+  reject_quota(retry_place.replace('retry-1','retry-full'))
   assert sql("SELECT used_rows||':'||reserved_rows FROM heimdall_retention.capacity",quota_db)==before
   # Release consumes its original fixed slot; it must work at a full quota.
   sql(release.replace('hold-1','hold-2'),quota_db)
+  sql(release.replace('hold-1','retry-2'),quota_db)
   assert sql("SELECT used_rows||':'||reserved_rows FROM heimdall_retention.capacity",quota_db)==before
   sql("UPDATE heimdall_retention.capacity SET row_limit=row_limit+1,byte_limit=byte_limit+8192",quota_db)
   def race_hold(hold):
@@ -335,7 +355,10 @@ try:
   for statement in [marker.replace("'tenant-1'","'other'"),marker.replace('2001,1000','2001,1001'),marker.replace("'normal-terminal'","'missing'"),marker.replace("'[\"ordinary\"]'","'[\"z-request\"]'"),"DELETE FROM heimdall.audit_deliveries WHERE product_id='ledger' AND environment='staging' AND event_id='ordinary';"+marker]:reject_marker(statement)
   held="INSERT INTO heimdall_retention.event_holds(product_id,environment,hold_id,event_id,tenant_id,placed_at,placement_event_id) VALUES('ledger','staging','retired-hold','ordinary','tenant-1',2001,'normal-terminal')"
   reject_marker(held+';'+marker)
+  retry_held=held.replace('placement_event_id)', 'placement_event_id,purpose)').replace("2001,'normal-terminal')","2001,'normal-terminal','retry')")
+  reject_marker(retry_held+';'+marker)
   remove="DELETE FROM heimdall.audit_deliveries WHERE product_id='ledger' AND environment='staging' AND event_id='ordinary'; DELETE FROM heimdall_capacity.event_charges WHERE product_id='ledger' AND environment='staging' AND event_id='ordinary'; DELETE FROM heimdall.audit_events WHERE product_id='ledger' AND environment='staging' AND event_id='ordinary'"
+  reject_marker(marker+';'+retry_held+';'+remove)
   reject_marker(marker+';'+held+';'+remove) # Also catch holds placed later in the same transaction.
   sql('BEGIN;'+marker+';'+remove+';COMMIT;',marker_db)
   assert sql("SELECT used_rows FROM heimdall_retention.capacity",marker_db)==str(int(before_marker)+1)
@@ -399,7 +422,7 @@ try:
   decision_retirement=json.loads((ROOT/'contracts/fixtures/retired-decision-inspection.json').read_text())
   decision_db='retired_decisions'
   sql('CREATE DATABASE '+decision_db+' TEMPLATE retention_port_go')
-  sql(hold_sql+quota_sql+"INSERT INTO heimdall_retention.capacity(row_limit,byte_limit) VALUES(1000,8192000);"+marker_sql,decision_db)
+  sql(hold_sql+retry_sql+quota_sql+"INSERT INTO heimdall_retention.capacity(row_limit,byte_limit) VALUES(1000,8192000);"+marker_sql,decision_db)
   sql("UPDATE heimdall_capacity.policy SET event_limit=event_limit+10; UPDATE heimdall_capacity.upgrade SET event_limit=(SELECT event_limit FROM heimdall_capacity.policy)",decision_db)
   go('^TestRetirementReferences$',dict(env,HEIMDALL_TEST_RETIREMENT_REFERENCE_URL=dsn(decision_db)))
   compact_before=sql("SELECT jsonb_build_object('events',(SELECT jsonb_agg(to_jsonb(i) ORDER BY product_id,environment,event_id) FROM heimdall_retention.event_identities i),'decisions',(SELECT jsonb_agg(to_jsonb(d) ORDER BY product_id,environment,decision_id) FROM heimdall_retention.decision_identities d))",decision_db)
@@ -419,28 +442,29 @@ try:
     return "DELETE FROM heimdall.audit_deliveries WHERE "+predicate+"; DELETE FROM heimdall_capacity.event_charges WHERE "+predicate+"; DELETE FROM heimdall.audit_events WHERE "+predicate
    # Each member protects the whole group, including recovery administration.
    for member_index,event_id in enumerate(ids):
-    for winner in ['hold','retirement']:
-     database=f'decision_race_{product}_{member_index}_{winner}'
-     sql('CREATE DATABASE '+database+' TEMPLATE '+decision_db)
-     hold=f"INSERT INTO heimdall_retention.event_holds(product_id,environment,hold_id,event_id,tenant_id,placed_at,placement_event_id) VALUES('{product}','{environment}','group-hold','{event_id}','tenant-1',3001,'retirement-reference')"
-     retire=retirement+';'+detach+remove_members(members)
-     before_used=int(sql('SELECT used_rows FROM heimdall_retention.capacity',database))
-     compact_snapshot="SELECT jsonb_build_object('events',(SELECT jsonb_agg(to_jsonb(i) ORDER BY product_id,environment,event_id) FROM heimdall_retention.event_identities i),'decisions',(SELECT jsonb_agg(to_jsonb(d) ORDER BY product_id,environment,decision_id) FROM heimdall_retention.decision_identities d))"
-     before_identities=sql(compact_snapshot,database)
-     before_deliveries=sql('SELECT count(*) FROM heimdall.audit_deliveries WHERE '+members,database)
-     assert_retirement_race(database,hold if winner=='hold' else retire,retire if winner=='hold' else hold)
-     held_count='1' if winner=='hold' else '0'
-     retained_count=str(scope['members']) if winner=='hold' else '0'
-     assert sql("SELECT count(*) FROM heimdall_retention.event_holds WHERE hold_id='group-hold'",database)==held_count
-     assert sql('SELECT count(*) FROM heimdall.audit_events WHERE '+members,database)==retained_count
-     assert sql('SELECT count(*) FROM heimdall_capacity.event_charges WHERE '+members,database)==retained_count
-     assert sql('SELECT count(*) FROM heimdall.audit_decisions WHERE '+where,database)==held_count
-     assert sql('SELECT count(*) FROM heimdall_capacity.reservations WHERE '+where,database)==held_count
-     assert sql('SELECT count(*) FROM heimdall_retention.retirements WHERE '+where,database)==('0' if winner=='hold' else '1')
-     assert int(sql('SELECT used_rows FROM heimdall_retention.capacity',database))==before_used+1
-     assert sql(compact_snapshot,database)==before_identities
-     assert sql('SELECT count(*) FROM heimdall.audit_deliveries WHERE '+members,database)==(before_deliveries if winner=='hold' else '0')
-     print(f'Whole-decision lock race passed: {product}/{environment} member={event_id} winner={winner}',flush=True)
+    for purpose in ['administrative','retry']:
+     for winner in ['hold','retirement']:
+      database=f'decision_race_{product}_{member_index}_{winner}_{purpose}'
+      sql('CREATE DATABASE '+database+' TEMPLATE '+decision_db)
+      hold=f"INSERT INTO heimdall_retention.event_holds(product_id,environment,hold_id,event_id,tenant_id,placed_at,placement_event_id,purpose) VALUES('{product}','{environment}','group-hold','{event_id}','tenant-1',3001,'retirement-reference','{purpose}')"
+      retire=retirement+';'+detach+remove_members(members)
+      before_used=int(sql('SELECT used_rows FROM heimdall_retention.capacity',database))
+      compact_snapshot="SELECT jsonb_build_object('events',(SELECT jsonb_agg(to_jsonb(i) ORDER BY product_id,environment,event_id) FROM heimdall_retention.event_identities i),'decisions',(SELECT jsonb_agg(to_jsonb(d) ORDER BY product_id,environment,decision_id) FROM heimdall_retention.decision_identities d))"
+      before_identities=sql(compact_snapshot,database)
+      before_deliveries=sql('SELECT count(*) FROM heimdall.audit_deliveries WHERE '+members,database)
+      assert_retirement_race(database,hold if winner=='hold' else retire,retire if winner=='hold' else hold)
+      held_count='1' if winner=='hold' else '0'
+      retained_count=str(scope['members']) if winner=='hold' else '0'
+      assert sql("SELECT count(*) FROM heimdall_retention.event_holds WHERE hold_id='group-hold'",database)==held_count
+      assert sql('SELECT count(*) FROM heimdall.audit_events WHERE '+members,database)==retained_count
+      assert sql('SELECT count(*) FROM heimdall_capacity.event_charges WHERE '+members,database)==retained_count
+      assert sql('SELECT count(*) FROM heimdall.audit_decisions WHERE '+where,database)==held_count
+      assert sql('SELECT count(*) FROM heimdall_capacity.reservations WHERE '+where,database)==held_count
+      assert sql('SELECT count(*) FROM heimdall_retention.retirements WHERE '+where,database)==('0' if winner=='hold' else '1')
+      assert int(sql('SELECT used_rows FROM heimdall_retention.capacity',database))==before_used+1
+      assert sql(compact_snapshot,database)==before_identities
+      assert sql('SELECT count(*) FROM heimdall.audit_deliveries WHERE '+members,database)==(before_deliveries if winner=='hold' else '0')
+      print(f'Whole-decision lock race passed: {product}/{environment} member={event_id} purpose={purpose} winner={winner}',flush=True)
    partial=detach+remove_members(where+" AND event_id='z-request'")
    failed=subprocess.run(['docker','exec','-i',name,'psql','-U','postgres','-d',decision_db,'-At','-v','ON_ERROR_STOP=1','-v','VERBOSITY=verbose'],input='BEGIN;'+retirement+';'+partial+';COMMIT;',capture_output=True,text=True)
    assert failed.returncode!=0 and '23514' in failed.stderr,failed.stderr
@@ -491,6 +515,6 @@ try:
   sql("UPDATE heimdall_capacity.policy SET state='ready'",'normal')
   go('^TestCapacityBackfillPendingRecovery$',dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
   ts(dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
- print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work','SIGKILL after the first committed candidate resumes in the other language with original initiators and exact event outbox and capacity counts','reciprocal retention COMMIT loss returns unknown and the other SDK retries without changing compact metadata','both SDKs resolve identical retired retries and reject changed payloads without recreating events or deliveries','holds on every completed and recovered decision member exclude whole-group retirement in both observed lock orders','whole completed and recovered decisions retire atomically with preserved compact links and reciprocal SDK inspection','both SDKs distinguish live retired absent and corrupt missing history with primary readiness and cancellation','observed PostgreSQL lock waits serialize hold-first and retirement-first transactions without losing holds or creating late holds','retirement markers require atomic removal and reject held undelivered young or incomplete history','retained metadata quota blocks overflow and reserves recovery slots while independent hold release remains possible','prepared hold ledger preserves independent holds and immutable releases with scoped reference checks','prepared immutable identities bind source routing and decision members and survive privileged test payload removal']}))
+ print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work','SIGKILL after the first committed candidate resumes in the other language with original initiators and exact event outbox and capacity counts','reciprocal retention COMMIT loss returns unknown and the other SDK retries without changing compact metadata','both SDKs resolve identical retired retries and reject changed payloads without recreating events or deliveries','explicit retry holds preserve immutable purpose and independent audited release without expiry or quota refunds','holds on every completed and recovered decision member exclude whole-group retirement in both observed lock orders','whole completed and recovered decisions retire atomically with preserved compact links and reciprocal SDK inspection','both SDKs distinguish live retired absent and corrupt missing history with primary readiness and cancellation','observed PostgreSQL lock waits serialize hold-first and retirement-first transactions without losing holds or creating late holds','retirement markers require atomic removal and reject held undelivered young or incomplete history','retained metadata quota blocks overflow and reserves recovery slots while independent hold release remains possible','prepared hold ledger preserves independent holds and immutable releases with scoped reference checks','prepared immutable identities bind source routing and decision members and survive privileged test payload removal']}))
 finally:
  if created:run(['docker','rm','--force',name],stdout=subprocess.DEVNULL)
