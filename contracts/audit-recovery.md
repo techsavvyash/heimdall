@@ -141,5 +141,50 @@ outcome_unknown, otherwise completed. This classifies recorded history; recovere
 does not independently prove a recovery administration event or worker action.
 The output is a proposed validated binding, not a committed slot or durable
 receipt. Shared positive and negative vectors are in
-`fixtures/audit-decision-binding.json`. Upgrade scanning/checkpointing, database
-reconciliation and result-release enforcement remain unimplemented.
+`fixtures/audit-decision-binding.json`. The bounded deployment backfill below persists these bindings. Global upgrade
+coverage/activation and runtime result-release enforcement remain unimplemented.
+
+## Bounded deployment backfill
+
+Internal TS `PostgresAudit.backfillDecisionPage` and Go
+`Audit.BackfillDecisionPage` implement one transactional page of historical
+binding. They require the prepared decision schema and
+`persistence/session/0002-backfill.sql`, an explicitly registered checkpoint for
+the configured product/environment, and base metadata in version 1/migrating with
+the exact v1 migration ledger checksum. They refuse ready or read-only state.
+These files remain outside the supported migration catalog. No public runtime API
+or automatic migration is introduced.
+
+The deployment must drain writers and retention jobs before registering scopes.
+Every call takes the shared deployment advisory transaction lock, locks its
+checkpoint and uses primary reads. Each page contains at most 100 events and
+4 MiB of stored event JSON, plus bounded routing/JSON framing. The deadline is
+five seconds including connection/lock waits; cancellation before COMMIT rolls
+back the page. A first record exceeding the byte budget is an error, never an
+empty successful page. Each decoded event must pass the caller's full event
+validator and ha1/digest/indexed-binding validation. Products with custom event
+registries must supply the matching validator; the present live proof covers
+reserved built-in events.
+
+Two C-collated event-ID passes avoid assuming event IDs sort chronologically:
+
+1. `requests`: validate every event and create pending bindings for authorization
+   requests. Repeated distinct requests for one decision fail the whole page.
+2. At end of the request pass, persist its event count, reset the cursor and enter
+   `outcomes`. Validate every event again; bind terminals to the original verified
+   request. Orphan, mismatched or multiple terminal events fail the whole page.
+3. At end of outcomes, require the same scanned event count before marking the
+   scope `complete`. Repeating a completed call returns zero processed events.
+
+Slot changes and checkpoint movement commit together. Neither pass changes
+historical events or deliveries, emits replacement events, reruns authorization,
+or activates readiness. A lost COMMIT response returns outcome_unknown; the next
+call resumes from the durable checkpoint. It does not blindly replay the previous
+page. TS and Go can resume one another's checkpoints.
+
+Count agreement detects some source drift; it is not a snapshot or writer fence.
+A completed scope does not establish that all database scopes were registered or
+that omitted/new scopes are safe. The deployment coordinator still must verify
+global coverage and prepared-schema integrity, enforce external quiescence, and
+publish v2 compatibility only after all gates pass. Runtime atomic resolution,
+recovery scanning, capacity policy and late-allow suppression remain required.

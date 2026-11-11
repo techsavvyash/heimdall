@@ -1,3 +1,5 @@
+import { sessionChecksum } from "./readiness.js";
+import { bindAuditDecision } from "../audit-decision-binding.js";
 import type { Pool, PoolClient } from "pg";
 import { auditDigest, validateDeliveryReceipt } from "../audit-receipts.js";
 import { HeimdallError } from "../errors.js";
@@ -60,6 +62,176 @@ export class PostgresAudit {
     } catch {
       throw new HeimdallError("audit_unavailable");
     }
+  }
+  // Deployment-only: old writers must be drained and the explicit upgrade must
+  // install both prepared v2 tables and register every audit scope first.
+  async backfillDecisionPage(limit: number, signal?: AbortSignal) {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100)
+      throw new HeimdallError("invalid_argument");
+    return transaction(
+      this.pool,
+      async (client) => {
+        await client.query("SELECT pg_advisory_xact_lock(74162401)");
+        const gate = await client.query(
+          "SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AND (SELECT count(*) FROM heimdall.schema_metadata)=1 AND EXISTS(SELECT 1 FROM heimdall.schema_metadata WHERE singleton AND database_version=1 AND state='migrating') AND (SELECT count(*) FROM heimdall.migrations)=1 AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=1 AND checksum=$1) AS permitted",
+          [sessionChecksum],
+        );
+        if (gate.rows[0]?.permitted !== true) throw new HeimdallError("unavailable");
+        const progress = await client.query(
+          "SELECT phase,last_event_id,scanned_count::text,expected_count::text FROM heimdall.audit_decision_backfill WHERE product_id=$1 AND environment=$2 FOR UPDATE",
+          [this.productId, this.environment],
+        );
+        if (progress.rows.length !== 1) throw new HeimdallError("unavailable");
+        const p = progress.rows[0]!;
+        const integer = (v: unknown): number => {
+          if (
+            typeof v !== "string" ||
+            !/^(0|[1-9][0-9]{0,15})(?![\s\S])/.test(v) ||
+            !Number.isSafeInteger(Number(v))
+          )
+            throw new HeimdallError("audit_unavailable");
+          return Number(v);
+        };
+        let count = integer(p.scanned_count);
+        let expected = p.expected_count === null ? null : integer(p.expected_count);
+        let phase = p.phase as string;
+        let after = p.last_event_id as string | null;
+        if (
+          !["requests", "outcomes", "complete"].includes(phase) ||
+          (after !== null && !token(after, 128)) ||
+          (phase === "requests") !== (expected === null) ||
+          (phase === "complete" && (after !== null || count !== expected))
+        )
+          throw new HeimdallError("audit_unavailable");
+        if (phase !== "complete" && (after === null) !== (count === 0))
+          throw new HeimdallError("audit_unavailable");
+        if (phase === "complete")
+          return { phase, after, scannedCount: count, expectedCount: expected, processed: 0 };
+        const page = await client.query<{
+          total: number;
+          records: {
+            event_id: string;
+            recorded_at: string;
+            payload_digest: string;
+            event: Record<string, unknown>;
+          }[];
+        }>(
+          `WITH selected AS MATERIALIZED (
+ SELECT event_id,recorded_at,payload_digest,event FROM heimdall.audit_events
+ WHERE product_id=$1 AND environment=$2 AND ($3::text IS NULL OR event_id COLLATE "C">$3 COLLATE "C") ORDER BY event_id COLLATE "C" LIMIT $4
+), sized AS (SELECT *,sum(octet_length(event::text)) OVER(ORDER BY event_id COLLATE "C") AS size FROM selected)
+ SELECT (SELECT count(*)::int FROM selected) AS total,COALESCE(jsonb_agg(jsonb_build_object('event_id',event_id,'recorded_at',recorded_at::text,'payload_digest',encode(payload_digest,'hex'),'event',event) ORDER BY event_id COLLATE "C"),'[]'::jsonb) AS records FROM sized WHERE size<=4194304`,
+          [this.productId, this.environment, after, limit],
+        );
+        if (
+          page.rows.length !== 1 ||
+          !Number.isInteger(page.rows[0]!.total) ||
+          page.rows[0]!.total < 0 ||
+          page.rows[0]!.total > limit ||
+          !Array.isArray(page.rows[0]!.records) ||
+          page.rows[0]!.records.length > page.rows[0]!.total ||
+          (page.rows[0]!.total > 0 && page.rows[0]!.records.length === 0)
+        )
+          throw new HeimdallError("audit_unavailable");
+        const selected = { rows: page.rows[0]!.records };
+        for (const row of selected.rows) {
+          if (
+            !token(row.event_id, 128) ||
+            (after !== null && row.event_id <= after) ||
+            !/^[a-f0-9]{64}(?![\s\S])/.test(row.payload_digest)
+          )
+            throw new HeimdallError("audit_unavailable");
+          const event = this.decodeStored(
+            row.event,
+            row.event_id,
+            integer(row.recorded_at),
+            row.payload_digest,
+          );
+          if (phase === "requests" && event.eventType === "heimdall.authorization.requested") {
+            const b = bindAuditDecision(this.productId, this.environment, [event]);
+            await client.query(
+              "INSERT INTO heimdall.audit_decisions(product_id,environment,decision_id,request_event_id,requested_at) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING",
+              [this.productId, this.environment, b.decisionId, b.requestEventId, b.requestedAt],
+            );
+            const existing = await client.query(
+              "SELECT request_event_id,requested_at::text,resolution FROM heimdall.audit_decisions WHERE product_id=$1 AND environment=$2 AND decision_id=$3",
+              [this.productId, this.environment, b.decisionId],
+            );
+            if (
+              existing.rows.length !== 1 ||
+              existing.rows[0].request_event_id !== b.requestEventId ||
+              existing.rows[0].requested_at !== String(b.requestedAt) ||
+              existing.rows[0].resolution !== "pending"
+            )
+              throw new HeimdallError("audit_unavailable");
+          }
+          if (phase === "outcomes" && event.eventType === "heimdall.authorization.completed") {
+            const existing = await client.query(
+              "SELECT d.request_event_id,d.requested_at::text,d.resolution,d.terminal_event_id,d.resolved_at::text,e.recorded_at::text,e.payload_digest,e.event FROM heimdall.audit_decisions d JOIN heimdall.audit_events e ON e.product_id=d.product_id AND e.environment=d.environment AND e.event_id=d.request_event_id WHERE d.product_id=$1 AND d.environment=$2 AND d.decision_id=$3 FOR UPDATE OF d",
+              [this.productId, this.environment, event.decisionId],
+            );
+            if (existing.rows.length !== 1) throw new HeimdallError("audit_unavailable");
+            const r = existing.rows[0];
+            const request = this.decodeStored(
+              r.event,
+              r.request_event_id,
+              integer(r.recorded_at),
+              r.payload_digest.toString("hex"),
+            );
+            const b = bindAuditDecision(this.productId, this.environment, [request, event]);
+            if (r.requested_at !== String(b.requestedAt))
+              throw new HeimdallError("audit_unavailable");
+            if (r.resolution === "pending") {
+              if (r.terminal_event_id !== null || r.resolved_at !== null)
+                throw new HeimdallError("audit_unavailable");
+              await client.query(
+                "UPDATE heimdall.audit_decisions SET resolution=$4,terminal_event_id=$5,resolved_at=$6 WHERE product_id=$1 AND environment=$2 AND decision_id=$3 AND resolution='pending'",
+                [
+                  this.productId,
+                  this.environment,
+                  b.decisionId,
+                  b.resolution,
+                  b.terminalEventId,
+                  b.resolvedAt,
+                ],
+              );
+            } else if (
+              r.resolution !== b.resolution ||
+              r.terminal_event_id !== b.terminalEventId ||
+              r.resolved_at !== String(b.resolvedAt)
+            )
+              throw new HeimdallError("audit_unavailable");
+          }
+          after = row.event_id;
+        }
+        count += selected.rows.length;
+        if (!Number.isSafeInteger(count) || (phase === "outcomes" && count > expected!))
+          throw new HeimdallError("audit_unavailable");
+        if (selected.rows.length === 0) {
+          after = null;
+          if (phase === "requests") {
+            phase = "outcomes";
+            expected = count;
+            count = 0;
+          } else {
+            if (count !== expected) throw new HeimdallError("audit_unavailable");
+            phase = "complete";
+          }
+        }
+        await client.query(
+          "UPDATE heimdall.audit_decision_backfill SET phase=$3,last_event_id=$4,scanned_count=$5,expected_count=$6 WHERE product_id=$1 AND environment=$2",
+          [this.productId, this.environment, phase, after, count, expected],
+        );
+        return {
+          phase,
+          after,
+          scannedCount: count,
+          expectedCount: expected,
+          processed: selected.rows.length,
+        };
+      },
+      signal,
+    );
   }
   // A read is not a claim/lease. Concurrent workers may select the same records.
   async pending(sink: string, now: number, limit: number, signal?: AbortSignal) {

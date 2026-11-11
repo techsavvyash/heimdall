@@ -14,3 +14,18 @@ test("prepared audit recovery SQL matches its shared proof checksum", () => {
   );
   expect(createHash("sha256").update(sql).digest("hex")).toBe(fixture.checksum);
 });
+
+test("prepared audit backfill SQL matches its shared proof checksums", () => {
+  const fixture = JSON.parse(
+    readFileSync(
+      new URL("../../../contracts/fixtures/audit-backfill.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  for (const item of fixture.prepared) {
+    const sql = readFileSync(
+      new URL(`../../../contracts/persistence/${item.path}`, import.meta.url),
+    );
+    expect(createHash("sha256").update(sql).digest("hex")).toBe(item.checksum);
+  }
+});

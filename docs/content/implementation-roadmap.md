@@ -191,3 +191,5 @@ Phase 3 export foundation: [[evidence/phase-3-managed-export]] records sanitized
 Phase 3 audit recovery foundation: [[evidence/phase-3-audit-recovery-schema]] records the prepared v2 decision slot and PostgreSQL race/rollback proof. Explicit upgrade/backfill and both SDKs’ resolution/recovery paths must pass before activation.
 
 Phase 3 audit upgrade prerequisite: [[evidence/phase-3-audit-decision-binding]] records TS/Go request/outcome correlation and ambiguous-history refusal. Persistent backfill and result-release enforcement remain required.
+
+Phase 3 audit backfill: [[evidence/phase-3-audit-backfill]] records bounded two-pass historical binding, transactional checkpoints, cross-language restart and committed-response-loss proof. Global upgrade coverage/activation and runtime resolution/recovery remain required.
