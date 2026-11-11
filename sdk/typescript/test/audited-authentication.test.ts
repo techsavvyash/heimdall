@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { Ajv2020 } from "ajv/dist/2020.js";
 import { afterEach, expect, test, vi } from "vitest";
 import { AuditedAuthentication } from "../src/internal/audited-authentication.js";
 import { auditDigest } from "../src/internal/audit-receipts.js";
@@ -14,10 +13,6 @@ const cases = read("fixtures/identity-status.json") as {
   user: unknown;
   userStatus: number;
 }[];
-const shape = new Ajv2020({ strict: true }).compile(read("audit-event.schema.json"));
-const validate = (event: Record<string, unknown>) => {
-  if (!shape(event)) throw new Error("invalid");
-};
 const config = {
   issuer: f.issuer,
   audience: f.audience,
@@ -55,7 +50,6 @@ function setup(append: ConstructorParameters<typeof AuditedAuthentication>[3]) {
     async () => "secret",
     { check: async () => false, invalidate: async () => {} },
     append,
-    validate,
     () => f.now,
   );
 }
@@ -167,7 +161,6 @@ test.each(
       now += c.advanceMs;
       return receipt(e);
     },
-    validate,
     () => now,
   );
   const result = await runner.verify(raw, "bearer").then(

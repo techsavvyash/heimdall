@@ -19,7 +19,6 @@ type authTransport func(*http.Request) (*http.Response, error)
 
 func (f authTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 func TestAuditedAuthentication(t *testing.T) {
-	_, validate := fixtures(t)
 	var f struct {
 		Issuer, Audience, Subject string
 		Now                       int64
@@ -55,7 +54,7 @@ func TestAuditedAuthentication(t *testing.T) {
 	defer func() { http.DefaultTransport = old }()
 	config := identity.StatusConfig{Config: identity.Config{Issuer: f.Issuer, Audience: f.Audience, JWKSURI: f.Issuer + "/keys", Profile: "production"}, ProductID: "ledger", Environment: "production", PolicyVersion: "p1", ClientID: "client"}
 	setup := func(append Append) *Authentication {
-		a, e := NewAuthentication(config, func(context.Context) (string, error) { return "secret", nil }, identity.Gate{Check: func(context.Context, identity.Identity) (bool, error) { return false, nil }, Invalidate: func(context.Context, identity.Negative) error { return nil }}, append, validate, func() time.Time { return time.UnixMilli(f.Now) })
+		a, e := NewAuthentication(config, func(context.Context) (string, error) { return "secret", nil }, identity.Gate{Check: func(context.Context, identity.Identity) (bool, error) { return false, nil }, Invalidate: func(context.Context, identity.Negative) error { return nil }}, append, func() time.Time { return time.UnixMilli(f.Now) })
 		if e != nil {
 			t.Fatal(e)
 		}

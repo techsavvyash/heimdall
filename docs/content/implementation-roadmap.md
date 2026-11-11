@@ -123,3 +123,5 @@ Phase 3 configuration checkpoint: [[evidence/phase-3-runtime-configuration]] rec
 Phase 3 discovery checkpoint: [[evidence/phase-3-oidc-discovery]] records bounded issuer-pinned metadata validation, same-origin endpoint and protocol capability gates, and direct TS/Go token verification from discovered JWKS on Railway. Public runtime and audited identity composition remain open.
 
 Phase 3 authentication-audit checkpoint: [[evidence/phase-3-audited-authentication]] connects identity verification to durable completion receipts and post-commit freshness/expiry guards in both SDKs, with PostgreSQL identity/audit composition proof. Public runtime construction remains open.
+
+Phase 3 bundled-validation checkpoint: [[evidence/phase-3-bundled-audit-validation]] removes the external schema-validation callback from audited authentication in both SDKs, with canonical-schema differential checks and PostgreSQL integration proof. Public runtime assembly remains open.

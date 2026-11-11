@@ -1,3 +1,4 @@
+import { validateAuditShape } from "./audit-shape.js";
 import { randomUUID } from "node:crypto";
 import { IdentityVerifier } from "./identity-verifier.js";
 import { bounded, commitAuditEvent, known } from "./audited-decision.js";
@@ -17,13 +18,11 @@ export class AuditedAuthentication {
     secret: Arguments[1],
     gate: Arguments[2],
     private readonly append: Parameters<typeof commitAuditEvent>[1],
-    private readonly validate: Parameters<typeof commitAuditEvent>[2],
     private readonly now: () => number = Date.now,
   ) {
     if (
       ![config.productId, config.environment].every((v) => /^[A-Za-z0-9_-]{1,64}$/.test(v)) ||
-      typeof append !== "function" ||
-      typeof validate !== "function"
+      typeof append !== "function"
     )
       throw new HeimdallError("invalid_argument");
     this.verifier = new IdentityVerifier(config, secret, gate, now);
@@ -78,7 +77,7 @@ export class AuditedAuthentication {
       attributes: {},
       ...(failure ? { reasonCode: failure.code } : {}),
     };
-    await commitAuditEvent(event, this.append, this.validate);
+    await commitAuditEvent(event, this.append, validateAuditShape);
     if (failure) throw failure;
     try {
       checkCancellation(operation);
@@ -107,7 +106,7 @@ export class AuditedAuthentication {
           reasonCode: rejected.code,
         },
         this.append,
-        this.validate,
+        validateAuditShape,
       );
       throw rejected;
     }

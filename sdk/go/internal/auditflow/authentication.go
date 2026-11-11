@@ -18,8 +18,8 @@ type Authentication struct {
 	releaseWindow int64
 }
 
-func NewAuthentication(config identity.StatusConfig, secret func(context.Context) (string, error), gate identity.Gate, append Append, validate func(map[string]any) error, now func() time.Time) (*Authentication, error) {
-	writer, err := New(config.ProductID, config.Environment, append, validate, now)
+func NewAuthentication(config identity.StatusConfig, secret func(context.Context) (string, error), gate identity.Gate, append Append, now func() time.Time) (*Authentication, error) {
+	writer, err := New(config.ProductID, config.Environment, append, contract.ValidateAuditShape, now)
 	if err != nil {
 		return nil, err
 	}

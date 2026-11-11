@@ -57,3 +57,23 @@ compositions. authentication-release.json defines final freshness/expiry vectors
 PostgreSQL tests compose real signed fixture tokens and provider-status fixtures
 with restricted identity and audit database roles, durable session invalidation,
 six authentication events and six outbox rows in each language's isolated scope.
+
+## Bundled event structure
+
+Authentication constructors no longer accept an audit-schema validation callback.
+The SDK validates built-in event structure itself before semantic validation and
+receipt verification. TypeScript validateAuditShape and Go
+contract.ValidateAuditShape match audit-event.schema.json: exact required/optional
+fields, primitive types, integer ranges, Unicode code-point lengths, actor variants,
+target fields, enums and collection limits. Go accepts the decoded-JSON map and
+float64-number representation used by the audit port; it does not coerce arbitrary
+Go structs or integer types. TypeScript also rejects malformed Unicode strings.
+
+The canonical schema and shared schema fixtures remain authoritative. Differential
+tests compare the bundled implementation with a schema validator, and shared
+boundary vectors cover Unicode limits, extra fields and actor/target variants.
+Structural validation does not authenticate an actor, approve a custom event type,
+or replace existing origin, semantic attribute and durable-receipt checks.
+Custom event registration and the generic persistence adapter's validator contract
+are unchanged. No external schema fetch, repository file lookup or new runtime
+dependency is needed by authentication construction.

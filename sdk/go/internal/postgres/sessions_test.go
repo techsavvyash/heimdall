@@ -577,13 +577,13 @@ func TestIdentityGate(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	warm, e := auditflow.NewAuthentication(config, func(context.Context) (string, error) { return "secret", nil }, gate, audit.Append, validateAudit, func() time.Time { return time.UnixMilli(token.Now) })
+	warm, e := auditflow.NewAuthentication(config, func(context.Context) (string, error) { return "secret", nil }, gate, audit.Append, func() time.Time { return time.UnixMilli(token.Now) })
 	if e != nil {
 		t.Fatal(e)
 	}
 	zero := int64(0)
 	config.FreshnessMs = &zero
-	fresh, e := auditflow.NewAuthentication(config, func(context.Context) (string, error) { return "secret", nil }, gate, audit.Append, validateAudit, func() time.Time { return time.UnixMilli(token.Now) })
+	fresh, e := auditflow.NewAuthentication(config, func(context.Context) (string, error) { return "secret", nil }, gate, audit.Append, func() time.Time { return time.UnixMilli(token.Now) })
 	if e != nil {
 		t.Fatal(e)
 	}
