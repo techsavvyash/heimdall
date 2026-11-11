@@ -175,3 +175,28 @@ as an ordinary event. No source objects are mutated or shared mutable routing
 returned. This does not persist rows, acquire locks, authorize deletion or verify
 holds. These builders accept built-in events only; custom event registry integration
 remains part of the mandatory enterprise/custom-audit work before release.
+
+## Prepared PostgreSQL group persistence
+
+Internal PostgreSQL RetainIdentityGroup/retainIdentityGroup now reads and copies
+one explicit group of at most three event IDs. This deployment-only port requires
+drained writers, the pinned prepared identity schema and existing v3 readiness.
+It does not publish v4, grant runtime identity access or enable retirement.
+
+The transaction takes the exclusive deployment advisory lock, current capacity
+admission, and SHARE locks on the source event/delivery/decision/charge/reservation
+tables. Reads then validate each bounded ha1 envelope, indexed identity/time,
+digest, exact envelope byte charge and original charged routing. The complete
+semantic builder verifies the requested resolution and exact tenant scope before
+any insert. Event identities and the linked decision identity commit together;
+SQL triggers compare source bindings and refuse changes to immutable identities.
+An exact retry compares/upserts identical rows; a matching pending identity may
+advance to the current source resolution. A late failure rolls back all inserts.
+
+Both ports use a five-second operation deadline and synchronous commit. Cancellation
+before dispatch returns cancellation; a lost COMMIT response remains outcome_unknown.
+No returned identity authorizes business work. Readiness, catalog registration,
+metadata quota/reservations, checkpointed backfill, publication and runtime
+integration remain required before this prepared port can become an operational
+retention workflow. Its table locks are intentionally an offline mechanism, not
+an acceptable online cleanup strategy. Payloads remain untouched.

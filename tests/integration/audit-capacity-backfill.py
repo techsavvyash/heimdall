@@ -219,6 +219,13 @@ try:
   identity_fixture=json.loads((ROOT/'contracts/fixtures/audit-retention-identities.json').read_text())
   identity_sql=(ROOT/'contracts/persistence'/identity_fixture['path']).read_text()
   assert hashlib.sha256(identity_sql.encode()).hexdigest()==identity_fixture['checksum']
+  for language in ['go','ts']:
+   database='retention_port_'+language
+   sql('CREATE DATABASE '+database+' TEMPLATE cli_activation')
+   sql(identity_sql,database)
+   selected=dict(env,HEIMDALL_TEST_RETENTION_URL=dsn(database))
+   if language=='go':go('^TestPreparedRetention$',selected)
+   else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retention.test.ts'],env=selected)
   identity_db='retention_identities'
   sql('CREATE DATABASE '+identity_db+' TEMPLATE cli_activation')
   sql('BEGIN;'+identity_sql+'ROLLBACK;',identity_db)

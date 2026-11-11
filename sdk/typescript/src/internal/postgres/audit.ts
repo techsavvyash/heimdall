@@ -1,3 +1,4 @@
+import { buildRetentionIdentities } from "../retention-identities.js";
 import {
   sessionChecksum,
   decisionChecksum,
@@ -6,6 +7,7 @@ import {
   capacitySQL,
 } from "./readiness.js";
 import {
+  capacityWrite,
   lockAuditCapacity,
   lockRuntimeCapacity,
   chargeAuditEvent,
@@ -77,6 +79,99 @@ export class PostgresAudit {
     } catch {
       throw new HeimdallError("audit_unavailable");
     }
+  }
+  // Prepared deployment port only: callers drain writers and install the pinned
+  // identity schema. This does not activate retention or provide a runtime API.
+  async retainIdentityGroup(
+    tenantId: string | null,
+    resolution: string,
+    eventIds: string[],
+    signal?: AbortSignal,
+  ) {
+    if (
+      (tenantId !== null && !token(tenantId, 128)) ||
+      !Array.isArray(eventIds) ||
+      eventIds.length < 1 ||
+      eventIds.length > 3 ||
+      eventIds.some((id) => !token(id, 128)) ||
+      new Set(eventIds).size !== eventIds.length
+    )
+      throw new HeimdallError("invalid_argument");
+    const ids = [...eventIds];
+    return transaction(
+      this.pool,
+      async (client) => {
+        await client.query("SELECT pg_advisory_xact_lock(74162401)");
+        await lockRuntimeCapacity(client);
+        await client.query(
+          "LOCK TABLE heimdall.audit_events,heimdall.audit_deliveries,heimdall.audit_decisions,heimdall_capacity.event_charges,heimdall_capacity.reservations IN SHARE MODE",
+        );
+        const sources = [];
+        for (const id of ids) {
+          const result = await client.query(
+            "SELECT e.event,e.recorded_at::text AS at,encode(e.payload_digest,'hex') AS digest,c.delivery_rows AS count,ARRAY(SELECT sink_id FROM heimdall.audit_deliveries d WHERE d.product_id=e.product_id AND d.environment=e.environment AND d.event_id=e.event_id ORDER BY sink_id COLLATE \"C\") AS routing FROM heimdall.audit_events e JOIN heimdall_capacity.event_charges c USING(product_id,environment,event_id) WHERE e.product_id=$1 AND e.environment=$2 AND e.event_id=$3 AND octet_length(e.event::text)<=1500000 AND c.envelope_bytes=octet_length(e.event::text)",
+            [this.productId, this.environment, id],
+          );
+          const row = result.rows[0];
+          if (!row) throw new HeimdallError("audit_unavailable");
+          const event = this.decodeStored(row.event, id, Number(row.at), row.digest);
+          sources.push({
+            event,
+            digest: row.digest,
+            routing: row.routing,
+            deliveryRows: Number(row.count),
+          });
+        }
+        const identities = buildRetentionIdentities(
+          { productId: this.productId, environment: this.environment, tenantId },
+          resolution,
+          sources,
+        );
+        for (const i of identities)
+          await capacityWrite(
+            client,
+            "INSERT INTO heimdall_retention.event_identities(product_id,environment,event_id,tenant_id,recorded_at,payload_digest,kind,decision_id,routing) VALUES($1,$2,$3,$4,$5,decode($6,'hex'),$7,$8,$9::jsonb) ON CONFLICT(product_id,environment,event_id) DO UPDATE SET tenant_id=EXCLUDED.tenant_id,recorded_at=EXCLUDED.recorded_at,payload_digest=EXCLUDED.payload_digest,kind=EXCLUDED.kind,decision_id=EXCLUDED.decision_id,routing=EXCLUDED.routing",
+            [
+              i.productId,
+              i.environment,
+              i.eventId,
+              i.tenantId,
+              i.recordedAt,
+              i.digest,
+              i.kind,
+              i.decisionId,
+              JSON.stringify(i.routing),
+            ],
+          );
+        if (resolution !== "ordinary") {
+          const binding = bindAuditDecision(
+            this.productId,
+            this.environment,
+            sources
+              .map((s) => s.event)
+              .filter((e) => e.eventType !== "heimdall.recovery.completed"),
+          );
+          await capacityWrite(
+            client,
+            "INSERT INTO heimdall_retention.decision_identities(product_id,environment,decision_id,tenant_id,request_event_id,requested_at,resolution,terminal_event_id,recovery_event_id,resolved_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(product_id,environment,decision_id) DO UPDATE SET tenant_id=EXCLUDED.tenant_id,request_event_id=EXCLUDED.request_event_id,requested_at=EXCLUDED.requested_at,resolution=EXCLUDED.resolution,terminal_event_id=EXCLUDED.terminal_event_id,recovery_event_id=EXCLUDED.recovery_event_id,resolved_at=EXCLUDED.resolved_at",
+            [
+              this.productId,
+              this.environment,
+              binding.decisionId,
+              tenantId,
+              binding.requestEventId,
+              binding.requestedAt,
+              binding.resolution,
+              binding.terminalEventId,
+              identities.find((i) => i.kind === "recovery")?.eventId ?? null,
+              binding.resolvedAt,
+            ],
+          );
+        }
+        return identities;
+      },
+      signal,
+    );
   }
   // Deployment-only: old writers must be drained and the explicit upgrade must
   // install both prepared v2 tables and register every audit scope first.

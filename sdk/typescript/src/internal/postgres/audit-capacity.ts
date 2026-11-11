@@ -17,7 +17,7 @@ export async function lockAuditCapacity(client: PoolClient) {
   if (result.rows.length !== 1 || result.rows[0].state !== "ready")
     throw new HeimdallError("audit_unavailable");
 }
-async function capacityWrite(client: PoolClient, sql: string, args: unknown[]) {
+export async function capacityWrite(client: PoolClient, sql: string, args: unknown[]) {
   try {
     return await client.query(sql, args);
   } catch (error) {
