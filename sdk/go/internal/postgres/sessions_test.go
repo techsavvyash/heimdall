@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/santhosh-tekuri/jsonschema/v6"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/auditflow"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/identity"
 	"io"
@@ -566,13 +567,23 @@ func TestIdentityGate(t *testing.T) {
 		t.Fatal(e)
 	}
 	config := identity.StatusConfig{Config: identity.Config{Issuer: token.Issuer, Audience: token.Audience, JWKSURI: token.Issuer + "/keys", Profile: "production"}, ProductID: "gate-go", Environment: "production", PolicyVersion: "p1", ClientID: "client"}
-	warm, e := identity.NewIdentityVerifier(config, func(context.Context) (string, error) { return "secret", nil }, gate, func() time.Time { return time.UnixMilli(token.Now) })
+	auditDB, e := sql.Open("postgres", url+"&options=-c%20role%3Dheimdall_audit_runtime")
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer auditDB.Close()
+	_, validateAudit := auditFixtureValidator(t)
+	audit, e := NewAudit(auditDB, "gate-go", "production", []string{"siem"}, validateAudit)
+	if e != nil {
+		t.Fatal(e)
+	}
+	warm, e := auditflow.NewAuthentication(config, func(context.Context) (string, error) { return "secret", nil }, gate, audit.Append, validateAudit, func() time.Time { return time.UnixMilli(token.Now) })
 	if e != nil {
 		t.Fatal(e)
 	}
 	zero := int64(0)
 	config.FreshnessMs = &zero
-	fresh, e := identity.NewIdentityVerifier(config, func(context.Context) (string, error) { return "secret", nil }, gate, func() time.Time { return time.UnixMilli(token.Now) })
+	fresh, e := auditflow.NewAuthentication(config, func(context.Context) (string, error) { return "secret", nil }, gate, audit.Append, validateAudit, func() time.Time { return time.UnixMilli(token.Now) })
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -680,4 +691,12 @@ func TestIdentityGate(t *testing.T) {
 	if _, e = sessions.CreateSession(ctx, "resurrect", value, expiry); !errors.Is(e, contract.ErrUnauthenticated) {
 		t.Fatal("resurrected identity", e)
 	}
+	var eventCount, deliveryCount int
+	if e = auditDB.QueryRow("SELECT count(*) FROM heimdall.audit_events WHERE product_id='gate-go' AND environment='production'").Scan(&eventCount); e != nil || eventCount != 6 {
+		t.Fatal("authentication events", eventCount, e)
+	}
+	if e = auditDB.QueryRow("SELECT count(*) FROM heimdall.audit_deliveries WHERE product_id='gate-go' AND environment='production'").Scan(&deliveryCount); e != nil || deliveryCount != 6 {
+		t.Fatal("authentication deliveries", deliveryCount, e)
+	}
+
 }

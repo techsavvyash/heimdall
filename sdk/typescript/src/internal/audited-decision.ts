@@ -12,7 +12,7 @@ type Requested = Event & {
   recordedAt: number;
 };
 
-async function bounded<T>(
+export async function bounded<T>(
   action: (signal: AbortSignal) => Promise<T>,
   signal: AbortSignal,
 ): Promise<T> {
@@ -40,7 +40,7 @@ async function bounded<T>(
     if (abort) signal.removeEventListener("abort", abort);
   }
 }
-function known(error: unknown): HeimdallError {
+export function known(error: unknown): HeimdallError {
   return error instanceof HeimdallError
     ? new HeimdallError(error.code)
     : new HeimdallError("unavailable");
@@ -64,24 +64,8 @@ export class AuditedDecision {
     )
       throw new HeimdallError("invalid_argument");
   }
-  private async commit(event: Requested) {
-    try {
-      this.validate(event);
-      validateAuditEvent(
-        event as unknown as Parameters<typeof validateAuditEvent>[0],
-        "sdk",
-        () => false,
-      );
-      const digest = auditDigest(event);
-      // A separate bounded finalization budget permits durable cancellation outcomes.
-      const receipt = await bounded(
-        (signal) => this.append(structuredClone(event), signal),
-        AbortSignal.timeout(5000),
-      );
-      validateAuditReceipt(event, digest, receipt);
-    } catch {
-      throw new HeimdallError("audit_unavailable");
-    }
+  private commit(event: Requested) {
+    return commitAuditEvent(event, this.append, this.validate);
   }
   async run(
     input: Requested,
@@ -148,5 +132,29 @@ export class AuditedDecision {
     if (failure) throw failure;
     checkCancellation(operation);
     return result;
+  }
+}
+
+export async function commitAuditEvent(
+  event: Requested,
+  append: (event: Event, signal: AbortSignal) => Promise<Receipt>,
+  validate: (event: Event) => void,
+) {
+  try {
+    validate(event);
+    validateAuditEvent(
+      event as unknown as Parameters<typeof validateAuditEvent>[0],
+      "sdk",
+      () => false,
+    );
+    const digest = auditDigest(event);
+    // A separate bounded finalization budget permits durable cancellation outcomes.
+    const receipt = await bounded(
+      (signal) => append(structuredClone(event), signal),
+      AbortSignal.timeout(5000),
+    );
+    validateAuditReceipt(event, digest, receipt);
+  } catch {
+    throw new HeimdallError("audit_unavailable");
   }
 }

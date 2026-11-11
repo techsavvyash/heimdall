@@ -493,3 +493,9 @@ and the boundary between locally valid settings and remote readiness.
 
 [oidc-discovery.md](oidc-discovery.md) defines bounded issuer-pinned metadata
 reads, same-origin endpoints, required backend capabilities and cancellation.
+
+## Audited authentication
+
+[audited-authentication.md](audited-authentication.md) defines durable authentication
+completion, verified/unknown actor construction, receipt checks, cancellation and
+post-commit expiry/freshness refusal in both SDKs.

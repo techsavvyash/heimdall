@@ -121,3 +121,5 @@ Phase 3 durable-identity checkpoint: [[evidence/phase-3-durable-identity-gate]] 
 Phase 3 configuration checkpoint: [[evidence/phase-3-runtime-configuration]] records bounded configuration/manifest loading, policy validation, detached snapshots and Railway model verification from those snapshots in TS and Go. Public runtime factory composition remains open.
 
 Phase 3 discovery checkpoint: [[evidence/phase-3-oidc-discovery]] records bounded issuer-pinned metadata validation, same-origin endpoint and protocol capability gates, and direct TS/Go token verification from discovered JWKS on Railway. Public runtime and audited identity composition remain open.
+
+Phase 3 authentication-audit checkpoint: [[evidence/phase-3-audited-authentication]] connects identity verification to durable completion receipts and post-commit freshness/expiry guards in both SDKs, with PostgreSQL identity/audit composition proof. Public runtime construction remains open.

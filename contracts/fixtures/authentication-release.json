@@ -1,0 +1,7 @@
+[
+  { "name": "fresh", "advanceMs": 0, "error": "" },
+  { "name": "within freshness", "advanceMs": 59999, "error": "" },
+  { "name": "freshness boundary", "advanceMs": 60000, "error": "unavailable" },
+  { "name": "clock rollback", "advanceMs": -1, "error": "unavailable" },
+  { "name": "token expiry", "advanceMs": 3600000, "error": "unauthenticated" }
+]

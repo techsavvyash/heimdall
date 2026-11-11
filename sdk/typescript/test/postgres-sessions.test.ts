@@ -1,4 +1,5 @@
-import { IdentityVerifier } from "../src/internal/identity-verifier.js";
+import { AuditedAuthentication } from "../src/internal/audited-authentication.js";
+import { PostgresAudit } from "../src/internal/postgres/audit.js";
 import { sessionIdentityContext } from "../src/internal/identity-context.js";
 import { readFileSync } from "node:fs";
 import { Ajv2020 } from "ajv/dist/2020.js";
@@ -559,16 +560,35 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       policyVersion: "p1",
       clientId: "client",
     };
-    const fresh = new IdentityVerifier(
+    const auditPool = new Pool({
+      connectionString: process.env.HEIMDALL_TEST_DATABASE_URL,
+      options: "-c role=heimdall_audit_runtime",
+    });
+    const auditShape = ajv.compile(read("audit-event.schema.json"));
+    const validateAudit = (event: Record<string, unknown>) => {
+      if (!auditShape(event)) throw new HeimdallError("invalid_argument");
+    };
+    const audit = new PostgresAudit(auditPool, "gate-ts", "production", ["siem"], validateAudit);
+    let committed = 0;
+    const append = async (event: Record<string, unknown>, signal: AbortSignal) => {
+      const receipt = await audit.append(event, signal);
+      committed++;
+      return receipt;
+    };
+    const fresh = new AuditedAuthentication(
       { ...config, freshnessMs: 0 },
       async () => "secret",
       gate,
+      append,
+      validateAudit,
       () => f.now,
     );
-    const warm = new IdentityVerifier(
+    const warm = new AuditedAuthentication(
       config,
       async () => "secret",
       gate,
+      append,
+      validateAudit,
       () => f.now,
     );
     const value = payload("gate-ts", f.subject, {
@@ -637,7 +657,23 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       await expect(sessions.createSession("resurrect", value, expires)).rejects.toThrow(
         "unauthenticated",
       );
+      expect(committed).toBe(6);
+      expect(
+        (
+          await auditPool.query(
+            "SELECT count(*)::int AS n FROM heimdall.audit_events WHERE product_id='gate-ts' AND environment='production'",
+          )
+        ).rows[0].n,
+      ).toBe(6);
+      expect(
+        (
+          await auditPool.query(
+            "SELECT count(*)::int AS n FROM heimdall.audit_deliveries WHERE product_id='gate-ts' AND environment='production'",
+          )
+        ).rows[0].n,
+      ).toBe(6);
     } finally {
+      await auditPool.end();
       vi.unstubAllGlobals();
       await pool.end();
     }
