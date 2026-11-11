@@ -1,0 +1,28 @@
+{
+  "suite": "persistence-schema-v1",
+  "runId": "40af844100aa4a1c97507ef53f83b4b8",
+  "migrationChecksum": "f71db3eece51c3230c27c89a4e154bda18e15de3276b2e7eb0001a3e38c79cc4",
+  "observations": {
+    "tables": [
+      "audit_deliveries",
+      "audit_events",
+      "identity_denials",
+      "migrations",
+      "records",
+      "schema_metadata"
+    ],
+    "scopeIsolation": true,
+    "staleAndExpiredCASRejected": true,
+    "deleteRecreateRevisionAdvanced": true,
+    "concurrentCASWinners": 1,
+    "runtimeDDLAndAuditMutationDenied": true,
+    "auditOutboxRollbackAtomic": true,
+    "committedAuditOutboxVisible": true
+  },
+  "cleanup": "owned application database and runtime role deleted",
+  "limitations": [
+    "database schema proof only; TS/Go adapters and migration runner not implemented",
+    "synthetic encrypted envelopes and audit payloads; application schema/crypto validation remains required",
+    "same cluster as verification services, separate disposable application database"
+  ]
+}

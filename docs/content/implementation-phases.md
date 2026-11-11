@@ -116,3 +116,5 @@ The event-visibility follow-up corrects the older builder-comment interpretation
 [[evidence/phase-3-tenant-model|Phase 3 model compiler checkpoint]] starts shared TS/Go membership-gated model generation and live policy assertions. Delegation/administration and persistence work remain open.
 
 [[evidence/phase-3-delegation|Delegation policy checkpoint]] adds product-defined membership-gated grant relations, owner exclusion and unknown-role rejection in both languages. Runtime mutation coordination remains open.
+
+[[evidence/phase-3-persistence-schema|Shared PostgreSQL foundation]] adds the first immutable session/audit migration and verifies scoped CAS, revision non-reuse, runtime privilege boundaries and atomic audit/outbox rollback in a disposable Railway application database. TS/Go storage operations and the migration runner remain open.
