@@ -143,10 +143,24 @@ try:
   go('^TestCapacityActivationLive$',dict(env,HEIMDALL_TEST_CAPACITY_ACTIVATE_URL=dsn('activate_publish_failure')+'&options=-c%20role%3Dactivation_limited',HEIMDALL_TEST_CAPACITY_ACTIVATE_MODE='reject'))
   assert sql("SELECT state FROM heimdall_capacity.policy",'activate_publish_failure')=='preparing'
   assert sql("SELECT count(*) FROM heimdall.migrations WHERE version=3",'activate_publish_failure')=='0'
+  sql('CREATE DATABASE cli_activation TEMPLATE normal')
+  activate=['--activate-capacity-upgrade','--writers-drained']
+  for bad in [activate[:1],activate+['--batch-size','10'],activate+['--sql-directory',source],activate+['--capacity-events','10'],activate+['--activate-audit-upgrade']]:cli(bad,'cli_activation',2)
+  cli(['--status','audit-v3'],'cli_activation',1)
+  cli(activate,'cli_activation')
+  cli(activate,'cli_activation')
+  cli(['--status','audit-v3'],'cli_activation')
+  cli(['--status','audit-v2'],'cli_activation',1)
+  cli(['--status','managed-v3'],'cli_activation',1)
+  cli(['--initialize-managed-schema','--sql',str(ROOT/'contracts/persistence/managed/0001.sql')],'cli_activation')
+  cli(['--status','managed-v3'],'cli_activation')
+  ready_env=dict(env,HEIMDALL_TEST_CAPACITY_READY_URL=dsn('cli_activation'))
+  go('^TestCapacityReadiness$',ready_env)
+  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-capacity-readiness.test.ts'],env=ready_env)
   # Isolated port test only: no public compatibility activation.
   sql("UPDATE heimdall_capacity.policy SET state='ready'",'normal')
   go('^TestCapacityBackfillPendingRecovery$',dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
   ts(dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
- print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse']}))
+ print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse']}))
 finally:
  if created:run(['docker','rm','--force',name],stdout=subprocess.DEVNULL)

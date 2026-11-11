@@ -78,3 +78,49 @@ export async function checkKeyUsageReadiness(pool: Pool, signal?: AbortSignal): 
   );
   if (rows.length !== 1 || rows[0]?.ready !== true) throw new HeimdallError("unavailable");
 }
+
+export const capacityChecksum = "15da3b2fa8a64b285516dc554a9c1cb7268fec5427046722ab9854cc0710e492";
+const capacityPreparationChecksum =
+  "60366da3390b8255dcabc6d1308a4fdfe22f012ee2e7e93a4434afb19c40ab86";
+export const capacitySQL = `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'
+ AND (SELECT count(*) FROM heimdall.schema_metadata)=1
+ AND EXISTS(SELECT 1 FROM heimdall.schema_metadata WHERE singleton AND database_version=3 AND state='ready' AND reader_min=3 AND reader_max=3 AND writer_min=3 AND writer_max=3)
+ AND (SELECT count(*) FROM heimdall.migrations)=3
+ AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=1 AND checksum=$1)
+ AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=2 AND checksum=$2)
+ AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=3 AND checksum=$3)
+ AND (SELECT count(*) FROM heimdall_capacity.policy)=1
+ AND (SELECT count(*) FROM heimdall_capacity.upgrade)=1
+ AND (SELECT count(*) FROM heimdall_capacity.backfill)=1
+ AND EXISTS(SELECT 1 FROM heimdall_capacity.backfill WHERE singleton AND phase='complete' AND after_product IS NULL AND after_environment IS NULL AND after_id IS NULL)
+ AND EXISTS(SELECT 1 FROM heimdall_capacity.policy p JOIN heimdall_capacity.upgrade u USING(singleton) WHERE p.singleton AND p.state='ready' AND u.capacity_checksum=$3 AND u.preparation_checksum=$4 AND p.event_limit=u.event_limit AND p.byte_limit=u.byte_limit AND p.delivery_limit=u.delivery_limit) AS ready`;
+export async function checkCapacityReadiness(pool: Pool, signal?: AbortSignal): Promise<void> {
+  const rows = await query<{ ready: boolean }>(
+    pool,
+    capacitySQL,
+    [sessionChecksum, decisionChecksum, capacityChecksum, capacityPreparationChecksum],
+    false,
+    signal,
+  );
+  if (rows.length !== 1 || rows[0]?.ready !== true) throw new HeimdallError("unavailable");
+}
+const managedCapacitySQL = `SELECT base.ready AND managed.ready AS ready FROM (${capacitySQL}) base CROSS JOIN (${sql.replaceAll("heimdall.", "heimdall_managed.").replaceAll("$1", "$5")}) managed`;
+export async function checkManagedCapacityReadiness(
+  pool: Pool,
+  signal?: AbortSignal,
+): Promise<void> {
+  const rows = await query<{ ready: boolean }>(
+    pool,
+    managedCapacitySQL,
+    [
+      sessionChecksum,
+      decisionChecksum,
+      capacityChecksum,
+      capacityPreparationChecksum,
+      managedChecksum,
+    ],
+    false,
+    signal,
+  );
+  if (rows.length !== 1 || rows[0]?.ready !== true) throw new HeimdallError("unavailable");
+}

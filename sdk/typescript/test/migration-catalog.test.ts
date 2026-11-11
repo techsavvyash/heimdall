@@ -16,7 +16,11 @@ it.each(["session", "managed", "keys"] as const)(
     expect(catalog[family].length).toBeGreaterThan(0);
     for (const [index, migration] of catalog[family].entries()) {
       expect(migration.version).toBe(index + 1);
-      expect(migration.path).toBe(`${family}/${String(index + 1).padStart(4, "0")}.sql`);
+      expect(migration.path).toBe(
+        family === "session" && migration.version === 3
+          ? "session/0003-capacity.sql"
+          : `${family}/${String(index + 1).padStart(4, "0")}.sql`,
+      );
       const sql = readFileSync(new URL(migration.path, root));
       expect(sql.includes(13)).toBe(false);
       expect(createHash("sha256").update(sql).digest("hex")).toBe(migration.checksum);

@@ -5,7 +5,9 @@ date: 2026-11-12
 
 This checkpoint adds the deployment transaction that activates an accounted audit
 capacity ledger. It is internal, not yet exposed as a supported CLI upgrade or
-composed into public TS/Go storage factories. Phase 3 remains incomplete.
+composed into public TS/Go storage factories. Phase 3 remains incomplete. The subsequent
+[[phase-3-capacity-v3-deployment]] checkpoint adds CLI and readiness support; public
+serving composition remains outstanding.
 
 ## Transaction and data flow
 

@@ -10,6 +10,11 @@
       "version": 2,
       "path": "session/0002.sql",
       "checksum": "f7e859c78a6d099ad4a4d35c96e553ba10a53e3ae7e23440237c769efcd50722"
+    },
+    {
+      "version": 3,
+      "path": "session/0003-capacity.sql",
+      "checksum": "15da3b2fa8a64b285516dc554a9c1cb7268fec5427046722ab9854cc0710e492"
     }
   ],
   "managed": [

@@ -1,0 +1,94 @@
+{
+  "cases": [
+    {
+      "name": "ready",
+      "sql": [],
+      "ready": true,
+      "managedReady": true
+    },
+    {
+      "name": "migrating",
+      "sql": ["UPDATE heimdall.schema_metadata SET state='migrating'"],
+      "ready": false,
+      "managedReady": false
+    },
+    {
+      "name": "old_version",
+      "sql": ["UPDATE heimdall.schema_metadata SET database_version=2"],
+      "ready": false,
+      "managedReady": false
+    },
+    {
+      "name": "reader_window",
+      "sql": ["UPDATE heimdall.schema_metadata SET reader_max=4"],
+      "ready": false,
+      "managedReady": false
+    },
+    {
+      "name": "writer_window",
+      "sql": ["UPDATE heimdall.schema_metadata SET writer_min=2"],
+      "ready": false,
+      "managedReady": false
+    },
+    {
+      "name": "missing_migration",
+      "sql": ["DELETE FROM heimdall.migrations WHERE version=3"],
+      "ready": false,
+      "managedReady": false
+    },
+    {
+      "name": "wrong_checksum",
+      "sql": ["UPDATE heimdall.migrations SET checksum=repeat('0',64) WHERE version=3"],
+      "ready": false,
+      "managedReady": false
+    },
+    {
+      "name": "policy_preparing",
+      "sql": ["UPDATE heimdall_capacity.policy SET state='preparing'"],
+      "ready": false,
+      "managedReady": false
+    },
+    {
+      "name": "incomplete",
+      "sql": ["UPDATE heimdall_capacity.backfill SET phase='decisions'"],
+      "ready": false,
+      "managedReady": false
+    },
+    {
+      "name": "wrong_receipt",
+      "sql": ["UPDATE heimdall_capacity.upgrade SET preparation_checksum=repeat('0',64)"],
+      "ready": false,
+      "managedReady": false
+    },
+    {
+      "name": "changed_limits",
+      "sql": ["UPDATE heimdall_capacity.upgrade SET event_limit=event_limit+1"],
+      "ready": false,
+      "managedReady": false
+    },
+    {
+      "name": "new_history_counts",
+      "sql": ["UPDATE heimdall_capacity.backfill SET scanned_events=0,scanned_decisions=0"],
+      "ready": true,
+      "managedReady": true
+    },
+    {
+      "name": "read_only",
+      "sql": ["SET LOCAL transaction_read_only=on"],
+      "ready": false,
+      "managedReady": false
+    },
+    {
+      "name": "managed_migrating",
+      "sql": ["UPDATE heimdall_managed.schema_metadata SET state='migrating'"],
+      "ready": true,
+      "managedReady": false
+    },
+    {
+      "name": "managed_checksum",
+      "sql": ["UPDATE heimdall_managed.migrations SET checksum=repeat('0',64)"],
+      "ready": true,
+      "managedReady": false
+    }
+  ]
+}

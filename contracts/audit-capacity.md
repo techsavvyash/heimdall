@@ -280,6 +280,38 @@ checkpoint counts to legitimate post-activation writes.
 The operation has a 30-second overall deadline, a 5-second lock timeout and a
 20-second statement timeout. Its full historical scan is not resumable and remains
 unqualified for large histories. External writer drain remains required.
-This primitive is internal: CLI exposure, shared v3 readiness/catalog declarations
-and public TS/Go runtime composition are still required before operators can use
-this as a supported serving upgrade. Existing public v2 factories reject v3.
+This primitive is internal. The deployment CLI and readiness policy below now
+expose its storage protocol; public TS/Go runtime composition is still required
+before operators can use this as a supported serving upgrade. Existing public v2
+factories reject v3.
+
+## Deployment CLI and v3 readiness
+
+`heimdall-migrate --activate-capacity-upgrade --writers-drained` now invokes the
+activation transaction. The explicit drain assertion and single-mode validation
+are required; preparation limits, SQL input and batch flags are rejected in this
+mode. The CLI uses `HEIMDALL_MIGRATION_DATABASE_URL` and the built-in-only validator
+shared by previous upgrade commands. Custom-event registry selection remains a
+separate release dependency.
+
+`--status audit-v3` checks the activated protocol. `--status managed-v3` checks
+both audit-v3 and managed-v1 in one statement snapshot. TypeScript
+`checkCapacityReadiness`/`checkManagedCapacityReadiness` and Go
+`CheckCapacityReadiness`/`CheckManagedCapacityReadiness` share the same policy:
+primary writable database, exact version/reader/writer 3, all three migration
+checksums, one ready policy, matching preparation receipt and limits, and a
+completed cursor-free checkpoint. Historical checkpoint counts are not live
+usage counters and are not compared with current history by startup readiness.
+Missing tables or incompatible state return unavailable; cancellation is retained.
+These startup checks do not replace structural validation at deployment.
+
+Explicit managed-schema initialization accepts the ready v3 base. If a capacity
+namespace exists it must satisfy v3 readiness, rather than falling back to an older
+base protocol. The shared catalog now records migration 3 as
+`session/0003-capacity.sql`; its preparation extension remains checksum-bound by
+the upgrade receipt. SQL files are immutable.
+
+Public factories still use v2 at this checkpoint. Operators must not activate a
+serving deployment until the public v3 integration and its required runtime grants
+are available. The CLI/status success reports storage compatibility, not release
+readiness or completed integration of the product's serving processes.

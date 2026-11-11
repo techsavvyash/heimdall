@@ -68,3 +68,14 @@ var keyUsageReadinessSQL = strings.ReplaceAll(readinessSQL, "heimdall.", "heimda
 func CheckKeyUsageReadiness(ctx context.Context, db *sql.DB) error {
 	return checkReadiness(ctx, db, keyUsageReadinessSQL, keyUsageChecksum)
 }
+
+// CheckCapacityReadiness observes the activated v3 protocol without migrations.
+func CheckCapacityReadiness(ctx context.Context, db *sql.DB) error {
+	return checkReadiness(ctx, db, capacityReadinessSQL, sessionChecksum, decisionChecksum, capacityUpgradeChecksums[0], capacityUpgradeChecksums[1])
+}
+
+var managedCapacityReadinessSQL = "SELECT base.ready AND managed.ready AS ready FROM (" + capacityReadinessSQL + ") base CROSS JOIN (" + strings.ReplaceAll(managedOnlyReadinessSQL, "$1", "$5") + ") managed"
+
+func CheckManagedCapacityReadiness(ctx context.Context, db *sql.DB) error {
+	return checkReadiness(ctx, db, managedCapacityReadinessSQL, sessionChecksum, decisionChecksum, capacityUpgradeChecksums[0], capacityUpgradeChecksums[1], managedChecksum)
+}
