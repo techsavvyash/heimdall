@@ -60,3 +60,11 @@ var managedAuditReadinessSQL = "SELECT base.ready AND managed.ready AS ready FRO
 func CheckManagedAuditReadiness(ctx context.Context, db *sql.DB) error {
 	return checkReadiness(ctx, db, managedAuditReadinessSQL, sessionChecksum, decisionChecksum, managedChecksum)
 }
+
+const keyUsageChecksum = "eb47f12e3a390f450d63fea50e8da47708e5e473c78bb14761b56cfdcc799bef"
+
+var keyUsageReadinessSQL = strings.ReplaceAll(readinessSQL, "heimdall.", "heimdall_keys.")
+
+func CheckKeyUsageReadiness(ctx context.Context, db *sql.DB) error {
+	return checkReadiness(ctx, db, keyUsageReadinessSQL, keyUsageChecksum)
+}

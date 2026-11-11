@@ -65,3 +65,16 @@ export async function checkManagedAuditReadiness(pool: Pool, signal?: AbortSigna
   );
   if (rows.length !== 1 || rows[0]?.ready !== true) throw new HeimdallError("unavailable");
 }
+
+export const keyUsageChecksum = "eb47f12e3a390f450d63fea50e8da47708e5e473c78bb14761b56cfdcc799bef";
+export const keyUsageSQL = sql.replaceAll("heimdall.", "heimdall_keys.");
+export async function checkKeyUsageReadiness(pool: Pool, signal?: AbortSignal): Promise<void> {
+  const rows = await query<{ ready: boolean }>(
+    pool,
+    keyUsageSQL,
+    [keyUsageChecksum],
+    false,
+    signal,
+  );
+  if (rows.length !== 1 || rows[0]?.ready !== true) throw new HeimdallError("unavailable");
+}

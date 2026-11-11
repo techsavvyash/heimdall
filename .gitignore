@@ -22,6 +22,8 @@ go.work.sum
 .env.*
 !.env.example
 keys/
+!contracts/persistence/keys/
+!contracts/persistence/keys/*.sql
 secrets/
 *.pem
 *.key

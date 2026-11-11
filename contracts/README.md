@@ -158,6 +158,35 @@ Go's GCM API requires fewer than 2^32 encryptions per key across all replicas.
 A durable key-usage/rotation policy is a production release requirement; these
 internal primitives do not claim to enforce a deployment-wide counter.
 
+### Record-key usage accounting (implementation in progress)
+
+The independent `heimdall_keys` schema counts encryptions by lowercase SHA-256
+of ASCII `heimdall.record-key-usage.v1` followed by a NUL byte and the 32 raw
+AES key bytes. Product, environment and display key ID are deliberately excluded.
+All replicas and products sharing key material must use the same accounting
+ledger. Separate databases cannot independently establish a global allowance.
+`record-key-usage.json` supplies shared synthetic fingerprint and limit vectors.
+
+A key has an immutable explicit limit from 1 through 4294967295. Its usage can
+only increase, and retirement is irreversible. Runtime credentials receive
+SELECT and UPDATE of `used`, never registration, deletion or policy changes.
+A reservation increments usage under a row lock and commits synchronously on
+the primary before encryption may start. Missing, retired or exhausted keys
+return unavailable. An uncertain COMMIT returns outcome_unknown and must not
+permit encryption. Failed encryption or later record persistence does not
+refund a confirmed reservation. A new attempt consumes another allowance.
+
+Registration must be deployment-owned and restricted to fresh key material;
+unknown historical usage cannot safely start at zero. Restore or clone of an
+older ledger requires fresh encryption keys before writes resume. Retained
+keys may still decrypt existing records. Retirement prevents new reservations,
+not execution under receipts already committed before retirement.
+
+The internal schema, migration, registration, retirement and reservation functions
+have disposable PostgreSQL concurrency and COMMIT-loss tests in both languages.
+Operator tooling, rotation orchestration and composition with every record-encryption
+path remain required before claiming deployment-wide enforcement.
+
 All cryptographic fixtures use public synthetic keys and payloads. The shared
 corpus includes a reference vector and captured outputs from both SDK writers,
 plus tampering, mismatched contexts and noncanonical base64. Both languages read

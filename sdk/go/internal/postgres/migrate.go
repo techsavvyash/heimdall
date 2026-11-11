@@ -14,18 +14,21 @@ import (
 // installation. Deployment-only: never call from runtime constructors. It cannot
 // upgrade or repair an incompatible installation and never runs caller-defined SQL.
 func MigrateSession(ctx context.Context, db *sql.DB, migration []byte) error {
-	return migrate(ctx, db, migration, false)
+	return migrate(ctx, db, migration, "session")
 }
 
 // MigrateManaged requires a ready session/audit installation. It never installs or
 // repairs the prerequisite implicitly and never changes the session ledger.
 func MigrateManaged(ctx context.Context, db *sql.DB, migration []byte) error {
-	return migrate(ctx, db, migration, true)
+	return migrate(ctx, db, migration, "managed")
 }
-func migrate(ctx context.Context, db *sql.DB, migration []byte, managed bool) error {
+func migrate(ctx context.Context, db *sql.DB, migration []byte, family string) error {
 	schema, checksum, readySQL := "heimdall", sessionChecksum, readinessSQL
-	if managed {
+	if family == "managed" {
 		schema, checksum, readySQL = "heimdall_managed", managedChecksum, managedOnlyReadinessSQL
+	}
+	if family == "keys" {
+		schema, checksum, readySQL = "heimdall_keys", keyUsageChecksum, keyUsageReadinessSQL
 	}
 	digest := sha256.Sum256(migration)
 	if db == nil || ctx == nil || hex.EncodeToString(digest[:]) != checksum {
@@ -62,7 +65,7 @@ func migrate(ctx context.Context, db *sql.DB, migration []byte, managed bool) er
 	if err = tx.QueryRowContext(ctx, "SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'").Scan(&primary); err != nil || !primary {
 		return databaseError(ctx)
 	}
-	if managed {
+	if family == "managed" {
 		var baseReady bool
 		if err = tx.QueryRowContext(ctx, "SELECT old.ready OR upgraded.ready FROM ("+readinessSQL+") old CROSS JOIN ("+auditReadinessSQL+") upgraded", sessionChecksum, decisionChecksum).Scan(&baseReady); err != nil || !baseReady {
 			return databaseError(ctx)
@@ -103,4 +106,9 @@ func databaseError(ctx context.Context) error {
 		return err
 	}
 	return contract.ErrUnavailable
+}
+
+// MigrateKeyUsage installs the independent shared key-accounting schema.
+func MigrateKeyUsage(ctx context.Context, db *sql.DB, migration []byte) error {
+	return migrate(ctx, db, migration, "keys")
 }
