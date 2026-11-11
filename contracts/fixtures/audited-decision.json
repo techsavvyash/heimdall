@@ -1,0 +1,11 @@
+[
+  { "name": "allow", "value": true, "outcome": "allow", "error": "" },
+  { "name": "deny", "value": false, "outcome": "deny", "error": "" },
+  { "name": "invalid_argument", "outcome": "invalid", "error": "invalid_argument" },
+  { "name": "unauthenticated", "outcome": "deny", "error": "unauthenticated" },
+  { "name": "forbidden", "outcome": "deny", "error": "forbidden" },
+  { "name": "unavailable", "outcome": "unavailable", "error": "unavailable" },
+  { "name": "deadline_exceeded", "outcome": "unavailable", "error": "deadline_exceeded" },
+  { "name": "cancelled", "outcome": "cancelled", "error": "cancelled" },
+  { "name": "arbitrary error", "outcome": "unavailable", "error": "unavailable" }
+]

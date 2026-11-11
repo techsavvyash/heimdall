@@ -475,3 +475,10 @@ Shared model-binding.json fixtures capture the pinned provider response and
 drift cases. Verified results bind mappings to that exact immutable model ID;
 future checks must send that ID. This guard does not implement runtime check
 orchestration, role mutation, model activation, or tuple migration.
+
+## Audited execution
+
+[audited-decision.md](audited-decision.md) defines the internal read-only decision
+runner's durable ordering, fresh invocation IDs, cancellation finalization budget,
+receipt verification and uncertainty behavior. It requires trusted SDK metadata;
+it does not authenticate actors or implement public authorization by itself.

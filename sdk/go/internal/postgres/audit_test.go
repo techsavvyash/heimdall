@@ -8,9 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"github.com/santhosh-tekuri/jsonschema/v6"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/auditflow"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"os"
 	"reflect"
+	"strconv"
 	"sync"
 	"testing"
 )
@@ -751,4 +753,107 @@ func TestTransitionCommitLoss(t *testing.T) {
 		t.Fatal("transition replay", result, err)
 	}
 	verify()
+}
+
+func TestAuditedDecision(t *testing.T) {
+	url := os.Getenv("HEIMDALL_TEST_DATABASE_URL")
+	if url == "" || os.Getenv("HEIMDALL_TEST_READ_PEER") != "" {
+		t.Skip("live decision")
+	}
+	f, validate := auditFixtureValidator(t)
+	db, e := sql.Open("postgres", url+"&options=-c%20role%3D"+os.Getenv("HEIMDALL_TEST_AUDIT_ROLE"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer db.Close()
+	store, e := NewAudit(db, "ledger", "auditflow-go", []string{"primary"}, validate)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var ids []string
+	runner, e := auditflow.New("ledger", "auditflow-go", func(ctx context.Context, event map[string]any) (contract.AuditReceipt, error) {
+		r, e := store.Append(ctx, event)
+		if e == nil {
+			ids = append(ids, r.EventID)
+		}
+		return r, e
+	}, validate, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	f[0].Event["environment"] = "auditflow-go"
+	for _, allow := range []bool{true, false} {
+		got, e := runner.Run(context.Background(), f[0].Event, func(ctx context.Context) (bool, error) {
+			var count int
+			if e := db.QueryRowContext(ctx, "SELECT count(*) FROM heimdall.audit_events WHERE event_id=$1", ids[len(ids)-1]).Scan(&count); e != nil || count != 1 {
+				t.Error("requested not committed", e)
+			}
+			return allow, nil
+		})
+		if e != nil || got != allow {
+			t.Fatal("decision", e)
+		}
+		var count int
+		if e = db.QueryRow("SELECT count(*) FROM heimdall.audit_deliveries WHERE event_id=$1", ids[len(ids)-1]).Scan(&count); e != nil || count != 1 {
+			t.Fatal("terminal not committed", e)
+		}
+	}
+}
+func TestDecisionCommitLoss(t *testing.T) {
+	url := os.Getenv("HEIMDALL_TEST_DECISION_COMMIT_LOSS")
+	if url == "" {
+		t.Skip("decision commit loss")
+	}
+	f, validate := auditFixtureValidator(t)
+	fault, e := sql.Open("postgres", url)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer fault.Close()
+	direct, e := sql.Open("postgres", os.Getenv("HEIMDALL_TEST_DATABASE_URL"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer direct.Close()
+	normal, e := NewAudit(direct, "ledger", "decision-loss-go", []string{"primary"}, validate)
+	if e != nil {
+		t.Fatal(e)
+	}
+	broken, e := NewAudit(fault, "ledger", "decision-loss-go", []string{"primary"}, validate)
+	if e != nil {
+		t.Fatal(e)
+	}
+	stage, _ := strconv.Atoi(os.Getenv("HEIMDALL_TEST_DECISION_LOSS_STAGE"))
+	events := []map[string]any{}
+	var eventsMu sync.Mutex
+	evaluated := false
+	runner, e := auditflow.New("ledger", "decision-loss-go", func(ctx context.Context, event map[string]any) (contract.AuditReceipt, error) {
+		eventsMu.Lock()
+		events = append(events, event)
+		count := len(events)
+		eventsMu.Unlock()
+		if count == stage {
+			return broken.Append(ctx, event)
+		}
+		return normal.Append(ctx, event)
+	}, validate, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	f[0].Event["environment"] = "decision-loss-go"
+	_, e = runner.Run(context.Background(), f[0].Event, func(context.Context) (bool, error) { evaluated = true; return true, nil })
+	eventsMu.Lock()
+	defer eventsMu.Unlock()
+	if !errors.Is(e, contract.ErrAuditUnavailable) || evaluated != (stage == 2) || len(events) != stage {
+		t.Fatal("released uncertain decision", e)
+	}
+	for _, event := range events {
+		var count int
+		if e = direct.QueryRow("SELECT count(*) FROM heimdall.audit_events WHERE event_id=$1", event["eventId"]).Scan(&count); e != nil || count != 1 {
+			t.Fatal("commit missing", e)
+		}
+		if _, e = normal.Append(context.Background(), event); e != nil {
+			t.Fatal("exact append retry failed", e)
+		}
+	}
 }

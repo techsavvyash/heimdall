@@ -1,3 +1,4 @@
+import { AuditedDecision } from "../src/internal/audited-decision.js";
 import { auditDigest } from "../src/internal/audit-receipts.js";
 import { readFileSync } from "node:fs";
 import { Ajv2020 } from "ajv/dist/2020.js";
@@ -570,4 +571,96 @@ test.skipIf(!process.env.HEIMDALL_TEST_TRANSITION_LOSS)(
     }
   },
   15000,
+);
+
+test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TEST_READ_PEER)(
+  "audited decision uses committed PostgreSQL receipts",
+  async () => {
+    const pool = new Pool({
+      connectionString: process.env.HEIMDALL_TEST_DATABASE_URL,
+      options: `-c role=${process.env.HEIMDALL_TEST_AUDIT_ROLE}`,
+    });
+    try {
+      const store = new PostgresAudit(pool, "ledger", "auditflow-ts", ["primary"], validate);
+      const ids: string[] = [];
+      const runner = new AuditedDecision(
+        "ledger",
+        "auditflow-ts",
+        async (e, s) => {
+          const r = await store.append(e, s);
+          ids.push(r.eventId);
+          return r;
+        },
+        validate,
+      );
+      for (const allowed of [true, false]) {
+        const result = await runner.run(
+          { ...fixtures[0].event, environment: "auditflow-ts" },
+          async () => {
+            const rows = await pool.query(
+              "SELECT event_id FROM heimdall.audit_events WHERE product_id='ledger' AND environment='auditflow-ts' AND event_id=$1",
+              [ids.at(-1)],
+            );
+            expect(rows.rowCount).toBe(1);
+            return allowed;
+          },
+        );
+        expect(result).toBe(allowed);
+        expect(
+          (
+            await pool.query(
+              "SELECT event_id FROM heimdall.audit_deliveries WHERE product_id='ledger' AND environment='auditflow-ts' AND event_id=$1",
+              [ids.at(-1)],
+            )
+          ).rowCount,
+        ).toBe(1);
+      }
+    } finally {
+      await pool.end();
+    }
+  },
+);
+test.skipIf(!process.env.HEIMDALL_TEST_DECISION_COMMIT_LOSS)(
+  "decision audit committed response loss",
+  async () => {
+    const fault = new Pool({ connectionString: process.env.HEIMDALL_TEST_DECISION_COMMIT_LOSS });
+    const direct = new Pool({ connectionString: process.env.HEIMDALL_TEST_DATABASE_URL });
+    const stage = Number(process.env.HEIMDALL_TEST_DECISION_LOSS_STAGE);
+    const events: Record<string, unknown>[] = [];
+    let evaluated = false;
+    try {
+      const normal = new PostgresAudit(direct, "ledger", "decision-loss-ts", ["primary"], validate);
+      const broken = new PostgresAudit(fault, "ledger", "decision-loss-ts", ["primary"], validate);
+      const runner = new AuditedDecision(
+        "ledger",
+        "decision-loss-ts",
+        async (e, s) => {
+          events.push(structuredClone(e));
+          return (events.length === stage ? broken : normal).append(e, s);
+        },
+        validate,
+      );
+      await expect(
+        runner.run({ ...fixtures[0].event, environment: "decision-loss-ts" }, async () => {
+          evaluated = true;
+          return true;
+        }),
+      ).rejects.toThrow("audit_unavailable");
+      expect(evaluated).toBe(stage === 2);
+      expect(events.length).toBe(stage);
+      for (const event of events) {
+        expect(
+          (
+            await direct.query("SELECT event_id FROM heimdall.audit_events WHERE event_id=$1", [
+              event.eventId,
+            ])
+          ).rowCount,
+        ).toBe(1);
+        expect((await normal.append(event)).payloadDigest).toBe(auditDigest(event));
+      }
+    } finally {
+      await fault.end();
+      await direct.end();
+    }
+  },
 );
