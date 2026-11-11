@@ -185,3 +185,5 @@ serialization with managed mutations. Remote rebuild/checkpoint orchestration an
 broader storage operational foundations remain open.
 
 Phase 3 storage maintenance: [[evidence/phase-3-record-cleanup]] records bounded TS/Go expired-record cleanup, concurrency and commit-loss proof. This does not complete audit retention, sanitized export or restore qualification.
+
+Phase 3 export foundation: [[evidence/phase-3-managed-export]] records sanitized, bounded workspace and per-workspace operation pages in both SDKs. Public authorization/audit composition and coordinated exit/restore remain required.

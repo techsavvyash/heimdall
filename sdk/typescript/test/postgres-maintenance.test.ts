@@ -24,6 +24,7 @@ test("record cleanup validates bounds and cancellation without connecting", asyn
   const pool = new Pool();
   try {
     expect(() => new RecordMaintenance(pool, "../bad", "test")).toThrow("invalid_argument");
+    expect(() => new RecordMaintenance(pool, "cleanup\n", "test")).toThrow("invalid_argument");
     for (const limit of [...fixture.invalidLimits, 1.5, NaN])
       await expect(
         new RecordMaintenance(pool, "cleanup", "test", () => fixture.cutoff).cleanupExpired(limit),

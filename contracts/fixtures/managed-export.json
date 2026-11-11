@@ -1,0 +1,759 @@
+{
+  "cases": [
+    {
+      "name": "workspaces",
+      "kind": "workspaces",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "lifecycle": "suspended",
+        "mutationBlocked": true,
+        "revision": "9223372036854775807"
+      },
+      "valid": true
+    },
+    {
+      "name": "workspaces-productId-other",
+      "kind": "workspaces",
+      "row": {
+        "productId": "other",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "lifecycle": "suspended",
+        "mutationBlocked": true,
+        "revision": "9223372036854775807"
+      },
+      "valid": false
+    },
+    {
+      "name": "workspaces-environment-other",
+      "kind": "workspaces",
+      "row": {
+        "productId": "export",
+        "environment": "other",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "lifecycle": "suspended",
+        "mutationBlocked": true,
+        "revision": "9223372036854775807"
+      },
+      "valid": false
+    },
+    {
+      "name": "workspaces-workspaceId-other",
+      "kind": "workspaces",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "other",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "lifecycle": "suspended",
+        "mutationBlocked": true,
+        "revision": "9223372036854775807"
+      },
+      "valid": false
+    },
+    {
+      "name": "workspaces-createdAt-3",
+      "kind": "workspaces",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "3",
+        "updatedAt": "2",
+        "lifecycle": "suspended",
+        "mutationBlocked": true,
+        "revision": "9223372036854775807"
+      },
+      "valid": false
+    },
+    {
+      "name": "workspaces-updatedAt-9007199254740992",
+      "kind": "workspaces",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "9007199254740992",
+        "lifecycle": "suspended",
+        "mutationBlocked": true,
+        "revision": "9223372036854775807"
+      },
+      "valid": false
+    },
+    {
+      "name": "workspaces-createdAt-01",
+      "kind": "workspaces",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "01",
+        "updatedAt": "2",
+        "lifecycle": "suspended",
+        "mutationBlocked": true,
+        "revision": "9223372036854775807"
+      },
+      "valid": false
+    },
+    {
+      "name": "workspaces-intent_payload-secret",
+      "kind": "workspaces",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "lifecycle": "suspended",
+        "mutationBlocked": true,
+        "revision": "9223372036854775807",
+        "intent_payload": "secret"
+      },
+      "valid": false
+    },
+    {
+      "name": "operations",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "uncertain",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": true
+    },
+    {
+      "name": "operations-productId-other",
+      "kind": "operations",
+      "row": {
+        "productId": "other",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "uncertain",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": false
+    },
+    {
+      "name": "operations-environment-other",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "other",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "uncertain",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": false
+    },
+    {
+      "name": "operations-workspaceId-other",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "other",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "uncertain",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": false
+    },
+    {
+      "name": "operations-createdAt-3",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "3",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "uncertain",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": false
+    },
+    {
+      "name": "operations-updatedAt-9007199254740992",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "9007199254740992",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "uncertain",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": false
+    },
+    {
+      "name": "operations-createdAt-01",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "01",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "uncertain",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": false
+    },
+    {
+      "name": "operations-intent_payload-secret",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "uncertain",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1",
+        "intent_payload": "secret"
+      },
+      "valid": false
+    },
+    {
+      "name": "workspace-revision-0",
+      "kind": "workspaces",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "lifecycle": "suspended",
+        "mutationBlocked": true,
+        "revision": "0"
+      },
+      "valid": false
+    },
+    {
+      "name": "workspace-revision-9223372036854775808",
+      "kind": "workspaces",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "lifecycle": "suspended",
+        "mutationBlocked": true,
+        "revision": "9223372036854775808"
+      },
+      "valid": false
+    },
+    {
+      "name": "workspace-mutationBlocked-false",
+      "kind": "workspaces",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "lifecycle": "suspended",
+        "mutationBlocked": "false",
+        "revision": "9223372036854775807"
+      },
+      "valid": false
+    },
+    {
+      "name": "workspace-lifecycle-deleted",
+      "kind": "workspaces",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "lifecycle": "deleted",
+        "mutationBlocked": true,
+        "revision": "9223372036854775807"
+      },
+      "valid": false
+    },
+    {
+      "name": "operation-dispatchCount-0",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "uncertain",
+        "dispatchCount": "0",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": false
+    },
+    {
+      "name": "operation-generation-0",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "uncertain",
+        "dispatchCount": "1",
+        "generation": "0",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": false
+    },
+    {
+      "name": "operation-state-cancelled",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "cancelled",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": false
+    },
+    {
+      "name": "operation-modelHash-oops",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "uncertain",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "oops",
+        "manifestVersion": "1"
+      },
+      "valid": false
+    },
+    {
+      "name": "operation-manifestVersion-2147483648",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "uncertain",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "2147483648"
+      },
+      "valid": false
+    },
+    {
+      "name": "operation-kind-unknown",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "unknown",
+        "state": "uncertain",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": false
+    },
+    {
+      "name": "operation-storeId-bad\n",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "uncertain",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "bad\n",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": false
+    },
+    {
+      "name": "operation-operationId-bad\n",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "bad\n",
+        "kind": "assign_roles",
+        "state": "uncertain",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": false
+    },
+    {
+      "name": "state-pending",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "pending",
+        "dispatchCount": "0",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": true
+    },
+    {
+      "name": "state-retryable",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "retryable",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": true
+    },
+    {
+      "name": "state-dispatching",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "dispatching",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": true
+    },
+    {
+      "name": "state-confirmed",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "confirmed",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": true
+    },
+    {
+      "name": "state-uncertain",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "uncertain",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": true
+    },
+    {
+      "name": "state-completed",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "completed",
+        "dispatchCount": "1",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": true
+    },
+    {
+      "name": "state-cancelled",
+      "kind": "operations",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "operationId": "op",
+        "kind": "assign_roles",
+        "state": "cancelled",
+        "dispatchCount": "0",
+        "generation": "9007199254740991",
+        "nextAttemptAt": "0",
+        "storeId": "store",
+        "modelId": "model",
+        "modelHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifestVersion": "1"
+      },
+      "valid": true
+    },
+    {
+      "name": "lifecycle-pending",
+      "kind": "workspaces",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "lifecycle": "pending",
+        "mutationBlocked": true,
+        "revision": "9223372036854775807"
+      },
+      "valid": true
+    },
+    {
+      "name": "lifecycle-active",
+      "kind": "workspaces",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "lifecycle": "active",
+        "mutationBlocked": true,
+        "revision": "9223372036854775807"
+      },
+      "valid": true
+    },
+    {
+      "name": "lifecycle-suspended",
+      "kind": "workspaces",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "lifecycle": "suspended",
+        "mutationBlocked": true,
+        "revision": "9223372036854775807"
+      },
+      "valid": true
+    },
+    {
+      "name": "lifecycle-tombstoned",
+      "kind": "workspaces",
+      "row": {
+        "productId": "export",
+        "environment": "test",
+        "workspaceId": "workspace",
+        "createdAt": "1",
+        "updatedAt": "2",
+        "lifecycle": "tombstoned",
+        "mutationBlocked": true,
+        "revision": "9223372036854775807"
+      },
+      "valid": true
+    }
+  ],
+  "seed": [
+    "INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at) SELECT '$scope','test','w-'||lpad(i::text,3,'0'),'PRIVATE-NAME',CASE i%4 WHEN 0 THEN 'pending' WHEN 1 THEN 'active' WHEN 2 THEN 'suspended' ELSE 'tombstoned' END,i%2=0,1,2 FROM generate_series(0,102) i",
+    "INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at) VALUES('$scope','other','foreign','PRIVATE-NAME','active',false,1,2)",
+    "INSERT INTO heimdall_managed.operations(product_id,environment,operation_id,workspace_id,kind,actor_hash,target_hash,key_digest,fingerprint,intent_payload,store_id,model_id,model_hash,manifest_version,state,dispatch_count,generation,next_attempt_at,created_at,updated_at) SELECT '$scope','test','op-'||lpad(i::text,3,'0'),'w-000','assign_roles',sha256('PRIVATE-ACTOR'::bytea),sha256('PRIVATE-TARGET'::bytea),sha256(i::text::bytea),sha256('PRIVATE-FINGERPRINT'::bytea),'PRIVATE-INTENT'::bytea,'store','model',decode(repeat('c',64),'hex'),1,CASE WHEN i=101 THEN 'uncertain' ELSE 'completed' END,1,2,0,1,2 FROM generate_series(0,101) i"
+  ],
+  "workspaceCount": 103,
+  "operationCount": 102
+}

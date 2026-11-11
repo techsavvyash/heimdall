@@ -12,7 +12,7 @@ export class RecordMaintenance {
   ) {
     if (
       ![productId, environment].every(
-        (s) => typeof s === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(s),
+        (s) => typeof s === "string" && /^[A-Za-z0-9_-]{1,64}(?![\s\S])/.test(s),
       )
     )
       throw new HeimdallError("invalid_argument");
