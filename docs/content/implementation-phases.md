@@ -108,3 +108,5 @@ The [[evidence/phase-2-oidc|OIDC checkpoint]] now also records live unknown-key 
 [[evidence/phase-2-lifecycle-events|Lifecycle event collection checkpoint]] verifies per-aggregate event pagination and replay after SCIM deletion. Aggregate-local sequence numbers make a global sequence checkpoint unsafe; complete upstream event export remains a verification gate.
 
 The lifecycle event checkpoint also records bounded time-window collection across four aggregates, exact replay and saturated-boundary refusal. Moving-watermark visibility remains unproven; an empty page is not a safe wall-clock checkpoint.
+
+The event-visibility follow-up corrects the older builder-comment interpretation and tests the actual SQL advisory-lock drain on Railway. Unrelated open transactions allow reads; an instance writer barrier blocks the reader until release.
