@@ -246,7 +246,14 @@ func TestLiveToken(t *testing.T) {
 	if json.Unmarshal([]byte(raw), &c) != nil {
 		t.Fatal("invalid live config")
 	}
-	v, e := NewTokenVerifier(Config{c.Issuer, c.Audience, c.JWKSURI, "production"}, nil)
+	metadata, e := DiscoverOIDC(context.Background(), c.Issuer, "production")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if metadata.JWKSURI != c.JWKSURI {
+		t.Fatal("discovery binding")
+	}
+	v, e := NewTokenVerifier(Config{c.Issuer, c.Audience, metadata.JWKSURI, "production"}, nil)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -254,7 +261,7 @@ func TestLiveToken(t *testing.T) {
 	if e != nil || result.Subject() != c.Subject || !v.Owns(result) {
 		t.Fatal("valid token", e)
 	}
-	other, e := NewTokenVerifier(Config{c.Issuer, c.OtherAudience, c.JWKSURI, "production"}, nil)
+	other, e := NewTokenVerifier(Config{c.Issuer, c.OtherAudience, metadata.JWKSURI, "production"}, nil)
 	if e != nil {
 		t.Fatal(e)
 	}

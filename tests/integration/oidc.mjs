@@ -445,7 +445,7 @@ try {
             "unknown key rejected",
             "trusted kid with untrusted signature rejected",
           ],
-          jwks: "configured same-origin endpoint; fetched by each SDK",
+          jwks: "issuer-pinned discovery validated by each SDK; same-origin JWKS fetched by each SDK",
         },
       });
     }

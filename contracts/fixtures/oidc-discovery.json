@@ -1,0 +1,377 @@
+{
+  "issuer": "https://identity.example.test",
+  "metadata": {
+    "issuer": "https://identity.example.test",
+    "jwks_uri": "https://identity.example.test/oauth/v2/keys",
+    "authorization_endpoint": "https://identity.example.test/oauth/v2/authorize",
+    "token_endpoint": "https://identity.example.test/oauth/v2/token",
+    "introspection_endpoint": "https://identity.example.test/oauth/v2/introspect",
+    "revocation_endpoint": "https://identity.example.test/oauth/v2/revoke",
+    "response_types_supported": ["code"],
+    "grant_types_supported": ["authorization_code", "refresh_token"],
+    "id_token_signing_alg_values_supported": ["RS256"],
+    "code_challenge_methods_supported": ["S256"],
+    "token_endpoint_auth_methods_supported": ["client_secret_basic"],
+    "introspection_endpoint_auth_methods_supported": ["client_secret_basic"],
+    "revocation_endpoint_auth_methods_supported": ["client_secret_basic"]
+  },
+  "cases": [
+    {
+      "name": "supported",
+      "patch": {},
+      "valid": true
+    },
+    {
+      "name": "unrelated extension",
+      "patch": {
+        "provider_extension": {
+          "enabled": true
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "other algorithms do not widen trust",
+      "patch": {
+        "id_token_signing_alg_values_supported": ["EdDSA", "RS256"]
+      },
+      "valid": true
+    },
+    {
+      "name": "issuer exact trailing slash",
+      "patch": {
+        "issuer": "https://identity.example.test/"
+      },
+      "valid": false
+    },
+    {
+      "name": "missing issuer",
+      "patch": {
+        "issuer": null
+      },
+      "valid": false
+    },
+    {
+      "name": "missing jwks_uri",
+      "patch": {
+        "jwks_uri": null
+      },
+      "valid": false
+    },
+    {
+      "name": "missing authorization_endpoint",
+      "patch": {
+        "authorization_endpoint": null
+      },
+      "valid": false
+    },
+    {
+      "name": "missing token_endpoint",
+      "patch": {
+        "token_endpoint": null
+      },
+      "valid": false
+    },
+    {
+      "name": "missing introspection_endpoint",
+      "patch": {
+        "introspection_endpoint": null
+      },
+      "valid": false
+    },
+    {
+      "name": "missing revocation_endpoint",
+      "patch": {
+        "revocation_endpoint": null
+      },
+      "valid": false
+    },
+    {
+      "name": "missing response_types_supported",
+      "patch": {
+        "response_types_supported": null
+      },
+      "valid": false
+    },
+    {
+      "name": "missing grant_types_supported",
+      "patch": {
+        "grant_types_supported": null
+      },
+      "valid": false
+    },
+    {
+      "name": "missing id_token_signing_alg_values_supported",
+      "patch": {
+        "id_token_signing_alg_values_supported": null
+      },
+      "valid": false
+    },
+    {
+      "name": "missing code_challenge_methods_supported",
+      "patch": {
+        "code_challenge_methods_supported": null
+      },
+      "valid": false
+    },
+    {
+      "name": "missing token_endpoint_auth_methods_supported",
+      "patch": {
+        "token_endpoint_auth_methods_supported": null
+      },
+      "valid": false
+    },
+    {
+      "name": "missing introspection_endpoint_auth_methods_supported",
+      "patch": {
+        "introspection_endpoint_auth_methods_supported": null
+      },
+      "valid": false
+    },
+    {
+      "name": "missing revocation_endpoint_auth_methods_supported",
+      "patch": {
+        "revocation_endpoint_auth_methods_supported": null
+      },
+      "valid": false
+    },
+    {
+      "name": "jwks_uri other origin",
+      "patch": {
+        "jwks_uri": "https://evil.example.test/path"
+      },
+      "valid": false
+    },
+    {
+      "name": "jwks_uri query",
+      "patch": {
+        "jwks_uri": "https://identity.example.test/path?secret=x"
+      },
+      "valid": false
+    },
+    {
+      "name": "jwks_uri traversal",
+      "patch": {
+        "jwks_uri": "https://identity.example.test/a/%2e%2e/b"
+      },
+      "valid": false
+    },
+    {
+      "name": "jwks_uri downgrade",
+      "patch": {
+        "jwks_uri": "http://identity.example.test/path"
+      },
+      "valid": false
+    },
+    {
+      "name": "authorization_endpoint other origin",
+      "patch": {
+        "authorization_endpoint": "https://evil.example.test/path"
+      },
+      "valid": false
+    },
+    {
+      "name": "authorization_endpoint query",
+      "patch": {
+        "authorization_endpoint": "https://identity.example.test/path?secret=x"
+      },
+      "valid": false
+    },
+    {
+      "name": "authorization_endpoint traversal",
+      "patch": {
+        "authorization_endpoint": "https://identity.example.test/a/%2e%2e/b"
+      },
+      "valid": false
+    },
+    {
+      "name": "authorization_endpoint downgrade",
+      "patch": {
+        "authorization_endpoint": "http://identity.example.test/path"
+      },
+      "valid": false
+    },
+    {
+      "name": "token_endpoint other origin",
+      "patch": {
+        "token_endpoint": "https://evil.example.test/path"
+      },
+      "valid": false
+    },
+    {
+      "name": "token_endpoint query",
+      "patch": {
+        "token_endpoint": "https://identity.example.test/path?secret=x"
+      },
+      "valid": false
+    },
+    {
+      "name": "token_endpoint traversal",
+      "patch": {
+        "token_endpoint": "https://identity.example.test/a/%2e%2e/b"
+      },
+      "valid": false
+    },
+    {
+      "name": "token_endpoint downgrade",
+      "patch": {
+        "token_endpoint": "http://identity.example.test/path"
+      },
+      "valid": false
+    },
+    {
+      "name": "introspection_endpoint other origin",
+      "patch": {
+        "introspection_endpoint": "https://evil.example.test/path"
+      },
+      "valid": false
+    },
+    {
+      "name": "introspection_endpoint query",
+      "patch": {
+        "introspection_endpoint": "https://identity.example.test/path?secret=x"
+      },
+      "valid": false
+    },
+    {
+      "name": "introspection_endpoint traversal",
+      "patch": {
+        "introspection_endpoint": "https://identity.example.test/a/%2e%2e/b"
+      },
+      "valid": false
+    },
+    {
+      "name": "introspection_endpoint downgrade",
+      "patch": {
+        "introspection_endpoint": "http://identity.example.test/path"
+      },
+      "valid": false
+    },
+    {
+      "name": "revocation_endpoint other origin",
+      "patch": {
+        "revocation_endpoint": "https://evil.example.test/path"
+      },
+      "valid": false
+    },
+    {
+      "name": "revocation_endpoint query",
+      "patch": {
+        "revocation_endpoint": "https://identity.example.test/path?secret=x"
+      },
+      "valid": false
+    },
+    {
+      "name": "revocation_endpoint traversal",
+      "patch": {
+        "revocation_endpoint": "https://identity.example.test/a/%2e%2e/b"
+      },
+      "valid": false
+    },
+    {
+      "name": "revocation_endpoint downgrade",
+      "patch": {
+        "revocation_endpoint": "http://identity.example.test/path"
+      },
+      "valid": false
+    },
+    {
+      "name": "response_types_supported unsupported",
+      "patch": {
+        "response_types_supported": ["unsupported"]
+      },
+      "valid": false
+    },
+    {
+      "name": "response_types_supported malformed",
+      "patch": {
+        "response_types_supported": [7]
+      },
+      "valid": false
+    },
+    {
+      "name": "grant_types_supported unsupported",
+      "patch": {
+        "grant_types_supported": ["unsupported"]
+      },
+      "valid": false
+    },
+    {
+      "name": "grant_types_supported malformed",
+      "patch": {
+        "grant_types_supported": [7]
+      },
+      "valid": false
+    },
+    {
+      "name": "id_token_signing_alg_values_supported unsupported",
+      "patch": {
+        "id_token_signing_alg_values_supported": ["unsupported"]
+      },
+      "valid": false
+    },
+    {
+      "name": "id_token_signing_alg_values_supported malformed",
+      "patch": {
+        "id_token_signing_alg_values_supported": [7]
+      },
+      "valid": false
+    },
+    {
+      "name": "code_challenge_methods_supported unsupported",
+      "patch": {
+        "code_challenge_methods_supported": ["unsupported"]
+      },
+      "valid": false
+    },
+    {
+      "name": "code_challenge_methods_supported malformed",
+      "patch": {
+        "code_challenge_methods_supported": [7]
+      },
+      "valid": false
+    },
+    {
+      "name": "token_endpoint_auth_methods_supported unsupported",
+      "patch": {
+        "token_endpoint_auth_methods_supported": ["unsupported"]
+      },
+      "valid": false
+    },
+    {
+      "name": "token_endpoint_auth_methods_supported malformed",
+      "patch": {
+        "token_endpoint_auth_methods_supported": [7]
+      },
+      "valid": false
+    },
+    {
+      "name": "introspection_endpoint_auth_methods_supported unsupported",
+      "patch": {
+        "introspection_endpoint_auth_methods_supported": ["unsupported"]
+      },
+      "valid": false
+    },
+    {
+      "name": "introspection_endpoint_auth_methods_supported malformed",
+      "patch": {
+        "introspection_endpoint_auth_methods_supported": [7]
+      },
+      "valid": false
+    },
+    {
+      "name": "revocation_endpoint_auth_methods_supported unsupported",
+      "patch": {
+        "revocation_endpoint_auth_methods_supported": ["unsupported"]
+      },
+      "valid": false
+    },
+    {
+      "name": "revocation_endpoint_auth_methods_supported malformed",
+      "patch": {
+        "revocation_endpoint_auth_methods_supported": [7]
+      },
+      "valid": false
+    }
+  ]
+}

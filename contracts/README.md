@@ -488,3 +488,8 @@ it does not authenticate actors or implement public authorization by itself.
 [runtime-configuration.md](runtime-configuration.md) defines bounded deployment
 loading, structural and semantic policy checks, immutable/detached snapshots,
 and the boundary between locally valid settings and remote readiness.
+
+## OIDC discovery
+
+[oidc-discovery.md](oidc-discovery.md) defines bounded issuer-pinned metadata
+reads, same-origin endpoints, required backend capabilities and cancellation.
