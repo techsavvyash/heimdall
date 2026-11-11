@@ -149,3 +149,29 @@ The test deletion bypasses the unimplemented hold/age/authorization workflow; it
 is not a production purge procedure. Runtime roles receive no namespace access.
 Metadata accounting/reservations, holds, retirement markers, SDK identity writes/reads, complete
 backfill/activation and authorized retirement remain outstanding.
+
+## Decoded history identity construction
+
+Internal TS buildRetentionIdentities and Go BuildRetentionIdentities now validate
+one complete decoded built-in event group before producing compact identity rows.
+Inputs contain the expected exact tenant scope, resolution, each full event and
+its stored digest, original sink IDs and charged delivery count. The storage
+caller must first validate/decode the ha1 envelope and load these facts from a
+consistent primary snapshot; caller-supplied routing is not evidence by itself.
+
+The builders validate full event shape and semantics, recompute portable digests,
+require exact product/environment/tenant binding, reject duplicate event/sink IDs,
+and require routing cardinality to equal its original charge. Missing routing is
+invalid; an explicit empty list represents no configured sinks. They derive tenant,
+kind and decision membership from validated events, correlate request/completion
+contexts, and validate recovery administration's actor, target, timestamps and
+deterministic event ID. Missing or orphaned members and a resolution inconsistent
+with history fail as audit_unavailable. Invalid configured scope is invalid_argument.
+
+Output is sorted by event ID, with sorted copied routing and no payload/actor/body.
+Ordinary events have no retained decision link, even if the event carries a
+correlation decisionId. Authorization recovery administration cannot be treated
+as an ordinary event. No source objects are mutated or shared mutable routing
+returned. This does not persist rows, acquire locks, authorize deletion or verify
+holds. These builders accept built-in events only; custom event registry integration
+remains part of the mandatory enterprise/custom-audit work before release.
