@@ -450,13 +450,31 @@ WITH selected AS MATERIALIZED (
     cutoff: number,
     signal?: AbortSignal,
   ) {
+    return this.recoverCapacityWith(terminal, administration, cutoff, lockAuditCapacity, signal);
+  }
+  // Trusted maintenance port; the caller authorizes the recovery initiator.
+  async recoverRuntime(
+    terminal: Record<string, unknown>,
+    administration: Record<string, unknown>,
+    cutoff: number,
+    signal?: AbortSignal,
+  ) {
+    return this.recoverCapacityWith(terminal, administration, cutoff, lockRuntimeCapacity, signal);
+  }
+  private async recoverCapacityWith(
+    terminal: Record<string, unknown>,
+    administration: Record<string, unknown>,
+    cutoff: number,
+    admit: (client: PoolClient) => Promise<void>,
+    signal?: AbortSignal,
+  ) {
     const completion = this.prepare(terminal),
       recovery = this.prepare(administration);
     validateRecoveryPair(completion.snapshot, recovery.snapshot, cutoff);
     const scope = [this.productId, this.environment];
     const receipt = await this.appendFinalized(
       completion.snapshot,
-      lockAuditCapacity,
+      admit,
       async (client, snapshot, inserted) => {
         const changed = await this.persistDecision(client, snapshot, cutoff);
         const adminInserted = await this.writePrepared(client, recovery, !changed);

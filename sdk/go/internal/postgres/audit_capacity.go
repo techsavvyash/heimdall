@@ -45,6 +45,14 @@ func (a *Audit) appendCapacityWith(ctx context.Context, event map[string]any, ad
 	})
 }
 func (a *Audit) RecoverCapacity(ctx context.Context, terminal, administration map[string]any, cutoff int64) (*AuditRecoveryReceipt, error) {
+	return a.recoverCapacityWith(ctx, terminal, administration, cutoff, lockAuditCapacity)
+}
+
+// RecoverRuntime is a trusted maintenance port. The caller authorizes the initiator.
+func (a *Audit) RecoverRuntime(ctx context.Context, terminal, administration map[string]any, cutoff int64) (*AuditRecoveryReceipt, error) {
+	return a.recoverCapacityWith(ctx, terminal, administration, cutoff, lockRuntimeCapacity)
+}
+func (a *Audit) recoverCapacityWith(ctx context.Context, terminal, administration map[string]any, cutoff int64, admit func(context.Context, *sql.Tx) error) (*AuditRecoveryReceipt, error) {
 	if ctx == nil {
 		return nil, contract.ErrInvalidArgument
 	}
@@ -59,7 +67,7 @@ func (a *Audit) RecoverCapacity(ctx context.Context, terminal, administration ma
 	if e = contract.ValidateRecoveryPair(completion.snapshot, recovery.snapshot, cutoff); e != nil {
 		return nil, e
 	}
-	receipt, e := a.appendFinalized(ctx, completion.snapshot, lockAuditCapacity, func(ctx context.Context, tx *sql.Tx, snapshot map[string]any, inserted bool) error {
+	receipt, e := a.appendFinalized(ctx, completion.snapshot, admit, func(ctx context.Context, tx *sql.Tx, snapshot map[string]any, inserted bool) error {
 		changed, e := a.persistDecision(ctx, tx, snapshot, &cutoff)
 		if e != nil {
 			return e

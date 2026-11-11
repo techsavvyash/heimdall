@@ -160,10 +160,24 @@ try:
   sql("CREATE ROLE public_capacity_runtime; GRANT USAGE ON SCHEMA heimdall,heimdall_capacity TO public_capacity_runtime; GRANT SELECT ON heimdall.schema_metadata,heimdall.migrations,heimdall_capacity.policy,heimdall_capacity.upgrade,heimdall_capacity.backfill TO public_capacity_runtime; GRANT SELECT,INSERT ON heimdall.audit_events,heimdall.audit_deliveries,heimdall_capacity.event_charges TO public_capacity_runtime; GRANT SELECT,INSERT,UPDATE ON heimdall.audit_decisions,heimdall_capacity.reservations TO public_capacity_runtime; GRANT UPDATE(used_events,used_bytes,used_deliveries,reserved_events,reserved_bytes,reserved_deliveries) ON heimdall_capacity.policy TO public_capacity_runtime",'cli_activation')
   run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-public-capacity.test.ts'],env=ready_env)
   subprocess.run(['go','test','-race','-count=1','.', '-run','^TestPublicCapacity$'],cwd=ROOT/'sdk/go',env=ready_env,check=True)
+  for language in ['go','ts']:
+   for lost in [False,True]:
+    database='runtime_recovery_'+language+('_loss' if lost else '')
+    sql('CREATE DATABASE '+database+' TEMPLATE cli_activation')
+    selected=dict(env,HEIMDALL_TEST_RUNTIME_RECOVERY_URL=dsn(database))
+    def recover():
+     if language=='go':go('^TestRuntimeRecovery$',selected)
+     else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-runtime-recovery.test.ts'],env=selected)
+    if lost:
+     with CommitLossProxy(int(port)) as proxy:
+      selected['HEIMDALL_TEST_RUNTIME_RECOVERY_LOSS']=dsn(database,proxy.port)+'&options=-c%20role%3Dpublic_capacity_runtime'
+      recover()
+      assert proxy.dropped.is_set() and not proxy.errors
+    else:recover()
   # Isolated port test only: no public compatibility activation.
   sql("UPDATE heimdall_capacity.policy SET state='ready'",'normal')
   go('^TestCapacityBackfillPendingRecovery$',dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
   ts(dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
- print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse']}))
+ print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries']}))
 finally:
  if created:run(['docker','rm','--force',name],stdout=subprocess.DEVNULL)

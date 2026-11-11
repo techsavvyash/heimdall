@@ -532,3 +532,26 @@ The underlying v1 primitives and deployment compatibility checks remain tested;
 they are not an option to bypass v3 in public factories. Live public-factory proof
 is tests/integration/public-runtime-v3.py; legacy and bearer-runtime regressions
 use separate v1 and activated-v3 databases in postgres-records.py.
+
+## V3 recovery admission
+
+The trusted maintenance ports `PostgresAudit.recoverRuntime` and `Audit.RecoverRuntime`
+use the same atomic recovery pair/capacity implementation as the prepared ports,
+with current v3 admission under the shared deployment lock. Admission is checked
+inside the transaction even for an exact receipt retry. A migrating or incompatible
+protocol refuses before history is changed; a previously successful startup does
+not authorize a later recovery write.
+
+The policy lock, original request/slot validation, terminal/administration writes,
+reservation release and actual charges remain one transaction. Reserved allowance
+permits the recovery pair even when ordinary new events have filled the logical
+budget. Confirmed COMMIT response loss still returns `outcome_unknown`; retry the
+same immutable pair through a currently compatible deployment to obtain its
+original receipts. A late normal completion conflicts rather than replacing the
+unknown outcome. Scanned candidates remain hints, not leases or permission to
+skip finalization checks.
+
+These are internal maintenance ports, not a new public authorization surface.
+The caller must authenticate and authorize the recovery initiator and preserve
+the proposed immutable pair across uncertain results. Bounded scheduling, durable
+restart checkpoints and public maintenance composition remain outstanding.
