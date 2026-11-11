@@ -139,3 +139,7 @@ Phase 3 managed schema checkpoint: [[evidence/phase-3-managed-schema]] adds inde
 
 
 Phase 3 managed deployment checkpoint: [[evidence/phase-3-managed-migrations]] adds explicit managed initialization after session readiness, combined TS/Go compatibility checks and read-only status modes in the existing CLI. Managed record adapters and operational foundations remain open.
+
+Phase 3 workspace-read checkpoint: [[evidence/phase-3-workspace-reads]] adds scoped,
+validated primary reads in both SDKs, with cross-language PostgreSQL and
+cancellation proof. Managed writes and atomic audit composition remain next.

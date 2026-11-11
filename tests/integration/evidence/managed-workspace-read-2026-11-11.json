@@ -1,0 +1,39 @@
+{
+  "run": "0d0c266d99d44cb6b70394e658ee4756",
+  "backend": "postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac",
+  "checksums": {
+    "session": "f71db3eece51c3230c27c89a4e154bda18e15de3276b2e7eb0001a3e38c79cc4",
+    "managed": "3df4dc62f6271691c56ac605c51012a97301b98c70454af62984cf253c066c55"
+  },
+  "constraintCases": 18,
+  "checks": [
+    "session-only install excludes managed schema",
+    "failed managed DDL transaction leaves no schema",
+    "independent managed metadata",
+    "scoped foreign keys",
+    "immutable intent and identifiers",
+    "uncertain operation retains unique slot",
+    "concurrent unfinished inserts have one winner",
+    "runtime cannot delete history, reset sequences or run DDL",
+    "workspace operation candidate audit and outbox transaction rollback"
+  ],
+  "sdkSQLTests": "TS and Go constraints, primary workspace reads, blocked-read cancellation and bidirectional reads passed",
+  "migrationCLI": "missing prerequisite refusal, read-only status, mid-DDL rollback, concurrent install, confirmed commit loss and replay passed",
+  "result": "passed",
+  "limitations": [
+    "physical SQL foundation, not managed SDK orchestration",
+    "payload binding and state transitions must be validated by future adapters",
+    "managed adapters and production orchestration remain pending"
+  ],
+  "workspaceReadCases": 25,
+  "workspaceReadChecks": [
+    "SELECT-only runtime role",
+    "product and environment isolation",
+    "committed lifecycle visibility without cache",
+    "maximum bigint revision preserved as decimal text",
+    "read-only connection refuses even absent workspace",
+    "blocked read deadline and pool recovery in both SDKs",
+    "closed pool returns unavailable",
+    "TS and Go decode each other workspace rows"
+  ]
+}

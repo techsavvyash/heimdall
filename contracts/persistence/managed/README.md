@@ -9,7 +9,8 @@ installation does not create managed tables. No service internal database is use
 
 The deployment CLI now installs this family explicitly after verifying session v1.
 Both SDKs expose internal combined readiness checks, observing both families in one
-statement snapshot. Managed CRUD/CAS adapters remain pending; there is no managed
+statement snapshot. Internal workspace readers now validate scoped primary rows in both SDKs. Managed
+write/CAS and operation/candidate adapters remain pending; there is no managed
 public factory yet.
 
 From `sdk/go`, with `HEIMDALL_MIGRATION_DATABASE_URL` set to the selected application
@@ -108,3 +109,28 @@ local PostgreSQL 17.11 tests, including bidirectional driver reads. The optional
 a random disposable application database and a NOLOGIN test role. Both modes clean
 up owned resources before reporting success. Railway executes the shared SQL cases;
 it does not run native SDK processes inside the database service.
+
+## Workspace read boundary
+
+Internal TS `WorkspaceRecords.get` and Go `WorkspaceRecords.Get` capture product
+and environment at construction and accept only the workspace ID per read. They
+own no connection pool, perform no startup I/O or DDL, and use one primary-query
+snapshot with a five-second deadline (or earlier caller cancellation). A SELECT-only
+role needs schema USAGE plus SELECT on managed workspaces; compatibility readiness
+separately needs the metadata/ledger grants described above.
+
+Missing rows return null/nil only after a successful primary read. Read-only
+transactions/replicas, query failures and malformed stored rows return unavailable;
+cancellation keeps its own classification. Decoding checks scope, lifecycle,
+boolean flags, name Unicode/codepoint/byte bounds, canonical positive bigint
+revision, safe integer timestamps and creation/update ordering. Revisions remain
+strings. No cache can hide a later committed mutation-block flag. This snapshot
+does not fence an already authorized request against a later suspension.
+
+The reader returns a validated record for the existing workspace lifecycle gate.
+It is not an authorization API: active/unblocked only permits subsequent identity,
+SSO and current OpenFGA membership checks, with mandatory decision audit before
+protected work. No mutation or unblocking path is exposed by this read port.
+`contracts/fixtures/managed-workspace-read.json` defines shared decode/gate cases;
+the managed integration harness tests both SDKs with real PostgreSQL and a
+SELECT-only role, including blocked-read deadlines and cross-language row reads.
