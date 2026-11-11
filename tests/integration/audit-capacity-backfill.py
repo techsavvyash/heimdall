@@ -5,6 +5,7 @@ import hashlib
 import os
 from pathlib import Path
 import secrets
+import select
 import subprocess
 import tempfile
 import time
@@ -349,6 +350,44 @@ try:
   # Re-adoption must charge permanent markers too.
   sql("DELETE FROM heimdall_retention.capacity; INSERT INTO heimdall_retention.capacity(row_limit,byte_limit) VALUES(1000,8192000)",marker_db)
   assert sql("SELECT used_rows FROM heimdall_retention.capacity",marker_db)==str(int(before_marker)+1)
+  for winner in ['hold','retirement']:
+   database='retirement_race_'+winner
+   sql('CREATE DATABASE '+database+' TEMPLATE retention_capacity')
+   sql(marker_sql,database)
+   sql("UPDATE heimdall_retention.capacity SET row_limit=row_limit+10,byte_limit=byte_limit+81920; UPDATE heimdall.audit_deliveries SET state='delivered',delivered_at=1001 WHERE product_id='ledger' AND environment='staging' AND event_id='ordinary'",database)
+   initial_used=int(sql('SELECT used_rows FROM heimdall_retention.capacity',database))
+   owner_action=held if winner=='hold' else marker+';'+remove
+   contender_action=marker+';'+remove if winner=='hold' else held
+   command=['docker','exec','-i',name,'psql','-U','postgres','-d',database,'-qAt','-v','ON_ERROR_STOP=1','-v','VERBOSITY=verbose']
+   owner=subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+   try:
+    owner.stdin.write("BEGIN; SET LOCAL statement_timeout='10s';"+owner_action+";SELECT 'owner-ready';\n")
+    owner.stdin.flush()
+    assert select.select([owner.stdout],[],[],10)[0],'owner did not acquire locks'
+    ready=owner.stdout.readline().strip()
+    assert ready=='owner-ready',(ready,owner.poll())
+    def contender():
+     return subprocess.run(command,input="SET application_name='retirement-contender'; BEGIN; SET LOCAL statement_timeout='10s';"+contender_action+';COMMIT;',capture_output=True,text=True,timeout=15)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as workers:
+     future=workers.submit(contender)
+     deadline=time.monotonic()+5
+     while sql("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND application_name='retirement-contender' AND wait_event_type='Lock')",database)!='t':
+      assert not future.done(),'contender did not wait for the identity lock'
+      assert time.monotonic()<deadline,'contender lock wait not observed'
+      time.sleep(.02)
+     out,err=owner.communicate('COMMIT;\n',timeout=10)
+     assert owner.returncode==0,(out,err)
+     result=future.result(timeout=10)
+     assert result.returncode!=0 and '23514' in result.stderr,result.stderr
+   finally:
+    if owner.poll() is None:
+     owner.kill();owner.communicate(timeout=5)
+   expected_hold='1' if winner=='hold' else '0'
+   expected_retirement='0' if winner=='hold' else '1'
+   assert sql("SELECT count(*) FROM heimdall_retention.event_holds WHERE hold_id='retired-hold'",database)==expected_hold
+   assert sql("SELECT count(*) FROM heimdall.audit_events WHERE product_id='ledger' AND environment='staging' AND event_id='ordinary'",database)==expected_hold
+   assert sql("SELECT count(*) FROM heimdall_retention.retirements",database)==expected_retirement
+   assert int(sql('SELECT used_rows FROM heimdall_retention.capacity',database))==initial_used+1
   identity_db='retention_identities'
   sql('CREATE DATABASE '+identity_db+' TEMPLATE cli_activation')
   sql('BEGIN;'+identity_sql+'ROLLBACK;',identity_db)
@@ -382,6 +421,6 @@ try:
   sql("UPDATE heimdall_capacity.policy SET state='ready'",'normal')
   go('^TestCapacityBackfillPendingRecovery$',dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
   ts(dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
- print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work','SIGKILL after the first committed candidate resumes in the other language with original initiators and exact event outbox and capacity counts','reciprocal retention COMMIT loss returns unknown and the other SDK retries without changing compact metadata','retirement markers require atomic removal and reject held undelivered young or incomplete history','retained metadata quota blocks overflow and reserves recovery slots while independent hold release remains possible','prepared hold ledger preserves independent holds and immutable releases with scoped reference checks','prepared immutable identities bind source routing and decision members and survive privileged test payload removal']}))
+ print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work','SIGKILL after the first committed candidate resumes in the other language with original initiators and exact event outbox and capacity counts','reciprocal retention COMMIT loss returns unknown and the other SDK retries without changing compact metadata','observed PostgreSQL lock waits serialize hold-first and retirement-first transactions without losing holds or creating late holds','retirement markers require atomic removal and reject held undelivered young or incomplete history','retained metadata quota blocks overflow and reserves recovery slots while independent hold release remains possible','prepared hold ledger preserves independent holds and immutable releases with scoped reference checks','prepared immutable identities bind source routing and decision members and survive privileged test payload removal']}))
 finally:
  if created:run(['docker','rm','--force',name],stdout=subprocess.DEVNULL)

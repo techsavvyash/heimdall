@@ -41,7 +41,8 @@ The administrative reference in this structural test is an existing event used
 as a stand-in. This does not prove authorized administrative event semantics or
 provide a production purge procedure. The marker's duration is a trusted input;
 policy authorization and explicit retry obligations belong to the future SDK
-transaction. Whole-decision retirement, concurrent process races, marker-aware
-reads, migration and v4 activation remain unfinished. Runtime grants are unchanged.
+transaction. [[phase-3-retirement-races]] adds separate-connection hold/retirement races for
+ordinary events. Whole-decision retirement, marker-aware reads, migration and v4
+activation remain unfinished. Runtime grants are unchanged.
 See [[design/audit-retention]], [[phase-3-retention-capacity]] and
 [[phase-3-readiness-audit]].
