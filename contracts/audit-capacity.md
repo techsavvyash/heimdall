@@ -1,9 +1,9 @@
 # Audit capacity admission and decision reservations
 
 This implements the arithmetic behind the selected audit hard-limit requirement.
-It is an internal shared contract, not an enforced PostgreSQL admission gate yet.
+It is an internal shared contract, not an activated public admission gate yet.
 `fixtures/audit-capacity.json` is executed by both SDKs. Deployment installation,
-existing-history accounting, atomic persistence and runtime composition remain
+existing-history accounting and public runtime composition remain
 required before this can protect a serving deployment.
 
 ## Units and bounds
@@ -81,8 +81,9 @@ Shared vectors cover exact admission limits, one-unit shortfalls in each dimensi
 normal-completion release, maximum recovery at full capacity, ordinary append
 refusal, missing/partial reservations, corrupt counters, invalid charges and safe
 integer boundaries. TS additionally tests nonfinite/fractional numeric inputs and
-input immutability. This proves arithmetic parity only. Atomic race, rollback,
-COMMIT-loss, migration and public fail-closed tests remain required for enforcement.
+input immutability. Those vectors prove arithmetic parity only. The prepared physical and SDK proof
+below adds atomic races, rollback and COMMIT-loss coverage. Migration and public
+fail-closed tests remain required for deployed enforcement.
 
 ## Prepared PostgreSQL capacity ledger
 
@@ -123,8 +124,41 @@ change deployment policy; this is not isolation from a hostile database owner.
 Physical tests prove DDL rollback, server-derived charges, constraint refusals,
 transaction rollback, maximum recovery at full capacity, concurrent cross-product
 admission, normal/recovery contention and both sink/charge race orders. Their SQL
-events validate routing constraints only, not complete SDK event schemas. Runtime
-must still validate full ha1 payload/digests, semantic event/decision/admin bindings,
+events validate routing constraints only, not complete SDK event schemas. The prepared SDK paths below
+validate full ha1 payload/digests, semantic event/decision/admin bindings,
 and original retry receipts before invoking accounting. Unaccounted legacy writes
 remain possible until the new runtime protocol, complete backfill and activation
 gate are implemented. This prepared schema is not a public enforcement claim.
+
+## Prepared SDK transaction paths
+
+The internal TS `appendCapacity` / `recoverCapacity` and Go `AppendCapacity` /
+`RecoverCapacity` paths now compose complete event validation, decision binding,
+physical accounting and original receipts in one transaction. They are not public
+factory entry points. The test harness installs an empty prepared database and
+sets its policy ready; this is not a supported historical migration or activation.
+
+The writer takes shared deployment admission, then the primary policy row lock,
+before inserting events or locking decisions. Policy must be ready on every
+attempt, including retries. Ordinary append charges one new event. Request append
+also creates its scoped pending reservation. Normal/recovery completion validates
+and updates the decision, releases that reservation, and charges the selected
+terminal (plus recovery administration) before COMMIT. Deferred charge references
+and the transaction boundary prevent a partial release. A failed outcome or sink
+insert rolls everything back.
+
+An exact retry validates the existing ha1 payload/digest, charge bytes and original
+outbox count, and verifies reservation/decision bindings without inserting another
+charge or reservation. Existing uncharged events and missing reservations fail
+closed; runtime does not backfill them. A changed sink configuration does not add
+new destinations to an existing event. Conflicting payloads or losing terminal
+choices remain `conflict`; capacity exhaustion and incomplete accounting are
+`audit_unavailable`. An unconfirmed COMMIT remains `outcome_unknown`; an identical
+retry inspects the committed state and cannot refund or double-charge it.
+
+`fixtures/audit-capacity-writes.json` drives both live suites, with a three-event
+budget and separate byte/delivery shortfall cases. Proof includes normal/recovery
+races, cross-product admission, both cross-language recovery directions and lost
+COMMIT responses for ordinary/request/completion/recovery writes. Public startup,
+a versioned migration/backfill/activation gate, managed mutation reservations and
+authorized retention remain required before claiming complete enforcement.

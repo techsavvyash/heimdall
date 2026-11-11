@@ -13,7 +13,7 @@ func (a *Audit) AppendDecision(ctx context.Context, event map[string]any) (contr
 	if (event["eventType"] != "heimdall.authorization.requested" && event["eventType"] != "heimdall.authorization.completed") || event["outcome"] == "outcome_unknown" {
 		return contract.AuditReceipt{}, contract.ErrInvalidArgument
 	}
-	return a.appendFinalized(ctx, event, func(context.Context, *sql.Tx) error { return nil }, func(ctx context.Context, tx *sql.Tx, event map[string]any) error {
+	return a.appendFinalized(ctx, event, func(context.Context, *sql.Tx) error { return nil }, func(ctx context.Context, tx *sql.Tx, event map[string]any, _ bool) error {
 		_, e := a.persistDecision(ctx, tx, event, nil)
 		return e
 	})
@@ -102,7 +102,7 @@ func (a *Audit) AppendRuntime(ctx context.Context, event map[string]any) (contra
 			return databaseError(ctx)
 		}
 		return nil
-	}, func(ctx context.Context, tx *sql.Tx, snapshot map[string]any) error {
+	}, func(ctx context.Context, tx *sql.Tx, snapshot map[string]any, _ bool) error {
 		if snapshot["eventType"] == "heimdall.authorization.requested" || snapshot["eventType"] == "heimdall.authorization.completed" {
 			_, e := a.persistDecision(ctx, tx, snapshot, nil)
 			return e

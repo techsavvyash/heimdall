@@ -27,12 +27,13 @@ func (a *Audit) RecoverDecision(ctx context.Context, terminal, administration ma
 	if e = contract.ValidateRecoveryPair(completion.snapshot, recovery.snapshot, cutoff); e != nil {
 		return nil, e
 	}
-	receipt, e := a.appendFinalized(ctx, completion.snapshot, func(context.Context, *sql.Tx) error { return nil }, func(ctx context.Context, tx *sql.Tx, event map[string]any) error {
+	receipt, e := a.appendFinalized(ctx, completion.snapshot, func(context.Context, *sql.Tx) error { return nil }, func(ctx context.Context, tx *sql.Tx, event map[string]any, _ bool) error {
 		changed, e := a.persistDecision(ctx, tx, event, &cutoff)
 		if e != nil {
 			return e
 		}
-		return a.writePrepared(ctx, tx, recovery, !changed)
+		_, e = a.writePrepared(ctx, tx, recovery, !changed)
+		return e
 	})
 	if e != nil {
 		return nil, e

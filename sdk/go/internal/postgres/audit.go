@@ -45,9 +45,9 @@ func (a *Audit) Append(ctx context.Context, event map[string]any) (contract.Audi
 // SDK-internal local writes only. The callback must not commit, perform remote I/O,
 // or publish a result. Audit event idempotency does not deduplicate mutations.
 func (a *Audit) appendWith(ctx context.Context, event map[string]any, mutate func(context.Context, *sql.Tx) error) (contract.AuditReceipt, error) {
-	return a.appendFinalized(ctx, event, mutate, func(context.Context, *sql.Tx, map[string]any) error { return nil })
+	return a.appendFinalized(ctx, event, mutate, func(context.Context, *sql.Tx, map[string]any, bool) error { return nil })
 }
-func (a *Audit) appendFinalized(ctx context.Context, event map[string]any, mutate func(context.Context, *sql.Tx) error, finalize func(context.Context, *sql.Tx, map[string]any) error) (contract.AuditReceipt, error) {
+func (a *Audit) appendFinalized(ctx context.Context, event map[string]any, mutate func(context.Context, *sql.Tx) error, finalize func(context.Context, *sql.Tx, map[string]any, bool) error) (contract.AuditReceipt, error) {
 	empty := contract.AuditReceipt{}
 	if ctx == nil || mutate == nil {
 		return empty, contract.ErrInvalidArgument
@@ -89,10 +89,11 @@ func (a *Audit) appendFinalized(ctx context.Context, event map[string]any, mutat
 		}
 		return empty, databaseError(ctx)
 	}
-	if err = a.writePrepared(ctx, tx, prepared, false); err != nil {
+	inserted, err := a.writePrepared(ctx, tx, prepared, false)
+	if err != nil {
 		return empty, err
 	}
-	if err = finalize(ctx, tx, prepared.snapshot); err != nil {
+	if err = finalize(ctx, tx, prepared.snapshot, inserted); err != nil {
 		return empty, err
 	}
 	if err = contract.CheckCancellation(ctx); err != nil {
@@ -369,7 +370,7 @@ func (a *Audit) prepare(event map[string]any) (*preparedAudit, error) {
 
 	return &preparedAudit{snapshot, encoded, receipt}, nil
 }
-func (a *Audit) writePrepared(ctx context.Context, tx *sql.Tx, prepared *preparedAudit, existingOnly bool) error {
+func (a *Audit) writePrepared(ctx context.Context, tx *sql.Tx, prepared *preparedAudit, existingOnly bool) (bool, error) {
 	receipt := prepared.receipt
 	eventID := receipt.EventID
 	digest := receipt.PayloadDigest
@@ -381,41 +382,41 @@ func (a *Audit) writePrepared(ctx context.Context, tx *sql.Tx, prepared *prepare
 	if !existingOnly {
 		inserted, err = tx.ExecContext(ctx, "INSERT INTO heimdall.audit_events(product_id,environment,event_id,payload_digest,recorded_at,event) VALUES($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT DO NOTHING", a.product, a.environment, eventID, digestBytes, receipt.RecordedAt, string(storageEnvelope))
 		if err != nil {
-			return databaseError(ctx)
+			return false, databaseError(ctx)
 		}
 	}
 	var storedDigest, storedEvent []byte
 	var recordedAt int64
 	err = tx.QueryRowContext(ctx, "SELECT payload_digest,recorded_at,event FROM heimdall.audit_events WHERE product_id=$1 AND environment=$2 AND event_id=$3", a.product, a.environment, eventID).Scan(&storedDigest, &recordedAt, &storedEvent)
 	if err == sql.ErrNoRows {
-		return contract.ErrAuditUnavailable
+		return false, contract.ErrAuditUnavailable
 	}
 	if err != nil {
-		return databaseError(ctx)
+		return false, databaseError(ctx)
 	}
 	if hex.EncodeToString(storedDigest) != digest {
-		return contract.ErrConflict
+		return false, contract.ErrConflict
 	}
 	if recordedAt != receipt.RecordedAt {
-		return contract.ErrAuditUnavailable
+		return false, contract.ErrAuditUnavailable
 	}
 	if _, err = a.decodeStored(storedEvent, eventID, recordedAt, digest); err != nil {
-		return err
+		return false, err
 	}
 	count := int64(0)
 	if inserted != nil {
 		count, err = inserted.RowsAffected()
 	}
 	if err != nil {
-		return contract.ErrUnavailable
+		return false, contract.ErrUnavailable
 	}
 	if count == 1 {
 		for _, sink := range a.sinks {
 			if _, err = tx.ExecContext(ctx, "INSERT INTO heimdall.audit_deliveries(product_id,environment,event_id,sink_id) VALUES($1,$2,$3,$4)", a.product, a.environment, eventID, sink); err != nil {
-				return databaseError(ctx)
+				return false, databaseError(ctx)
 			}
 		}
 	}
 
-	return nil
+	return count == 1, nil
 }

@@ -1,3 +1,10 @@
+import {
+  lockAuditCapacity,
+  chargeAuditEvent,
+  reserveAuditDecision,
+  resolveAuditCapacity,
+  checkAuditReservation,
+} from "./audit-capacity.js";
 import { auditSQL, sessionChecksum, decisionChecksum } from "./readiness.js";
 import { validateRecoveryPair } from "../audit-recovery.js";
 import { bindAuditDecision } from "../audit-decision-binding.js";
@@ -404,6 +411,66 @@ WITH selected AS MATERIALIZED (
       return { eventId: row.event_id, attempts: row.attempts, event };
     });
   }
+  // Prepared capacity path, deliberately not wired into the public factory until
+  // drained migration/backfill and a new compatibility protocol are implemented.
+  async appendCapacity(event: Record<string, unknown>, signal?: AbortSignal) {
+    if (
+      event?.eventType === "heimdall.authorization.completed" &&
+      event.outcome === "outcome_unknown"
+    )
+      throw new HeimdallError("invalid_argument");
+    const scope = [this.productId, this.environment];
+    return this.appendFinalized(
+      event,
+      lockAuditCapacity,
+      async (client, snapshot, inserted) => {
+        const request = snapshot.eventType === "heimdall.authorization.requested";
+        const completion = snapshot.eventType === "heimdall.authorization.completed";
+        if (request || completion) {
+          const changed = await this.persistDecision(client, snapshot);
+          if (completion) await resolveAuditCapacity(client, scope, snapshot, changed, null);
+        }
+        await chargeAuditEvent(client, scope, snapshot.eventId as string, inserted);
+        if (request) await reserveAuditDecision(client, scope, snapshot, inserted);
+        if (request || completion) await checkAuditReservation(client, scope, snapshot, null);
+      },
+      signal,
+    );
+  }
+  async recoverCapacity(
+    terminal: Record<string, unknown>,
+    administration: Record<string, unknown>,
+    cutoff: number,
+    signal?: AbortSignal,
+  ) {
+    const completion = this.prepare(terminal),
+      recovery = this.prepare(administration);
+    validateRecoveryPair(completion.snapshot, recovery.snapshot, cutoff);
+    const scope = [this.productId, this.environment];
+    const receipt = await this.appendFinalized(
+      completion.snapshot,
+      lockAuditCapacity,
+      async (client, snapshot, inserted) => {
+        const changed = await this.persistDecision(client, snapshot, cutoff);
+        const adminInserted = await this.writePrepared(client, recovery, !changed);
+        await resolveAuditCapacity(client, scope, snapshot, changed, recovery.eventId);
+        await chargeAuditEvent(client, scope, completion.eventId, inserted);
+        await chargeAuditEvent(client, scope, recovery.eventId, adminInserted);
+        await checkAuditReservation(client, scope, snapshot, recovery.eventId);
+      },
+      signal,
+    );
+    return {
+      terminal: receipt,
+      administration: {
+        productId: this.productId,
+        environment: this.environment,
+        eventId: recovery.eventId,
+        recordedAt: recovery.recordedAt,
+        payloadDigest: recovery.originalDigest,
+      },
+    };
+  }
   // Public v2 writes hold shared deployment admission through COMMIT.
   async appendRuntime(event: Record<string, unknown>, signal?: AbortSignal) {
     if (
@@ -449,7 +516,11 @@ WITH selected AS MATERIALIZED (
   private async appendFinalized(
     event: Record<string, unknown>,
     mutate: (client: PoolClient) => Promise<void>,
-    finalize: (client: PoolClient, event: Record<string, unknown>) => Promise<void>,
+    finalize: (
+      client: PoolClient,
+      event: Record<string, unknown>,
+      inserted: boolean,
+    ) => Promise<void>,
     signal?: AbortSignal,
   ) {
     if (typeof mutate !== "function") throw new HeimdallError("invalid_argument");
@@ -459,8 +530,8 @@ WITH selected AS MATERIALIZED (
       async (client) => {
         await mutate(client);
         const { snapshot, eventId, recordedAt, originalDigest } = prepared;
-        await this.writePrepared(client, prepared);
-        await finalize(client, snapshot);
+        const inserted = await this.writePrepared(client, prepared);
+        await finalize(client, snapshot, inserted);
         return {
           productId: this.productId,
           environment: this.environment,
@@ -532,6 +603,7 @@ WITH selected AS MATERIALIZED (
           [...parameters, sink],
         );
     }
+    return inserted.rowCount === 1;
   }
   // Prepared v2 port: factory/readiness activation is a separate deployment gate.
   async appendDecision(event: Record<string, unknown>, signal?: AbortSignal) {
