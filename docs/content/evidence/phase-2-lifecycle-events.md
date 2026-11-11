@@ -40,3 +40,23 @@ Complete upstream identity/configuration export still needs a verified strategy 
 Run tests/integration/scim.mjs with HEIMDALL_PROBE_EVENTS=true and the protected verification issuer/bootstrap PAT described in deploy/verification/zitadel.md. The existing SCIM role map is required. The probe creates an instance viewer grant only for its disposable machine, removes that grant explicitly, then removes its owned organizations. No instance role-map change is required.
 
 Sanitized observations are in tests/integration/evidence/scim-events-2026-11-11.json. The assertions cover per-aggregate pagination/replay, overlapping sequences, unsafe cross-aggregate cursor omission, organization filtering, credential separation and authoritative deleted state. The full SCIM regression runs alongside them. Phase 2 remains open.
+
+## Bounded time-window follow-up
+
+Run b8277422-a3c0-4348-95b0-d1d2bb24b1f9 tested an organization-filtered time scan without supplying aggregate IDs. Eleven requests with a page limit of eight discovered four aggregates and matched all 22 events in a separate unsaturated baseline. Repeating the scan produced the same event keys. Evidence: tests/integration/evidence/scim-event-windows-2026-11-11.json.
+
+The probe recursively splits full windows, overlaps their exclusive endpoints by one microsecond, and deduplicates by aggregate type/ID/sequence within the fixed issuer. It accepts a window only when the response has fewer events than its requested limit. An unsplittable full timestamp bucket or exhausted request budget fails without returning a completed window; it cannot advance a checkpoint. A live limit-one query at an event timestamp verified this refusal path. The initial nanosecond overlap attempt omitted the final event; the successful run uses microsecond-aligned boundaries matching the pinned PostgreSQL deployment. Production code must preserve exact provider timestamp precision and validate the supported storage granularity.
+
+```mermaid
+flowchart TD
+  W[Fixed organization and time window] --> Q[Read bounded event page]
+  Q -->|Below limit| K[Keep verified scoped event keys]
+  Q -->|At limit| S{Window can split?}
+  S -->|Yes| O[Split with one-microsecond overlap]
+  O --> Q
+  S -->|No or request budget exhausted| F[Fail window and retain checkpoint]
+  K --> D[Deduplicate overlapping keys]
+  D --> V[Require stable visibility and durable ingestion before checkpoint]
+```
+
+This is static-window capability evidence, not a lossless moving-watermark proof. The pinned event-store builder's AwaitOpenTransactions excludes events newer than the oldest database transaction; an empty or short response alone does not prove all events up to wall-clock now are visible. Overlap/replay alone cannot guarantee recovery from an arbitrarily long transaction or retention gap. A verified visibility barrier or equivalent upstream delivery/reconciliation mechanism remains necessary before a production collector can advance a global time checkpoint. The 60-second identity gate must continue to use authoritative state, independently of audit export progress.

@@ -106,3 +106,5 @@ The [[evidence/phase-2-oidc|OIDC checkpoint]] now also records live unknown-key 
 [[evidence/phase-2-browser-federation|Browser federation callback checkpoint]] verifies real SAML/OIDC logins with a bound one-time loopback callback, negative cookie/state/intent/replay checks and the downstream HTTP evidence chain. Durable production callbacks and tenant-policy switching remain open.
 
 [[evidence/phase-2-lifecycle-events|Lifecycle event collection checkpoint]] verifies per-aggregate event pagination and replay after SCIM deletion. Aggregate-local sequence numbers make a global sequence checkpoint unsafe; complete upstream event export remains a verification gate.
+
+The lifecycle event checkpoint also records bounded time-window collection across four aggregates, exact replay and saturated-boundary refusal. Moving-watermark visibility remains unproven; an empty page is not a safe wall-clock checkpoint.

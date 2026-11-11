@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { collectWindow, eventKey, timestampNanos, formatNanos } from "./event-window.mjs";
 
 // Capability probe only: durable checkpoints and product routing belong in the SDK worker.
 export async function probeLifecycleEvents({ ok, request, orgs, users, scopedToken, runId }) {
@@ -90,6 +91,47 @@ export async function probeLifecycleEvents({ ok, request, orgs, users, scopedTok
       (await request("GET", `/v2/users/${users[0]}`, undefined, scopedToken)).status,
       404,
     );
+    const baseline = await ok(
+      "POST",
+      path,
+      { resourceOwner: orgs[0], asc: true, limit: 1000 },
+      token.token,
+    );
+    assert(baseline.events.length > 8 && baseline.events.length < 1000);
+    const times = baseline.events.map((event) => timestampNanos(event.creationDate));
+    const lower = times.reduce((a, b) => (a < b ? a : b)) - 1000n;
+    const upper = times.reduce((a, b) => (a > b ? a : b)) + 1000n;
+    const readWindow = async (range, limit) =>
+      (
+        await ok(
+          "POST",
+          path,
+          {
+            resourceOwner: orgs[0],
+            asc: true,
+            limit,
+            range,
+          },
+          token.token,
+        )
+      ).events ?? [];
+    const windowed = await collectWindow(readWindow, lower, upper, 8);
+    assert.deepEqual(windowed.events.map(eventKey).sort(), baseline.events.map(eventKey).sort());
+    const replayWindow = await collectWindow(readWindow, lower, upper, 8);
+    assert.deepEqual(
+      replayWindow.events.map(eventKey).sort(),
+      windowed.events.map(eventKey).sort(),
+    );
+    const boundary = times[0];
+    const excluded = await readWindow(
+      { since: formatNanos(boundary), until: formatNanos(boundary + 1000n) },
+      8,
+    );
+    assert.equal(excluded.length, 0);
+    await assert.rejects(
+      collectWindow(readWindow, boundary - 1000n, boundary + 1000n, 1),
+      /Saturated timestamp boundary/,
+    );
     return {
       scimCredentialEventsStatus: denied.status,
       collectorRole: "IAM_OWNER_VIEWER",
@@ -104,6 +146,15 @@ export async function probeLifecycleEvents({ ok, request, orgs, users, scopedTok
       crossAggregateCursorSkippedKnownEvents: true,
       historicalActivationCurrentState: "deleted",
       payloadsOmitted: true,
+      timeWindow: {
+        baselineEvents: baseline.events.length,
+        discoveredAggregates: new Set(windowed.events.map((event) => event.aggregate.id)).size,
+        requests: windowed.requests,
+        completeAgainstUnsaturatedBaseline: true,
+        replayMatched: true,
+        exclusiveBoundsVerified: true,
+        saturatedBoundaryRefused: true,
+      },
     };
   } finally {
     if (granted)

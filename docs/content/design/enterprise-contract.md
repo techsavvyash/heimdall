@@ -91,3 +91,5 @@ Provider intent expiry must not substitute for the local browser-transaction dea
 ## Pinned event collection constraint
 
 [[evidence/phase-2-lifecycle-events]] verifies aggregate-local event sequences and an instance-scoped reader. Never use one numeric sequence across users or organizations. Known-identity lifecycle checks can reconcile authoritative state with per-aggregate checkpoints; complete discovery/export still requires verified gap handling. Historical activation events cannot override a current inactive/deleted authoritative state.
+
+Bounded time-window scans can discover multiple aggregates, as measured in the same evidence page, but short pages alone do not certify a complete moving time watermark. Upstream open transactions and retention can hide events. Export must retain its checkpoint on incomplete/saturated windows and require a verified visibility strategy before claiming complete delivery.
