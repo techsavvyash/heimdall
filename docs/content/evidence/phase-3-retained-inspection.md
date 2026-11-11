@@ -36,7 +36,7 @@ These internal reads require the prepared schemas and existing v3 primary readin
 They do not activate retention or alter public SDK APIs. The live case validates
 the original event; the retired case returns metadata only and cannot reconstruct
 the personal payload or an old allow result. Public payload-only reads must later
-map intentional retirement to not_found after authorization. Full retired-decision
-qualification, runtime receipt retries and v4 admission remain unfinished. See
+map intentional retirement to not_found after authorization. [[phase-3-retired-decisions]] adds completed/recovered group removal and inspection
+proof. Runtime receipt retries and v4 admission remain unfinished. See
 [[phase-3-retirement-markers]], [[design/audit-retention]] and
 [[phase-3-readiness-audit]].

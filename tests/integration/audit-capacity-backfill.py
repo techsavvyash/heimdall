@@ -394,6 +394,38 @@ try:
    selected=dict(env,HEIMDALL_TEST_RETAINED_READ_URL=dsn(database))
    if language=='go':go('^TestRetainedInspection$',selected)
    else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-read.test.ts'],env=selected)
+  decision_retirement=json.loads((ROOT/'contracts/fixtures/retired-decision-inspection.json').read_text())
+  decision_db='retired_decisions'
+  sql('CREATE DATABASE '+decision_db+' TEMPLATE retention_port_go')
+  sql(hold_sql+quota_sql+"INSERT INTO heimdall_retention.capacity(row_limit,byte_limit) VALUES(1000,8192000);"+marker_sql,decision_db)
+  sql("UPDATE heimdall_capacity.policy SET event_limit=event_limit+10; UPDATE heimdall_capacity.upgrade SET event_limit=(SELECT event_limit FROM heimdall_capacity.policy)",decision_db)
+  go('^TestRetirementReferences$',dict(env,HEIMDALL_TEST_RETIREMENT_REFERENCE_URL=dsn(decision_db)))
+  compact_before=sql("SELECT jsonb_build_object('events',(SELECT jsonb_agg(to_jsonb(i) ORDER BY product_id,environment,event_id) FROM heimdall_retention.event_identities i),'decisions',(SELECT jsonb_agg(to_jsonb(d) ORDER BY product_id,environment,decision_id) FROM heimdall_retention.decision_identities d))",decision_db)
+  initial_used=int(sql('SELECT used_rows FROM heimdall_retention.capacity',decision_db))
+  for scope in decision_retirement['scopes']:
+   product,environment=scope['productId'],scope['environment']
+   where=f"product_id='{product}' AND environment='{environment}'"
+   ids=json.loads(sql("SELECT to_jsonb(array_remove(ARRAY[request_event_id,terminal_event_id,recovery_event_id],NULL)) FROM heimdall_retention.decision_identities WHERE "+where,decision_db))
+   assert len(ids)==scope['members']
+   member_list=json.dumps(sorted(ids))
+   array="ARRAY["+','.join("'"+id+"'" for id in ids)+"]"
+   members=where+' AND event_id=ANY('+array+')'
+   sql("UPDATE heimdall.audit_deliveries SET state='delivered',delivered_at=2001 WHERE "+members,decision_db)
+   retirement=f"INSERT INTO heimdall_retention.retirements(product_id,environment,retirement_id,target_event_id,tenant_id,retired_at,retain_for_ms,administration_event_id,member_event_ids) VALUES('{product}','{environment}','decision-retirement','z-request','tenant-1',3001,1000,'retirement-reference','{member_list}')"
+   detach="DELETE FROM heimdall_capacity.reservations WHERE "+where+"; DELETE FROM heimdall.audit_decisions WHERE "+where+';'
+   def remove_members(predicate):
+    return "DELETE FROM heimdall.audit_deliveries WHERE "+predicate+"; DELETE FROM heimdall_capacity.event_charges WHERE "+predicate+"; DELETE FROM heimdall.audit_events WHERE "+predicate
+   partial=detach+remove_members(where+" AND event_id='z-request'")
+   failed=subprocess.run(['docker','exec','-i',name,'psql','-U','postgres','-d',decision_db,'-At','-v','ON_ERROR_STOP=1','-v','VERBOSITY=verbose'],input='BEGIN;'+retirement+';'+partial+';COMMIT;',capture_output=True,text=True)
+   assert failed.returncode!=0 and '23514' in failed.stderr,failed.stderr
+   assert sql('SELECT count(*) FROM heimdall.audit_events WHERE '+members,decision_db)==str(scope['members'])
+   sql('BEGIN;'+retirement+';'+detach+remove_members(members)+';COMMIT;',decision_db)
+   assert sql('SELECT count(*) FROM heimdall.audit_events WHERE '+members,decision_db)=='0'
+  assert sql("SELECT jsonb_build_object('events',(SELECT jsonb_agg(to_jsonb(i) ORDER BY product_id,environment,event_id) FROM heimdall_retention.event_identities i),'decisions',(SELECT jsonb_agg(to_jsonb(d) ORDER BY product_id,environment,decision_id) FROM heimdall_retention.decision_identities d))",decision_db)==compact_before
+  assert int(sql('SELECT used_rows FROM heimdall_retention.capacity',decision_db))==initial_used+2
+  selected=dict(env,HEIMDALL_TEST_RETIRED_DECISION_URL=dsn(decision_db))
+  go('^TestRetiredDecisionInspection$',selected)
+  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retired-decision.test.ts'],env=selected)
   identity_db='retention_identities'
   sql('CREATE DATABASE '+identity_db+' TEMPLATE cli_activation')
   sql('BEGIN;'+identity_sql+'ROLLBACK;',identity_db)
@@ -427,6 +459,6 @@ try:
   sql("UPDATE heimdall_capacity.policy SET state='ready'",'normal')
   go('^TestCapacityBackfillPendingRecovery$',dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
   ts(dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
- print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work','SIGKILL after the first committed candidate resumes in the other language with original initiators and exact event outbox and capacity counts','reciprocal retention COMMIT loss returns unknown and the other SDK retries without changing compact metadata','both SDKs distinguish live retired absent and corrupt missing history with primary readiness and cancellation','observed PostgreSQL lock waits serialize hold-first and retirement-first transactions without losing holds or creating late holds','retirement markers require atomic removal and reject held undelivered young or incomplete history','retained metadata quota blocks overflow and reserves recovery slots while independent hold release remains possible','prepared hold ledger preserves independent holds and immutable releases with scoped reference checks','prepared immutable identities bind source routing and decision members and survive privileged test payload removal']}))
+ print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work','SIGKILL after the first committed candidate resumes in the other language with original initiators and exact event outbox and capacity counts','reciprocal retention COMMIT loss returns unknown and the other SDK retries without changing compact metadata','whole completed and recovered decisions retire atomically with preserved compact links and reciprocal SDK inspection','both SDKs distinguish live retired absent and corrupt missing history with primary readiness and cancellation','observed PostgreSQL lock waits serialize hold-first and retirement-first transactions without losing holds or creating late holds','retirement markers require atomic removal and reject held undelivered young or incomplete history','retained metadata quota blocks overflow and reserves recovery slots while independent hold release remains possible','prepared hold ledger preserves independent holds and immutable releases with scoped reference checks','prepared immutable identities bind source routing and decision members and survive privileged test payload removal']}))
 finally:
  if created:run(['docker','rm','--force',name],stdout=subprocess.DEVNULL)

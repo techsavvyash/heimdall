@@ -1,0 +1,10 @@
+{
+  "tenantId": "tenant-1",
+  "administrationId": "retirement-reference",
+  "retiredAt": 3001,
+  "retainForMs": 1000,
+  "scopes": [
+    { "productId": "ledger", "environment": "staging", "resolution": "completed", "members": 2 },
+    { "productId": "support", "environment": "production", "resolution": "recovered", "members": 3 }
+  ]
+}
