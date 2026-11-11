@@ -193,7 +193,13 @@ Pure envelope primitives remain unmetered internal cryptography helpers, not
 production persistence entry points. `sdk/go/cmd/heimdall-keys` supplies explicit initialization, compatibility status,
 fresh private-file registration and irreversible fingerprint retirement for both
 SDKs. Registration and retirement retries inspect preserved policy after uncertain
-COMMIT. Complete fleet rotation/restore orchestration remains required before release.
+COMMIT. `key-rotation.json` and the two-product PostgreSQL drill verify rolling
+active keys, retained decryption, lagging-writer refusal and an isolated restore
+procedure. Restored login/session records are discarded offline, restored keys
+are retired and fresh material is registered before runtime access is granted.
+Compatibility checks cannot detect an unnoticed ledger rollback. This record-layer
+proof does not establish full-system restore or audit/managed recovery; those
+remain required before release.
 
 All cryptographic fixtures use public synthetic keys and payloads. The shared
 corpus includes a reference vector and captured outputs from both SDK writers,
