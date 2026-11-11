@@ -21,6 +21,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "jose": "6.2.12",
     "pg": "8.23.1"
   },
   "devDependencies": {

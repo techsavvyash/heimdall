@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import {
   randomUUID,
   randomBytes,
@@ -291,6 +292,7 @@ try {
     const original = result.body.access_token.split(".");
     const originalHeader = JSON.parse(Buffer.from(original[0], "base64url"));
     const keyRejections = [];
+    const forgedTokens = [];
     for (const [scenario, kid] of [
       ["unknown signing key", `heimdall-unknown-${runId}`],
       ["known key ID with untrusted signature", originalHeader.kid],
@@ -307,11 +309,78 @@ try {
         rejected.status === 200 && rejected.body.active === false,
         `${scenario}: forged token must not introspect active`,
       );
+      forgedTokens.push(forged);
       keyRejections.push({
         scenario,
         localValidation: "rejected",
         introspectionStatus: rejected.status,
         active: rejected.body.active,
+      });
+    }
+    if (process.env.HEIMDALL_PROBE_SDK_IDENTITY === "1") {
+      const env = {
+        ...process.env,
+        HEIMDALL_TEST_TOKEN_CASES: JSON.stringify({
+          issuer,
+          audience: client.projectId,
+          otherAudience: other.projectId,
+          jwksUri: discovery.jwks_uri,
+          token: result.body.access_token,
+          subject: user.id,
+          forged: forgedTokens,
+        }),
+      };
+      // Tokens cross only the inherited process environment; never logs or files.
+      for (const language of ["ts", "go"]) {
+        const command =
+          language === "ts"
+            ? [
+                "pnpm",
+                "--filter",
+                "@heimdall/sdk",
+                "exec",
+                "vitest",
+                "run",
+                "test/token-verifier.live.test.ts",
+              ]
+            : ["go", "test", "-race", "-count=1", "./internal/identity", "-run", "^TestLiveToken$"];
+        const child = spawnSync(command[0], command.slice(1), {
+          env,
+          cwd: new URL(language === "ts" ? "../../" : "../../sdk/go/", import.meta.url),
+          encoding: "utf8",
+          timeout: 60000,
+        });
+        if (child.status !== 0) {
+          const diagnostic = child.stdout + child.stderr;
+          console.error(
+            JSON.stringify({
+              sdkFailure: language,
+              codes: [
+                ...new Set(
+                  diagnostic.match(
+                    /\b(?:unauthenticated|unavailable|deadline_exceeded|invalid_argument|cancelled)\b/g,
+                  ) ?? [],
+                ),
+              ],
+              locations: diagnostic.match(/token-verifier[^\s]*:\d+:\d+/g) ?? [],
+            }),
+          );
+        }
+        assert.equal(child.status, 0, `${language} SDK live token verification failed`);
+      }
+      observations.push({
+        product: client.product,
+        sdkTokenVerification: {
+          typescript: "passed",
+          go: "passed",
+          checks: [
+            "valid access token",
+            "cross-product audience rejected",
+            "unknown key rejected",
+            "trusted kid with untrusted signature rejected",
+          ],
+          jwks: "configured same-origin endpoint; fetched by each SDK",
+        },
       });
     }
     assert(result.body.refresh_token, "Refresh token missing");
@@ -501,7 +570,9 @@ console.log(
       limitations: [
         "Login client API performs password check; browser Login UI not exercised",
         "strict upstream SAML/OIDC evidence not verified",
-        "probe JWT assertions are not SDK authentication implementation",
+        process.env.HEIMDALL_PROBE_SDK_IDENTITY === "1"
+          ? "SDK signature checks exercised; authoritative SDK identity freshness still pending"
+          : "probe JWT assertions are not SDK authentication implementation",
         "deactivation samples are not a revocation latency guarantee",
       ],
     },

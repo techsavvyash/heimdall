@@ -3,6 +3,7 @@ module github.com/techsavvyash/heimdall/sdk/go
 go 1.24.0
 
 require (
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/lib/pq v1.12.3
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 )
