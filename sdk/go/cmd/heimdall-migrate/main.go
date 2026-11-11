@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/postgres"
 )
 
@@ -23,9 +25,20 @@ func run() int {
 	prepare := flag.Bool("prepare-audit-upgrade", false, "prepare audit v2 tables without activating runtime readiness")
 	directory := flag.String("sql-directory", "", "shared session SQL directory for explicit audit upgrade preparation")
 	drained := flag.Bool("writers-drained", false, "assert all old application writers and retention jobs have been stopped and cannot resume")
+	backfill := flag.Bool("backfill-audit-upgrade", false, "discover missing scopes or advance one bounded audit backfill page; never activate readiness")
+	batch := flag.Int("batch-size", 100, "scope registration or event page bound for audit backfill, 1 to 100")
 	flag.Parse()
+	batchSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "batch-size" {
+			batchSet = true
+		}
+	})
 	dsn := os.Getenv("HEIMDALL_MIGRATION_DATABASE_URL")
 	modes := 0
+	if *backfill {
+		modes++
+	}
 	if *prepare {
 		modes++
 	}
@@ -38,13 +51,13 @@ func run() int {
 	if *status != "" {
 		modes++
 	}
-	if modes != 1 || dsn == "" || flag.NArg() != 0 || (*prepare && (*directory == "" || !*drained || *sqlPath != "")) || (!*prepare && (*directory != "" || *drained)) || (*status != "" && (*status != "session" && *status != "managed" || *sqlPath != "")) || (!*prepare && *status == "" && *sqlPath == "") {
-		fmt.Fprintln(os.Stderr, "select one initialization, status or explicit drained audit-upgrade preparation mode with its required SQL inputs")
+	if (*backfill && (!*drained || *directory != "" || *sqlPath != "" || *batch < 1 || *batch > 100)) || (!*backfill && batchSet) || modes != 1 || dsn == "" || flag.NArg() != 0 || (*prepare && (*directory == "" || !*drained || *sqlPath != "")) || (!*prepare && !*backfill && (*directory != "" || *drained)) || (*status != "" && (*status != "session" && *status != "managed" || *sqlPath != "")) || (!*prepare && !*backfill && *status == "" && *sqlPath == "") {
+		fmt.Fprintln(os.Stderr, "select one initialization, status, drained upgrade preparation or backfill mode with its required inputs")
 		return 2
 	}
 	var migration []byte
 	var err error
-	if *status == "" && !*prepare {
+	if *status == "" && !*prepare && !*backfill {
 		migration, err = os.ReadFile(*sqlPath)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "cannot read shared migration")
@@ -71,7 +84,10 @@ func run() int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	family := "session"
+	var step *postgres.AuditUpgradeStep
 	switch {
+	case *backfill:
+		step, err = postgres.AdvanceAuditUpgrade(ctx, db, *batch, *drained, validateBuiltinAudit)
 	case *prepare:
 		err = postgres.PrepareAuditUpgrade(ctx, db, upgrade[0], upgrade[1], upgrade[2], *drained)
 	case *status == "managed":
@@ -86,13 +102,37 @@ func run() int {
 		err = postgres.MigrateSession(ctx, db, migration)
 	}
 	if err != nil {
+		if *backfill && step != nil {
+			_ = json.NewEncoder(os.Stderr).Encode(step)
+		}
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	if *prepare {
+	if *backfill {
+		if json.NewEncoder(os.Stdout).Encode(step) != nil {
+			return 1
+		}
+	} else if *prepare {
 		fmt.Println("audit upgrade prepared; runtime remains unavailable; backfill and activation still required")
 	} else {
 		fmt.Println(family + " schema v1 ready")
 	}
 	return 0
+}
+
+// This initial CLI validates reserved built-in events only; custom history is
+// refused until a matching product schema registry can be supplied explicitly.
+func validateBuiltinAudit(event map[string]any) error {
+	if e := contract.ValidateAuditShape(event); e != nil {
+		return e
+	}
+	raw, e := json.Marshal(event)
+	if e != nil {
+		return contract.ErrInvalidArgument
+	}
+	var typed contract.AuditEvent
+	if json.Unmarshal(raw, &typed) != nil {
+		return contract.ErrInvalidArgument
+	}
+	return contract.ValidateAuditEvent(typed, "sdk", func(string, int, map[string]any) bool { return false })
 }

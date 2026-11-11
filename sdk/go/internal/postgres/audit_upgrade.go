@@ -50,12 +50,8 @@ func PrepareAuditUpgrade(ctx context.Context, db *sql.DB, decisionSQL, backfillS
 		return databaseError(ctx)
 	}
 	if receiptExists {
-		var valid bool
-		if e = tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM heimdall.schema_metadata)=1 AND EXISTS(SELECT 1 FROM heimdall.schema_metadata WHERE singleton AND database_version=1 AND state='migrating' AND reader_min=1 AND reader_max=1 AND writer_min=1 AND writer_max=1)
-   AND (SELECT count(*) FROM heimdall.migrations)=1 AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=1 AND checksum=$1)
-   AND (SELECT count(*) FROM heimdall.audit_upgrade)=1 AND EXISTS(SELECT 1 FROM heimdall.audit_upgrade WHERE singleton AND base_checksum=$1 AND decision_checksum=$2 AND backfill_checksum=$3 AND preparation_checksum=$4)
-   AND to_regclass('heimdall.audit_decisions') IS NOT NULL AND to_regclass('heimdall.audit_decision_backfill') IS NOT NULL`, sessionChecksum, auditUpgradeChecksums[0], auditUpgradeChecksums[1], auditUpgradeChecksums[2]).Scan(&valid); e != nil || !valid {
-			return databaseError(ctx)
+		if e = checkPreparedAuditUpgrade(ctx, tx); e != nil {
+			return e
 		}
 	} else {
 		var ready bool
@@ -84,6 +80,19 @@ func PrepareAuditUpgrade(ctx context.Context, db *sql.DB, decisionSQL, backfillS
 	}
 	if e = tx.Commit(); e != nil {
 		return contract.ErrOutcomeUnknown
+	}
+	return nil
+}
+
+const auditUpgradePreparedSQL = `SELECT (SELECT count(*) FROM heimdall.schema_metadata)=1 AND EXISTS(SELECT 1 FROM heimdall.schema_metadata WHERE singleton AND database_version=1 AND state='migrating' AND reader_min=1 AND reader_max=1 AND writer_min=1 AND writer_max=1)
+   AND (SELECT count(*) FROM heimdall.migrations)=1 AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=1 AND checksum=$1)
+   AND (SELECT count(*) FROM heimdall.audit_upgrade)=1 AND EXISTS(SELECT 1 FROM heimdall.audit_upgrade WHERE singleton AND base_checksum=$1 AND decision_checksum=$2 AND backfill_checksum=$3 AND preparation_checksum=$4)
+   AND to_regclass('heimdall.audit_decisions') IS NOT NULL AND to_regclass('heimdall.audit_decision_backfill') IS NOT NULL`
+
+func checkPreparedAuditUpgrade(ctx context.Context, tx *sql.Tx) error {
+	var valid bool
+	if e := tx.QueryRowContext(ctx, auditUpgradePreparedSQL, sessionChecksum, auditUpgradeChecksums[0], auditUpgradeChecksums[1], auditUpgradeChecksums[2]).Scan(&valid); e != nil || !valid {
+		return databaseError(ctx)
 	}
 	return nil
 }

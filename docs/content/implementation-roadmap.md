@@ -201,3 +201,5 @@ Phase 3 unresolved scans: [[evidence/phase-3-audit-decision-scan]] records bound
 Phase 3 recovery finalization: [[evidence/phase-3-audit-recovery-write]] records atomic unknown-outcome and administration pairs, both normal/recovery race orders, late-allow suppression and commit-loss retries. Explicit upgrade/readiness activation and storage capacity/retention remain required.
 
 Phase 3 upgrade preparation: [[evidence/phase-3-audit-upgrade-prepare]] records the explicit checksum-pinned CLI preparation transaction, rollback, concurrent/repeated execution and commit-loss proof. It keeps runtime unavailable; global backfill coverage and activation remain required.
+
+Phase 3 upgrade coordination: [[evidence/phase-3-audit-upgrade-backfill]] records automatic scope discovery, bounded CLI steps, concurrent restart and count-drift refusal. Physical-schema validation, readiness activation and custom-history registry integration remain required.

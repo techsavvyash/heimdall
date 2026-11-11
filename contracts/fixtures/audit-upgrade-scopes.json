@@ -1,0 +1,11 @@
+{
+  "limit": 2,
+  "scopes": [
+    { "productId": "support", "environment": "staging" },
+    { "productId": "ledger", "environment": "production" },
+    { "productId": "support", "environment": "production" },
+    { "productId": "ledger", "environment": "staging" }
+  ],
+  "eventsPerScope": 4,
+  "decisionsPerScope": 2
+}

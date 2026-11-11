@@ -368,3 +368,47 @@ runtime/status checks refuse migrating state; already-running old processes stil
 require the external drain. Catalog versions, public SDK factories and their
 ready-v1 policy are unchanged. SQL checksum vectors and live evidence are in
 fixtures/audit-upgrade-prepare.json and tests/integration/audit-upgrade-prepare.py.
+
+## Deployment scope coordinator
+
+After preparation, invoke one bounded step repeatedly:
+
+```sh
+heimdall-migrate --backfill-audit-upgrade --writers-drained --batch-size 100
+```
+
+The same migration DSN is required. Batch size is 1 through 100. Each invocation
+returns JSON with status `registered`, `backfilled` or `coverage_complete`.
+Registration discovers product/environment pairs from existing audit history and
+inserts at most the requested number of missing checkpoints. With no missing
+scopes, it selects the first incomplete scope in C-collated order and advances one
+page through the existing backfill port. The returned progress is a checkpoint,
+not permission to reevaluate historical authorization. Repeat after restart or an
+outcome_unknown response; durable state determines the next step.
+
+The coordinator checks the preparation receipt and migrating v1 metadata under
+the deployment lock. It releases the registration connection before acquiring a
+backfill connection, including with a one-connection pool. Its total budget is ten
+seconds; registration statements and the existing event-page operation each have
+five-second bounds. Registration and coverage queries may inspect many rows:
+limits bound mutations and event pages, not total database scan complexity.
+
+At apparent completion, one SQL snapshot verifies every history scope has a
+completed checkpoint, each scanned count equals its expected count, and each
+expected count equals current history size. Count drift fails audit_unavailable
+without resetting completed checkpoints. An empty history can report complete;
+a later invocation still discovers newly present scopes. This is not a writer
+fence, detection of same-count history replacement, full physical-schema proof,
+or readiness activation. The external drain remains mandatory throughout.
+
+The CLI currently validates reserved built-in events only. Custom history fails
+closed until a matching product registry can be supplied; the internal coordinator
+accepts a full validator. On event-page failure it reports `backfill_failed` and
+the selected product/environment without exposing event payloads. Operators must
+resolve the cause rather than skip history. Registry support remains a release
+requirement, not a supported shortcut for custom events.
+
+Shared scope vectors live in fixtures/audit-upgrade-scopes.json. The live harness
+is tests/integration/audit-upgrade-backfill.py. This deployment orchestration is a
+single Go command for both SDKs; the underlying event-page/checkpoint format is
+implemented in both languages. Runtime factories and catalog readiness remain v1.
