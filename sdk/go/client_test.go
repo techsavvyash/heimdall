@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -11,9 +12,11 @@ import (
 	heimdall "github.com/techsavvyash/heimdall/sdk/go"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/configuration"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
+	postgres "github.com/techsavvyash/heimdall/sdk/go/postgres"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -27,7 +30,7 @@ type runtimeHarness struct {
 	events           []map[string]any
 }
 
-func setupRuntime(t *testing.T, failure string) *runtimeHarness {
+func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeHarness {
 	t.Helper()
 	raw, e := os.ReadFile("../../contracts/fixtures/configuration-v1.json")
 	if e != nil {
@@ -84,6 +87,9 @@ func setupRuntime(t *testing.T, failure string) *runtimeHarness {
 	base.Config["transportProfile"] = "loopback"
 	base.Config["openfga"].(map[string]any)["url"] = issuer
 	base.Manifest["clients"].(map[string]any)["web"].(map[string]any)["transportProfile"] = "loopback"
+	if len(environment) > 0 {
+		base.Config["environment"] = environment[0]
+	}
 	h.config, _ = json.Marshal(base.Config)
 	h.manifest, _ = json.Marshal(base.Manifest)
 	deployment, e := configuration.Parse(h.config, h.manifest)
@@ -220,5 +226,111 @@ func TestPublicAuditFailure(t *testing.T) {
 	}
 	if p, e := client.Tokens().Verify(context.Background(), h.token); p != nil || !errors.Is(e, heimdall.ErrAuditUnavailable) {
 		t.Fatal(p, e)
+	}
+}
+
+func TestPostgresFactory(t *testing.T) {
+	db, err := sql.Open("postgres", "postgres://unused")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	raw, err := os.ReadFile("../../contracts/fixtures/postgres-runtime.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Name, ProductID, Environment string
+		AuditSinks                   []string
+		Valid                        bool
+	}
+	if json.Unmarshal(raw, &cases) != nil {
+		t.Fatal("fixture")
+	}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			storage, err := postgres.NewStorage(db, postgres.StorageOptions{ProductID: c.ProductID, Environment: c.Environment, AuditSinks: c.AuditSinks})
+			if c.Valid {
+				if err != nil || storage.ProductID != c.ProductID {
+					t.Fatal(err)
+				}
+			} else if !errors.Is(err, heimdall.ErrInvalidArgument) {
+				t.Fatal(err)
+			}
+		})
+	}
+	storage, err := postgres.NewStorage(db, postgres.StorageOptions{ProductID: "ledger", Environment: "production"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = storage.Ready(nil); !errors.Is(err, heimdall.ErrInvalidArgument) {
+		t.Fatal(err)
+	}
+	if _, err = storage.AppendAudit(nil, nil); !errors.Is(err, heimdall.ErrInvalidArgument) {
+		t.Fatal(err)
+	}
+	if _, err = storage.Identity.Check(nil, heimdall.Identity{}); !errors.Is(err, heimdall.ErrInvalidArgument) {
+		t.Fatal(err)
+	}
+	if err = storage.Identity.Invalidate(nil, heimdall.IdentityNegative{}); !errors.Is(err, heimdall.ErrInvalidArgument) {
+		t.Fatal(err)
+	}
+	if db.Stats().OpenConnections != 0 {
+		t.Fatal("factory opened connection")
+	}
+}
+func TestPublicPostgresRuntime(t *testing.T) {
+	url := os.Getenv("HEIMDALL_TEST_DATABASE_URL")
+	if url == "" || os.Getenv("HEIMDALL_TEST_READ_PEER") != "" {
+		t.Skip("public PostgreSQL runtime")
+	}
+	h := setupRuntime(t, "", "public-go")
+	db, err := sql.Open("postgres", url+"&options=-c%20role%3Dheimdall_public_runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	sinks := []string{"siem"}
+	storage, err := postgres.NewStorage(db, postgres.StorageOptions{ProductID: "ledger", Environment: "public-go", AuditSinks: sinks})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sinks[0] = "changed"
+	h.options.Storage = storage
+	ctx := context.Background()
+	client, err := heimdall.New(ctx, h.config, h.manifest, h.options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor, err := client.Tokens().Verify(ctx, h.token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = client.Tokens().Verify(ctx, "invalid"); !errors.Is(err, heimdall.ErrUnauthenticated) {
+		t.Fatal(err)
+	}
+	err = storage.Identity.Invalidate(ctx, heimdall.IdentityNegative{Identity: actor.Identity(), Context: "bearer", TokenDigest: strings.Repeat("a", 64), Reason: "identity_inactive"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = client.Tokens().Verify(ctx, h.token); !errors.Is(err, heimdall.ErrUnauthenticated) {
+		t.Fatal(err)
+	}
+	var count int
+	if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_events WHERE product_id='ledger' AND environment='public-go'").Scan(&count); err != nil || count != 3 {
+		t.Fatal(count, err)
+	}
+	if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_deliveries WHERE product_id='ledger' AND environment='public-go' AND sink_id='siem'").Scan(&count); err != nil || count != 3 {
+		t.Fatal(count, err)
+	}
+	if _, err = storage.AppendAudit(ctx, map[string]any{}); !errors.Is(err, heimdall.ErrInvalidArgument) {
+		t.Fatal(err)
+	}
+	if err = db.PingContext(ctx); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	if _, err = heimdall.New(ctx, h.config, h.manifest, h.options); !errors.Is(err, heimdall.ErrUnavailable) {
+		t.Fatal(err)
 	}
 }

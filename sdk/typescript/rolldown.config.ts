@@ -1,10 +1,10 @@
 import { defineConfig } from "rolldown";
 
 export default defineConfig({
-  input: "src/index.ts",
+  input: { index: "src/index.ts", postgres: "src/postgres.ts" },
   platform: "node",
   output: {
-    file: "dist/index.js",
+    dir: "dist",
     format: "esm",
     sourcemap: true,
     cleanDir: true,

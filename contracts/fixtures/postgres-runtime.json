@@ -1,0 +1,51 @@
+[
+  {
+    "name": "scoped empty routing",
+    "productId": "ledger",
+    "environment": "production",
+    "auditSinks": [],
+    "valid": true
+  },
+  {
+    "name": "two sinks",
+    "productId": "ledger",
+    "environment": "production",
+    "auditSinks": ["siem", "archive"],
+    "valid": true
+  },
+  {
+    "name": "empty product",
+    "productId": "",
+    "environment": "production",
+    "auditSinks": [],
+    "valid": false
+  },
+  {
+    "name": "newline environment",
+    "productId": "ledger",
+    "environment": "production\n",
+    "auditSinks": [],
+    "valid": false
+  },
+  {
+    "name": "duplicate sink",
+    "productId": "ledger",
+    "environment": "production",
+    "auditSinks": ["siem", "siem"],
+    "valid": false
+  },
+  {
+    "name": "empty sink",
+    "productId": "ledger",
+    "environment": "production",
+    "auditSinks": [""],
+    "valid": false
+  },
+  {
+    "name": "newline sink",
+    "productId": "ledger",
+    "environment": "production",
+    "auditSinks": ["siem\n"],
+    "valid": false
+  }
+]

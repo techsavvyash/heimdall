@@ -127,3 +127,6 @@ Phase 3 authentication-audit checkpoint: [[evidence/phase-3-audited-authenticati
 Phase 3 bundled-validation checkpoint: [[evidence/phase-3-bundled-audit-validation]] removes the external schema-validation callback from audited authentication in both SDKs, with canonical-schema differential checks and PostgreSQL integration proof. Public runtime assembly remains open.
 
 Phase 3 public-runtime checkpoint: [[evidence/phase-3-public-runtime]] exposes scoped constructors and audited bearer authentication in TS/Go, with startup failures, packed TS consumer proof and Railway service composition. Public adapter assembly, sessions and authorization remain open.
+
+
+Phase 3 PostgreSQL runtime checkpoint: [[evidence/phase-3-postgres-runtime]] exposes scoped storage factories in both SDKs and verifies the public runtime with restricted PostgreSQL credentials, committed events/outbox rows and durable denial. Sessions, public authorization and combined live-provider/durable-storage proof remain open.

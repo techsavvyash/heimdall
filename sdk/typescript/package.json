@@ -12,6 +12,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./postgres": {
+      "types": "./dist/postgres.d.ts",
+      "import": "./dist/postgres.js"
     }
   },
   "scripts": {
@@ -21,11 +25,11 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@types/pg": "8.23.1",
     "jose": "6.2.12",
     "pg": "8.23.1"
   },
   "devDependencies": {
-    "@types/pg": "8.23.1",
     "ajv": "8.20.0",
     "rolldown": "1.2.13",
     "vitest": "5.0.3"

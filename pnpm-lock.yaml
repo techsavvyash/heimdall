@@ -467,6 +467,9 @@ importers:
 
   sdk/typescript:
     dependencies:
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
       jose:
         specifier: 6.2.12
         version: 6.2.12
@@ -474,9 +477,6 @@ importers:
         specifier: 8.23.1
         version: 8.23.1
     devDependencies:
-      '@types/pg':
-        specifier: 8.23.1
-        version: 8.23.1
       ajv:
         specifier: 8.20.0
         version: 8.20.0

@@ -1,3 +1,5 @@
+import { Pool } from "pg";
+import { createPostgresStorage } from "../src/postgres.js";
 import { readFileSync } from "node:fs";
 import { afterEach, expect, test, vi } from "vitest";
 import { createHeimdall, auditEventDigest as auditDigest } from "../src/index.js";
@@ -14,9 +16,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
-function setup(failure = "") {
+function setup(failure = "", environment = "production") {
   vi.spyOn(Date, "now").mockReturnValue(token.now);
-  const config = { ...base.config, issuer: token.issuer, audience: token.audience };
+  const config = { ...base.config, environment, issuer: token.issuer, audience: token.audience };
   const artifact = compileTenantModel(base.manifest, config);
   const metadata = JSON.parse(
     JSON.stringify(read("oidc-discovery.json").metadata).replaceAll(
@@ -174,3 +176,83 @@ test("startup captures ports and policy before readiness yields", async () => {
   expect((await runtime.tokens.verify(raw, { signal })).policyVersion).toBe("p1");
   expect(s.events).toHaveLength(1);
 });
+
+test.each(
+  read("postgres-runtime.json") as {
+    name: string;
+    productId: string;
+    environment: string;
+    auditSinks: string[];
+    valid: boolean;
+  }[],
+)("PostgreSQL factory $name", async (c) => {
+  const pool = new Pool();
+  const connect = vi.spyOn(pool, "connect");
+  try {
+    let result = false;
+    try {
+      const storage = createPostgresStorage(pool, c);
+      result = storage.productId === c.productId && Object.isFrozen(storage);
+    } catch (error) {
+      if ((error as { code: string }).code !== "invalid_argument") throw error;
+    }
+    expect(result).toBe(c.valid);
+    expect(connect).not.toHaveBeenCalled();
+  } finally {
+    await pool.end();
+  }
+});
+
+test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TEST_READ_PEER)(
+  "public runtime uses PostgreSQL readiness denial and durable audit",
+  async () => {
+    const s = setup("", "public-ts");
+    const pool = new Pool({
+      connectionString: process.env.HEIMDALL_TEST_DATABASE_URL,
+      options: "-c role=heimdall_public_runtime",
+    });
+    const signal = new AbortController().signal;
+    const sinks = ["siem"];
+    const storage = createPostgresStorage(pool, { ...s.config, auditSinks: sinks });
+    sinks[0] = "changed";
+    s.options.storage = storage;
+    try {
+      const runtime = await createHeimdall(
+        JSON.stringify(s.config),
+        JSON.stringify(base.manifest),
+        s.options,
+        { signal },
+      );
+      await runtime.tokens.verify(raw, { signal });
+      await expect(runtime.tokens.verify("invalid", { signal })).rejects.toThrow("unauthenticated");
+      await storage.identity.invalidate(
+        {
+          issuer: token.issuer,
+          subject: token.subject,
+          context: "bearer",
+          tokenDigest: "a".repeat(64),
+          reason: "identity_inactive",
+        },
+        signal,
+      );
+      await expect(runtime.tokens.verify(raw, { signal })).rejects.toThrow("unauthenticated");
+      const events = await pool.query(
+        "SELECT count(*)::int AS count FROM heimdall.audit_events WHERE product_id='ledger' AND environment='public-ts'",
+      );
+      expect(events.rows[0].count).toBe(3);
+      const delivery = await pool.query(
+        "SELECT sink_id, count(*)::int AS count FROM heimdall.audit_deliveries WHERE product_id='ledger' AND environment='public-ts' GROUP BY sink_id",
+      );
+      expect(delivery.rows).toEqual([{ sink_id: "siem", count: 3 }]);
+      await expect(storage.appendAudit({}, signal)).rejects.toThrow("invalid_argument");
+      expect((await pool.query("SELECT 1 AS alive")).rows[0].alive).toBe(1);
+    } finally {
+      await pool.end();
+    }
+    await expect(
+      createHeimdall(JSON.stringify(s.config), JSON.stringify(base.manifest), s.options, {
+        signal,
+      }),
+    ).rejects.toThrow("unavailable");
+  },
+);

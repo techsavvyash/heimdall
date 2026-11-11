@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
@@ -11,11 +11,15 @@ try {
   run("pnpm", ["--filter", "@heimdall/sdk", "pack", "--pack-destination", archive], root);
   const tarball = readdirSync(archive).find((name) => name.endsWith(".tgz"));
   if (!tarball) throw new Error("Package tarball missing");
-  run("tar", ["-xzf", join(archive, tarball), "-C", archive]);
-  const scope = join(work, "node_modules", "@heimdall");
-  mkdirSync(scope, { recursive: true });
-  renameSync(join(archive, "package"), join(scope, "sdk"));
-  writeFileSync(join(work, "package.json"), '{"type":"module"}');
+  writeFileSync(
+    join(work, "package.json"),
+    JSON.stringify({
+      type: "module",
+      dependencies: { "@heimdall/sdk": "file:" + join(archive, tarball) },
+    }),
+  );
+  writeFileSync(join(work, "pnpm-workspace.yaml"), "minimumReleaseAge: 43200\n");
+  run("pnpm", ["install", "--prefer-offline", "--ignore-scripts"]);
   writeFileSync(
     join(work, "tsconfig.json"),
     JSON.stringify({
@@ -34,6 +38,10 @@ try {
   writeFileSync(
     join(work, "consumer.ts"),
     `import { createHeimdall, auditEventDigest, type Principal, type RuntimeOptions } from '@heimdall/sdk';
+import { createPostgresStorage } from '@heimdall/sdk/postgres';
+declare const pool: Parameters<typeof createPostgresStorage>[0];
+const storage = createPostgresStorage(pool,{productId:'ledger',environment:'production',auditSinks:['siem']});
+void storage;
 declare const config: string, manifest: string, options: RuntimeOptions;
 const signal = new AbortController().signal;
 const runtime = await createHeimdall(config, manifest, options, {signal});
@@ -48,6 +56,9 @@ void forged;
   writeFileSync(
     join(work, "probe.mjs"),
     `import {createHeimdall,HeimdallError,auditEventDigest} from '@heimdall/sdk';
+import {createPostgresStorage} from '@heimdall/sdk/postgres';
+const storage = createPostgresStorage({connect(){}},{productId:'ledger',environment:'production',auditSinks:[]});
+if(!Object.isFrozen(storage) || typeof storage.appendAudit !== 'function') throw new Error('Missing PostgreSQL factory');
 if(typeof createHeimdall !== 'function' || typeof auditEventDigest({}) !== 'string') throw new Error('Missing runtime exports');
 try {
  await createHeimdall('{}','{}',{}, {signal:new AbortController().signal});
@@ -59,7 +70,9 @@ try {
   );
   run(join(root, "node_modules", ".bin", "tsc"), ["-p", join(work, "tsconfig.json")]);
   run(process.execPath, [join(work, "probe.mjs")]);
-  console.log("Packed runtime: isolated import, declarations and principal type boundary passed");
+  console.log(
+    "Packed runtime: fresh dependency install, core/PostgreSQL imports, declarations and principal type boundary passed",
+  );
 } finally {
   rmSync(work, { recursive: true, force: true });
 }
