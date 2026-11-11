@@ -241,6 +241,39 @@ try:
    before=sql(snapshot_query,database)
    retention_attempt(second,selected)
    assert sql(snapshot_query,database)==before
+  # Prepared hold structure only: existing audit events are reference stand-ins,
+  # not proof of an authorized administrative hold action.
+  hold_fixture=json.loads((ROOT/'contracts/fixtures/audit-retention-holds.json').read_text())
+  hold_sql=(ROOT/'contracts/persistence'/hold_fixture['path']).read_text()
+  assert hashlib.sha256(hold_sql.encode()).hexdigest()==hold_fixture['checksum']
+  hold_db='retention_holds'
+  sql('CREATE DATABASE '+hold_db+' TEMPLATE retention_port_go')
+  sql('BEGIN;'+hold_sql+'ROLLBACK;',hold_db)
+  assert sql("SELECT to_regclass('heimdall_retention.event_holds') IS NULL",hold_db)=='t'
+  sql(hold_sql,hold_db)
+  place="INSERT INTO heimdall_retention.event_holds(product_id,environment,hold_id,event_id,tenant_id,placed_at,placement_event_id) VALUES('ledger','staging','hold-1','z-request','tenant-1',1001,'ordinary')"
+  release="UPDATE heimdall_retention.event_holds SET released_at=2001,release_event_id='normal-terminal' WHERE hold_id='hold-1'"
+  def reject_hold(statement):
+   r=subprocess.run(['docker','exec','-i',name,'psql','-U','postgres','-d',hold_db,'-At','-v','ON_ERROR_STOP=1','-v','VERBOSITY=verbose'],input='BEGIN;'+statement+';ROLLBACK;',capture_output=True,text=True)
+   assert r.returncode!=0 and '23514' in r.stderr,r.stderr
+  sql('BEGIN;'+place+';ROLLBACK;',hold_db)
+  assert sql('SELECT count(*) FROM heimdall_retention.event_holds',hold_db)=='0'
+  for statement in [place.replace("'tenant-1'","'other'"),place.replace("1001,'ordinary'","1000,'ordinary'"),place.replace("'ordinary'","'missing'"),place.replace("'staging'","'other'"),place.replace("'ordinary'","'z-request'"),"UPDATE heimdall.audit_events SET payload_digest=decode(repeat('00',32),'hex') WHERE product_id='ledger' AND environment='staging' AND event_id='ordinary';"+place]:reject_hold(statement)
+  with concurrent.futures.ThreadPoolExecutor(max_workers=2) as workers:
+   futures=[workers.submit(sql,place.replace('hold-1','hold-'+str(i)),hold_db) for i in [1,2]]
+   for future in futures:future.result(timeout=10)
+  assert sql('SELECT count(*) FROM heimdall_retention.event_holds WHERE released_at IS NULL',hold_db)=='2'
+  for statement in ["DELETE FROM heimdall_retention.event_holds WHERE hold_id='hold-1'","UPDATE heimdall_retention.event_holds SET tenant_id='other' WHERE hold_id='hold-1'","UPDATE heimdall_retention.event_holds SET event_id='ordinary' WHERE hold_id='hold-1'",release.replace('2001','1000'),release.replace("'normal-terminal'","'ordinary'")]:reject_hold(statement)
+  sql(release,hold_db)
+  snapshot=sql("SELECT jsonb_agg(to_jsonb(h) ORDER BY hold_id) FROM heimdall_retention.event_holds h",hold_db)
+  sql(release,hold_db)
+  assert sql("SELECT jsonb_agg(to_jsonb(h) ORDER BY hold_id) FROM heimdall_retention.event_holds h",hold_db)==snapshot
+  assert sql('SELECT count(*) FROM heimdall_retention.event_holds WHERE released_at IS NULL',hold_db)=='1'
+  reject_hold("UPDATE heimdall_retention.event_holds SET released_at=NULL,release_event_id=NULL WHERE hold_id='hold-1'")
+  reject_hold("UPDATE heimdall_retention.event_holds SET released_at=2002 WHERE hold_id='hold-1'")
+  # A hold on the request protects a resolved decision's whole group, not only its target row.
+  assert sql("SELECT EXISTS(SELECT 1 FROM heimdall_retention.event_holds h JOIN heimdall_retention.event_identities i USING(product_id,environment,event_id) WHERE h.product_id='ledger' AND h.environment='staging' AND i.decision_id='decision-1' AND h.released_at IS NULL)",hold_db)=='t'
+  assert sql("SELECT has_table_privilege('public_capacity_runtime','heimdall_retention.event_holds','INSERT')",hold_db)=='f'
   identity_db='retention_identities'
   sql('CREATE DATABASE '+identity_db+' TEMPLATE cli_activation')
   sql('BEGIN;'+identity_sql+'ROLLBACK;',identity_db)
@@ -274,6 +307,6 @@ try:
   sql("UPDATE heimdall_capacity.policy SET state='ready'",'normal')
   go('^TestCapacityBackfillPendingRecovery$',dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
   ts(dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
- print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work','SIGKILL after the first committed candidate resumes in the other language with original initiators and exact event outbox and capacity counts','reciprocal retention COMMIT loss returns unknown and the other SDK retries without changing compact metadata','prepared immutable identities bind source routing and decision members and survive privileged test payload removal']}))
+ print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work','SIGKILL after the first committed candidate resumes in the other language with original initiators and exact event outbox and capacity counts','reciprocal retention COMMIT loss returns unknown and the other SDK retries without changing compact metadata','prepared hold ledger preserves independent holds and immutable releases with scoped reference checks','prepared immutable identities bind source routing and decision members and survive privileged test payload removal']}))
 finally:
  if created:run(['docker','rm','--force',name],stdout=subprocess.DEVNULL)

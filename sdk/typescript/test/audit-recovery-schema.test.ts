@@ -83,3 +83,16 @@ test("prepared retention identities match the shared SQL checksum", () => {
   const sql = readFileSync(new URL(`../../../contracts/persistence/${f.path}`, import.meta.url));
   expect(createHash("sha256").update(sql).digest("hex")).toBe(f.checksum);
 });
+
+test("prepared retention hold SQL matches shared checksum", () => {
+  const fixture = JSON.parse(
+    readFileSync(
+      new URL("../../../contracts/fixtures/audit-retention-holds.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const sql = readFileSync(
+    new URL(`../../../contracts/persistence/${fixture.path}`, import.meta.url),
+  );
+  expect(createHash("sha256").update(sql).digest("hex")).toBe(fixture.checksum);
+});

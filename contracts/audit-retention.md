@@ -200,3 +200,30 @@ metadata quota/reservations, checkpointed backfill, publication and runtime
 integration remain required before this prepared port can become an operational
 retention workflow. Its table locks are intentionally an offline mechanism, not
 an acceptable online cleanup strategy. Payloads remain untouched.
+
+## Prepared durable hold ledger
+
+The separate `0004-retention-holds.sql` prepares an append-preserving ledger of
+scoped hold IDs, target retained event IDs, placement time/reference and optional
+release time/reference. It does not register v4 or grant runtime access. Multiple
+hold IDs may protect the same event independently. Any active hold on a decision
+member protects the complete group; releasing one hold never releases another.
+
+Placement fields cannot change, rows cannot be deleted, and a released hold cannot
+be reopened or revised. Exact no-op updates are allowed. Release requires a
+distinct audit reference and a timestamp no earlier than placement. New holds must
+start active. Target and audit references are product/environment scoped and
+must have the same tenant, including exact null semantics. Target payload must
+still exist; the audit reference must have live payload whose indexed time and
+digest match its retained identity. Full ha1 validation and administrative event
+purpose/actor/authorization are deliberately not attested by these SQL checks.
+
+The trigger locks the target retained identity. Future retirement must lock all
+group identities in deterministic order and then check active holds before
+removing any payload. This shared lock protocol has not yet been wired to a purge
+port, so the ledger alone does not prevent privileged direct payload deletion.
+The SDK hold workflow must atomically persist its authorized administrative event,
+compact reference and hold transition with metadata accounting. Full history
+validation, hold quotas, retirement exclusion, v4 admission and public APIs remain
+required. Tests of this prepared schema use existing events as reference stand-ins;
+they prove structural constraints, not authorized administrative actions.
