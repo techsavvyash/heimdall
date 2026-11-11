@@ -211,3 +211,44 @@ Retry time is scheduling state, not a fence: an old external request may still b
 running when another attempt becomes due. At-least-once sink deduplication remains
 required. These audit delivery primitives must not be reused to unblock managed
 OpenFGA mutations; their separate quiescence/recovery gate is unchanged.
+
+## Identity-bound session records
+
+Authenticated-session persistence uses the internal SessionRecords adapter with a
+mandatory payload validator returning exact product, environment, issuer and
+subject. Generic record CRUD only reads/updates/deletes rows with NULL
+identity_hash; it cannot bypass the bound session path. Neither primitive verifies
+provider authentication, freshness, session lifetime policy or audit obligations.
+Those checks remain required in the composing SDK lifecycle.
+
+identity_hash is SHA-256 over the ASCII canonical encodeIdentity(issuer, subject)
+value. It never hashes an email address. For bound records, the existing hr1
+associated-data recordKey is lower-case hex(key_hash) concatenated with
+lower-case hex(identity_hash), exactly 128 ASCII characters. The encrypted
+[expiresAt, base64url(payload)] wrapper remains unchanged. Reads verify both the
+index/AAD binding and the decoded payload's exact identity and product scope.
+Generic unbound records retain their existing 64-character key-hash AAD.
+
+Session create/CAS and identity invalidation acquire the same transaction advisory
+lock: first eight bytes, interpreted as signed big-endian int64, of SHA-256 of
+ASCII `heimdall.identity.v1|<product>|<environment>|<identityHashHex>`.
+contracts/fixtures/session-storage.json supplies shared identity and lock vectors.
+Transactions use READ COMMITTED and synchronous_commit=on. A writer checks the
+persistent denial under the lock before writing. CAS cannot change identity.
+Invalidation atomically upserts the denial and deletes that identity's scoped
+records. Thus a racing creation either commits before invalidation and is deleted,
+or observes denial and fails unauthenticated. Lock hash collisions only serialize
+otherwise independent operations; full scoped identities still govern every query.
+
+Reads exclude denied identities. A read already in flight can precede invalidation;
+this primitive does not revoke data already returned to a caller. Observed timestamps
+only advance and deleted is sticky across inactive replays. No denial-clearing API
+is implemented: reactivation needs the separately specified authoritative cleanup,
+current-grant reconciliation and fresh-login gate. Historical activation events
+must never clear a newer denial.
+
+A lost COMMIT response is outcome_unknown. Invalidation may be replayed safely;
+its returned count reports rows deleted by that invocation, not earlier attempts.
+No claim of success is inferred from a connection close. SDK factories must apply
+this invalidation to every relevant product binding when processing a provider-wide
+negative observation; this scoped store does not discover products or run a worker.

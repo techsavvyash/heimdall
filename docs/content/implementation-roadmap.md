@@ -103,3 +103,5 @@ Phase 3 acknowledgement checkpoint: [[evidence/phase-3-audit-acknowledgements]] 
 Phase 3 pending-read checkpoint: [[evidence/phase-3-audit-pending]] records bounded due-event selection, payload/scope verification, explicit invalid candidates and cross-language decoding. Worker scheduling and quarantine remain open.
 
 Phase 3 delivery-transition checkpoint: [[evidence/phase-3-audit-transitions]] records conditional attempt claims, monotonic retry deferral, idempotent quarantine and lost-COMMIT proof in both languages. External delivery policy and privileged replay remain open.
+
+Phase 3 identity-session checkpoint: [[evidence/phase-3-identity-sessions]] records identity-bound encryption, atomic persistent denial/session deletion, cross-language locking and uncertain-COMMIT recovery. Provider freshness, reactivation and audited lifecycle composition remain open.

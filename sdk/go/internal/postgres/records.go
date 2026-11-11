@@ -32,7 +32,7 @@ type Record struct {
 
 var token = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
-const columns = "revision::text, envelope, expires_at::text, key_id"
+const columns = "revision::text, envelope, expires_at::text, key_id, identity_hash"
 const maxSafe = 9007199254740991
 
 func valid(s string, max int) bool { return len(s) > 0 && len(s) <= max && token.MatchString(s) }
@@ -87,7 +87,8 @@ func (r *Records) query(ctx context.Context, scope contract.RecordScope, write b
 		return nil, err
 	}
 	var revision, envelope, expiry, keyID string
-	err = conn.QueryRowContext(ctx, query, args...).Scan(&revision, &envelope, &expiry, &keyID)
+	var identityHash []byte
+	err = conn.QueryRowContext(ctx, query, args...).Scan(&revision, &envelope, &expiry, &keyID, &identityHash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -110,6 +111,15 @@ func (r *Records) query(ctx context.Context, scope contract.RecordScope, write b
 		}
 		return nil, err
 	}
+	if len(identityHash) != 0 {
+		if len(identityHash) != 32 {
+			return nil, contract.ErrUnavailable
+		}
+		scope.RecordKey += hex.EncodeToString(identityHash)
+	}
+	return r.open(scope, revision, envelope, expiry, keyID)
+}
+func (r *Records) open(scope contract.RecordScope, revision, envelope, expiry, keyID string) (*Record, error) {
 	rev, err := strconv.ParseInt(revision, 10, 64)
 	if err != nil || rev <= 0 || strconv.FormatInt(rev, 10) != revision {
 		return nil, contract.ErrUnavailable
@@ -156,7 +166,7 @@ func (r *Records) Get(ctx context.Context, kind, key string) (*Record, error) {
 	if err != nil {
 		return nil, err
 	}
-	return r.query(ctx, scope, false, "SELECT "+columns+" FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind=$3 AND key_hash=$4 AND expires_at>$5", r.product, r.environment, kind, hash, r.now())
+	return r.query(ctx, scope, false, "SELECT "+columns+" FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind=$3 AND key_hash=$4 AND identity_hash IS NULL AND expires_at>$5", r.product, r.environment, kind, hash, r.now())
 }
 func (r *Records) CompareAndSwap(ctx context.Context, kind, key, revision string, value []byte, expires int64) (*Record, error) {
 	rev, err := strconv.ParseInt(revision, 10, 64)
@@ -171,7 +181,7 @@ func (r *Records) CompareAndSwap(ctx context.Context, kind, key, revision string
 	if err != nil {
 		return nil, err
 	}
-	return r.query(ctx, scope, true, "UPDATE heimdall.records SET key_id=$5,envelope=$6,expires_at=$7 WHERE product_id=$1 AND environment=$2 AND kind=$3 AND key_hash=$4 AND revision=$8 AND expires_at>$9 RETURNING "+columns, r.product, r.environment, kind, hash, keyID, envelope, expires, revision, r.now())
+	return r.query(ctx, scope, true, "UPDATE heimdall.records SET key_id=$5,envelope=$6,expires_at=$7 WHERE product_id=$1 AND environment=$2 AND kind=$3 AND key_hash=$4 AND identity_hash IS NULL AND revision=$8 AND expires_at>$9 RETURNING "+columns, r.product, r.environment, kind, hash, keyID, envelope, expires, revision, r.now())
 }
 func (r *Records) Delete(ctx context.Context, kind, key string) error {
 	scope, hash, err := r.scope(kind, key)
@@ -179,6 +189,6 @@ func (r *Records) Delete(ctx context.Context, kind, key string) error {
 		return err
 	}
 	// DELETE has no rows; the shared query path still classifies uncertain writes.
-	_, err = r.query(ctx, scope, true, "DELETE FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind=$3 AND key_hash=$4", r.product, r.environment, kind, hash)
+	_, err = r.query(ctx, scope, true, "DELETE FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind=$3 AND key_hash=$4 AND identity_hash IS NULL", r.product, r.environment, kind, hash)
 	return err
 }

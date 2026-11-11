@@ -1,0 +1,260 @@
+package postgres
+
+import (
+	"bytes"
+	"context"
+	"database/sql"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/santhosh-tekuri/jsonschema/v6"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
+	"os"
+	"strconv"
+	"sync"
+	"testing"
+	"time"
+)
+
+type sessionFixture struct {
+	Record             json.RawMessage
+	IdentityHash, Lock string
+	Now, ExpiresAt     int64
+}
+
+func sessionSetup(t *testing.T, db *sql.DB, product string) (*SessionRecords, sessionFixture) {
+	t.Helper()
+	raw, err := os.ReadFile("../../../../contracts/fixtures/session-storage.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var f sessionFixture
+	if err = json.Unmarshal(raw, &f); err != nil {
+		t.Fatal(err)
+	}
+	compiler := jsonschema.NewCompiler()
+	for _, name := range []string{"enterprise-evidence", "session-payload"} {
+		raw, err := os.ReadFile("../../../../contracts/" + name + ".schema.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var schema any
+		if err = json.Unmarshal(raw, &schema); err != nil {
+			t.Fatal(err)
+		}
+		if err = compiler.AddResource(schema.(map[string]any)["$id"].(string), schema); err != nil {
+			t.Fatal(err)
+		}
+	}
+	raw, _ = os.ReadFile("../../../../contracts/session-payload.schema.json")
+	var root map[string]any
+	_ = json.Unmarshal(raw, &root)
+	shape, err := compiler.Compile(root["$id"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	validate := func(raw []byte) (SessionPrincipal, error) {
+		var v map[string]any
+		if json.Unmarshal(raw, &v) != nil || shape.Validate(v) != nil {
+			return SessionPrincipal{}, contract.ErrInvalidArgument
+		}
+		return SessionPrincipal{v["productId"].(string), v["environment"].(string), v["issuer"].(string), v["subject"].(string)}, nil
+	}
+	cipher, err := contract.NewRecordCipher("test-key", map[string][]byte{"test-key": bytes.Repeat([]byte{7}, 32)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := NewSessionRecords(db, cipher, product, "production", validate, func() int64 { return f.Now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s, f
+}
+func sessionPayload(f sessionFixture, product, subject string) []byte {
+	var v map[string]any
+	_ = json.Unmarshal(f.Record, &v)
+	v["productId"] = product
+	if subject != "" {
+		v["subject"] = subject
+	}
+	raw, _ := json.Marshal(v)
+	return raw
+}
+func TestSessionRecords(t *testing.T) {
+	url := os.Getenv("HEIMDALL_TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("live sessions")
+	}
+	db, err := sql.Open("postgres", url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	runtime, err := sql.Open("postgres", url+"&options=-c%20role%3Dheimdall_identity_runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	shared, f := sessionSetup(t, runtime, "ledger-identity")
+	ctx := context.Background()
+	identity, err := identityBinding("https://id.example.com", "Maya\x00東京")
+	if err != nil || hex.EncodeToString(identity) != f.IdentityHash || strconv.FormatInt(identityLock("ledger-identity", "production", identity), 10) != f.Lock {
+		t.Fatal("identity/lock parity", err)
+	}
+	peer, err := shared.GetSession(ctx, "from-ts-session")
+	if err != nil || peer == nil {
+		t.Fatal("TS peer", err)
+	}
+	var got, want any
+	_ = json.Unmarshal(peer.Value, &got)
+	_ = json.Unmarshal(f.Record, &want)
+	a, _ := json.Marshal(got)
+	b, _ := json.Marshal(want)
+	if !bytes.Equal(a, b) {
+		t.Fatal("peer payload")
+	}
+	if os.Getenv("HEIMDALL_TEST_READ_PEER") != "" {
+		return
+	}
+	if _, err = shared.CreateSession(ctx, "from-go-session", f.Record, f.ExpiresAt); err != nil {
+		t.Fatal(err)
+	}
+	if n, e := shared.InvalidateIdentity(ctx, "https://id.example.com", "cross-deny", 4000, "inactive"); e != nil || n != 1 {
+		t.Fatal("cross invalidation", n, e)
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec("SELECT pg_advisory_xact_lock($1::bigint)", f.Lock); err != nil {
+		t.Fatal(err)
+	}
+	short, cancel := context.WithTimeout(ctx, 150*time.Millisecond)
+	_, err = shared.CreateSession(short, "go-blocked", f.Record, f.ExpiresAt)
+	cancel()
+	_ = tx.Rollback()
+	if !errors.Is(err, contract.ErrDeadlineExceeded) {
+		t.Fatal("shared lock", err)
+	}
+	s, _ := sessionSetup(t, runtime, "identity-go")
+	value := sessionPayload(f, "identity-go", "")
+	if _, err = s.CreateSession(ctx, "invalid", []byte("{}"), f.ExpiresAt); !errors.Is(err, contract.ErrInvalidArgument) {
+		t.Fatal(err)
+	}
+	first, err := s.CreateSession(ctx, "go-one", value, f.ExpiresAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.CreateSession(ctx, "go-two", value, f.ExpiresAt); err != nil {
+		t.Fatal(err)
+	}
+	if r, e := s.records.Get(ctx, "session", "go-one"); e != nil || r != nil {
+		t.Fatal("generic bypass", e)
+	}
+	if r, e := s.records.CompareAndSwap(ctx, "session", "go-one", first.Revision, value, f.ExpiresAt); e != nil || r != nil {
+		t.Fatal("generic CAS bypass", e)
+	}
+	if err = s.records.Delete(ctx, "session", "go-one"); err != nil {
+		t.Fatal(err)
+	}
+	if r, e := s.CompareAndSwapSession(ctx, "go-one", first.Revision, sessionPayload(f, "identity-go", "different"), f.ExpiresAt); e != nil || r != nil {
+		t.Fatal("identity switch", e)
+	}
+	if r, e := s.CompareAndSwapSession(ctx, "go-one", first.Revision, value, f.ExpiresAt); e != nil || r == nil {
+		t.Fatal("CAS", e)
+	}
+	if _, err = s.CreateSession(ctx, "go-other", sessionPayload(f, "identity-go", "other"), f.ExpiresAt); err != nil {
+		t.Fatal(err)
+	}
+	if n, e := s.InvalidateIdentity(ctx, "https://id.example.com", "Maya\x00東京", 5000, "inactive"); e != nil || n != 2 {
+		t.Fatal(n, e)
+	}
+	if r, e := s.GetSession(ctx, "go-one"); e != nil || r != nil {
+		t.Fatal("denied read", e)
+	}
+	if r, e := s.GetSession(ctx, "go-other"); e != nil || r == nil {
+		t.Fatal("other identity", e)
+	}
+	if _, e := s.CreateSession(ctx, "go-denied", value, f.ExpiresAt); !errors.Is(e, contract.ErrUnauthenticated) {
+		t.Fatal(e)
+	}
+	_, err = s.InvalidateIdentity(ctx, "https://id.example.com", "Maya\x00東京", 4000, "deleted")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.InvalidateIdentity(ctx, "https://id.example.com", "Maya\x00東京", 6000, "inactive")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var observed int64
+	var reason string
+	if err = db.QueryRow("SELECT observed_at,reason FROM heimdall.identity_denials WHERE product_id='identity-go' AND identity_hash=$1", identity).Scan(&observed, &reason); err != nil || observed != 6000 || reason != "deleted" {
+		t.Fatal(observed, reason, err)
+	}
+	var wg sync.WaitGroup
+	errs := make(chan error, 9)
+	for i := range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, e := s.CreateSession(ctx, fmt.Sprintf("go-race-%d", i), sessionPayload(f, "identity-go", "racing"), f.ExpiresAt)
+			errs <- e
+		}()
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, e := s.InvalidateIdentity(ctx, "https://id.example.com", "racing", 5000, "inactive")
+		errs <- e
+	}()
+	wg.Wait()
+	close(errs)
+	for e := range errs {
+		if e != nil && !errors.Is(e, contract.ErrUnauthenticated) {
+			t.Fatal(e)
+		}
+	}
+	for i := range 8 {
+		if r, e := s.GetSession(ctx, fmt.Sprintf("go-race-%d", i)); e != nil || r != nil {
+			t.Fatal("race survivor", e)
+		}
+	}
+}
+
+func TestIdentityCommitLoss(t *testing.T) {
+	url := os.Getenv("HEIMDALL_TEST_IDENTITY_COMMIT_LOSS")
+	if url == "" {
+		t.Skip("live COMMIT fault")
+	}
+	db, err := sql.Open("postgres", os.Getenv("HEIMDALL_TEST_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	faulty, err := sql.Open("postgres", url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer faulty.Close()
+	healthy, f := sessionSetup(t, db, "identity-fault-go")
+	fault, _ := sessionSetup(t, faulty, "identity-fault-go")
+	ctx := context.Background()
+	value := sessionPayload(f, "identity-fault-go", "")
+	if _, err = healthy.CreateSession(ctx, "fault-session", value, f.ExpiresAt); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = fault.InvalidateIdentity(ctx, "https://id.example.com", "Maya\x00東京", 4000, "inactive"); !errors.Is(err, contract.ErrOutcomeUnknown) {
+		t.Fatal(err)
+	}
+	var denials, sessions int
+	if err = db.QueryRow("SELECT (SELECT count(*) FROM heimdall.identity_denials WHERE product_id='identity-fault-go'),(SELECT count(*) FROM heimdall.records WHERE product_id='identity-fault-go')").Scan(&denials, &sessions); err != nil || denials != 1 || sessions != 0 {
+		t.Fatal(denials, sessions, err)
+	}
+	if n, e := healthy.InvalidateIdentity(ctx, "https://id.example.com", "Maya\x00東京", 4000, "inactive"); e != nil || n != 0 {
+		t.Fatal(n, e)
+	}
+	if _, err = healthy.CreateSession(ctx, "retry-session", value, f.ExpiresAt); !errors.Is(err, contract.ErrUnauthenticated) {
+		t.Fatal(err)
+	}
+}

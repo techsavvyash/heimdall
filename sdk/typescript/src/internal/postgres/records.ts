@@ -5,38 +5,50 @@ import type { RecordCipher } from "../envelopes.js";
 import { HeimdallError } from "../errors.js";
 
 type Kind = "session" | "login";
-type Row = { revision: string; envelope: string; expires_at: string; key_id: string };
+export type Row = {
+  revision: string;
+  envelope: string;
+  expires_at: string;
+  key_id: string;
+  identity_hash: Buffer | null;
+};
 const token = (s: string, max: number) =>
   typeof s === "string" && s.length > 0 && s.length <= max && !/[^A-Za-z0-9_-]/.test(s);
-const columns = "revision::text, envelope, expires_at::text, key_id";
+export const columns = "revision::text, envelope, expires_at::text, key_id, identity_hash";
 
 // Internal encrypted record adapter. Caller owns the pool and encryption-key lifecycle.
 // Authentication, payload-schema validation and durable audit are composed above this layer.
 export class PostgresRecords {
   constructor(
-    private readonly pool: Pool,
-    private readonly cipher: RecordCipher,
-    private readonly productId: string,
-    private readonly environment: string,
-    private readonly now: () => number = Date.now,
+    protected readonly pool: Pool,
+    protected readonly cipher: RecordCipher,
+    protected readonly productId: string,
+    protected readonly environment: string,
+    protected readonly now: () => number = Date.now,
   ) {
     if (!token(productId, 64) || !token(environment, 64))
       throw new HeimdallError("invalid_argument");
   }
-  private key(kind: Kind, key: string) {
+  protected key(kind: Kind, key: string) {
     if (!["session", "login"].includes(kind) || !token(key, 128))
       throw new HeimdallError("invalid_argument");
     return createHash("sha256").update(key, "ascii").digest();
   }
-  private scope(kind: Kind, hash: Buffer) {
+  protected scope(kind: Kind, hash: Buffer, identityHash?: Buffer | null) {
     return {
       productId: this.productId,
       environment: this.environment,
       kind,
-      recordKey: hash.toString("hex"),
+      recordKey: hash.toString("hex") + (identityHash?.toString("hex") ?? ""),
     };
   }
-  private seal(kind: Kind, hash: Buffer, value: Uint8Array, expiresAt: number) {
+  protected seal(
+    kind: Kind,
+    hash: Buffer,
+    value: Uint8Array,
+    expiresAt: number,
+    identityHash?: Buffer,
+  ) {
     if (
       !(value instanceof Uint8Array) ||
       value.length > 700000 ||
@@ -45,13 +57,14 @@ export class PostgresRecords {
     )
       throw new HeimdallError("invalid_argument");
     const envelope = this.cipher.seal(
-      this.scope(kind, hash),
+      this.scope(kind, hash, identityHash),
       Buffer.from(JSON.stringify([expiresAt, Buffer.from(value).toString("base64url")])),
     );
     return { envelope, keyId: envelope.split(".")[1]! };
   }
-  private open(kind: Kind, hash: Buffer, row: Row) {
+  protected open(kind: Kind, hash: Buffer, row: Row) {
     try {
+      if (row.identity_hash !== null && row.identity_hash.length !== 32) throw new Error();
       if (
         !/^[1-9][0-9]*$/.test(row.revision) ||
         BigInt(row.revision) > 9223372036854775807n ||
@@ -59,7 +72,9 @@ export class PostgresRecords {
       )
         throw new Error();
       const decoded: unknown = JSON.parse(
-        Buffer.from(this.cipher.open(this.scope(kind, hash), row.envelope)).toString("utf8"),
+        Buffer.from(
+          this.cipher.open(this.scope(kind, hash, row.identity_hash), row.envelope),
+        ).toString("utf8"),
       );
       if (
         !Array.isArray(decoded) ||
@@ -101,7 +116,7 @@ export class PostgresRecords {
     const hash = this.key(kind, key);
     const rows = await query<Row>(
       this.pool,
-      `SELECT ${columns} FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind=$3 AND key_hash=$4 AND expires_at>$5`,
+      `SELECT ${columns} FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind=$3 AND key_hash=$4 AND identity_hash IS NULL AND expires_at>$5`,
       [this.productId, this.environment, kind, hash, this.now()],
       false,
       signal,
@@ -122,7 +137,7 @@ export class PostgresRecords {
     const sealed = this.seal(kind, hash, value, expiresAt);
     const rows = await query<Row>(
       this.pool,
-      `UPDATE heimdall.records SET key_id=$5,envelope=$6,expires_at=$7 WHERE product_id=$1 AND environment=$2 AND kind=$3 AND key_hash=$4 AND revision=$8 AND expires_at>$9 RETURNING ${columns}`,
+      `UPDATE heimdall.records SET key_id=$5,envelope=$6,expires_at=$7 WHERE product_id=$1 AND environment=$2 AND kind=$3 AND key_hash=$4 AND identity_hash IS NULL AND revision=$8 AND expires_at>$9 RETURNING ${columns}`,
       [
         this.productId,
         this.environment,
@@ -143,7 +158,7 @@ export class PostgresRecords {
     const hash = this.key(kind, key);
     await query<Row>(
       this.pool,
-      "DELETE FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind=$3 AND key_hash=$4",
+      "DELETE FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind=$3 AND key_hash=$4 AND identity_hash IS NULL",
       [this.productId, this.environment, kind, hash],
       true,
       signal,
