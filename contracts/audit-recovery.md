@@ -94,7 +94,8 @@ through a checksum-pinned, serialized deployment upgrade, not runtime DDL:
 A bridge/upgrade implementation may separate installation and backfill transactions
 for bounded work, but readiness must remain unavailable until coverage is complete.
 No automatic repair, silent old-writer coexistence or timer-based backfill shortcut
-is allowed. The current migration CLI intentionally does not accept 0002.sql yet.
+is allowed. The ordinary v1 initialization mode rejects 0002.sql. The separate preparation
+mode below installs the additive files without activating v2 readiness.
 
 ## Evidence boundary
 
@@ -327,3 +328,43 @@ This is local result gating, not a fence for previously dispatched remote writes
 race orders, competing recoveries, rollback, exact retries, missing-administration
 refusal, cross-language recovery and committed-response loss. Factory selection,
 v2 deployment upgrade/readiness, scheduling, capacity and retention remain open.
+
+## Explicit offline preparation command
+
+The Go deployment CLI now accepts one additional mutually exclusive mode:
+
+```sh
+heimdall-migrate --prepare-audit-upgrade \
+  --sql-directory contracts/persistence/session --writers-drained
+```
+
+It reads HEIMDALL_MIGRATION_DATABASE_URL as before. The directory must contain the
+exact pinned 0002.sql, 0002-backfill.sql and 0002-upgrade.sql files; altered bytes
+are rejected before database I/O. The flag is an operator assertion that all old
+writers, background jobs and retention have stopped and cannot resume. It does
+not stop processes, revoke credentials or prove quiescence. Do not run it on a
+serving application or treat the incomplete upgrade flow as production-ready.
+
+PrepareAuditUpgrade uses a primary/read-write connection, a 30-second overall
+budget, five-second lock and 20-second statement timeouts, synchronous commit and
+the shared deployment advisory lock. From ready v1, it atomically installs the
+prepared tables/guard, writes a singleton deployment receipt with all checksums,
+and changes base metadata to migrating. Version and the v1 migration ledger stay
+unchanged. The new receipt is deployment-owned; no runtime table creation or
+permission to change readiness is inferred.
+
+Failure before COMMIT rolls back the entire installation and metadata change.
+Cancellation during lock acquisition leaves ready v1 intact. Concurrent callers
+serialize; retry inspects the committed receipt, exact migration metadata/ledger
+and required table presence rather than rerunning DDL. It refuses unrecognized
+partial objects, mismatched receipts and incompatible metadata. A lost COMMIT
+response is outcome_unknown and permits this same inspected retry. Neither retry
+nor the receipt asserts full physical-schema integrity; activation must verify
+that separately, together with complete global history coverage.
+
+The command explicitly prints that runtime remains unavailable. It does not
+register scopes, run backfill, publish v2 compatibility or start writers. The v1
+runtime/status checks refuse migrating state; already-running old processes still
+require the external drain. Catalog versions, public SDK factories and their
+ready-v1 policy are unchanged. SQL checksum vectors and live evidence are in
+fixtures/audit-upgrade-prepare.json and tests/integration/audit-upgrade-prepare.py.

@@ -29,3 +29,18 @@ test("prepared audit backfill SQL matches its shared proof checksums", () => {
     expect(createHash("sha256").update(sql).digest("hex")).toBe(item.checksum);
   }
 });
+
+test("audit upgrade preparation files match shared checksums", () => {
+  const f = JSON.parse(
+    readFileSync(
+      new URL("../../../contracts/fixtures/audit-upgrade-prepare.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  for (const item of f.files) {
+    const sql = readFileSync(
+      new URL(`../../../contracts/persistence/session/${item.path}`, import.meta.url),
+    );
+    expect(createHash("sha256").update(sql).digest("hex")).toBe(item.checksum);
+  }
+});
