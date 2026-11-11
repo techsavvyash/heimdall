@@ -12,6 +12,7 @@ import (
 type RoleRelations struct {
 	Assignment string `json:"assignment"`
 	Effective  string `json:"effective"`
+	Delegate   string `json:"delegate"`
 }
 type TenantModel struct {
 	Model       map[string]any           `json:"model"`
@@ -43,7 +44,7 @@ func CompileTenantModel(manifest Manifest, binding Binding) (TenantModel, error)
 	}
 	sort.Strings(names)
 	for index, role := range names {
-		r := RoleRelations{Assignment: fmt.Sprintf("r_%d", index), Effective: fmt.Sprintf("e_%d", index)}
+		r := RoleRelations{Assignment: fmt.Sprintf("r_%d", index), Effective: fmt.Sprintf("e_%d", index), Delegate: fmt.Sprintf("d_%d", index)}
 		result.Roles[role] = r
 		relations[r.Assignment] = map[string]any{"this": map[string]any{}}
 		metadata[r.Assignment] = direct
@@ -60,17 +61,20 @@ func CompileTenantModel(manifest Manifest, binding Binding) (TenantModel, error)
 				grants = append(grants, modelRef(result.Roles[role].Assignment))
 			}
 		}
-		var grant any
-		switch len(grants) {
-		case 0:
-			grant = map[string]any{"difference": map[string]any{"base": modelRef("member"), "subtract": modelRef("member")}}
-		case 1:
-			grant = grants[0]
-		default:
-			grant = map[string]any{"union": map[string]any{"child": grants}}
-		}
-		relations[relation] = modelIntersect(modelRef("member"), grant)
+		relations[relation] = modelIntersect(modelRef("member"), modelUnion(grants))
 	}
+	for _, target := range names {
+		grants := []any{}
+		if target != manifest.OwnerRole {
+			for _, actor := range names {
+				if slices.Contains(manifest.Delegation[actor], target) {
+					grants = append(grants, modelRef(result.Roles[actor].Assignment))
+				}
+			}
+		}
+		relations[result.Roles[target].Delegate] = modelIntersect(modelRef("member"), modelUnion(grants))
+	}
+
 	result.Model = map[string]any{"schema_version": "1.1", "type_definitions": []any{map[string]any{"type": "user"}, map[string]any{"type": "workspace", "relations": relations, "metadata": map[string]any{"relations": metadata}}}}
 	encoded, err := json.Marshal(result.Model)
 	if err != nil {
@@ -79,4 +83,25 @@ func CompileTenantModel(manifest Manifest, binding Binding) (TenantModel, error)
 	sum := sha256.Sum256(encoded)
 	result.ModelHash = hex.EncodeToString(sum[:])
 	return result, nil
+}
+
+func modelUnion(grants []any) any {
+	switch len(grants) {
+	case 0:
+		return map[string]any{"difference": map[string]any{"base": modelRef("member"), "subtract": modelRef("member")}}
+	case 1:
+		return grants[0]
+	default:
+		return map[string]any{"union": map[string]any{"child": grants}}
+	}
+}
+
+// ResolveRoleRelations resolves names only. Mutation callers must check Delegate
+// against fresh actor membership and persist audit before dispatch.
+func ResolveRoleRelations(model TenantModel, role string) (RoleRelations, error) {
+	relations, ok := model.Roles[role]
+	if !ok {
+		return RoleRelations{}, ErrInvalidArgument
+	}
+	return relations, nil
 }

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
-import { compileTenantModel } from "../src/internal/tenant-model.js";
+import { compileTenantModel, roleRelations } from "../src/internal/tenant-model.js";
 const cases = JSON.parse(
   readFileSync(
     new URL("../../../contracts/fixtures/tenant-model-v1.json", import.meta.url),
@@ -23,4 +23,17 @@ it.each(cases)("compiles portable $name model and hash", (c) => {
   expect(() => compileTenantModel({ ...c.manifest, ownerRole: "missing" }, c.binding)).toThrow(
     "invalid_argument",
   );
+});
+
+it.each(cases)("resolves declared roles and rejects unknown names: $name", (c) => {
+  const model = compileTenantModel(c.manifest, c.binding);
+  for (const role of Object.keys(c.manifest.roles))
+    expect(roleRelations(model, role)).toEqual(c.expected.roles[role]);
+  for (const role of ["", "constructor", "__proto__", "OWNER", "unknown"])
+    expect(() => roleRelations(model, role)).toThrow("invalid_argument");
+  const invalid = {
+    ...c.manifest,
+    delegation: { ...c.manifest.delegation, [c.manifest.ownerRole]: [c.manifest.ownerRole] },
+  };
+  expect(() => compileTenantModel(invalid, c.binding)).toThrow("invalid_argument");
 });

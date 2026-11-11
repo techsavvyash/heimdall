@@ -207,6 +207,101 @@
                     }
                   ]
                 }
+              },
+              "d_0": {
+                "intersection": {
+                  "child": [
+                    {
+                      "computedUserset": {
+                        "relation": "member"
+                      }
+                    },
+                    {
+                      "computedUserset": {
+                        "relation": "r_2"
+                      }
+                    }
+                  ]
+                }
+              },
+              "d_1": {
+                "intersection": {
+                  "child": [
+                    {
+                      "computedUserset": {
+                        "relation": "member"
+                      }
+                    },
+                    {
+                      "union": {
+                        "child": [
+                          {
+                            "computedUserset": {
+                              "relation": "r_0"
+                            }
+                          },
+                          {
+                            "computedUserset": {
+                              "relation": "r_2"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              "d_2": {
+                "intersection": {
+                  "child": [
+                    {
+                      "computedUserset": {
+                        "relation": "member"
+                      }
+                    },
+                    {
+                      "difference": {
+                        "base": {
+                          "computedUserset": {
+                            "relation": "member"
+                          }
+                        },
+                        "subtract": {
+                          "computedUserset": {
+                            "relation": "member"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "d_3": {
+                "intersection": {
+                  "child": [
+                    {
+                      "computedUserset": {
+                        "relation": "member"
+                      }
+                    },
+                    {
+                      "union": {
+                        "child": [
+                          {
+                            "computedUserset": {
+                              "relation": "r_0"
+                            }
+                          },
+                          {
+                            "computedUserset": {
+                              "relation": "r_2"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
               }
             },
             "metadata": {
@@ -251,23 +346,27 @@
           }
         ]
       },
-      "modelHash": "ad30cc1241fc3390ced7ac9301eb4069dfc075ab17fcdb06d7a9588d9ffa4277",
+      "modelHash": "e06754bf8d1160b28103621c6ee1a1ccc0e2c1f8fa63760a2040b22c49c9cbb3",
       "roles": {
         "admin": {
           "assignment": "r_0",
-          "effective": "e_0"
+          "effective": "e_0",
+          "delegate": "d_0"
         },
         "approver": {
           "assignment": "r_1",
-          "effective": "e_1"
+          "effective": "e_1",
+          "delegate": "d_1"
         },
         "owner": {
           "assignment": "r_2",
-          "effective": "e_2"
+          "effective": "e_2",
+          "delegate": "d_2"
         },
         "viewer": {
           "assignment": "r_3",
-          "effective": "e_3"
+          "effective": "e_3",
+          "delegate": "d_3"
         }
       },
       "permissions": {
@@ -457,6 +556,63 @@
                     }
                   ]
                 }
+              },
+              "d_0": {
+                "intersection": {
+                  "child": [
+                    {
+                      "computedUserset": {
+                        "relation": "member"
+                      }
+                    },
+                    {
+                      "computedUserset": {
+                        "relation": "r_1"
+                      }
+                    }
+                  ]
+                }
+              },
+              "d_1": {
+                "intersection": {
+                  "child": [
+                    {
+                      "computedUserset": {
+                        "relation": "member"
+                      }
+                    },
+                    {
+                      "difference": {
+                        "base": {
+                          "computedUserset": {
+                            "relation": "member"
+                          }
+                        },
+                        "subtract": {
+                          "computedUserset": {
+                            "relation": "member"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "d_2": {
+                "intersection": {
+                  "child": [
+                    {
+                      "computedUserset": {
+                        "relation": "member"
+                      }
+                    },
+                    {
+                      "computedUserset": {
+                        "relation": "r_1"
+                      }
+                    }
+                  ]
+                }
               }
             },
             "metadata": {
@@ -494,19 +650,321 @@
           }
         ]
       },
-      "modelHash": "deab0f4ac8e7e449595f3b8fe6b9712b7b0b6f139365f67611f3279abb8a00b7",
+      "modelHash": "af8f76c3d684052bea009c86f1b895c3ce44281847d064e3154108f836a46b24",
       "roles": {
         "agent": {
           "assignment": "r_0",
-          "effective": "e_0"
+          "effective": "e_0",
+          "delegate": "d_0"
         },
         "owner": {
           "assignment": "r_1",
-          "effective": "e_1"
+          "effective": "e_1",
+          "delegate": "d_1"
         },
         "reader": {
           "assignment": "r_2",
-          "effective": "e_2"
+          "effective": "e_2",
+          "delegate": "d_2"
+        }
+      },
+      "permissions": {
+        "ticket.assign": "p_0",
+        "ticket.read": "p_1",
+        "unassigned": "p_2"
+      }
+    }
+  },
+  {
+    "name": "custom-owner",
+    "manifest": {
+      "schemaVersion": 1,
+      "productId": "support",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["ticket.read", "ticket.assign", "unassigned"],
+      "roles": {
+        "reader": ["ticket.read"],
+        "agent": ["ticket.read", "ticket.assign"],
+        "founder": ["ticket.read", "ticket.assign"]
+      },
+      "ownerRole": "founder",
+      "delegation": {
+        "founder": ["reader", "agent"]
+      }
+    },
+    "binding": {
+      "productId": "support",
+      "manifestVersion": 1,
+      "clientKey": "web"
+    },
+    "expected": {
+      "model": {
+        "schema_version": "1.1",
+        "type_definitions": [
+          {
+            "type": "user"
+          },
+          {
+            "type": "workspace",
+            "relations": {
+              "member": {
+                "this": {}
+              },
+              "r_0": {
+                "this": {}
+              },
+              "e_0": {
+                "intersection": {
+                  "child": [
+                    {
+                      "computedUserset": {
+                        "relation": "member"
+                      }
+                    },
+                    {
+                      "computedUserset": {
+                        "relation": "r_0"
+                      }
+                    }
+                  ]
+                }
+              },
+              "r_1": {
+                "this": {}
+              },
+              "e_1": {
+                "intersection": {
+                  "child": [
+                    {
+                      "computedUserset": {
+                        "relation": "member"
+                      }
+                    },
+                    {
+                      "computedUserset": {
+                        "relation": "r_1"
+                      }
+                    }
+                  ]
+                }
+              },
+              "r_2": {
+                "this": {}
+              },
+              "e_2": {
+                "intersection": {
+                  "child": [
+                    {
+                      "computedUserset": {
+                        "relation": "member"
+                      }
+                    },
+                    {
+                      "computedUserset": {
+                        "relation": "r_2"
+                      }
+                    }
+                  ]
+                }
+              },
+              "p_0": {
+                "intersection": {
+                  "child": [
+                    {
+                      "computedUserset": {
+                        "relation": "member"
+                      }
+                    },
+                    {
+                      "union": {
+                        "child": [
+                          {
+                            "computedUserset": {
+                              "relation": "r_0"
+                            }
+                          },
+                          {
+                            "computedUserset": {
+                              "relation": "r_1"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              "p_1": {
+                "intersection": {
+                  "child": [
+                    {
+                      "computedUserset": {
+                        "relation": "member"
+                      }
+                    },
+                    {
+                      "union": {
+                        "child": [
+                          {
+                            "computedUserset": {
+                              "relation": "r_0"
+                            }
+                          },
+                          {
+                            "computedUserset": {
+                              "relation": "r_1"
+                            }
+                          },
+                          {
+                            "computedUserset": {
+                              "relation": "r_2"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              "p_2": {
+                "intersection": {
+                  "child": [
+                    {
+                      "computedUserset": {
+                        "relation": "member"
+                      }
+                    },
+                    {
+                      "difference": {
+                        "base": {
+                          "computedUserset": {
+                            "relation": "member"
+                          }
+                        },
+                        "subtract": {
+                          "computedUserset": {
+                            "relation": "member"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "d_0": {
+                "intersection": {
+                  "child": [
+                    {
+                      "computedUserset": {
+                        "relation": "member"
+                      }
+                    },
+                    {
+                      "computedUserset": {
+                        "relation": "r_1"
+                      }
+                    }
+                  ]
+                }
+              },
+              "d_1": {
+                "intersection": {
+                  "child": [
+                    {
+                      "computedUserset": {
+                        "relation": "member"
+                      }
+                    },
+                    {
+                      "difference": {
+                        "base": {
+                          "computedUserset": {
+                            "relation": "member"
+                          }
+                        },
+                        "subtract": {
+                          "computedUserset": {
+                            "relation": "member"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "d_2": {
+                "intersection": {
+                  "child": [
+                    {
+                      "computedUserset": {
+                        "relation": "member"
+                      }
+                    },
+                    {
+                      "computedUserset": {
+                        "relation": "r_1"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "metadata": {
+              "relations": {
+                "member": {
+                  "directly_related_user_types": [
+                    {
+                      "type": "user"
+                    }
+                  ]
+                },
+                "r_0": {
+                  "directly_related_user_types": [
+                    {
+                      "type": "user"
+                    }
+                  ]
+                },
+                "r_1": {
+                  "directly_related_user_types": [
+                    {
+                      "type": "user"
+                    }
+                  ]
+                },
+                "r_2": {
+                  "directly_related_user_types": [
+                    {
+                      "type": "user"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      },
+      "modelHash": "af8f76c3d684052bea009c86f1b895c3ce44281847d064e3154108f836a46b24",
+      "roles": {
+        "agent": {
+          "assignment": "r_0",
+          "effective": "e_0",
+          "delegate": "d_0"
+        },
+        "founder": {
+          "assignment": "r_1",
+          "effective": "e_1",
+          "delegate": "d_1"
+        },
+        "reader": {
+          "assignment": "r_2",
+          "effective": "e_2",
+          "delegate": "d_2"
         }
       },
       "permissions": {

@@ -36,6 +36,21 @@ func TestTenantModel(t *testing.T) {
 			if err != nil || !reflect.DeepEqual(actual, again) {
 				t.Fatal("order changed model")
 			}
+			for role, want := range c.Expected.Roles {
+				got, err := ResolveRoleRelations(actual, role)
+				if err != nil || got != want {
+					t.Fatal("role resolution mismatch")
+				}
+			}
+			for _, role := range []string{"", "constructor", "__proto__", "OWNER", "unknown"} {
+				if _, err := ResolveRoleRelations(actual, role); err != ErrInvalidArgument {
+					t.Fatal("unknown role accepted")
+				}
+			}
+			c.Manifest.Delegation[c.Manifest.OwnerRole] = []string{c.Manifest.OwnerRole}
+			if _, err := CompileTenantModel(c.Manifest, c.Binding); err != ErrInvalidArgument {
+				t.Fatal("owner delegation accepted")
+			}
 			c.Manifest.OwnerRole = "missing"
 			if _, err := CompileTenantModel(c.Manifest, c.Binding); err != ErrInvalidArgument {
 				t.Fatal("invalid manifest accepted")

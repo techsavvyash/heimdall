@@ -66,6 +66,14 @@ try {
           "workspace:acme",
           member && assigned.includes(role),
         );
+      for (const target of roles) {
+        const allowed =
+          member &&
+          target !== c.manifest.ownerRole &&
+          assigned.some((actor) => (c.manifest.delegation[actor] ?? []).includes(target));
+        addCheck(user(mask), c.expected.roles[target].delegate, "workspace:acme", allowed);
+        addCheck(user(mask), c.expected.roles[target].delegate, "workspace:globex", false);
+      }
       for (const permission of c.manifest.permissions) {
         const relation = c.expected.permissions[permission];
         addCheck(
@@ -93,7 +101,7 @@ try {
     const before = checks.length;
     for (const relation of [
       ...Object.values(c.expected.permissions),
-      ...Object.values(c.expected.roles).map((r) => r.effective),
+      ...Object.values(c.expected.roles).flatMap((r) => [r.effective, r.delegate]),
     ])
       addCheck(user(allMask), relation, "workspace:acme", false);
     const otherProduct = c.name === "ledger" ? "support" : "ledger";
@@ -111,6 +119,8 @@ try {
       combinations: 2 ** (roles.length + 1),
       checks: checks.length,
       staleRoleDenial: true,
+      delegationRequiresMembership: true,
+      ordinaryOwnerAssignmentDenied: true,
       crossTenantDenial: true,
       crossProductPrincipalDenial: true,
     });

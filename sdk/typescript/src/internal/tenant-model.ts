@@ -1,10 +1,17 @@
 import { createHash } from "node:crypto";
+import { HeimdallError } from "./errors.js";
 import { validateManifestBinding } from "./manifest.js";
 
 type Manifest = Parameters<typeof validateManifestBinding>[0];
 type Binding = Parameters<typeof validateManifestBinding>[1];
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 const ref = (relation: string): Json => ({ computedUserset: { relation } });
+const union = (grants: Json[]): Json =>
+  grants.length === 0
+    ? { difference: { base: ref("member"), subtract: ref("member") } }
+    : grants.length === 1
+      ? grants[0]!
+      : { union: { child: grants } };
 const intersect = (left: Json, right: Json): Json => ({ intersection: { child: [left, right] } });
 function canonical(value: Json): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -20,7 +27,7 @@ function canonical(value: Json): string {
 // Relation ordinals are bound to this exact model/manifest, never inferred at request time.
 export function compileTenantModel(manifest: Manifest, binding: Binding) {
   validateManifestBinding(manifest, binding);
-  const roles: Record<string, { assignment: string; effective: string }> = {};
+  const roles: Record<string, { assignment: string; effective: string; delegate: string }> = {};
   const permissions: Record<string, string> = {};
   const relations: Record<string, Json> = { member: { this: {} } };
   const metadata: Record<string, Json> = {
@@ -31,7 +38,7 @@ export function compileTenantModel(manifest: Manifest, binding: Binding) {
     .forEach((role, index) => {
       const assignment = `r_${index}`;
       const effective = `e_${index}`;
-      roles[role] = { assignment, effective };
+      roles[role] = { assignment, effective, delegate: `d_${index}` };
       relations[assignment] = { this: {} };
       metadata[assignment] = { directly_related_user_types: [{ type: "user" }] };
       relations[effective] = intersect(ref("member"), ref(assignment));
@@ -42,14 +49,22 @@ export function compileTenantModel(manifest: Manifest, binding: Binding) {
     const grants = Object.keys(roles)
       .filter((role) => manifest.roles[role]!.includes(permission))
       .map((role) => ref(roles[role]!.assignment));
-    const grant: Json =
-      grants.length === 0
-        ? { difference: { base: ref("member"), subtract: ref("member") } }
-        : grants.length === 1
-          ? grants[0]!
-          : { union: { child: grants } };
-    relations[relation] = intersect(ref("member"), grant);
+    relations[relation] = intersect(ref("member"), union(grants));
   });
+  for (const target of Object.keys(roles)) {
+    const grants =
+      target === manifest.ownerRole
+        ? []
+        : Object.keys(roles)
+            .filter(
+              (actor) =>
+                Object.hasOwn(manifest.delegation, actor) &&
+                manifest.delegation[actor]!.includes(target),
+            )
+            .map((actor) => ref(roles[actor]!.assignment));
+    relations[roles[target]!.delegate] = intersect(ref("member"), union(grants));
+  }
+
   const model: Json = {
     schema_version: "1.1",
     type_definitions: [
@@ -59,4 +74,11 @@ export function compileTenantModel(manifest: Manifest, binding: Binding) {
   };
   const modelHash = createHash("sha256").update(canonical(model)).digest("hex");
   return { model, modelHash, roles, permissions };
+}
+
+// This resolves a declared name, not actor authorization. The delegate relation
+// must be checked with fresh membership before any audited mutation is dispatched.
+export function roleRelations(model: ReturnType<typeof compileTenantModel>, role: string) {
+  if (!Object.hasOwn(model.roles, role)) throw new HeimdallError("invalid_argument");
+  return model.roles[role]!;
 }

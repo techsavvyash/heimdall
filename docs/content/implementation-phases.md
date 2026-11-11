@@ -114,3 +114,5 @@ The lifecycle event checkpoint also records bounded time-window collection acros
 The event-visibility follow-up corrects the older builder-comment interpretation and tests the actual SQL advisory-lock drain on Railway. Unrelated open transactions allow reads; an instance writer barrier blocks the reader until release.
 
 [[evidence/phase-3-tenant-model|Phase 3 model compiler checkpoint]] starts shared TS/Go membership-gated model generation and live policy assertions. Delegation/administration and persistence work remain open.
+
+[[evidence/phase-3-delegation|Delegation policy checkpoint]] adds product-defined membership-gated grant relations, owner exclusion and unknown-role rejection in both languages. Runtime mutation coordination remains open.

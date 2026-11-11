@@ -29,6 +29,21 @@ submits those exact models, checks every example role/membership combination,
 checks another workspace and product principal, removes membership while retaining
 role tuples, and requires denial with HIGHER_CONSISTENCY. Only owned stores are deleted.
 
-Ordinary owner grants, delegation checks, provisioning validation, migration and
-runtime errors remain separate implementation work; direct OpenFGA writer credentials
+Runtime enforcement of the delegation checks, owner transfer, provisioning
+validation and migration remain separate implementation work; direct OpenFGA writer credentials
 can write any assignment relation and are not an end-user policy boundary.
+
+## Delegation relations
+
+Each role also has a d_N delegate relation. Its grants come only from explicitly
+listed actor roles in manifest.delegation, intersected with member. The configured
+ownerRole has an always-false delegate relation, regardless of its spelling. No
+missing delegation entry implies owner or administrator privileges. A manifest
+that explicitly delegates its owner role is rejected before compilation.
+
+roleRelations / ResolveRoleRelations reject undeclared names with invalid_argument
+and return assignment/effective/delegate relation names for declared roles. Returning
+a mapping is not authorization. The future mutation coordinator must check delegate
+for the verified actor and workspace using HIGHER_CONSISTENCY, apply lifecycle and
+identity gates, and persist its authorized audit/journal intent before writing the
+assignment. Raw writer credentials still bypass end-user policy.
