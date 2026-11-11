@@ -3,7 +3,7 @@ title: Phase 3 hold and retirement locking proof
 date: 2026-11-12
 ---
 
-This checkpoint exercises hold placement against ordinary-event retirement on
+This checkpoint exercises hold placement against ordinary-event and complete-decision retirement on
 separate PostgreSQL connections in both commit orders. It tests the prepared SQL
 locking protocol; it does not expose a production hold or purge API.
 
@@ -38,8 +38,39 @@ Pinned PostgreSQL 17.11 run
 observed-lock races and the surrounding migration, capacity and recovery harness.
 Its disposable container was removed. The full workspace gate passed.
 
-The result is limited to ordinary events and PostgreSQL's tested READ COMMITTED
-behavior. Complete-decision retirement, explicit retry obligations, authorized SDK
-orchestration, marker-aware readers and v4 activation remain required. See
+## Complete-decision member races
+
+The extended proof covers Ledger's completed decision (request and completion)
+and Support's recovered decision (request, unknown completion and recovery
+administration). Each of the five members is independently held against whole-group
+retirement in both commit orders: ten additional observed-lock races.
+
+```mermaid
+flowchart TD
+  Member[Hold on any decision member] --> Lock[Lock that retained identity]
+  Group[Retire complete decision] --> All[Lock every retained member]
+  Lock --> Winner{First transaction commits}
+  All --> Winner
+  Winner -->|Hold first| Preserve[Keep all payloads deliveries charges and source links]
+  Winner -->|Retirement first| Refuse[Remove whole group and refuse late hold]
+  Preserve --> Identity[Keep all compact event and decision identities]
+  Refuse --> Identity
+```
+
+Each race checks the complete payload and charge counts, delivery count, source
+decision and reservation, marker/hold winner, immutable compact event and decision
+snapshots, and exactly one new metadata slot. The contender must actually wait on
+a PostgreSQL lock before the first transaction commits; a timeout or deadlock is
+not a passing result. Independent database clones keep every race isolated.
+
+Extended pinned PostgreSQL 17.11 run
+`heimdall-capacity-backfill-8b9ae8bcf3804b45b316b8176bb502d8` passed all ten member races and the
+surrounding TS/Go recovery, capacity, migration and retention harness. Its disposable
+container was removed. `pnpm run check` passed; the final pre-push gate checks the
+committed tree again.
+
+The result is limited to PostgreSQL's tested READ COMMITTED behavior and privileged
+test transactions with administrative reference stand-ins. Explicit retry
+obligations, authorized SDK orchestration and v4 activation remain required. See
 [[phase-3-retirement-markers]], [[phase-3-retention-holds]] and
 [[phase-3-readiness-audit]].

@@ -102,11 +102,12 @@ Migrations must install and backfill the required identity/hold/accounting state
 validate existing history and require compatible writers before retirement is
 enabled. Existing v3 capacity alone is insufficient for this gate.
 
-Current implementation includes the shared classifier and the prepared compact
-identity schema below. Durable holds, runtime identity integration, additional
-accounting, atomic retirement, migration/backfill,
-concurrent-hold/retry fault tests and public authorized maintenance remain required
-before retention can be enabled. No current event deletion is added by this work.
+Current implementation includes the shared classifier, prepared compact identities,
+durable holds, metadata quotas, retirement markers, internal identity/receipt reads
+and privileged atomic-removal proofs described below. None enables public runtime
+retention. Compatible atomic runtime identity writes, explicit retry obligations,
+authorized administrative composition, bounded migration/backfill and v4 activation
+remain required before retention can be enabled.
 
 ## Prepared compact identity storage
 
@@ -286,9 +287,15 @@ remain. Exact no-op marker updates do not recharge or require retired payloads.
 
 This is prepared SQL, not an enabled purge API. The live positive test retires an
 ordinary event in a privileged disposable database with a reference stand-in.
-Authorized administrative events, explicit retry-obligation checks, whole-decision
-and cross-process retirement race proofs, marker-aware readers, bounded maintenance,
-and v4 compatibility/admission remain required. The immutable marker is the future
+Whole completed/recovered decisions now have atomic-removal and marker-aware read
+proofs. Cross-process tests exercise holds on every member in both commit orders,
+observing a real PostgreSQL lock wait before releasing the winning transaction.
+All payloads survive a winning hold; a winning retirement removes the whole group
+and refuses the late hold. Compact event/decision identities remain unchanged and
+the losing transaction adds no metadata charge. This proves the prepared SQL
+protocol under READ COMMITTED, not authorized runtime orchestration.
+Authorized administrative events, explicit retry-obligation checks, bounded
+maintenance and v4 compatibility/admission remain required. The immutable marker is the future
 reader's evidence for intentional removal; missing payload without one remains
 an integrity error. Privileged direct SQL deletion is not made safe by this schema.
 
