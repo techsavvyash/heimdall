@@ -20,6 +20,7 @@ import (
 
 type Records struct {
 	db                   *sql.DB
+	keyUsageDB           *sql.DB
 	cipher               *contract.RecordCipher
 	product, environment string
 	now                  func() int64
@@ -38,14 +39,14 @@ const maxSafe = 9007199254740991
 func valid(s string, max int) bool { return len(s) > 0 && len(s) <= max && token.MatchString(s) }
 
 // NewRecords does not migrate or own the caller's connection pool.
-func NewRecords(db *sql.DB, cipher *contract.RecordCipher, product, environment string, now func() int64) (*Records, error) {
-	if db == nil || cipher == nil || !valid(product, 64) || !valid(environment, 64) {
+func NewRecords(db, keyUsageDB *sql.DB, cipher *contract.RecordCipher, product, environment string, now func() int64) (*Records, error) {
+	if db == nil || keyUsageDB == nil || cipher == nil || !valid(product, 64) || !valid(environment, 64) {
 		return nil, contract.ErrInvalidArgument
 	}
 	if now == nil {
 		now = func() int64 { return time.Now().UnixMilli() }
 	}
-	return &Records{db, cipher, product, environment, now}, nil
+	return &Records{db, keyUsageDB, cipher, product, environment, now}, nil
 }
 func (r *Records) scope(kind, key string) (contract.RecordScope, []byte, error) {
 	if (kind != "session" && kind != "login") || !valid(key, 128) {
@@ -54,13 +55,19 @@ func (r *Records) scope(kind, key string) (contract.RecordScope, []byte, error) 
 	hash := sha256.Sum256([]byte(key))
 	return contract.RecordScope{ProductID: r.product, Environment: r.environment, Kind: kind, RecordKey: hex.EncodeToString(hash[:])}, hash[:], nil
 }
-func (r *Records) seal(scope contract.RecordScope, value []byte, expires int64) (string, string, error) {
+func (r *Records) seal(ctx context.Context, scope contract.RecordScope, value []byte, expires int64) (string, string, error) {
 	if len(value) > 700000 || expires > maxSafe || expires <= r.now() {
 		return "", "", contract.ErrInvalidArgument
 	}
 	raw, err := json.Marshal([]any{expires, base64.RawURLEncoding.EncodeToString(value)})
 	if err != nil {
 		return "", "", contract.ErrInvalidArgument
+	}
+	if err := ReserveRecordKeyUsage(ctx, r.keyUsageDB, r.cipher.ActiveFingerprint()); err != nil {
+		return "", "", err
+	}
+	if err := contract.CheckCancellation(ctx); err != nil {
+		return "", "", err
 	}
 	envelope, err := r.cipher.Seal(scope, raw)
 	if err != nil {
@@ -155,7 +162,7 @@ func (r *Records) Create(ctx context.Context, kind, key string, value []byte, ex
 	if err != nil {
 		return nil, err
 	}
-	envelope, keyID, err := r.seal(scope, value, expires)
+	envelope, keyID, err := r.seal(ctx, scope, value, expires)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +184,7 @@ func (r *Records) CompareAndSwap(ctx context.Context, kind, key, revision string
 	if err != nil {
 		return nil, err
 	}
-	envelope, keyID, err := r.seal(scope, value, expires)
+	envelope, keyID, err := r.seal(ctx, scope, value, expires)
 	if err != nil {
 		return nil, err
 	}

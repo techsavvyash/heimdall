@@ -74,6 +74,10 @@ func NewRecordCipher(active string, keys map[string][]byte) (*RecordCipher, erro
 	}
 	return &RecordCipher{ring: r}, nil
 }
+func (r *RecordCipher) ActiveFingerprint() string {
+	fingerprint, _ := RecordKeyFingerprint(r.ring.keys[r.ring.active])
+	return fingerprint
+}
 func (r *RecordCipher) Seal(scope RecordScope, plaintext []byte) (string, error) {
 	aad, err := recordAAD(scope, r.ring.active)
 	if err != nil {

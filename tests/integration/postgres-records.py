@@ -1,4 +1,5 @@
 """Disposable local PostgreSQL proof; requires Docker, pnpm and Go on PATH."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -61,6 +62,10 @@ try:
     admin("CREATE ROLE heimdall_audit_runtime NOLOGIN; GRANT USAGE ON SCHEMA heimdall TO heimdall_audit_runtime; GRANT SELECT ON heimdall.audit_events,heimdall.audit_deliveries TO heimdall_audit_runtime; GRANT INSERT ON heimdall.audit_events,heimdall.audit_deliveries TO heimdall_audit_runtime;")
     admin("CREATE ROLE heimdall_audit_delivery NOLOGIN; GRANT USAGE ON SCHEMA heimdall TO heimdall_audit_delivery; GRANT SELECT,UPDATE ON heimdall.audit_deliveries TO heimdall_audit_delivery;")
     admin("CREATE ROLE heimdall_identity_runtime NOLOGIN; GRANT USAGE ON SCHEMA heimdall TO heimdall_identity_runtime; GRANT SELECT,INSERT,UPDATE,DELETE ON heimdall.records,heimdall.identity_denials TO heimdall_identity_runtime; GRANT USAGE ON SEQUENCE heimdall.record_revision_seq TO heimdall_identity_runtime;")
+    admin((ROOT / "contracts/persistence/keys/0001.sql").read_text())
+    key_checksum = json.loads((ROOT / "contracts/persistence/catalog.json").read_text())["keys"][0]["checksum"]
+    fingerprint = hashlib.sha256(b"heimdall.record-key-usage.v1\0" + bytes([7])*32).hexdigest()
+    admin("INSERT INTO heimdall_keys.migrations(version,checksum) VALUES(1,'"+key_checksum+"'); INSERT INTO heimdall_keys.schema_metadata(database_version,state,reader_min,reader_max,writer_min,writer_max) VALUES(1,'ready',1,1,1,1); INSERT INTO heimdall_keys.record_key_usage(fingerprint,encryption_limit) VALUES(decode('"+fingerprint+"','hex'),100000); GRANT USAGE ON SCHEMA heimdall_keys TO heimdall_identity_runtime; GRANT SELECT ON ALL TABLES IN SCHEMA heimdall_keys TO heimdall_identity_runtime; GRANT UPDATE(used) ON heimdall_keys.record_key_usage TO heimdall_identity_runtime;")
     # Public factories require activated v2. Keep legacy v1 persistence suites
     # on their original database so neither protocol is silently relabelled.
     admin("CREATE DATABASE public_runtime OWNER migration_owner")

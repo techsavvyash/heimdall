@@ -31,6 +31,15 @@ try:
  subprocess.run(["go","test","-race","-count=1","./internal/postgres","-run","^TestKeyUsageLive$"],cwd=ROOT/'sdk/go',env=env,check=True)
  run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-key-usage.test.ts"],env=env)
  assert sql("SELECT used FROM heimdall_keys.record_key_usage WHERE fingerprint=decode(repeat('6',64),'hex')")=="2"
+ sql((ROOT/'contracts/persistence/session/0001.sql').read_text())
+ subprocess.run(["go","test","-race","-count=1","./internal/postgres","-run","^TestMeteredRecords$"],cwd=ROOT/'sdk/go',env=env,check=True)
+ run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-metered-records.test.ts"],env=env)
+ for language in ('go','ts'):
+  with CommitLossProxy(int(port)) as proxy:
+   fault=dict(env,HEIMDALL_TEST_KEYS_LOSS=dsn(proxy.port,True))
+   if language=='go':subprocess.run(["go","test","-race","-count=1","./internal/postgres","-run","^TestMeteredRecordsLoss$"],cwd=ROOT/'sdk/go',env=fault,check=True)
+   else:run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-metered-records.test.ts","-t","uncertain reservation"],env=fault)
+   assert proxy.dropped.is_set() and not proxy.errors
  sql("INSERT INTO heimdall_keys.record_key_usage(fingerprint,encryption_limit) VALUES(decode(repeat('3',64),'hex'),10)")
  for language in ('go','ts'):
   with CommitLossProxy(int(port)) as proxy:
@@ -42,6 +51,6 @@ try:
  for statement in ["UPDATE heimdall_keys.record_key_usage SET used=0", "UPDATE heimdall_keys.record_key_usage SET encryption_limit=100", "UPDATE heimdall_keys.record_key_usage SET state='active'", "DELETE FROM heimdall_keys.record_key_usage"]:
   result=subprocess.run(["docker","exec","-i",name,"psql","-U","postgres","-v","ON_ERROR_STOP=1"],input=statement,text=True,capture_output=True)
   assert result.returncode!=0
- print(json.dumps({'run':name,'result':'passed','checks':['TS and Go concurrent cap','idempotent registration preserves usage','irreversible retirement','runtime policy privilege refusal','both COMMIT losses consume usage without success','database guards reject reset deletion and policy change']}))
+ print(json.dumps({'run':name,'result':'passed','checks':['TS and Go concurrent cap','idempotent registration preserves usage','irreversible retirement','runtime policy privilege refusal','both COMMIT losses consume usage without success','all record write paths meter encryption including failed CAS and denied identity','retained decryption and rotation','uncertain reservation prevents encryption and persistence','database guards reject reset deletion and policy change']}))
 finally:
  if created:subprocess.run(["docker","rm","--force",name],check=True,stdout=subprocess.DEVNULL)

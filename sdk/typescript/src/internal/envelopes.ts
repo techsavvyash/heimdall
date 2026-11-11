@@ -5,6 +5,7 @@ import {
   randomBytes,
   timingSafeEqual,
 } from "node:crypto";
+import { recordKeyFingerprint } from "./key-usage.js";
 import { HeimdallError } from "./errors.js";
 
 const recordLimit = 1048576;
@@ -83,6 +84,9 @@ export class RecordCipher {
   private readonly ring: KeyRing;
   constructor(activeKeyId: string, keys: Readonly<Record<string, Uint8Array>>) {
     this.ring = new KeyRing(activeKeyId, keys);
+  }
+  activeFingerprint(): string {
+    return recordKeyFingerprint(this.ring.get(this.ring.active)!);
   }
   seal(scope: RecordScope, plaintext: Uint8Array): string {
     const associated = aad(scope, this.ring.active);

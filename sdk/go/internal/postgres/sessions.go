@@ -21,8 +21,8 @@ type SessionRecords struct {
 	validate func([]byte) (SessionPrincipal, error)
 }
 
-func NewSessionRecords(db *sql.DB, cipher *contract.RecordCipher, product, environment string, validate func([]byte) (SessionPrincipal, error), now func() int64) (*SessionRecords, error) {
-	r, err := NewRecords(db, cipher, product, environment, now)
+func NewSessionRecords(db, keyUsageDB *sql.DB, cipher *contract.RecordCipher, product, environment string, validate func([]byte) (SessionPrincipal, error), now func() int64) (*SessionRecords, error) {
+	r, err := NewRecords(db, keyUsageDB, cipher, product, environment, now)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +91,7 @@ func (s *SessionRecords) writeSession(ctx context.Context, key, revision string,
 	}
 	boundScope := scope
 	boundScope.RecordKey += hex.EncodeToString(identity)
-	envelope, keyID, err := r.seal(boundScope, value, expires)
+	envelope, keyID, err := r.seal(ctx, boundScope, value, expires)
 	if err != nil {
 		return nil, err
 	}

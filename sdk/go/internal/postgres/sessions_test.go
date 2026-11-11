@@ -70,7 +70,7 @@ func sessionSetup(t *testing.T, db *sql.DB, product string) (*SessionRecords, se
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := NewSessionRecords(db, cipher, product, "production", validate, func() int64 { return f.Now })
+	s, err := NewSessionRecords(db, db, cipher, product, "production", validate, func() int64 { return f.Now })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +330,7 @@ func TestConditionalSessionInvalidation(t *testing.T) {
 		}
 	}
 	other, _ := sessionSetup(t, db, "conditional-other-go")
-	stage, e := NewSessionRecords(db, s.records.cipher, "conditional-go", "staging", s.validate, func() int64 { return f.Now })
+	stage, e := NewSessionRecords(db, db, s.records.cipher, "conditional-go", "staging", s.validate, func() int64 { return f.Now })
 	if e != nil {
 		t.Fatal(e)
 	}

@@ -14,7 +14,7 @@ import (
 )
 
 func TestInvalidScope(t *testing.T) {
-	if _, err := NewRecords(nil, nil, "bad", "test", nil); !errors.Is(err, contract.ErrInvalidArgument) {
+	if _, err := NewRecords(nil, nil, nil, "bad", "test", nil); !errors.Is(err, contract.ErrInvalidArgument) {
 		t.Fatal(err)
 	}
 }
@@ -44,7 +44,7 @@ func TestRecords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := NewRecords(db, cipher, f.ProductID, f.Environment, nil)
+	store, err := NewRecords(db, db, cipher, f.ProductID, f.Environment, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,11 +96,11 @@ func TestRecords(t *testing.T) {
 	if winners != 1 {
 		t.Fatal(winners)
 	}
-	other, _ := NewRecords(db, cipher, "support", "test", nil)
+	other, _ := NewRecords(db, db, cipher, "support", "test", nil)
 	if r, e := other.Get(ctx, "session", "go-race"); r != nil || e != nil {
 		t.Fatal("scope", e)
 	}
-	expired, _ := NewRecords(db, cipher, "ledger", "test", func() int64 { return f.ExpiresAt })
+	expired, _ := NewRecords(db, db, cipher, "ledger", "test", func() int64 { return f.ExpiresAt })
 	if r, e := expired.Get(ctx, "session", "go-race"); r != nil || e != nil {
 		t.Fatal("expiry", e)
 	}

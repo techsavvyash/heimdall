@@ -184,8 +184,14 @@ not execution under receipts already committed before retirement.
 
 The internal schema, migration, registration, retirement and reservation functions
 have disposable PostgreSQL concurrency and COMMIT-loss tests in both languages.
-Operator tooling, rotation orchestration and composition with every record-encryption
-path remain required before claiming deployment-wide enforcement.
+PostgreSQL record and identity-bound session adapters now require an explicit
+accounting pool and reserve before each encryption. The pool may be the product
+pool or a separate shared primary. They snapshot the plaintext before waiting,
+propagate cancellation, and never encrypt after uncertain reservation commit.
+Failed CAS, uniqueness conflict and identity denial do not refund allowance.
+Pure envelope primitives remain unmetered internal cryptography helpers, not
+production persistence entry points. Operator tooling and complete rotation/restore
+orchestration remain required before release.
 
 All cryptographic fixtures use public synthetic keys and payloads. The shared
 corpus includes a reference vector and captured outputs from both SDK writers,

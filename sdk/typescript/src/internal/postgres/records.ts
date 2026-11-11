@@ -2,7 +2,8 @@ import { query } from "./query.js";
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import type { RecordCipher } from "../envelopes.js";
-import { HeimdallError } from "../errors.js";
+import { reserveRecordKeyUsage } from "./key-usage.js";
+import { HeimdallError, checkCancellation } from "../errors.js";
 
 type Kind = "session" | "login";
 export type Row = {
@@ -21,6 +22,7 @@ export const columns = "revision::text, envelope, expires_at::text, key_id, iden
 export class PostgresRecords {
   constructor(
     protected readonly pool: Pool,
+    protected readonly keyUsagePool: Pool,
     protected readonly cipher: RecordCipher,
     protected readonly productId: string,
     protected readonly environment: string,
@@ -42,12 +44,13 @@ export class PostgresRecords {
       recordKey: hash.toString("hex") + (identityHash?.toString("hex") ?? ""),
     };
   }
-  protected seal(
+  protected async seal(
     kind: Kind,
     hash: Buffer,
     value: Uint8Array,
     expiresAt: number,
     identityHash?: Buffer,
+    signal?: AbortSignal,
   ) {
     if (
       !(value instanceof Uint8Array) ||
@@ -56,10 +59,13 @@ export class PostgresRecords {
       expiresAt <= this.now()
     )
       throw new HeimdallError("invalid_argument");
-    const envelope = this.cipher.seal(
-      this.scope(kind, hash, identityHash),
-      Buffer.from(JSON.stringify([expiresAt, Buffer.from(value).toString("base64url")])),
+    const scope = this.scope(kind, hash, identityHash);
+    const plaintext = Buffer.from(
+      JSON.stringify([expiresAt, Buffer.from(value).toString("base64url")]),
     );
+    await reserveRecordKeyUsage(this.keyUsagePool, this.cipher.activeFingerprint(), signal);
+    if (signal) checkCancellation(signal);
+    const envelope = this.cipher.seal(scope, plaintext);
     return { envelope, keyId: envelope.split(".")[1]! };
   }
   protected open(kind: Kind, hash: Buffer, row: Row) {
@@ -102,7 +108,7 @@ export class PostgresRecords {
     signal?: AbortSignal,
   ) {
     const hash = this.key(kind, key);
-    const sealed = this.seal(kind, hash, value, expiresAt);
+    const sealed = await this.seal(kind, hash, value, expiresAt, undefined, signal);
     const rows = await query<Row>(
       this.pool,
       `INSERT INTO heimdall.records(product_id,environment,kind,key_hash,key_id,envelope,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING ${columns}`,
@@ -134,7 +140,7 @@ export class PostgresRecords {
     if (!/^[1-9][0-9]{0,18}$/.test(revision) || BigInt(revision) > 9223372036854775807n)
       throw new HeimdallError("invalid_argument");
     const hash = this.key(kind, key);
-    const sealed = this.seal(kind, hash, value, expiresAt);
+    const sealed = await this.seal(kind, hash, value, expiresAt, undefined, signal);
     const rows = await query<Row>(
       this.pool,
       `UPDATE heimdall.records SET key_id=$5,envelope=$6,expires_at=$7 WHERE product_id=$1 AND environment=$2 AND kind=$3 AND key_hash=$4 AND identity_hash IS NULL AND revision=$8 AND expires_at>$9 RETURNING ${columns}`,

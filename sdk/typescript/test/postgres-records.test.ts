@@ -14,13 +14,15 @@ const cipher = new RecordCipher(fixture.keyId, {
 });
 test("rejects malformed storage scopes before connection", () => {
   const pool = new Pool();
-  expect(() => new PostgresRecords(pool, cipher, "../bad", "test")).toThrow("invalid_argument");
+  expect(() => new PostgresRecords(pool, pool, cipher, "../bad", "test")).toThrow(
+    "invalid_argument",
+  );
 });
 test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TEST_READ_PEER)(
   "PostgreSQL encrypted records and language interoperability",
   async () => {
     const pool = new Pool({ connectionString: process.env.HEIMDALL_TEST_DATABASE_URL });
-    const store = new PostgresRecords(pool, cipher, fixture.productId, fixture.environment);
+    const store = new PostgresRecords(pool, pool, cipher, fixture.productId, fixture.environment);
     const value = Buffer.from(fixture.value);
     try {
       await store.create("session", "from-ts", value, fixture.expiresAt);
@@ -36,14 +38,18 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       );
       expect(results.filter(Boolean)).toHaveLength(1);
       expect(
-        await new PostgresRecords(pool, cipher, "support", "test").get("session", "ts-race"),
+        await new PostgresRecords(pool, pool, cipher, "support", "test").get("session", "ts-race"),
       ).toBeNull();
       expect(await store.get("login", "ts-race")).toBeNull();
       expect(
-        await new PostgresRecords(pool, cipher, "ledger", "test", () => fixture.expiresAt).get(
-          "session",
-          "ts-race",
-        ),
+        await new PostgresRecords(
+          pool,
+          pool,
+          cipher,
+          "ledger",
+          "test",
+          () => fixture.expiresAt,
+        ).get("session", "ts-race"),
       ).toBeNull();
       await store.delete("session", "ts-race");
       const recreated = await store.create("session", "ts-race", value, fixture.expiresAt);
@@ -90,7 +96,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !process.env.HEIMDALL_TES
   async () => {
     const pool = new Pool({ connectionString: process.env.HEIMDALL_TEST_DATABASE_URL });
     try {
-      const store = new PostgresRecords(pool, cipher, fixture.productId, fixture.environment);
+      const store = new PostgresRecords(pool, pool, cipher, fixture.productId, fixture.environment);
       expect((await store.get("session", "from-go"))?.value).toEqual(Buffer.from(fixture.value));
     } finally {
       await pool.end();

@@ -1,0 +1,6 @@
+{
+  "initialLimit": 6,
+  "rotationLimit": 1,
+  "expiresAt": 4102444800000,
+  "payload": "metered record: café 日本語"
+}

@@ -28,7 +28,7 @@ const payload = (
   extra: Record<string, unknown> = {},
 ) => Buffer.from(JSON.stringify({ ...fixture.record, productId, subject, ...extra }));
 const store = (pool: Pool, product = "ledger-identity", environment = "production") =>
-  new SessionRecords(pool, cipher, product, environment, validate, () => fixture.now);
+  new SessionRecords(pool, pool, cipher, product, environment, validate, () => fixture.now);
 test("bound session validates before database access", async () => {
   const pool = new Pool();
   try {
@@ -69,6 +69,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         fixture.expiresAt,
       );
       const generic = new PostgresRecords(
+        pool,
         pool,
         cipher,
         "identity-ts",
@@ -538,6 +539,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       options: "-c role=heimdall_identity_runtime",
     });
     const sessions = new SessionRecords(
+      pool,
       pool,
       cipher,
       "gate-ts",

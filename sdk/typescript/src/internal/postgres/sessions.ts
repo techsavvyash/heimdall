@@ -16,13 +16,14 @@ export class SessionRecords extends PostgresRecords {
   readonly invalidateIdentity: IdentityRecords["invalidateIdentity"];
   constructor(
     pool: Pool,
+    keyUsagePool: Pool,
     cipher: RecordCipher,
     productId: string,
     environment: string,
     private readonly validate: (value: Uint8Array) => Principal,
     now: () => number = Date.now,
   ) {
-    super(pool, cipher, productId, environment, now);
+    super(pool, keyUsagePool, cipher, productId, environment, now);
     this.identities = new IdentityRecords(pool, productId, environment, now);
     this.identityGate = this.identities.identityGate.bind(this.identities);
     this.invalidateSessionVersion = this.identities.invalidateSessionVersion.bind(this.identities);
@@ -74,7 +75,7 @@ export class SessionRecords extends PostgresRecords {
     const value = Buffer.from(input);
     const hash = this.key("session", key);
     const identity = this.principal(value);
-    const sealed = this.seal("session", hash, value, expiresAt, identity);
+    const sealed = await this.seal("session", hash, value, expiresAt, identity, signal);
     return transaction(
       this.pool,
       async (client) => {
