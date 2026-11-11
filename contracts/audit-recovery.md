@@ -412,3 +412,42 @@ Shared scope vectors live in fixtures/audit-upgrade-scopes.json. The live harnes
 is tests/integration/audit-upgrade-backfill.py. This deployment orchestration is a
 single Go command for both SDKs; the underlying event-page/checkpoint format is
 implemented in both languages. Runtime factories and catalog readiness remain v1.
+
+## Pinned structural schema gate
+
+Preparation (including inspected retries) and each coordinator step now compare
+the session/audit catalog to a bundled PostgreSQL 17 structural profile. The
+profile was captured from a pristine installation of the four checksum-pinned SQL
+files, not from an application database. Shared fixture
+fixtures/audit-upgrade-schema.json pins the query/profile bytes and corruption
+vectors. The deployment command embeds both files; runtime does not download or
+regenerate the expected profile. A profile change requires review against the
+pinned SQL and live proof, never automatic acceptance of observed drift.
+
+The check takes SHARE locks on the nine expected tables until its enclosing
+transaction ends, sets a transaction-local pg_catalog search path, and compares
+one catalog snapshot. It covers relations and persistence, column types/defaults/
+nullability/collations, constraints and validation state, index definitions and
+valid/ready/live flags, user and internal trigger configuration, trigger function
+definitions, sequence configuration, and absence of unexpected rules, policies or
+inheritance. Internal trigger OID-generated names are excluded; their constraint,
+function and execution configuration are compared. The session must use origin
+replication mode. The PostgreSQL major must be 17; only the pinned 17.11 release
+has executed evidence, and a different deparsed profile fails closed.
+
+Observed structural drift returns audit_unavailable without repair. Missing
+objects or catalog/query failures return unavailable. A preparation failure rolls
+back new DDL and migrating metadata together; a failed coordinator creates no
+checkpoints. Connection/statement/lock deadlines remain inherited from those
+operations. Table locks block ordinary conflicting table DDL/DML during the check
+transaction; they are released between coordinator steps. They do not prevent a
+privileged owner changing functions or configuration independently. The operator
+must prevent all schema changes and old writers throughout maintenance.
+
+This gate does not validate ownership, grants or role membership, sequence current
+position, historical payload correctness, storage durability, external quiescence
+or runtime readiness. Those remain distinct checks and operational obligations.
+It cannot attest physical disk/index consistency or protect against a hostile
+superuser. It does not activate v2 or imply that the complete upgrade flow is
+production-ready. Live catalog-corruption proof is in
+tests/integration/audit-upgrade-schema.py.

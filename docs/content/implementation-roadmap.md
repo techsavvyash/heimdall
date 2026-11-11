@@ -203,3 +203,5 @@ Phase 3 recovery finalization: [[evidence/phase-3-audit-recovery-write]] records
 Phase 3 upgrade preparation: [[evidence/phase-3-audit-upgrade-prepare]] records the explicit checksum-pinned CLI preparation transaction, rollback, concurrent/repeated execution and commit-loss proof. It keeps runtime unavailable; global backfill coverage and activation remain required.
 
 Phase 3 upgrade coordination: [[evidence/phase-3-audit-upgrade-backfill]] records automatic scope discovery, bounded CLI steps, concurrent restart and count-drift refusal. Physical-schema validation, readiness activation and custom-history registry integration remain required.
+
+Phase 3 schema gate: [[evidence/phase-3-audit-upgrade-schema]] records pinned structural catalog verification, 25 corruption cases, locking/cancellation and preparation rollback. Readiness activation and runtime factory selection remain required; structural matching does not attest grants, data integrity or quiescence.

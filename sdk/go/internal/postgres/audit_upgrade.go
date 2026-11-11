@@ -74,6 +74,9 @@ func PrepareAuditUpgrade(ctx context.Context, db *sql.DB, decisionSQL, backfillS
 		if _, e = tx.ExecContext(ctx, "UPDATE heimdall.schema_metadata SET state='migrating',reader_min=1,reader_max=1,writer_min=1,writer_max=1 WHERE singleton"); e != nil {
 			return databaseError(ctx)
 		}
+		if e = checkAuditUpgradeSchema(ctx, tx); e != nil {
+			return e
+		}
 	}
 	if e = contract.CheckCancellation(ctx); e != nil {
 		return e
@@ -94,5 +97,5 @@ func checkPreparedAuditUpgrade(ctx context.Context, tx *sql.Tx) error {
 	if e := tx.QueryRowContext(ctx, auditUpgradePreparedSQL, sessionChecksum, auditUpgradeChecksums[0], auditUpgradeChecksums[1], auditUpgradeChecksums[2]).Scan(&valid); e != nil || !valid {
 		return databaseError(ctx)
 	}
-	return nil
+	return checkAuditUpgradeSchema(ctx, tx)
 }
