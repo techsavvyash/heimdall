@@ -162,3 +162,25 @@ an outcome_unknown COMMIT response. This operation never creates routes or chang
 event payloads. Its database role needs SELECT/UPDATE on audit_deliveries only.
 A receipt is evidence from a trusted transport path, not authorization for arbitrary
 callers to mark unsent events delivered; the public exporter remains to be wired.
+
+Internal pending/Pending selects due pending deliveries for one configured
+product/environment and requested sink. Inputs allow 1–100 candidates and a safe
+integer local time. Rows are ordered by next_attempt_at then binary (C-collated)
+event ID. A SQL window sum limits returned event JSONB text to 4 MiB in addition
+to the count limit. This is a stored-payload budget, not a total wire/memory limit;
+metadata/driver overhead is additional. Every row is at most 1.5 MB by schema, so
+an oversized first row cannot make an otherwise nonempty selection return empty.
+
+Selection is a single read statement and does not claim, lease, update attempts
+or mark delivery. Repeat/concurrent reads can return the same rows. The exporter
+must acknowledge successful deliveries or explicitly schedule/quarantine failures
+before selecting again. No chronological or exactly-once delivery is promised.
+
+The shared decoder validates the ha1 wrapper, original event schema/semantics,
+canonical payload encoding, digest, and agreement between indexed and embedded
+product/environment/event ID/timestamp. A row failing those checks returns only
+its scoped event ID and attempt count with a null/nil Event. This is an explicit
+invalid/quarantine candidate, never a payload to export. Healthy later candidates
+in the same batch remain available. SQL/connection failure returns an error, not
+an empty backlog. Automatic quarantine and fairness across successive batches
+remain exporter work; this read primitive alone cannot guarantee their progress.

@@ -99,3 +99,5 @@ The migration checkpoint now includes compiled-runner execution on Railway with 
 Phase 3 audit checkpoint: [[evidence/phase-3-audit-persistence]] adds atomic event/delivery append in TS and Go, replay/conflict handling, lossless payload encoding and lost-COMMIT-response recovery evidence. Protected-operation orchestration and delivery workers remain open.
 
 Phase 3 acknowledgement checkpoint: [[evidence/phase-3-audit-acknowledgements]] records atomic partial delivery receipts, replay timestamp preservation, quarantine/missing-route rejection and committed-response-loss recovery in both SDKs. Delivery transport and scheduling remain open.
+
+Phase 3 pending-read checkpoint: [[evidence/phase-3-audit-pending]] records bounded due-event selection, payload/scope verification, explicit invalid candidates and cross-language decoding. Worker scheduling and quarantine remain open.

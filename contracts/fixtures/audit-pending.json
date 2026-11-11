@@ -1,0 +1,85 @@
+{
+  "now": 100,
+  "records": [
+    {
+      "id": "a",
+      "due": 50,
+      "attempts": 2
+    },
+    {
+      "id": "b",
+      "due": 100
+    },
+    {
+      "id": "c",
+      "due": 101
+    },
+    {
+      "id": "d",
+      "due": 0,
+      "state": "delivered"
+    },
+    {
+      "id": "e",
+      "due": 0,
+      "state": "quarantined"
+    },
+    {
+      "id": "f",
+      "due": 0,
+      "product": "support"
+    },
+    {
+      "id": "g",
+      "due": 0,
+      "environment": "staging"
+    },
+    {
+      "id": "h",
+      "due": 0,
+      "sink": "other"
+    },
+    {
+      "id": "i",
+      "due": 100,
+      "corruption": "digest"
+    },
+    {
+      "id": "j",
+      "due": 100,
+      "corruption": "payload-scope"
+    },
+    {
+      "id": "k",
+      "due": 100,
+      "tenantId": "tenant-2"
+    }
+  ],
+  "expected": [
+    {
+      "id": "a",
+      "attempts": 2,
+      "valid": true
+    },
+    {
+      "id": "b",
+      "attempts": 0,
+      "valid": true
+    },
+    {
+      "id": "i",
+      "attempts": 0,
+      "valid": false
+    },
+    {
+      "id": "j",
+      "attempts": 0,
+      "valid": false
+    },
+    {
+      "id": "k",
+      "attempts": 0,
+      "valid": true
+    }
+  ]
+}

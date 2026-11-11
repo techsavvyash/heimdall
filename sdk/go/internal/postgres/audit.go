@@ -92,25 +92,11 @@ func (a *Audit) Append(ctx context.Context, event map[string]any) (contract.Audi
 	if hex.EncodeToString(storedDigest) != digest {
 		return empty, contract.ErrConflict
 	}
-	var wrapper map[string]any
-	if json.Unmarshal(storedEvent, &wrapper) != nil || len(wrapper) != 6 || wrapper["format"] != "ha1" || wrapper["productId"] != a.product || wrapper["environment"] != a.environment || wrapper["eventId"] != eventID || wrapper["recordedAt"] != at {
+	if recordedAt != receipt.RecordedAt {
 		return empty, contract.ErrAuditUnavailable
 	}
-	payload, ok := wrapper["payload"].(string)
-	if !ok {
-		return empty, contract.ErrAuditUnavailable
-	}
-	bytes, err := base64.RawURLEncoding.Strict().DecodeString(payload)
-	if err != nil || base64.RawURLEncoding.EncodeToString(bytes) != payload {
-		return empty, contract.ErrAuditUnavailable
-	}
-	var stored map[string]any
-	if json.Unmarshal(bytes, &stored) != nil {
-		return empty, contract.ErrAuditUnavailable
-	}
-	actual, err := contract.AuditDigest(stored)
-	if err != nil || actual != digest || recordedAt != receipt.RecordedAt || a.validate(stored) != nil {
-		return empty, contract.ErrAuditUnavailable
+	if _, err = a.decodeStored(storedEvent, eventID, recordedAt, digest); err != nil {
+		return empty, err
 	}
 	count, err := inserted.RowsAffected()
 	if err != nil {
@@ -215,4 +201,81 @@ func (a *Audit) Acknowledge(ctx context.Context, batch, receipt contract.AuditDe
 		return contract.ErrOutcomeUnknown
 	}
 	return nil
+}
+
+func (a *Audit) decodeStored(raw []byte, eventID string, recordedAt int64, digest string) (map[string]any, error) {
+	var wrapper map[string]any
+	if json.Unmarshal(raw, &wrapper) != nil || len(wrapper) != 6 || wrapper["format"] != "ha1" || wrapper["productId"] != a.product || wrapper["environment"] != a.environment || wrapper["eventId"] != eventID || wrapper["recordedAt"] != float64(recordedAt) {
+		return nil, contract.ErrAuditUnavailable
+	}
+	payload, ok := wrapper["payload"].(string)
+	if !ok {
+		return nil, contract.ErrAuditUnavailable
+	}
+	bytes, err := base64.RawURLEncoding.Strict().DecodeString(payload)
+	if err != nil || base64.RawURLEncoding.EncodeToString(bytes) != payload {
+		return nil, contract.ErrAuditUnavailable
+	}
+	var event map[string]any
+	if json.Unmarshal(bytes, &event) != nil {
+		return nil, contract.ErrAuditUnavailable
+	}
+	if a.validate(event) != nil || event["productId"] != a.product || event["environment"] != a.environment || event["eventId"] != eventID || event["recordedAt"] != float64(recordedAt) {
+		return nil, contract.ErrAuditUnavailable
+	}
+	actual, err := contract.AuditDigest(event)
+	if err != nil || actual != digest {
+		return nil, contract.ErrAuditUnavailable
+	}
+	return event, nil
+}
+
+// PendingAudit has a nil Event only when stored data failed validation. Never
+// export such a payload; its scoped identity permits explicit quarantine.
+type PendingAudit struct {
+	EventID  string
+	Attempts int
+	Event    map[string]any
+}
+
+// Pending is a read, not a lease. Duplicates from concurrent workers are expected.
+func (a *Audit) Pending(ctx context.Context, sink string, now int64, limit int) ([]PendingAudit, error) {
+	if !valid(sink, 128) || now < 0 || now > maxSafe || limit < 1 || limit > 100 {
+		return nil, contract.ErrInvalidArgument
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := contract.CheckCancellation(ctx); err != nil {
+		return nil, err
+	}
+	rows, err := a.db.QueryContext(ctx, `WITH candidates AS MATERIALIZED (
+ SELECT d.event_id,d.attempts,d.next_attempt_at,e.recorded_at,e.payload_digest,e.event
+ FROM heimdall.audit_deliveries d JOIN heimdall.audit_events e USING(product_id,environment,event_id)
+ WHERE d.product_id=$1 AND d.environment=$2 AND d.sink_id=$3 AND d.state='pending' AND d.next_attempt_at<=$4
+ ORDER BY d.next_attempt_at,d.event_id COLLATE "C" LIMIT $5
+ ), sized AS (
+ SELECT *,sum(octet_length(event::text)) OVER(ORDER BY next_attempt_at,event_id COLLATE "C") AS size FROM candidates
+ ) SELECT event_id,attempts,recorded_at,payload_digest,event FROM sized WHERE size<=4194304 ORDER BY next_attempt_at,event_id COLLATE "C"`, a.product, a.environment, sink, now, limit)
+	if err != nil {
+		return nil, databaseError(ctx)
+	}
+	defer rows.Close()
+	result := []PendingAudit{}
+	for rows.Next() {
+		var item PendingAudit
+		var recordedAt int64
+		var digest, raw []byte
+		if err = rows.Scan(&item.EventID, &item.Attempts, &recordedAt, &digest, &raw); err != nil {
+			return nil, databaseError(ctx)
+		}
+		item.Event, _ = a.decodeStored(raw, item.EventID, recordedAt, hex.EncodeToString(digest))
+		result = append(result, item)
+	}
+	if rows.Err() != nil {
+		return nil, databaseError(ctx)
+	}
+	if err = contract.CheckCancellation(ctx); err != nil {
+		return nil, err
+	}
+	return result, nil
 }

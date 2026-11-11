@@ -3,12 +3,14 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"os"
+	"reflect"
 	"sync"
 	"testing"
 )
@@ -372,4 +374,147 @@ func TestAcknowledgementCommitLoss(t *testing.T) {
 		t.Fatal(err)
 	}
 	verify()
+}
+
+func TestAuditPending(t *testing.T) {
+	url := os.Getenv("HEIMDALL_TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("live pending selection")
+	}
+	fixtures, validate := auditFixtureValidator(t)
+	db, err := sql.Open("postgres", url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+	shared, _ := NewAudit(db, "ledger", "production", []string{"pending-shared"}, validate)
+	existing, err := shared.Pending(ctx, "pending-shared", 100, 100)
+	if err != nil || len(existing) == 0 || existing[0].Event == nil {
+		t.Fatal("cross-language pending", err)
+	}
+	if os.Getenv("HEIMDALL_TEST_READ_PEER") != "" {
+		if len(existing) != 2 {
+			t.Fatal("peer read", len(existing))
+		}
+		return
+	}
+	raw, err := os.ReadFile("../../../../contracts/fixtures/audit-pending.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var matrix struct {
+		Now     int64
+		Records []struct {
+			ID                                                      string
+			Due                                                     int64
+			Attempts                                                int
+			State, Product, Environment, Sink, Corruption, TenantID string
+		}
+		Expected []struct {
+			ID       string
+			Attempts int
+			Valid    bool
+		}
+	}
+	if json.Unmarshal(raw, &matrix) != nil {
+		t.Fatal("fixture")
+	}
+	clone := func(product, environment, id string) map[string]any {
+		raw, _ := json.Marshal(fixtures[0].Event)
+		var event map[string]any
+		json.Unmarshal(raw, &event)
+		event["productId"] = product
+		event["environment"] = environment
+		event["eventId"] = id
+		return event
+	}
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := db.Exec(query, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, row := range matrix.Records {
+		product := "ledger-pending-go"
+		if row.Product != "" {
+			product = "support-pending-go"
+		}
+		environment := row.Environment
+		if environment == "" {
+			environment = "production"
+		}
+		sink := row.Sink
+		if sink == "" {
+			sink = "pending"
+		}
+		state := row.State
+		if state == "" {
+			state = "pending"
+		}
+		event := clone(product, environment, "go-pending-"+row.ID)
+		if row.TenantID != "" {
+			event["tenantId"] = row.TenantID
+		}
+		writer, _ := NewAudit(db, product, environment, []string{sink}, validate)
+		if _, err = writer.Append(ctx, event); err != nil {
+			t.Fatal(err)
+		}
+		exec("UPDATE heimdall.audit_deliveries SET next_attempt_at=$2,attempts=$3,state=$4,delivered_at=CASE WHEN $4='delivered' THEN 100 ELSE NULL END WHERE event_id=$1", event["eventId"], row.Due, row.Attempts, state)
+		if row.Corruption == "digest" {
+			exec("UPDATE heimdall.audit_events SET payload_digest=decode(repeat('00',32),'hex') WHERE event_id=$1", event["eventId"])
+		}
+		if row.Corruption == "payload-scope" {
+			event["productId"] = "support-pending-go"
+			raw, _ := json.Marshal(event)
+			digest, _ := contract.AuditDigest(event)
+			exec("UPDATE heimdall.audit_events SET event=jsonb_set(event,'{payload}',to_jsonb($2::text)),payload_digest=decode($3,'hex') WHERE event_id=$1", event["eventId"], base64.RawURLEncoding.EncodeToString(raw), digest)
+		}
+	}
+	store, _ := NewAudit(db, "ledger-pending-go", "production", nil, validate)
+	selected, err := store.Pending(ctx, "pending", matrix.Now, 100)
+	if err != nil || len(selected) != len(matrix.Expected) {
+		t.Fatal("selection", err)
+	}
+	for i, want := range matrix.Expected {
+		got := selected[i]
+		if got.EventID != "go-pending-"+want.ID || got.Attempts != want.Attempts || (got.Event != nil) != want.Valid {
+			t.Fatal("selection mismatch", got.EventID)
+		}
+	}
+	limited, err := store.Pending(ctx, "pending", matrix.Now, 2)
+	if err != nil || len(limited) != 2 || limited[0].EventID != "go-pending-a" || limited[1].EventID != "go-pending-b" {
+		t.Fatal("limit", err)
+	}
+	repeated, err := store.Pending(ctx, "pending", matrix.Now, 100)
+	if err != nil || !reflect.DeepEqual(repeated, selected) {
+		t.Fatal("read changed state", err)
+	}
+	if _, err = store.Pending(ctx, "pending", matrix.Now, 0); !errors.Is(err, contract.ErrInvalidArgument) {
+		t.Fatal(err)
+	}
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err = store.Pending(cancelled, "pending", matrix.Now, 100); !errors.Is(err, contract.ErrCancelled) {
+		t.Fatal(err)
+	}
+	budget, _ := NewAudit(db, "budget-go", "production", []string{"budget"}, validate)
+	for i := 0; i < 6; i++ {
+		if _, err = budget.Append(ctx, clone("budget-go", "production", fmt.Sprintf("budget-go-%d", i))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec("UPDATE heimdall.audit_events SET event=jsonb_set(event,'{payload}',to_jsonb(repeat('a',1000000))) WHERE product_id='budget-go'")
+	bounded, err := budget.Pending(ctx, "budget", 100, 100)
+	if err != nil || len(bounded) != 4 {
+		t.Fatal("byte budget", err)
+	}
+	for _, item := range bounded {
+		if item.Event != nil {
+			t.Fatal("exported invalid payload")
+		}
+	}
+	if _, err = shared.Append(ctx, clone("ledger", "production", "pending-go-shared")); err != nil {
+		t.Fatal(err)
+	}
 }

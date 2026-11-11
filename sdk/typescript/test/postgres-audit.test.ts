@@ -1,3 +1,4 @@
+import { auditDigest } from "../src/internal/audit-receipts.js";
 import { readFileSync } from "node:fs";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { Pool } from "pg";
@@ -299,4 +300,116 @@ test.skipIf(!process.env.HEIMDALL_TEST_ACK_COMMIT_LOSS)(
     }
   },
   15000,
+);
+
+test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TEST_READ_PEER)(
+  "pending selection scope time corruption and budget",
+  async () => {
+    const pool = new Pool({ connectionString: process.env.HEIMDALL_TEST_DATABASE_URL });
+    const matrix = JSON.parse(
+      readFileSync(new URL("fixtures/audit-pending.json", root), "utf8"),
+    ) as {
+      now: number;
+      records: {
+        id: string;
+        due: number;
+        attempts?: number;
+        state?: string;
+        product?: string;
+        environment?: string;
+        sink?: string;
+        corruption?: string;
+        tenantId?: string;
+      }[];
+      expected: { id: string; attempts: number; valid: boolean }[];
+    };
+    const product = "ledger-pending-ts";
+    try {
+      for (const row of matrix.records) {
+        const scope = row.product ? "support-pending-ts" : product;
+        const environment = row.environment ?? "production";
+        const sink = row.sink ?? "pending";
+        const event = {
+          ...fixtures[0].event,
+          productId: scope,
+          environment,
+          eventId: "ts-pending-" + row.id,
+          tenantId: row.tenantId ?? fixtures[0].event.tenantId,
+        };
+        await new PostgresAudit(pool, scope, environment, [sink], validate).append(event);
+        await pool.query(
+          "UPDATE heimdall.audit_deliveries SET next_attempt_at=$2,attempts=$3,state=$4,delivered_at=CASE WHEN $4='delivered' THEN 100 ELSE NULL END WHERE event_id=$1",
+          [event.eventId, row.due, row.attempts ?? 0, row.state ?? "pending"],
+        );
+        if (row.corruption === "digest")
+          await pool.query(
+            "UPDATE heimdall.audit_events SET payload_digest=decode(repeat('00',32),'hex') WHERE event_id=$1",
+            [event.eventId],
+          );
+        if (row.corruption === "payload-scope") {
+          const wrong = { ...event, productId: "support-pending-ts" };
+          await pool.query(
+            "UPDATE heimdall.audit_events SET event=jsonb_set(event,'{payload}',to_jsonb($2::text)),payload_digest=$3 WHERE event_id=$1",
+            [
+              event.eventId,
+              Buffer.from(JSON.stringify(wrong)).toString("base64url"),
+              Buffer.from(auditDigest(wrong), "hex"),
+            ],
+          );
+        }
+      }
+      const store = new PostgresAudit(pool, product, "production", [], validate);
+      const selected = await store.pending("pending", matrix.now, 100);
+      expect(
+        selected.map((item) => ({
+          id: item.eventId.replace("ts-pending-", ""),
+          attempts: item.attempts,
+          valid: item.event !== null,
+        })),
+      ).toEqual(matrix.expected);
+      expect((await store.pending("pending", matrix.now, 2)).map((item) => item.eventId)).toEqual([
+        "ts-pending-a",
+        "ts-pending-b",
+      ]);
+      expect(await store.pending("pending", matrix.now, 100)).toEqual(selected);
+      await expect(store.pending("pending", matrix.now, 0)).rejects.toThrow("invalid_argument");
+      await expect(store.pending("pending", matrix.now, 100, AbortSignal.abort())).rejects.toThrow(
+        "cancelled",
+      );
+      const budget = new PostgresAudit(pool, "budget-ts", "production", ["budget"], validate);
+      for (let i = 0; i < 6; i++)
+        await budget.append({
+          ...fixtures[0].event,
+          productId: "budget-ts",
+          eventId: `budget-ts-${i}`,
+        });
+      await pool.query(
+        "UPDATE heimdall.audit_events SET event=jsonb_set(event,'{payload}',to_jsonb(repeat('a',1000000))) WHERE product_id='budget-ts'",
+      );
+      const limited = await budget.pending("budget", 100, 100);
+      expect(limited).toHaveLength(4);
+      expect(limited.every((item) => item.event === null)).toBe(true);
+      const shared = new PostgresAudit(pool, "ledger", "production", ["pending-shared"], validate);
+      await shared.append({ ...fixtures[0].event, eventId: "pending-ts-shared" });
+    } finally {
+      await pool.end();
+    }
+  },
+  20000,
+);
+test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !process.env.HEIMDALL_TEST_READ_PEER)(
+  "pending reader decodes both language writers",
+  async () => {
+    const pool = new Pool({ connectionString: process.env.HEIMDALL_TEST_DATABASE_URL });
+    try {
+      const store = new PostgresAudit(pool, "ledger", "production", [], validate);
+      const items = await store.pending("pending-shared", 100, 100);
+      expect(items.map((item) => item.event?.eventId)).toEqual([
+        "pending-go-shared",
+        "pending-ts-shared",
+      ]);
+    } finally {
+      await pool.end();
+    }
+  },
 );
