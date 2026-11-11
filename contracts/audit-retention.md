@@ -414,3 +414,41 @@ maintenance transaction must lock and revalidate current history, policy, delive
 and protection facts before acting. A snapshot classified as candidate can become
 held immediately after the read. Atomic authorized lifecycle orchestration and
 compatible runtime identity writes remain required.
+
+## Prepared atomic retained append
+
+Internal TS appendRetained and Go AppendRetained now compose normal audit writes
+with retained identity in one transaction. They validate/snapshot the full event
+before I/O, acquire existing primary v3 deployment/capacity admission and initialized retention
+capacity, and resolve
+its retained event ID inside that transaction before any insertion. Exact live or
+retired retries return the original receipt without recreating payload, outbox,
+source decision or quota charges. Changed digest/time conflicts, including tenant
+changes. Missing compact identity for a live event is an integrity failure; this
+writer does not silently backfill old v3 records.
+
+For a new ordinary event, payload, routing, payload charge and compact event
+identity commit together. A new request additionally commits its source decision,
+payload recovery reservation, retained decision and two reserved metadata slots.
+A new request cannot reuse any retained decision ID, including a retired decision.
+A normal completion requires an existing retained pending decision and live request
+identity. It commits source finalization, payload accounting, terminal identity and
+retained resolution together, consuming reserved capacity and releasing the unused
+recovery slot. A late identity/quota failure rolls back every earlier mutation.
+
+The shared source validation/copy and capacity finalization routines are reused
+inside the transaction; the deployment-only group-copy wrapper retains its original
+offline table locks. The new writer uses the existing capacity-policy row for
+serialization. All eventual maintenance workflows must acquire the same admission
+before identity/hold locks, as required by the retirement transaction contract.
+An exact receipt never authorizes fresh business work or changes sink routing.
+
+This internal path is not activated public storage. It requires installed prepared
+schemas and compatible callers; catalog/backfill/v4 publication and draining old
+writers remain mandatory before production use. New unknown completions and
+recovery-administration records cannot be inserted individually through this path;
+a retained recovery-pair transaction remains required. Already retained records of
+those kinds may be resolved as immutable receipt-only retries. Five-second operation
+bounds, synchronous commit, cancellation and conservative unknown-COMMIT behavior
+are preserved. Dedicated lost-response and cross-language writer handoff proof for
+this new composition remains required before activation.

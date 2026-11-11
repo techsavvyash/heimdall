@@ -47,6 +47,21 @@ func (a *Audit) RetainIdentityGroup(ctx context.Context, tenant *string, resolut
 	if _, e = tx.ExecContext(ctx, "LOCK TABLE heimdall.audit_events,heimdall.audit_deliveries,heimdall.audit_decisions,heimdall_capacity.event_charges,heimdall_capacity.reservations IN SHARE MODE"); e != nil {
 		return nil, databaseError(ctx)
 	}
+	identities, e := a.retainIdentityGroupTx(ctx, tx, tenantCopy, resolution, ids)
+	if e != nil {
+		return nil, e
+	}
+	if e = contract.CheckCancellation(ctx); e != nil {
+		return nil, e
+	}
+	if e = tx.Commit(); e != nil {
+		return nil, contract.ErrOutcomeUnknown
+	}
+	return identities, nil
+}
+
+func (a *Audit) retainIdentityGroupTx(ctx context.Context, tx *sql.Tx, tenantCopy *string, resolution string, ids []string) ([]contract.RetainedIdentity, error) {
+	var e error
 	sources := []contract.RetentionSource{}
 	events := []map[string]any{}
 	for _, id := range ids {
@@ -96,12 +111,6 @@ func (a *Audit) RetainIdentityGroup(ctx context.Context, tenant *string, resolut
 		if e != nil {
 			return nil, auditCapacityError(ctx, e)
 		}
-	}
-	if e = contract.CheckCancellation(ctx); e != nil {
-		return nil, e
-	}
-	if e = tx.Commit(); e != nil {
-		return nil, contract.ErrOutcomeUnknown
 	}
 	return identities, nil
 }

@@ -281,72 +281,78 @@ export class PostgresAudit {
         await client.query(
           "LOCK TABLE heimdall.audit_events,heimdall.audit_deliveries,heimdall.audit_decisions,heimdall_capacity.event_charges,heimdall_capacity.reservations IN SHARE MODE",
         );
-        const sources = [];
-        for (const id of ids) {
-          const result = await client.query(
-            "SELECT e.event,e.recorded_at::text AS at,encode(e.payload_digest,'hex') AS digest,c.delivery_rows AS count,ARRAY(SELECT sink_id FROM heimdall.audit_deliveries d WHERE d.product_id=e.product_id AND d.environment=e.environment AND d.event_id=e.event_id ORDER BY sink_id COLLATE \"C\") AS routing FROM heimdall.audit_events e JOIN heimdall_capacity.event_charges c USING(product_id,environment,event_id) WHERE e.product_id=$1 AND e.environment=$2 AND e.event_id=$3 AND octet_length(e.event::text)<=1500000 AND c.envelope_bytes=octet_length(e.event::text)",
-            [this.productId, this.environment, id],
-          );
-          const row = result.rows[0];
-          if (!row) throw new HeimdallError("audit_unavailable");
-          const event = this.decodeStored(row.event, id, Number(row.at), row.digest);
-          sources.push({
-            event,
-            digest: row.digest,
-            routing: row.routing,
-            deliveryRows: Number(row.count),
-          });
-        }
-        const identities = buildRetentionIdentities(
-          { productId: this.productId, environment: this.environment, tenantId },
-          resolution,
-          sources,
-        );
-        for (const i of identities)
-          await capacityWrite(
-            client,
-            "INSERT INTO heimdall_retention.event_identities(product_id,environment,event_id,tenant_id,recorded_at,payload_digest,kind,decision_id,routing) VALUES($1,$2,$3,$4,$5,decode($6,'hex'),$7,$8,$9::jsonb) ON CONFLICT(product_id,environment,event_id) DO UPDATE SET tenant_id=EXCLUDED.tenant_id,recorded_at=EXCLUDED.recorded_at,payload_digest=EXCLUDED.payload_digest,kind=EXCLUDED.kind,decision_id=EXCLUDED.decision_id,routing=EXCLUDED.routing",
-            [
-              i.productId,
-              i.environment,
-              i.eventId,
-              i.tenantId,
-              i.recordedAt,
-              i.digest,
-              i.kind,
-              i.decisionId,
-              JSON.stringify(i.routing),
-            ],
-          );
-        if (resolution !== "ordinary") {
-          const binding = bindAuditDecision(
-            this.productId,
-            this.environment,
-            sources
-              .map((s) => s.event)
-              .filter((e) => e.eventType !== "heimdall.recovery.completed"),
-          );
-          await capacityWrite(
-            client,
-            "INSERT INTO heimdall_retention.decision_identities(product_id,environment,decision_id,tenant_id,request_event_id,requested_at,resolution,terminal_event_id,recovery_event_id,resolved_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(product_id,environment,decision_id) DO UPDATE SET tenant_id=EXCLUDED.tenant_id,request_event_id=EXCLUDED.request_event_id,requested_at=EXCLUDED.requested_at,resolution=EXCLUDED.resolution,terminal_event_id=EXCLUDED.terminal_event_id,recovery_event_id=EXCLUDED.recovery_event_id,resolved_at=EXCLUDED.resolved_at",
-            [
-              this.productId,
-              this.environment,
-              binding.decisionId,
-              tenantId,
-              binding.requestEventId,
-              binding.requestedAt,
-              binding.resolution,
-              binding.terminalEventId,
-              identities.find((i) => i.kind === "recovery")?.eventId ?? null,
-              binding.resolvedAt,
-            ],
-          );
-        }
-        return identities;
+        return this.retainIdentityGroupTx(client, tenantId, resolution, ids);
       },
       signal,
     );
+  }
+  private async retainIdentityGroupTx(
+    client: PoolClient,
+    tenantId: string | null,
+    resolution: string,
+    ids: string[],
+  ) {
+    const sources = [];
+    for (const id of ids) {
+      const result = await client.query(
+        "SELECT e.event,e.recorded_at::text AS at,encode(e.payload_digest,'hex') AS digest,c.delivery_rows AS count,ARRAY(SELECT sink_id FROM heimdall.audit_deliveries d WHERE d.product_id=e.product_id AND d.environment=e.environment AND d.event_id=e.event_id ORDER BY sink_id COLLATE \"C\") AS routing FROM heimdall.audit_events e JOIN heimdall_capacity.event_charges c USING(product_id,environment,event_id) WHERE e.product_id=$1 AND e.environment=$2 AND e.event_id=$3 AND octet_length(e.event::text)<=1500000 AND c.envelope_bytes=octet_length(e.event::text)",
+        [this.productId, this.environment, id],
+      );
+      const row = result.rows[0];
+      if (!row) throw new HeimdallError("audit_unavailable");
+      const event = this.decodeStored(row.event, id, Number(row.at), row.digest);
+      sources.push({
+        event,
+        digest: row.digest,
+        routing: row.routing,
+        deliveryRows: Number(row.count),
+      });
+    }
+    const identities = buildRetentionIdentities(
+      { productId: this.productId, environment: this.environment, tenantId },
+      resolution,
+      sources,
+    );
+    for (const i of identities)
+      await capacityWrite(
+        client,
+        "INSERT INTO heimdall_retention.event_identities(product_id,environment,event_id,tenant_id,recorded_at,payload_digest,kind,decision_id,routing) VALUES($1,$2,$3,$4,$5,decode($6,'hex'),$7,$8,$9::jsonb) ON CONFLICT(product_id,environment,event_id) DO UPDATE SET tenant_id=EXCLUDED.tenant_id,recorded_at=EXCLUDED.recorded_at,payload_digest=EXCLUDED.payload_digest,kind=EXCLUDED.kind,decision_id=EXCLUDED.decision_id,routing=EXCLUDED.routing",
+        [
+          i.productId,
+          i.environment,
+          i.eventId,
+          i.tenantId,
+          i.recordedAt,
+          i.digest,
+          i.kind,
+          i.decisionId,
+          JSON.stringify(i.routing),
+        ],
+      );
+    if (resolution !== "ordinary") {
+      const binding = bindAuditDecision(
+        this.productId,
+        this.environment,
+        sources.map((s) => s.event).filter((e) => e.eventType !== "heimdall.recovery.completed"),
+      );
+      await capacityWrite(
+        client,
+        "INSERT INTO heimdall_retention.decision_identities(product_id,environment,decision_id,tenant_id,request_event_id,requested_at,resolution,terminal_event_id,recovery_event_id,resolved_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(product_id,environment,decision_id) DO UPDATE SET tenant_id=EXCLUDED.tenant_id,request_event_id=EXCLUDED.request_event_id,requested_at=EXCLUDED.requested_at,resolution=EXCLUDED.resolution,terminal_event_id=EXCLUDED.terminal_event_id,recovery_event_id=EXCLUDED.recovery_event_id,resolved_at=EXCLUDED.resolved_at",
+        [
+          this.productId,
+          this.environment,
+          binding.decisionId,
+          tenantId,
+          binding.requestEventId,
+          binding.requestedAt,
+          binding.resolution,
+          binding.terminalEventId,
+          identities.find((i) => i.kind === "recovery")?.eventId ?? null,
+          binding.resolvedAt,
+        ],
+      );
+    }
+    return identities;
   }
   // Deployment-only: old writers must be drained and the explicit upgrade must
   // install both prepared v2 tables and register every audit scope first.
@@ -802,23 +808,30 @@ WITH selected AS MATERIALIZED (
       event.outcome === "outcome_unknown"
     )
       throw new HeimdallError("invalid_argument");
-    const scope = [this.productId, this.environment];
     return this.appendFinalized(
       event,
       admit,
       async (client, snapshot, inserted) => {
-        const request = snapshot.eventType === "heimdall.authorization.requested";
-        const completion = snapshot.eventType === "heimdall.authorization.completed";
-        if (request || completion) {
-          const changed = await this.persistDecision(client, snapshot);
-          if (completion) await resolveAuditCapacity(client, scope, snapshot, changed, null);
-        }
-        await chargeAuditEvent(client, scope, snapshot.eventId as string, inserted);
-        if (request) await reserveAuditDecision(client, scope, snapshot, inserted);
-        if (request || completion) await checkAuditReservation(client, scope, snapshot, null);
+        await this.finalizeCapacityEvent(client, snapshot, inserted);
       },
       signal,
     );
+  }
+  private async finalizeCapacityEvent(
+    client: PoolClient,
+    snapshot: Record<string, unknown>,
+    inserted: boolean,
+  ) {
+    const scope = [this.productId, this.environment];
+    const request = snapshot.eventType === "heimdall.authorization.requested";
+    const completion = snapshot.eventType === "heimdall.authorization.completed";
+    if (request || completion) {
+      const changed = await this.persistDecision(client, snapshot);
+      if (completion) await resolveAuditCapacity(client, scope, snapshot, changed, null);
+    }
+    await chargeAuditEvent(client, scope, snapshot.eventId as string, inserted);
+    if (request) await reserveAuditDecision(client, scope, snapshot, inserted);
+    if (request || completion) await checkAuditReservation(client, scope, snapshot, null);
   }
   async recoverCapacity(
     terminal: Record<string, unknown>,
@@ -871,6 +884,86 @@ WITH selected AS MATERIALIZED (
         payloadDigest: recovery.originalDigest,
       },
     };
+  }
+  // Prepared compatible writer only. Public v4 activation and recovery integration remain gated.
+  async appendRetained(event: Record<string, unknown>, signal?: AbortSignal) {
+    const p = this.prepare(event);
+    const receipt = {
+      productId: this.productId,
+      environment: this.environment,
+      eventId: p.eventId,
+      recordedAt: p.recordedAt,
+      payloadDigest: p.originalDigest,
+    };
+    const tenant = (p.snapshot.tenantId ?? null) as string | null;
+    return transaction(
+      this.pool,
+      async (client) => {
+        await lockRuntimeCapacity(client);
+        const capacity = await client.query(
+          "SELECT singleton FROM heimdall_retention.capacity WHERE singleton FOR UPDATE",
+        );
+        if (capacity.rows.length !== 1) throw new HeimdallError("audit_unavailable");
+
+        const read = async (id: string) => {
+          const rows = await client.query<RetainedRow>(retainedReadSQL, [
+            sessionChecksum,
+            decisionChecksum,
+            capacityChecksum,
+            capacityPreparationChecksum,
+            this.productId,
+            this.environment,
+            id,
+          ]);
+          if (rows.rows.length !== 1) throw new HeimdallError("unavailable");
+          return this.decodeRetainedRow(rows.rows[0]!, tenant, id, false);
+        };
+        const existing = await read(p.eventId);
+        if (existing) {
+          if (
+            existing.identity.digest !== p.originalDigest ||
+            existing.identity.recordedAt !== p.recordedAt
+          )
+            throw new HeimdallError("conflict");
+          return receipt;
+        }
+        const request = p.snapshot.eventType === "heimdall.authorization.requested";
+        const completion = p.snapshot.eventType === "heimdall.authorization.completed";
+        if (
+          (completion && p.snapshot.outcome === "outcome_unknown") ||
+          (p.snapshot.eventType === "heimdall.recovery.completed" &&
+            p.snapshot.action === "authorization.recover")
+        )
+          throw new HeimdallError("invalid_argument");
+        let resolution = "ordinary";
+        let ids = [p.eventId];
+        if (request || completion) {
+          const result = await client.query(
+            "SELECT request_event_id,resolution FROM heimdall_retention.decision_identities WHERE product_id=$1 AND environment=$2 AND decision_id=$3",
+            [this.productId, this.environment, p.snapshot.decisionId],
+          );
+          const d = result.rows[0];
+          if (request) {
+            if (d) throw new HeimdallError("conflict");
+            resolution = "pending";
+          } else {
+            if (!d) throw new HeimdallError("audit_unavailable");
+            if (d.resolution !== "pending") throw new HeimdallError("conflict");
+            const original = await read(d.request_event_id);
+            if (!original || original.state !== "live" || original.identity.tenantId !== tenant)
+              throw new HeimdallError("audit_unavailable");
+            resolution = "completed";
+            ids = [d.request_event_id, p.eventId];
+          }
+        }
+        const inserted = await this.writePrepared(client, p);
+        if (!inserted) throw new HeimdallError("audit_unavailable");
+        await this.finalizeCapacityEvent(client, p.snapshot, inserted);
+        await this.retainIdentityGroupTx(client, tenant, resolution, ids);
+        return receipt;
+      },
+      signal,
+    );
   }
   // Public writes hold v3 admission and capacity accounting through COMMIT.
   async appendRuntime(event: Record<string, unknown>, signal?: AbortSignal) {

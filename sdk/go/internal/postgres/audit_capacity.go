@@ -16,34 +16,37 @@ func (a *Audit) appendCapacityWith(ctx context.Context, event map[string]any, ad
 	if event["eventType"] == "heimdall.authorization.completed" && event["outcome"] == "outcome_unknown" {
 		return contract.AuditReceipt{}, contract.ErrInvalidArgument
 	}
-	return a.appendFinalized(ctx, event, admit, func(ctx context.Context, tx *sql.Tx, snapshot map[string]any, inserted bool) error {
-		request := snapshot["eventType"] == "heimdall.authorization.requested"
-		completion := snapshot["eventType"] == "heimdall.authorization.completed"
-		if request || completion {
-			changed, e := a.persistDecision(ctx, tx, snapshot, nil)
-			if e != nil {
-				return e
-			}
-			if completion {
-				if e = a.resolveAuditCapacity(ctx, tx, snapshot, changed, nil); e != nil {
-					return e
-				}
-			}
-		}
-		if e := a.chargeAuditEvent(ctx, tx, snapshot["eventId"].(string), inserted); e != nil {
+	return a.appendFinalized(ctx, event, admit, a.finalizeCapacityEvent)
+}
+func (a *Audit) finalizeCapacityEvent(ctx context.Context, tx *sql.Tx, snapshot map[string]any, inserted bool) error {
+
+	request := snapshot["eventType"] == "heimdall.authorization.requested"
+	completion := snapshot["eventType"] == "heimdall.authorization.completed"
+	if request || completion {
+		changed, e := a.persistDecision(ctx, tx, snapshot, nil)
+		if e != nil {
 			return e
 		}
-		if request && inserted {
-			if _, e := tx.ExecContext(ctx, "INSERT INTO heimdall_capacity.reservations(product_id,environment,decision_id,request_event_id) VALUES($1,$2,$3,$4)", a.product, a.environment, snapshot["decisionId"], snapshot["eventId"]); e != nil {
-				return auditCapacityError(ctx, e)
+		if completion {
+			if e = a.resolveAuditCapacity(ctx, tx, snapshot, changed, nil); e != nil {
+				return e
 			}
 		}
-		if request || completion {
-			return a.checkAuditReservation(ctx, tx, snapshot, nil)
+	}
+	if e := a.chargeAuditEvent(ctx, tx, snapshot["eventId"].(string), inserted); e != nil {
+		return e
+	}
+	if request && inserted {
+		if _, e := tx.ExecContext(ctx, "INSERT INTO heimdall_capacity.reservations(product_id,environment,decision_id,request_event_id) VALUES($1,$2,$3,$4)", a.product, a.environment, snapshot["decisionId"], snapshot["eventId"]); e != nil {
+			return auditCapacityError(ctx, e)
 		}
-		return nil
-	})
+	}
+	if request || completion {
+		return a.checkAuditReservation(ctx, tx, snapshot, nil)
+	}
+	return nil
 }
+
 func (a *Audit) RecoverCapacity(ctx context.Context, terminal, administration map[string]any, cutoff int64) (*AuditRecoveryReceipt, error) {
 	return a.recoverCapacityWith(ctx, terminal, administration, cutoff, lockAuditCapacity)
 }

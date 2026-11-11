@@ -63,6 +63,16 @@ func TestRetainedRetry(t *testing.T) {
 					t.Fatal(receipt, e)
 				}
 			}
+			if c.Expected != "absent" {
+				appended, err := a.AppendRetained(context.Background(), event)
+				outcome := "receipt"
+				if err != nil {
+					outcome = err.Error()
+				}
+				if outcome != c.Expected || (receipt != nil && appended != *receipt) {
+					t.Fatal("transactional retry", appended, err)
+				}
+			}
 			after, _ := json.Marshal(event)
 			if string(after) != string(before) {
 				t.Fatal("input mutated")

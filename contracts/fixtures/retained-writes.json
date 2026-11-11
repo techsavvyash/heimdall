@@ -1,0 +1,188 @@
+{
+  "snapshot": "SELECT jsonb_build_object('events',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall.audit_events t),'deliveries',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall.audit_deliveries t),'decisions',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall.audit_decisions t),'charges',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_capacity.event_charges t),'reservations',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_capacity.reservations t),'payloadCapacity',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_capacity.policy t),'identities',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_retention.event_identities t),'retainedDecisions',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_retention.decision_identities t),'metadata',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_retention.capacity t))::text AS snapshot",
+  "cases": [
+    {
+      "name": "ordinary atomic append",
+      "base": "ordinary",
+      "patch": {
+        "productId": "ledger",
+        "environment": "staging",
+        "decisionId": "retained-decision",
+        "eventId": "retained-ordinary"
+      },
+      "expected": "receipt",
+      "stable": false,
+      "checks": [
+        "SELECT EXISTS(SELECT 1 FROM heimdall_retention.event_identities WHERE product_id='ledger' AND environment='staging' AND event_id='retained-ordinary')"
+      ]
+    },
+    {
+      "name": "late identity failure rolls back entire request",
+      "base": "request",
+      "patch": {
+        "productId": "ledger",
+        "environment": "staging",
+        "decisionId": "retained-decision",
+        "eventId": "retained-request"
+      },
+      "expected": "audit_unavailable",
+      "stable": true,
+      "checks": [],
+      "before": "CREATE FUNCTION heimdall_retention.fail_retained_test() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.decision_id='retained-decision' THEN RAISE EXCEPTION 'injected' USING ERRCODE='23514'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_retained_test BEFORE INSERT ON heimdall_retention.decision_identities FOR EACH ROW EXECUTE FUNCTION heimdall_retention.fail_retained_test()"
+    },
+    {
+      "name": "insufficient metadata rolls back entire request",
+      "base": "request",
+      "patch": {
+        "productId": "ledger",
+        "environment": "staging",
+        "decisionId": "retained-decision",
+        "eventId": "retained-request"
+      },
+      "expected": "audit_unavailable",
+      "stable": true,
+      "checks": [],
+      "before": "DROP TRIGGER fail_retained_test ON heimdall_retention.decision_identities; DROP FUNCTION heimdall_retention.fail_retained_test(); UPDATE heimdall_retention.capacity SET row_limit=used_rows+reserved_rows+3,byte_limit=(used_rows+reserved_rows+3)*8192"
+    },
+    {
+      "name": "pending reserves terminal metadata",
+      "base": "request",
+      "patch": {
+        "productId": "ledger",
+        "environment": "staging",
+        "decisionId": "retained-decision",
+        "eventId": "retained-request"
+      },
+      "expected": "receipt",
+      "stable": false,
+      "checks": [
+        "SELECT used_rows+reserved_rows=row_limit FROM heimdall_retention.capacity",
+        "SELECT resolution='pending' FROM heimdall_retention.decision_identities WHERE product_id='ledger' AND environment='staging' AND decision_id='retained-decision'"
+      ],
+      "before": "UPDATE heimdall_retention.capacity SET row_limit=used_rows+reserved_rows+4,byte_limit=(used_rows+reserved_rows+4)*8192"
+    },
+    {
+      "name": "exact pending retry",
+      "base": "request",
+      "patch": {
+        "productId": "ledger",
+        "environment": "staging",
+        "decisionId": "retained-decision",
+        "eventId": "retained-request"
+      },
+      "expected": "receipt",
+      "stable": true,
+      "checks": []
+    },
+    {
+      "name": "normal completion succeeds at full metadata capacity",
+      "base": "normal",
+      "patch": {
+        "productId": "ledger",
+        "environment": "staging",
+        "decisionId": "retained-decision",
+        "eventId": "retained-terminal"
+      },
+      "expected": "receipt",
+      "stable": false,
+      "checks": [
+        "SELECT used_rows+reserved_rows=row_limit-1 FROM heimdall_retention.capacity",
+        "SELECT resolution='completed' AND terminal_event_id='retained-terminal' FROM heimdall_retention.decision_identities WHERE product_id='ledger' AND environment='staging' AND decision_id='retained-decision'"
+      ]
+    },
+    {
+      "name": "exact completion retry",
+      "base": "normal",
+      "patch": {
+        "productId": "ledger",
+        "environment": "staging",
+        "decisionId": "retained-decision",
+        "eventId": "retained-terminal"
+      },
+      "expected": "receipt",
+      "stable": true,
+      "checks": []
+    },
+    {
+      "name": "changed payload conflicts",
+      "base": "normal",
+      "patch": {
+        "productId": "ledger",
+        "environment": "staging",
+        "decisionId": "retained-decision",
+        "eventId": "retained-terminal",
+        "sdkVersion": "changed"
+      },
+      "expected": "conflict",
+      "stable": true,
+      "checks": []
+    },
+    {
+      "name": "changed tenant conflicts",
+      "base": "normal",
+      "patch": {
+        "productId": "ledger",
+        "environment": "staging",
+        "decisionId": "retained-decision",
+        "eventId": "retained-terminal",
+        "tenantId": "other"
+      },
+      "expected": "conflict",
+      "stable": true,
+      "checks": []
+    },
+    {
+      "name": "new request cannot reuse resolved decision",
+      "base": "request",
+      "patch": {
+        "productId": "ledger",
+        "environment": "staging",
+        "decisionId": "retained-decision",
+        "eventId": "another-request"
+      },
+      "expected": "conflict",
+      "stable": true,
+      "checks": []
+    },
+    {
+      "name": "one unused reservation is reusable",
+      "base": "ordinary",
+      "patch": {
+        "productId": "ledger",
+        "environment": "staging",
+        "decisionId": "retained-decision",
+        "eventId": "retained-ordinary-2"
+      },
+      "expected": "receipt",
+      "stable": false,
+      "checks": ["SELECT used_rows+reserved_rows=row_limit FROM heimdall_retention.capacity"]
+    },
+    {
+      "name": "full metadata rejects ordinary payload too",
+      "base": "ordinary",
+      "patch": {
+        "productId": "ledger",
+        "environment": "staging",
+        "decisionId": "retained-decision",
+        "eventId": "retained-ordinary-3"
+      },
+      "expected": "audit_unavailable",
+      "stable": true,
+      "checks": []
+    },
+    {
+      "name": "exact retry requires initialized metadata capacity",
+      "base": "ordinary",
+      "patch": {
+        "productId": "ledger",
+        "environment": "staging",
+        "decisionId": "retained-decision",
+        "eventId": "retained-ordinary"
+      },
+      "expected": "audit_unavailable",
+      "stable": true,
+      "checks": [],
+      "before": "DELETE FROM heimdall_retention.capacity"
+    }
+  ]
+}
