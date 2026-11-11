@@ -447,8 +447,42 @@ This internal path is not activated public storage. It requires installed prepar
 schemas and compatible callers; catalog/backfill/v4 publication and draining old
 writers remain mandatory before production use. New unknown completions and
 recovery-administration records cannot be inserted individually through this path;
-a retained recovery-pair transaction remains required. Already retained records of
+the retained recovery-pair transaction below handles them together. Already retained records of
 those kinds may be resolved as immutable receipt-only retries. Five-second operation
 bounds, synchronous commit, cancellation and conservative unknown-COMMIT behavior
-are preserved. Dedicated lost-response and cross-language writer handoff proof for
-this new composition remains required before activation.
+are preserved. Dedicated lost-response and cross-language handoff proof for normal retained
+appends remains required before activation; the recovery composition has its own
+proof below.
+
+## Prepared atomic retained recovery
+
+Internal TS recoverRetained and Go RecoverRetained now accept a validated immutable
+unknown-completion/recovery-administration pair and explicit cutoff. They acquire
+current deployment, payload-capacity and initialized retained-capacity admission
+in the same order as retained append. The caller remains responsible for verified
+initiator identity and recovery authorization.
+
+For a new pair, the retained decision must still be pending, its live request
+identity must match the tenant, and its requested time must meet the cutoff. Both
+payloads, original outbox routing, source decision/reservation transition, payload
+charges, retained member identities and retained resolution commit together. The
+two reserved metadata slots are consumed, allowing recovery at full payload and
+metadata quotas. A late retained-resolution failure rolls back all preceding
+writes and quota transitions. A normal completion arriving after recovery conflicts.
+
+Existing member identities are inspected before writing. Changed event digests
+conflict. Exact pair retries require both members, a recovered decision with those
+exact links, matching request identity and the same cutoff eligibility. Live
+retries revalidate complete decoded history and the source reservation; retired
+retries require validated whole-group retirement evidence. Mixed live/retired or
+incomplete pairs fail rather than repairing partial state. Exact retries return
+both original receipts without recreating payloads or deliveries. Actor changes
+cannot revise an existing recovery administration event.
+
+Both ports snapshot inputs before I/O, use five-second operation bounds and
+synchronous commit, and report unknown when COMMIT acknowledgement is lost. The
+reciprocal lost-response proof retries the same pair from the other SDK against
+the primary; complete payload/source/identity/accounting snapshots must remain
+unchanged. This is local database recovery, not permission to replay an uncertain
+remote OpenFGA or provider mutation. Public v4 activation, catalog/backfill and
+maintenance integration remain outstanding.

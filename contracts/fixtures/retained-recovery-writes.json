@@ -1,0 +1,72 @@
+{
+  "snapshot": "SELECT jsonb_build_object('events',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall.audit_events t),'deliveries',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall.audit_deliveries t),'decisions',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall.audit_decisions t),'charges',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_capacity.event_charges t),'reservations',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_capacity.reservations t),'payloadCapacity',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_capacity.policy t),'identities',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_retention.event_identities t),'retainedDecisions',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_retention.decision_identities t),'metadata',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_retention.capacity t))::text AS snapshot",
+  "cutoff": 1001,
+  "cases": [
+    {
+      "name": "late failure rolls back pair and all accounting",
+      "before": "UPDATE heimdall_retention.capacity SET row_limit=used_rows+reserved_rows,byte_limit=(used_rows+reserved_rows)*8192; UPDATE heimdall_capacity.policy SET event_limit=used_events+reserved_events,byte_limit=used_bytes+reserved_bytes,delivery_limit=used_deliveries+reserved_deliveries; UPDATE heimdall_capacity.upgrade SET event_limit=(SELECT event_limit FROM heimdall_capacity.policy),byte_limit=(SELECT byte_limit FROM heimdall_capacity.policy),delivery_limit=(SELECT delivery_limit FROM heimdall_capacity.policy);CREATE FUNCTION heimdall_retention.fail_recovery_test() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.resolution='recovered' AND OLD.resolution='pending' THEN RAISE EXCEPTION 'injected' USING ERRCODE='23514'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_recovery_test BEFORE UPDATE ON heimdall_retention.decision_identities FOR EACH ROW EXECUTE FUNCTION heimdall_retention.fail_recovery_test()",
+      "expected": "audit_unavailable",
+      "stable": true
+    },
+    {
+      "name": "request after cutoff refuses",
+      "before": "DROP TRIGGER fail_recovery_test ON heimdall_retention.decision_identities; DROP FUNCTION heimdall_retention.fail_recovery_test()",
+      "cutoff": 1000,
+      "expected": "conflict",
+      "stable": true
+    },
+    {
+      "name": "recovery consumes reservations at full quotas",
+      "expected": "receipt",
+      "stable": false,
+      "checks": [
+        "SELECT used_rows+reserved_rows=row_limit AND reserved_rows=2 FROM heimdall_retention.capacity",
+        "SELECT used_events+reserved_events=event_limit AND reserved_events=2 FROM heimdall_capacity.policy",
+        "SELECT resolution='recovered' AND terminal_event_id='recovery-terminal' AND recovery_event_id IS NOT NULL FROM heimdall_retention.decision_identities WHERE product_id='ledger' AND environment='production'"
+      ]
+    },
+    {
+      "name": "exact recovery retry",
+      "expected": "receipt",
+      "stable": true
+    },
+    {
+      "name": "changed administration conflicts",
+      "adminPatch": {
+        "sdkVersion": "changed"
+      },
+      "expected": "conflict",
+      "stable": true
+    },
+    {
+      "name": "changed recovery initiator conflicts",
+      "adminPatch": {
+        "actor": {
+          "kind": "user",
+          "issuer": "https://id.example.com",
+          "subject": "different-initiator"
+        }
+      },
+      "expected": "conflict",
+      "stable": true
+    },
+    {
+      "name": "retry preserves cutoff",
+      "cutoff": 1000,
+      "expected": "conflict",
+      "stable": true
+    },
+    {
+      "name": "late normal completion loses",
+      "normal": true,
+      "expected": "conflict",
+      "stable": true
+    },
+    {
+      "name": "retry requires metadata admission",
+      "before": "DELETE FROM heimdall_retention.capacity",
+      "expected": "audit_unavailable",
+      "stable": true
+    }
+  ]
+}

@@ -93,6 +93,22 @@ func TestRetiredDecisionInspection(t *testing.T) {
 		if _, err := a.InspectRetentionEligibility(context.Background(), &f.TenantID, "z-request", 4001, 1000); !errors.Is(err, contract.ErrNotFound) {
 			t.Fatal(err)
 		}
+		if scope.Resolution == "recovered" {
+			bases := capacityWritesData(t)
+			for _, event := range []map[string]any{bases.Terminal, bases.Administration} {
+				event["productId"] = scope.ProductID
+				event["environment"] = scope.Environment
+			}
+			bases.Administration["eventId"] = contract.RecoveryEventID(scope.ProductID, scope.Environment, bases.Terminal["eventId"].(string))
+			receipt, err := a.RecoverRetained(context.Background(), bases.Terminal, bases.Administration, 1001)
+			if err != nil || receipt == nil {
+				t.Fatal(receipt, err)
+			}
+			var count int
+			if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_events WHERE product_id=$1 AND environment=$2 AND event_id=ANY($3)", scope.ProductID, scope.Environment, pq.Array(ids)).Scan(&count); err != nil || count != 0 {
+				t.Fatal(count, err)
+			}
+		}
 		admin, e := a.InspectRetainedEvent(context.Background(), &f.TenantID, f.AdministrationID)
 		if e != nil || admin == nil || admin.State != "live" || admin.Event == nil {
 			t.Fatal(admin, e)

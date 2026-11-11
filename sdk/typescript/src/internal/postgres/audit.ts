@@ -885,7 +885,7 @@ WITH selected AS MATERIALIZED (
       },
     };
   }
-  // Prepared compatible writer only. Public v4 activation and recovery integration remain gated.
+  // Prepared compatible writer only. Public v4 activation remains gated.
   async appendRetained(event: Record<string, unknown>, signal?: AbortSignal) {
     const p = this.prepare(event);
     const receipt = {
@@ -899,25 +899,8 @@ WITH selected AS MATERIALIZED (
     return transaction(
       this.pool,
       async (client) => {
-        await lockRuntimeCapacity(client);
-        const capacity = await client.query(
-          "SELECT singleton FROM heimdall_retention.capacity WHERE singleton FOR UPDATE",
-        );
-        if (capacity.rows.length !== 1) throw new HeimdallError("audit_unavailable");
-
-        const read = async (id: string) => {
-          const rows = await client.query<RetainedRow>(retainedReadSQL, [
-            sessionChecksum,
-            decisionChecksum,
-            capacityChecksum,
-            capacityPreparationChecksum,
-            this.productId,
-            this.environment,
-            id,
-          ]);
-          if (rows.rows.length !== 1) throw new HeimdallError("unavailable");
-          return this.decodeRetainedRow(rows.rows[0]!, tenant, id, false);
-        };
+        await this.lockRetainedCapacity(client);
+        const read = (id: string) => this.readRetainedTx(client, id);
         const existing = await read(p.eventId);
         if (existing) {
           if (
@@ -961,6 +944,123 @@ WITH selected AS MATERIALIZED (
         await this.finalizeCapacityEvent(client, p.snapshot, inserted);
         await this.retainIdentityGroupTx(client, tenant, resolution, ids);
         return receipt;
+      },
+      signal,
+    );
+  }
+  private async lockRetainedCapacity(client: PoolClient) {
+    await lockRuntimeCapacity(client);
+    const result = await client.query(
+      "SELECT singleton FROM heimdall_retention.capacity WHERE singleton FOR UPDATE",
+    );
+    if (result.rows.length !== 1) throw new HeimdallError("audit_unavailable");
+  }
+  private async readRetainedTx(client: PoolClient, id: string) {
+    const rows = await client.query<RetainedRow>(retainedReadSQL, [
+      sessionChecksum,
+      decisionChecksum,
+      capacityChecksum,
+      capacityPreparationChecksum,
+      this.productId,
+      this.environment,
+      id,
+    ]);
+    if (rows.rows.length !== 1) throw new HeimdallError("unavailable");
+    return this.decodeRetainedRow(rows.rows[0]!, null, id, false);
+  }
+  // Trusted internal recovery: the caller authenticates and authorizes its initiator.
+  async recoverRetained(
+    terminal: Record<string, unknown>,
+    administration: Record<string, unknown>,
+    cutoff: number,
+    signal?: AbortSignal,
+  ) {
+    const t = this.prepare(terminal),
+      a = this.prepare(administration);
+    validateRecoveryPair(t.snapshot, a.snapshot, cutoff);
+    const receipt = (p: typeof t) => ({
+      productId: this.productId,
+      environment: this.environment,
+      eventId: p.eventId,
+      recordedAt: p.recordedAt,
+      payloadDigest: p.originalDigest,
+    });
+    const tenant = (t.snapshot.tenantId ?? null) as string | null;
+    return transaction(
+      this.pool,
+      async (client) => {
+        await this.lockRetainedCapacity(client);
+        const completed = await this.readRetainedTx(client, t.eventId);
+        const recovered = await this.readRetainedTx(client, a.eventId);
+        for (const [stored, p] of [
+          [completed, t],
+          [recovered, a],
+        ] as const) {
+          if (
+            stored &&
+            (stored.identity.digest !== p.originalDigest ||
+              stored.identity.recordedAt !== p.recordedAt)
+          )
+            throw new HeimdallError("conflict");
+        }
+        const rows = await client.query(
+          "SELECT request_event_id,requested_at::text,resolution,terminal_event_id,recovery_event_id FROM heimdall_retention.decision_identities WHERE product_id=$1 AND environment=$2 AND decision_id=$3",
+          [this.productId, this.environment, t.snapshot.decisionId],
+        );
+        const d = rows.rows[0];
+        if (!d) throw new HeimdallError("audit_unavailable");
+        if (Number(d.requested_at) > cutoff) throw new HeimdallError("conflict");
+        const request = await this.readRetainedTx(client, d.request_event_id);
+        if (!request || request.identity.tenantId !== tenant)
+          throw new HeimdallError("audit_unavailable");
+        if (completed || recovered) {
+          if (
+            !completed ||
+            !recovered ||
+            d.resolution !== "recovered" ||
+            d.terminal_event_id !== t.eventId ||
+            d.recovery_event_id !== a.eventId
+          )
+            throw new HeimdallError("audit_unavailable");
+          if (request.state !== completed.state || request.state !== recovered.state)
+            throw new HeimdallError("audit_unavailable");
+          if (request.state === "live") {
+            buildRetentionIdentities(
+              { productId: this.productId, environment: this.environment, tenantId: tenant },
+              "recovered",
+              [request, completed, recovered].map((member) => ({
+                event: member.event!,
+                digest: member.identity.digest,
+                routing: member.identity.routing,
+                deliveryRows: member.identity.routing.length,
+              })),
+            );
+            await checkAuditReservation(
+              client,
+              [this.productId, this.environment],
+              t.snapshot,
+              a.eventId,
+            );
+          }
+        } else {
+          if (d.resolution !== "pending") throw new HeimdallError("conflict");
+          if (request.state !== "live") throw new HeimdallError("audit_unavailable");
+          const inserted = await this.writePrepared(client, t);
+          const changed = await this.persistDecision(client, t.snapshot, cutoff);
+          const adminInserted = await this.writePrepared(client, a);
+          if (!inserted || !changed || !adminInserted) throw new HeimdallError("audit_unavailable");
+          const scope = [this.productId, this.environment];
+          await resolveAuditCapacity(client, scope, t.snapshot, changed, a.eventId);
+          await chargeAuditEvent(client, scope, t.eventId, inserted);
+          await chargeAuditEvent(client, scope, a.eventId, adminInserted);
+          await checkAuditReservation(client, scope, t.snapshot, a.eventId);
+          await this.retainIdentityGroupTx(client, tenant, "recovered", [
+            d.request_event_id,
+            t.eventId,
+            a.eventId,
+          ]);
+        }
+        return { terminal: receipt(t), administration: receipt(a) };
       },
       signal,
     );

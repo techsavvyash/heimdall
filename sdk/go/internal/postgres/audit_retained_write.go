@@ -8,7 +8,7 @@ import (
 )
 
 // AppendRetained is a prepared compatible writer, not public v4 activation.
-// New recovery pairs require their own future atomic retained recovery port.
+// New recovery pairs use RecoverRetained to preserve atomic administration.
 func (a *Audit) AppendRetained(ctx context.Context, event map[string]any) (contract.AuditReceipt, error) {
 	empty := contract.AuditReceipt{}
 	if ctx == nil {
@@ -35,26 +35,10 @@ func (a *Audit) AppendRetained(ctx context.Context, event map[string]any) (contr
 	if _, e = tx.ExecContext(ctx, "SET LOCAL synchronous_commit='on'"); e != nil {
 		return empty, databaseError(ctx)
 	}
-	if e = lockRuntimeCapacity(ctx, tx); e != nil {
+	if e = lockRetainedCapacity(ctx, tx); e != nil {
 		return empty, e
 	}
-	var capacity bool
-	if e = tx.QueryRowContext(ctx, "SELECT singleton FROM heimdall_retention.capacity WHERE singleton FOR UPDATE").Scan(&capacity); e != nil {
-		if e == sql.ErrNoRows {
-			return empty, contract.ErrAuditUnavailable
-		}
-		return empty, databaseError(ctx)
-	}
-	read := func(id string) (*RetainedEventInspection, error) {
-		var row retainedRow
-		var identity, payload []byte
-		err := tx.QueryRowContext(ctx, retainedReadSQL, sessionChecksum, decisionChecksum, capacityUpgradeChecksums[0], capacityUpgradeChecksums[1], a.product, a.environment, id).Scan(&row.Ready, &row.Present, &row.Live, &row.Markers, &row.Tenant, &identity, &payload, &row.Valid)
-		if err != nil {
-			return nil, databaseError(ctx)
-		}
-		row.Identity, row.Payload = identity, payload
-		return a.decodeRetainedRow(row, tenant, id, false)
-	}
+	read := func(id string) (*RetainedEventInspection, error) { return a.readRetainedTx(ctx, tx, id) }
 	existing, e := read(p.receipt.EventID)
 	if e != nil {
 		return empty, e
@@ -121,4 +105,27 @@ func (a *Audit) AppendRetained(ctx context.Context, event map[string]any) (contr
 		return empty, contract.ErrOutcomeUnknown
 	}
 	return p.receipt, nil
+}
+
+func lockRetainedCapacity(ctx context.Context, tx *sql.Tx) error {
+	if e := lockRuntimeCapacity(ctx, tx); e != nil {
+		return e
+	}
+	var initialized bool
+	if e := tx.QueryRowContext(ctx, "SELECT singleton FROM heimdall_retention.capacity WHERE singleton FOR UPDATE").Scan(&initialized); e != nil {
+		if e == sql.ErrNoRows {
+			return contract.ErrAuditUnavailable
+		}
+		return databaseError(ctx)
+	}
+	return nil
+}
+func (a *Audit) readRetainedTx(ctx context.Context, tx *sql.Tx, id string) (*RetainedEventInspection, error) {
+	var row retainedRow
+	var identity, payload []byte
+	if e := tx.QueryRowContext(ctx, retainedReadSQL, sessionChecksum, decisionChecksum, capacityUpgradeChecksums[0], capacityUpgradeChecksums[1], a.product, a.environment, id).Scan(&row.Ready, &row.Present, &row.Live, &row.Markers, &row.Tenant, &identity, &payload, &row.Valid); e != nil {
+		return nil, databaseError(ctx)
+	}
+	row.Identity, row.Payload = identity, payload
+	return a.decodeRetainedRow(row, nil, id, false)
 }

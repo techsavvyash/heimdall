@@ -1,3 +1,4 @@
+import { recoveryEventId } from "../src/internal/audit-recovery.js";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { expect, test } from "vitest";
@@ -38,6 +39,27 @@ test.skipIf(!process.env.HEIMDALL_TEST_RETIRED_DECISION_URL)(
         await expect(
           a.inspectRetentionEligibility(f.tenantId, "z-request", 4001, 1000),
         ).rejects.toThrow("not_found");
+        if (scope.resolution === "recovered") {
+          const bases = JSON.parse(
+            readFileSync(
+              new URL("../../../contracts/fixtures/audit-capacity-writes.json", import.meta.url),
+              "utf8",
+            ),
+          );
+          for (const event of [bases.terminal, bases.administration])
+            Object.assign(event, { productId: scope.productId, environment: scope.environment });
+          bases.administration.eventId = recoveryEventId(
+            scope.productId,
+            scope.environment,
+            bases.terminal.eventId,
+          );
+          await a.recoverRetained(bases.terminal, bases.administration, 1001);
+        }
+        const payloads = await pool.query(
+          "SELECT count(*)::int AS count FROM heimdall.audit_events WHERE product_id=$1 AND environment=$2 AND event_id=ANY($3)",
+          [scope.productId, scope.environment, row.ids],
+        );
+        expect(payloads.rows).toEqual([{ count: 0 }]);
         const admin = await a.inspectRetainedEvent(f.tenantId, f.administrationId);
         expect(admin?.state).toBe("live");
         expect(admin?.event?.eventId).toBe(f.administrationId);
