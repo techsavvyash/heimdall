@@ -1,4 +1,10 @@
-import { sessionChecksum } from "./readiness.js";
+import {
+  sessionChecksum,
+  decisionChecksum,
+  capacityChecksum,
+  capacityPreparationChecksum,
+  capacitySQL,
+} from "./readiness.js";
 import {
   lockAuditCapacity,
   lockRuntimeCapacity,
@@ -7,7 +13,7 @@ import {
   resolveAuditCapacity,
   checkAuditReservation,
 } from "./audit-capacity.js";
-import { validateRecoveryPair } from "../audit-recovery.js";
+import { validateRecoveryPair, recoveryEventId } from "../audit-recovery.js";
 import { bindAuditDecision } from "../audit-decision-binding.js";
 import type { Pool, PoolClient } from "pg";
 import { auditDigest, validateDeliveryReceipt } from "../audit-receipts.js";
@@ -411,6 +417,106 @@ WITH selected AS MATERIALIZED (
       }
       return { eventId: row.event_id, attempts: row.attempts, event };
     });
+  }
+  // One primary snapshot; this returns durable history, never fresh permission.
+  async readResolution(decisionId: string, signal?: AbortSignal) {
+    if (!token(decisionId, 128)) throw new HeimdallError("invalid_argument");
+    const rows = await query<{
+      ready: boolean;
+      record: {
+        id: string;
+        requestedAt: string;
+        resolution: string;
+        terminalId: string | null;
+        resolvedAt: string | null;
+        reservationRequest: string | null;
+        reservationResolution: string | null;
+        reservationTerminal: string | null;
+        recoveryId: string | null;
+        request: {
+          event_id: string;
+          recorded_at: string;
+          payload_digest: string;
+          event: Record<string, unknown>;
+        } | null;
+        terminal: {
+          event_id: string;
+          recorded_at: string;
+          payload_digest: string;
+          event: Record<string, unknown>;
+        } | null;
+        administration: {
+          event_id: string;
+          recorded_at: string;
+          payload_digest: string;
+          event: Record<string, unknown>;
+        } | null;
+      } | null;
+    }>(
+      this.pool,
+      resolutionSQL,
+      [
+        sessionChecksum,
+        decisionChecksum,
+        capacityChecksum,
+        capacityPreparationChecksum,
+        this.productId,
+        this.environment,
+        decisionId,
+      ],
+      false,
+      signal,
+    );
+    if (rows.length !== 1 || rows[0]?.ready !== true) throw new HeimdallError("unavailable");
+    const r = rows[0].record;
+    if (r === null) return null;
+    const number = (s: string) => {
+      const n = Number(s);
+      if (!Number.isSafeInteger(n) || n < 0 || String(n) !== s)
+        throw new HeimdallError("audit_unavailable");
+      return n;
+    };
+    const decode = (e: typeof r.request) => {
+      if (!e || !token(e.event_id, 128) || !/^[a-f0-9]{64}(?![\s\S])/.test(e.payload_digest))
+        throw new HeimdallError("audit_unavailable");
+      return this.decodeStored(e.event, e.event_id, number(e.recorded_at), e.payload_digest);
+    };
+    const request = decode(r.request);
+    const terminal = r.terminalId === null ? null : decode(r.terminal);
+    if (r.terminalId === null && r.terminal !== null) throw new HeimdallError("audit_unavailable");
+    const b = bindAuditDecision(
+      this.productId,
+      this.environment,
+      terminal ? [request, terminal] : [request],
+    );
+    if (
+      r.id !== decisionId ||
+      b.decisionId !== decisionId ||
+      b.requestedAt !== number(r.requestedAt) ||
+      b.resolution !== r.resolution ||
+      b.terminalEventId !== r.terminalId ||
+      b.resolvedAt !== (r.resolvedAt === null ? null : number(r.resolvedAt)) ||
+      r.reservationRequest !== b.requestEventId ||
+      r.reservationResolution !== r.resolution ||
+      r.reservationTerminal !== r.terminalId
+    )
+      throw new HeimdallError("audit_unavailable");
+    let administration: Record<string, unknown> | null = null;
+    if (r.resolution === "recovered") {
+      if (
+        !terminal ||
+        r.recoveryId !== recoveryEventId(this.productId, this.environment, r.terminalId!)
+      )
+        throw new HeimdallError("audit_unavailable");
+      administration = decode(r.administration);
+      try {
+        validateRecoveryPair(terminal, administration, b.requestedAt);
+      } catch {
+        throw new HeimdallError("audit_unavailable");
+      }
+    } else if (r.recoveryId !== null || r.administration !== null)
+      throw new HeimdallError("audit_unavailable");
+    return { decisionId, state: r.resolution, request, terminal, administration };
   }
   // Internal prepared port used by migration tests; public writes require v3.
   async appendCapacity(event: Record<string, unknown>, signal?: AbortSignal) {
@@ -843,3 +949,14 @@ WITH selected AS MATERIALIZED (
     );
   }
 }
+
+const resolutionSQL = `SELECT readiness.ready, CASE WHEN d.decision_id IS NULL THEN NULL ELSE jsonb_build_object(
+ 'id',d.decision_id,'requestedAt',d.requested_at::text,'resolution',d.resolution,'terminalId',d.terminal_event_id,'resolvedAt',d.resolved_at::text,
+ 'reservationRequest',c.request_event_id,'reservationResolution',c.resolution,'reservationTerminal',c.terminal_event_id,'recoveryId',c.recovery_event_id,
+ 'request',CASE WHEN r.event_id IS NULL THEN NULL ELSE jsonb_build_object('event_id',r.event_id,'recorded_at',r.recorded_at::text,'payload_digest',encode(r.payload_digest,'hex'),'event',r.event) END,'terminal',CASE WHEN t.event_id IS NULL THEN NULL ELSE jsonb_build_object('event_id',t.event_id,'recorded_at',t.recorded_at::text,'payload_digest',encode(t.payload_digest,'hex'),'event',t.event) END,'administration',CASE WHEN a.event_id IS NULL THEN NULL ELSE jsonb_build_object('event_id',a.event_id,'recorded_at',a.recorded_at::text,'payload_digest',encode(a.payload_digest,'hex'),'event',a.event) END) END AS record
+ FROM (${capacitySQL}) readiness
+ LEFT JOIN heimdall.audit_decisions d ON d.product_id=$5 AND d.environment=$6 AND d.decision_id=$7
+ LEFT JOIN heimdall_capacity.reservations c ON c.product_id=d.product_id AND c.environment=d.environment AND c.decision_id=d.decision_id
+ LEFT JOIN heimdall.audit_events r ON r.product_id=d.product_id AND r.environment=d.environment AND r.event_id=d.request_event_id
+ LEFT JOIN heimdall.audit_events t ON t.product_id=d.product_id AND t.environment=d.environment AND t.event_id=d.terminal_event_id
+ LEFT JOIN heimdall.audit_events a ON a.product_id=d.product_id AND a.environment=d.environment AND a.event_id=c.recovery_event_id`;

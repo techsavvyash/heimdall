@@ -587,3 +587,27 @@ calling v3 recovery, preserve them across uncertain results, and reload rather
 than regenerate them after restart. Initiator authorization belongs before
 proposal acceptance; validation alone cannot prove it. This checkpoint implements
 the proposal contract, not journal persistence, scheduling or restart durability.
+
+## Validated resolution observation
+
+Internal TS `PostgresAudit.readResolution` and Go `Audit.ReadResolution` read one
+scoped decision by ID from a writable primary in a single statement snapshot.
+They require current capacity-v3 readiness and return absent, pending, completed
+or recovered history. Absent is not a permission result; dependency failures and
+invalid history are errors, never an empty successful response.
+
+The reader validates the original request and optional terminal ha1 envelopes,
+portable digests, indexed timestamps, decision context and reservation bindings.
+Recovered history additionally requires the deterministic administration event
+and its full recovery-pair validation. Pending and normally completed records
+must not have recovery administration. The query joins at most three bounded
+stored envelopes; it does not scan event history. Both ports retain cancellation
+and a five-second database deadline.
+
+This is a read-only observation, not a receipt for a different proposed pair or
+permission to rerun an authorization evaluation. A new adapter can inspect the
+committed winner after an uncertain finalization response. A pending result can
+race an in-flight finalization; all later writes still contend on the immutable
+slot in their own transaction. No public maintenance scheduler or durable proposal
+journal is added by this port. Managed remote-write quarantine and verified
+quiescence requirements are unchanged.
