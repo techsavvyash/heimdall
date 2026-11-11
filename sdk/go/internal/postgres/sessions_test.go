@@ -267,3 +267,192 @@ func TestIdentityCommitLoss(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+type conditionalFixture struct {
+	InvalidRevisions []string
+	RaceCount        int
+	SharedKey        string
+}
+
+func conditionalCases(t *testing.T) conditionalFixture {
+	t.Helper()
+	raw, e := os.ReadFile("../../../../contracts/fixtures/session-invalidation.json")
+	if e != nil {
+		t.Fatal(e)
+	}
+	var f conditionalFixture
+	if json.Unmarshal(raw, &f) != nil {
+		t.Fatal("conditional fixture")
+	}
+	return f
+}
+func TestConditionalRevisionValidation(t *testing.T) {
+	s := &SessionRecords{}
+	for _, revision := range conditionalCases(t).InvalidRevisions {
+		if _, e := s.InvalidateSessionVersion(context.Background(), "key", revision, "https://id.example.com", "subject"); !errors.Is(e, contract.ErrInvalidArgument) {
+			t.Fatal(revision, e)
+		}
+	}
+}
+func TestConditionalSessionInvalidation(t *testing.T) {
+	if os.Getenv("HEIMDALL_TEST_DATABASE_URL") == "" || os.Getenv("HEIMDALL_TEST_READ_PEER") != "" {
+		t.Skip("live writer")
+	}
+	db, e := sql.Open("postgres", os.Getenv("HEIMDALL_TEST_DATABASE_URL")+"&options=-c%20role%3Dheimdall_identity_runtime")
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer db.Close()
+	s, f := sessionSetup(t, db, "conditional-go")
+	c := conditionalCases(t)
+	ctx := context.Background()
+	issuer, subject := "https://id.example.com", "Maya\x00東京"
+	value := sessionPayload(f, "conditional-go", "")
+	first, e := s.CreateSession(ctx, "one", value, f.ExpiresAt)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, identity := range [][2]string{{issuer, "other"}, {"https://other.example.com", subject}} {
+		if removed, e := s.InvalidateSessionVersion(ctx, "one", first.Revision, identity[0], identity[1]); e != nil || removed {
+			t.Fatal("identity isolation", e)
+		}
+	}
+	other, _ := sessionSetup(t, db, "conditional-other-go")
+	stage, e := NewSessionRecords(db, s.records.cipher, "conditional-go", "staging", s.validate, func() int64 { return f.Now })
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, store := range []*SessionRecords{other, stage} {
+		if removed, e := store.InvalidateSessionVersion(ctx, "one", first.Revision, issuer, subject); e != nil || removed {
+			t.Fatal("scope isolation", e)
+		}
+	}
+	newer, e := s.CompareAndSwapSession(ctx, "one", first.Revision, value, f.ExpiresAt)
+	if e != nil || newer == nil {
+		t.Fatal(e)
+	}
+	if removed, e := s.InvalidateSessionVersion(ctx, "one", first.Revision, issuer, subject); e != nil || removed {
+		t.Fatal("stale revision", e)
+	}
+	if current, e := s.GetSession(ctx, "one"); e != nil || current == nil || current.Revision != newer.Revision {
+		t.Fatal("replacement removed", e)
+	}
+	if removed, e := s.InvalidateSessionVersion(ctx, "one", newer.Revision, issuer, subject); e != nil || !removed {
+		t.Fatal("matching delete", e)
+	}
+	if removed, e := s.InvalidateSessionVersion(ctx, "one", newer.Revision, issuer, subject); e != nil || removed {
+		t.Fatal("repeat delete", e)
+	}
+	if changed, e := s.CompareAndSwapSession(ctx, "one", newer.Revision, value, f.ExpiresAt); e != nil || changed != nil {
+		t.Fatal("CAS resurrected delete", e)
+	}
+	replacement, e := s.CreateSession(ctx, "one", value, f.ExpiresAt)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if removed, e := s.InvalidateSessionVersion(ctx, "one", newer.Revision, issuer, subject); e != nil || removed {
+		t.Fatal("reused revision", e)
+	}
+	if current, e := s.GetSession(ctx, "one"); e != nil || current == nil || current.Revision != replacement.Revision {
+		t.Fatal("recreated session removed", e)
+	}
+	for i := range c.RaceCount {
+		key := fmt.Sprintf("conditional-race-%d", i)
+		record, e := s.CreateSession(ctx, key, value, f.ExpiresAt)
+		if e != nil {
+			t.Fatal(e)
+		}
+		type result struct {
+			changed *Record
+			removed bool
+			err     error
+		}
+		results := make(chan result, 2)
+		go func() {
+			r, e := s.CompareAndSwapSession(ctx, key, record.Revision, value, f.ExpiresAt)
+			results <- result{changed: r, err: e}
+		}()
+		go func() {
+			r, e := s.InvalidateSessionVersion(ctx, key, record.Revision, issuer, subject)
+			results <- result{removed: r, err: e}
+		}()
+		winners := 0
+		var winner *Record
+		for range 2 {
+			r := <-results
+			if r.err != nil {
+				t.Fatal(r.err)
+			}
+			if r.changed != nil {
+				winner = r.changed
+				winners++
+			}
+			if r.removed {
+				winners++
+			}
+		}
+		if winners != 1 {
+			t.Fatal("race winner count", winners)
+		}
+		current, e := s.GetSession(ctx, key)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if winner == nil {
+			if current != nil {
+				t.Fatal("deleted record survived")
+			}
+		} else if current == nil || current.Revision != winner.Revision {
+			t.Fatal("CAS winner removed")
+		}
+	}
+	shared, _ := sessionSetup(t, db, "ledger-identity")
+	record, e := shared.GetSession(ctx, c.SharedKey)
+	if e != nil || record == nil {
+		t.Fatal("TS peer record", e)
+	}
+	if removed, e := shared.InvalidateSessionVersion(ctx, c.SharedKey, record.Revision, issuer, subject); e != nil || !removed {
+		t.Fatal("TS peer deletion", e)
+	}
+}
+func TestConditionalSessionCommitLoss(t *testing.T) {
+	faultURL := os.Getenv("HEIMDALL_TEST_SESSION_DELETE_LOSS")
+	if faultURL == "" {
+		t.Skip("live COMMIT fault")
+	}
+	db, e := sql.Open("postgres", os.Getenv("HEIMDALL_TEST_DATABASE_URL"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer db.Close()
+	fault, e := sql.Open("postgres", faultURL)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer fault.Close()
+	s, f := sessionSetup(t, db, "conditional-fault-go")
+	broken, _ := sessionSetup(t, fault, "conditional-fault-go")
+	ctx := context.Background()
+	issuer, subject := "https://id.example.com", "Maya\x00東京"
+	value := sessionPayload(f, "conditional-fault-go", "")
+	record, e := s.CreateSession(ctx, "fault", value, f.ExpiresAt)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = broken.InvalidateSessionVersion(ctx, "fault", record.Revision, issuer, subject); !errors.Is(e, contract.ErrOutcomeUnknown) {
+		t.Fatal(e)
+	}
+	if current, e := s.GetSession(ctx, "fault"); e != nil || current != nil {
+		t.Fatal("confirmed commit not persisted", e)
+	}
+	replacement, e := s.CreateSession(ctx, "fault", value, f.ExpiresAt)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if removed, e := s.InvalidateSessionVersion(ctx, "fault", record.Revision, issuer, subject); e != nil || removed {
+		t.Fatal("retry removed replacement", e)
+	}
+	if current, e := s.GetSession(ctx, "fault"); e != nil || current == nil || current.Revision != replacement.Revision {
+		t.Fatal("replacement absent", e)
+	}
+}

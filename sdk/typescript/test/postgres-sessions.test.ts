@@ -305,3 +305,165 @@ test.skipIf(!process.env.HEIMDALL_TEST_IDENTITY_COMMIT_LOSS)(
     }
   },
 );
+
+test("conditional session invalidation rejects malformed revisions before access", async () => {
+  const pool = new Pool();
+  try {
+    for (const revision of [
+      ...read("fixtures/session-invalidation.json").invalidRevisions,
+      1,
+      null,
+    ])
+      await expect(
+        store(pool).invalidateSessionVersion(
+          "key",
+          revision,
+          fixture.record.issuer,
+          fixture.record.subject,
+        ),
+      ).rejects.toThrow("invalid_argument");
+  } finally {
+    await pool.end();
+  }
+});
+test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TEST_READ_PEER)(
+  "conditional session invalidation preserves replacements",
+  async () => {
+    const pool = new Pool({
+      connectionString: process.env.HEIMDALL_TEST_DATABASE_URL,
+      options: "-c role=heimdall_identity_runtime",
+    });
+    const s = store(pool, "conditional-ts");
+    const f = read("fixtures/session-invalidation.json");
+    const invalidate = (key: string, revision: string) =>
+      s.invalidateSessionVersion(key, revision, fixture.record.issuer, fixture.record.subject);
+    try {
+      const first = (await s.createSession("one", payload("conditional-ts"), fixture.expiresAt))!;
+      expect(
+        await s.invalidateSessionVersion("one", first.revision, fixture.record.issuer, "other"),
+      ).toBe(false);
+      expect(
+        await s.invalidateSessionVersion(
+          "one",
+          first.revision,
+          "https://other.example.com",
+          fixture.record.subject,
+        ),
+      ).toBe(false);
+      expect(
+        await store(pool, "conditional-other").invalidateSessionVersion(
+          "one",
+          first.revision,
+          fixture.record.issuer,
+          fixture.record.subject,
+        ),
+      ).toBe(false);
+      expect(
+        await store(pool, "conditional-ts", "staging").invalidateSessionVersion(
+          "one",
+          first.revision,
+          fixture.record.issuer,
+          fixture.record.subject,
+        ),
+      ).toBe(false);
+      const newer = (await s.compareAndSwapSession(
+        "one",
+        first.revision,
+        payload("conditional-ts"),
+        fixture.expiresAt,
+      ))!;
+      expect(await invalidate("one", first.revision)).toBe(false);
+      expect((await s.getSession("one"))!.revision).toBe(newer.revision);
+      expect(await invalidate("one", newer.revision)).toBe(true);
+      expect(await invalidate("one", newer.revision)).toBe(false);
+      expect(
+        await s.compareAndSwapSession(
+          "one",
+          newer.revision,
+          payload("conditional-ts"),
+          fixture.expiresAt,
+        ),
+      ).toBeNull();
+      const replacement = (await s.createSession(
+        "one",
+        payload("conditional-ts"),
+        fixture.expiresAt,
+      ))!;
+      expect(await invalidate("one", newer.revision)).toBe(false);
+      expect((await s.getSession("one"))!.revision).toBe(replacement.revision);
+      for (let i = 0; i < f.raceCount; i++) {
+        const key = `race-${i}`;
+        const record = (await s.createSession(key, payload("conditional-ts"), fixture.expiresAt))!;
+        const [changed, removed] = await Promise.all([
+          s.compareAndSwapSession(
+            key,
+            record.revision,
+            payload("conditional-ts"),
+            fixture.expiresAt,
+          ),
+          invalidate(key, record.revision),
+        ]);
+        expect(Number(changed !== null) + Number(removed)).toBe(1);
+        expect((await s.getSession(key))?.revision ?? null).toBe(changed?.revision ?? null);
+      }
+      await store(pool).createSession(f.sharedKey, payload("ledger-identity"), fixture.expiresAt);
+    } finally {
+      await pool.end();
+    }
+  },
+  20000,
+);
+test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !process.env.HEIMDALL_TEST_READ_PEER)(
+  "Go invalidates the TS observed session version",
+  async () => {
+    const pool = new Pool({ connectionString: process.env.HEIMDALL_TEST_DATABASE_URL });
+    try {
+      expect(
+        await store(pool).getSession(read("fixtures/session-invalidation.json").sharedKey),
+      ).toBeNull();
+    } finally {
+      await pool.end();
+    }
+  },
+);
+test.skipIf(!process.env.HEIMDALL_TEST_SESSION_DELETE_LOSS)(
+  "conditional session deletion committed response loss",
+  async () => {
+    const pool = new Pool({ connectionString: process.env.HEIMDALL_TEST_DATABASE_URL });
+    const fault = new Pool({ connectionString: process.env.HEIMDALL_TEST_SESSION_DELETE_LOSS });
+    const s = store(pool, "conditional-fault-ts");
+    try {
+      const record = (await s.createSession(
+        "fault",
+        payload("conditional-fault-ts"),
+        fixture.expiresAt,
+      ))!;
+      await expect(
+        store(fault, "conditional-fault-ts").invalidateSessionVersion(
+          "fault",
+          record.revision,
+          fixture.record.issuer,
+          fixture.record.subject,
+        ),
+      ).rejects.toThrow("outcome_unknown");
+      expect(await s.getSession("fault")).toBeNull();
+      const replacement = (await s.createSession(
+        "fault",
+        payload("conditional-fault-ts"),
+        fixture.expiresAt,
+      ))!;
+      expect(
+        await s.invalidateSessionVersion(
+          "fault",
+          record.revision,
+          fixture.record.issuer,
+          fixture.record.subject,
+        ),
+      ).toBe(false);
+      expect((await s.getSession("fault"))!.revision).toBe(replacement.revision);
+    } finally {
+      await fault.end();
+      await pool.end();
+    }
+  },
+);

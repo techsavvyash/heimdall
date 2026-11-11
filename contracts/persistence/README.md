@@ -260,3 +260,27 @@ primary-database connection. SQL, cancellation and schema failures are errors, n
 an absent denial. The later built-in factory must connect this read and durable
 session invalidation to the internal identity verifier; no end-to-end factory is
 claimed by these independently tested primitives.
+
+## Observed-version session invalidation
+
+InvalidateSessionVersion/invalidateSessionVersion removes a session only when its
+product, environment, opaque key hash, exact issuer/subject hash and stored revision
+all match the observation. It shares the identity transaction lock with session
+create/CAS and account-wide invalidation and commits with synchronous_commit=on.
+A matching delete returns true after commit. A missing record, another identity or
+changed revision returns false. False does not prove absence: a replacement may
+exist. Never retry by dropping the revision/identity predicates or substituting a
+newly read revision into the old negative observation.
+
+A CAS that wins first preserves its replacement against the old invalidation. A
+delete that wins first causes the old CAS to return no match. The same protection
+holds after delete/recreate because record revisions are not reused during the
+running database's sequence lifetime. Restore/access-disable/reconciliation rules
+remain required; this primitive does not independently make a backup restore safe.
+
+After a lost COMMIT response, return outcome_unknown. Replaying the exact old
+identity/key/revision is safe even if a new session now occupies that key. The
+current request remains unauthenticated; orchestration must distinguish a stale
+negative result from explicit logout and avoid clearing a replacement session's
+cookie on the basis of an unmatched old observation. Session/account-wide logout
+and identity denial retain their separate explicit operations.

@@ -228,3 +228,28 @@ func (s *SessionRecords) IsIdentityDenied(ctx context.Context, issuer, subject s
 	}
 	return denied, nil
 }
+
+// InvalidateSessionVersion only removes the identity/revision that was observed.
+func (s *SessionRecords) InvalidateSessionVersion(ctx context.Context, key, revision, issuer, subject string) (bool, error) {
+	rev, err := strconv.ParseInt(revision, 10, 64)
+	if err != nil || rev <= 0 || strconv.FormatInt(rev, 10) != revision {
+		return false, contract.ErrInvalidArgument
+	}
+	_, hash, err := s.records.scope("session", key)
+	if err != nil {
+		return false, err
+	}
+	identity, err := identityBinding(issuer, subject)
+	if err != nil {
+		return false, err
+	}
+	r := s.records
+	return identityTransaction(ctx, r.db, identityLock(r.product, r.environment, identity), func(ctx context.Context, tx *sql.Tx) (bool, error) {
+		result, err := tx.ExecContext(ctx, "DELETE FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind='session' AND key_hash=$3 AND identity_hash=$4 AND revision=$5", r.product, r.environment, hash, identity, revision)
+		if err != nil {
+			return false, err
+		}
+		count, err := result.RowsAffected()
+		return count == 1, err
+	})
+}

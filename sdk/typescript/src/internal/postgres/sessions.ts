@@ -60,7 +60,11 @@ export class SessionRecords extends PostgresRecords {
     expiresAt: number,
     signal?: AbortSignal,
   ) {
-    if (!/^[1-9][0-9]{0,18}$/.test(revision) || BigInt(revision) > 9223372036854775807n)
+    if (
+      typeof revision !== "string" ||
+      !/^[1-9][0-9]{0,18}$/.test(revision) ||
+      BigInt(revision) > 9223372036854775807n
+    )
       throw new HeimdallError("invalid_argument");
     return this.writeSession(key, value, expiresAt, revision, signal);
   }
@@ -126,6 +130,34 @@ export class SessionRecords extends PostgresRecords {
       "DELETE FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind='session' AND key_hash=$3 AND identity_hash IS NOT NULL",
       [this.productId, this.environment, hash],
       true,
+      signal,
+    );
+  }
+  async invalidateSessionVersion(
+    key: string,
+    revision: string,
+    issuer: string,
+    subject: string,
+    signal?: AbortSignal,
+  ) {
+    if (
+      typeof revision !== "string" ||
+      !/^[1-9][0-9]{0,18}$/.test(revision) ||
+      BigInt(revision) > 9223372036854775807n
+    )
+      throw new HeimdallError("invalid_argument");
+    const hash = this.key("session", key);
+    const identity = this.identity(issuer, subject);
+    return transaction(
+      this.pool,
+      async (client) => {
+        await client.query("SELECT pg_advisory_xact_lock($1::bigint)", [this.lock(identity)]);
+        const removed = await client.query(
+          "DELETE FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind='session' AND key_hash=$3 AND identity_hash=$4 AND revision=$5",
+          [this.productId, this.environment, hash, identity, revision],
+        );
+        return removed.rowCount === 1;
+      },
       signal,
     );
   }
