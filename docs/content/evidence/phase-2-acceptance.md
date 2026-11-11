@@ -3,7 +3,7 @@ title: Phase 2 acceptance audit — pinned service capabilities
 date: 2026-11-11
 ---
 
-**Phase 2 service acceptance and the account-model decision are satisfied; final publication verification is pending.** This audit consolidates the accumulated service evidence. It does not claim working SDKs. Historical checkpoint pages retain the limitations that applied when each probe ran; the matrix below links later evidence that supersedes some of those open items.
+**Phase 2 complete.** This audit consolidates the accumulated service evidence. It does not claim working SDKs. Historical checkpoint pages retain the limitations that applied when each probe ran; the matrix below links later evidence that supersedes some of those open items.
 
 ## Service acceptance matrix
 
@@ -26,7 +26,7 @@ date: 2026-11-11
 
 The user accepted separate tenant-owned accounts for independently administered directories. The agreed decisions and enterprise contract now specify account replacement, fresh membership checks, rejection of prior identity context and no automatic merge. Existing canonical issuer/subject encoding and live-derived TS/Go previous-account fixtures already represent this behavior; no schema migration or new public API is needed for the decision.
 
-The service evidence and this decision satisfy the Phase 2 scope. Final advancement waits for the affected contract checks, full gate, commit/push, CI and verified Railway publication. A completion record will bind that proof to the source commit before Phase 3 begins.
+The service evidence and this decision satisfy the Phase 2 scope. The affected shared fixtures and full workspace gate passed, the decision was committed/pushed, CI succeeded, and the exact source commit was deployed and verified on Railway. See the final sign-off below.
 
 ## Later-phase obligations remain mandatory
 
@@ -43,3 +43,12 @@ flowchart TD
 ```
 
 The most recent service proof is event-visibility run 16aece51-3eda-48e4-a976-ad799e5ea3d8, committed in e38ea793ad2f5e21b4b4b4656907f030387762bb. CI runs 42931790582 and 42931780015 passed; Railway docs deployment 56c2f35a-e9b8-49ae-b3b3-9a2e28006fdd succeeded and the correction was verified publicly. Individual evidence pages and tests/integration/evidence/ retain the earlier source/run/deployment records.
+
+
+## Final Phase 2 sign-off
+
+The accepted account-model design is committed in 74dd570691d5d82005f717e6b0885b37db29144f. The full gate passed with 863 Vitest tests, Go race tests, formatting/Oxlint/types/Knip/vet, SDK bundles/declarations and 57 Quartz pages. The shared enterprise-two-tenants fixtures include both SAML and OIDC previous-account rejection cases. CI runs 42976288771 and 42976281192 succeeded.
+
+Railway production docs deployment 9d19af7c-4387-4c9b-983e-de00a6da612e reached SUCCESS for that exact commit. The public enterprise contract returned HTTP 200 with the accepted account model and account-switch scenarios. The pinned verification services and historical live probes are identified in the matrix and their evidence pages.
+
+Phase 2 is complete within its service-verification scope. Phase 3 may now implement the membership-gated model, identity validation, shared PostgreSQL migrations/storage and durable audit foundations. Public SDK authentication APIs, end-to-end products and enterprise workers are not certified by this sign-off; Phases 3–7 remain required.

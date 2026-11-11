@@ -29,9 +29,9 @@ Audit persistence is built before authorization results can be released; enterpr
 
 ## Current phase
 
-**Phase 1 is complete. Phase 2 is in progress.**
+**Phases 1 and 2 are complete. Phase 3 is next.**
 
-[[evidence/phase-2-acceptance|The current Phase 2 acceptance audit]] consolidates the service proofs and later-phase obligations. The user approved separate tenant-owned accounts; final Phase 2 publication verification is pending before advancement.
+[[evidence/phase-2-acceptance|The current Phase 2 acceptance audit]] consolidates the service proofs and later-phase obligations. The user approved separate tenant-owned accounts, and the final sign-off records passing checks, CI and verified Railway publication. Phase 3 starts after this completion record is published.
 
 Phase 1 turns selected semantics into executable schemas and fixtures. Public authentication APIs remain unavailable until implemented and validated; internal contract utilities do not constitute verified authentication.
 
