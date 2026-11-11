@@ -73,6 +73,18 @@ func PrepareAuditCapacityUpgrade(ctx context.Context, db *sql.DB, capacitySQL, p
 		if e = checkAuditUpgradeSchema(ctx, tx); e != nil {
 			return e
 		}
+		// Detect undersized operator limits before entering a serving outage. The
+		// old-profile SHARE locks keep these local counts stable through preparation.
+		var fits bool
+		if e = tx.QueryRowContext(ctx, `WITH pending AS (SELECT count(*)::numeric AS n FROM heimdall.audit_decisions WHERE resolution='pending')
+ SELECT (SELECT count(*)::numeric FROM heimdall.audit_events)+2*n<=$1::numeric
+ AND (SELECT coalesce(sum(octet_length(event::text)::numeric),0) FROM heimdall.audit_events)+3000000*n<=$2::numeric
+ AND (SELECT count(*)::numeric FROM heimdall.audit_deliveries)+64*n<=$3::numeric FROM pending`, limits.Events, limits.EnvelopeBytes, limits.Deliveries).Scan(&fits); e != nil {
+			return databaseError(ctx)
+		}
+		if !fits {
+			return contract.ErrAuditUnavailable
+		}
 		for _, source := range [][]byte{capacitySQL, preparationSQL} {
 			if _, e = tx.ExecContext(ctx, string(source)); e != nil {
 				return databaseError(ctx)

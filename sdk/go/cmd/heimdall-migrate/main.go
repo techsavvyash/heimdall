@@ -31,8 +31,10 @@ func run() int {
 	drained := flag.Bool("writers-drained", false, "assert all old application writers and retention jobs have been stopped and cannot resume")
 	activate := flag.Bool("activate-audit-upgrade", false, "validate all historical bindings and atomically publish audit v2 compatibility")
 	backfill := flag.Bool("backfill-audit-upgrade", false, "discover missing scopes or advance one bounded audit backfill page; never activate readiness")
+	capacityBackfill := flag.Bool("backfill-capacity-upgrade", false, "validate and account one bounded historical page; never activate readiness")
 	batch := flag.Int("batch-size", 100, "scope registration or event page bound for audit backfill, 1 to 100")
 	flag.Parse()
+	backfillMode := *backfill || *capacityBackfill
 	batchSet := false
 	capacitySet := false
 	flag.Visit(func(f *flag.Flag) {
@@ -45,6 +47,9 @@ func run() int {
 	})
 	dsn := os.Getenv("HEIMDALL_MIGRATION_DATABASE_URL")
 	modes := 0
+	if *capacityBackfill {
+		modes++
+	}
 	if *capacity {
 		modes++
 	}
@@ -66,13 +71,13 @@ func run() int {
 	if *status != "" {
 		modes++
 	}
-	if (*capacity && (*directory == "" || !*drained || *sqlPath != "" || *capacityEvents < 1 || *capacityEvents > 9007199254740991 || *capacityBytes < 1 || *capacityBytes > 9007199254740991 || *capacityDeliveries < 1 || *capacityDeliveries > 9007199254740991)) || (!*capacity && capacitySet) || (*activate && (!*drained || *directory != "" || *sqlPath != "")) || (*backfill && (!*drained || *directory != "" || *sqlPath != "" || *batch < 1 || *batch > 100)) || (!*backfill && batchSet) || modes != 1 || dsn == "" || flag.NArg() != 0 || (*prepare && (*directory == "" || !*drained || *sqlPath != "")) || (!*capacity && !*prepare && !*backfill && !*activate && (*directory != "" || *drained)) || (*status != "" && (*status != "session" && *status != "managed" && *status != "audit-v2" && *status != "managed-v2" || *sqlPath != "")) || (!*capacity && !*prepare && !*backfill && !*activate && *status == "" && *sqlPath == "") {
+	if (*capacity && (*directory == "" || !*drained || *sqlPath != "" || *capacityEvents < 1 || *capacityEvents > 9007199254740991 || *capacityBytes < 1 || *capacityBytes > 9007199254740991 || *capacityDeliveries < 1 || *capacityDeliveries > 9007199254740991)) || (!*capacity && capacitySet) || (*activate && (!*drained || *directory != "" || *sqlPath != "")) || (backfillMode && (!*drained || *directory != "" || *sqlPath != "" || *batch < 1 || *batch > 100)) || (!backfillMode && batchSet) || modes != 1 || dsn == "" || flag.NArg() != 0 || (*prepare && (*directory == "" || !*drained || *sqlPath != "")) || (!*capacity && !*prepare && !backfillMode && !*activate && (*directory != "" || *drained)) || (*status != "" && (*status != "session" && *status != "managed" && *status != "audit-v2" && *status != "managed-v2" || *sqlPath != "")) || (!*capacity && !*prepare && !backfillMode && !*activate && *status == "" && *sqlPath == "") {
 		fmt.Fprintln(os.Stderr, "select one initialization, status, drained upgrade preparation, backfill or activation mode with its required inputs")
 		return 2
 	}
 	var migration []byte
 	var err error
-	if *status == "" && !*capacity && !*prepare && !*backfill && !*activate {
+	if *status == "" && !*capacity && !*prepare && !backfillMode && !*activate {
 		migration, err = os.ReadFile(*sqlPath)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "cannot read shared migration")
@@ -110,7 +115,10 @@ func run() int {
 	defer cancel()
 	family := "session"
 	var step *postgres.AuditUpgradeStep
+	var capacityStep *postgres.CapacityBackfillProgress
 	switch {
+	case *capacityBackfill:
+		capacityStep, err = postgres.AdvanceAuditCapacityUpgrade(ctx, db, *batch, *drained, validateBuiltinAudit)
 	case *capacity:
 		err = postgres.PrepareAuditCapacityUpgrade(ctx, db, capacityUpgrade[0], capacityUpgrade[1], contract.AuditCapacity{Events: *capacityEvents, EnvelopeBytes: *capacityBytes, Deliveries: *capacityDeliveries}, *drained)
 	case *activate:
@@ -141,7 +149,11 @@ func run() int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	if *backfill {
+	if *capacityBackfill {
+		if json.NewEncoder(os.Stdout).Encode(capacityStep) != nil {
+			return 1
+		}
+	} else if *backfill {
 		if json.NewEncoder(os.Stdout).Encode(step) != nil {
 			return 1
 		}

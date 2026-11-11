@@ -138,6 +138,18 @@ func TestAuditCapacityUpgradeLive(t *testing.T) {
 	if e = db.QueryRow("SELECT jsonb_agg(to_jsonb(e) ORDER BY product_id,event_id)::text FROM heimdall.audit_events e").Scan(&history); e != nil {
 		t.Fatal(e)
 	}
+	for _, under := range []contract.AuditCapacity{{Events: 7, EnvelopeBytes: 150000000, Deliveries: 3200}, {Events: 100, EnvelopeBytes: 3000000, Deliveries: 3200}, {Events: 100, EnvelopeBytes: 150000000, Deliveries: 64}} {
+		if e = PrepareAuditCapacityUpgrade(ctx, db, files[0], files[1], under, true); !errors.Is(e, contract.ErrAuditUnavailable) {
+			t.Fatal("undersized history budget", e)
+		}
+		var clean bool
+		if e = db.QueryRow("SELECT to_regnamespace('heimdall_capacity') IS NULL").Scan(&clean); e != nil || !clean {
+			t.Fatal("partial undersized preparation", e)
+		}
+		if e = CheckAuditReadiness(ctx, db); e != nil {
+			t.Fatal("undersized policy interrupted readiness", e)
+		}
+	}
 	if e = PrepareAuditCapacityUpgrade(ctx, db, files[0], files[1], limits, true); e != nil {
 		t.Fatal("prepare", e)
 	}

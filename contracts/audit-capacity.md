@@ -3,8 +3,8 @@
 This implements the arithmetic behind the selected audit hard-limit requirement.
 It is an internal shared contract, not an activated public admission gate yet.
 `fixtures/audit-capacity.json` is executed by both SDKs. Offline preparation is
-implemented; historical accounting, activation and public runtime composition
-remain required before this can protect a serving deployment.
+implemented along with bounded historical accounting; activation and public
+runtime composition remain required before this can protect a serving deployment.
 
 ## Units and bounds
 
@@ -201,6 +201,62 @@ before using it, without fabricating missing recovery records.
 
 The checkpoint records event and decision passes, a global product/environment/ID
 cursor, and separate scanned counts. Creating it is not performing the backfill.
-Bounded semantic accounting, coverage verification, activation and public protocol
-composition remain outstanding. Preparation intentionally leaves a serving outage;
-it is only one stage of the incomplete upgrade workflow.
+The bounded runner below performs semantic accounting and coverage verification.
+Activation and public protocol composition remain outstanding. Preparation
+intentionally leaves a serving outage until the complete upgrade workflow exists.
+
+## Bounded historical accounting
+
+`heimdall-migrate --backfill-capacity-upgrade --writers-drained --batch-size N`
+advances one durable page using the deployment connection. `N` is 1 through 100
+(default 100). The programmatic deployment runner accepts a full event-validation
+callback; the current CLI accepts reserved built-ins only and refuses custom
+history until registry selection is implemented. This shared deployment tool
+accounts records written by either SDK; it does not run as a service.
+
+Each call checks primary/prepared compatibility and the pinned extended schema,
+takes exclusive deployment admission and locks the checkpoint. It uses a 10-second
+operation deadline, 5-second lock timeout and 5-second statement timeout. All
+writers, export mutation and retention jobs remain externally stopped.
+
+- The event pass walks product/environment/event ID in C collation order. At most
+  100 candidates and 4194304 returned envelope bytes are processed. Every ha1
+  payload/digest is validated; authorization records must match a decision's
+  request or terminal ID. Server-derived charges are inserted or verified without
+  rewriting audit events or outbox routing.
+- The decision pass walks product/environment/decision ID. It fully validates the
+  request/terminal pair and slot fields. Recovered decisions must also have their
+  deterministic, correctly bound administration record; missing records are not
+  fabricated. Its returned envelope budget is 6291456 bytes, conservatively
+  including the maximum 1500000 bytes for each separately fetched recovery
+  administration. This permits at least one maximum-size three-event history.
+  The same 100-candidate cap applies; transport metadata is additional overhead.
+- Pending imports reserve the full recovery allowance; resolved imports add none.
+  Existing imports must match every nullable binding. Each page's changes and
+  checkpoint commit together. An invalid later record or insufficient capacity
+  rolls back that whole page while retaining prior committed progress.
+
+A lost page COMMIT returns `outcome_unknown`. Running the command again reads the
+stored checkpoint: it repeats an uncommitted page or advances after a committed
+one, without charging or reserving twice. It does not promise to return the lost
+page's exact progress response. Concurrent deployment processes serialize through
+the same admission lock.
+
+Before moving to the decision pass, event counts and charge coverage must match.
+Before reporting `complete` (and on subsequent complete calls), the runner checks
+scanned counts against actual events/decisions, missing or mismatched charges and
+reservations, actual encoded sizes and original sink counts, and aggregate policy
+usage/reserves. Late unaccounted history or a skipped cursor refuses completion.
+These coverage scans remain subject to the deadline; large-history qualification
+is still required. Completion does not change metadata, policy readiness or the
+migration catalog. Activation must separately revalidate and publish a compatible
+public protocol.
+
+Fresh preparation now checks that configured limits can contain all existing
+events, encoded bytes and deliveries plus every pending decision's recovery bound.
+These checks run under the old-profile table locks before capacity DDL or migrating
+state is committed. Insufficient limits fail while original v2 readiness remains
+intact. This is logical sizing, not proof of payload validity or physical disk
+headroom. Independent manual changes after preparation remain unsupported; the
+backfill still refuses over-budget accounting rather than publishing partial
+reservations.
