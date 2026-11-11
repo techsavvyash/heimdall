@@ -193,3 +193,5 @@ Phase 3 audit recovery foundation: [[evidence/phase-3-audit-recovery-schema]] re
 Phase 3 audit upgrade prerequisite: [[evidence/phase-3-audit-decision-binding]] records TS/Go request/outcome correlation and ambiguous-history refusal. Persistent backfill and result-release enforcement remain required.
 
 Phase 3 audit backfill: [[evidence/phase-3-audit-backfill]] records bounded two-pass historical binding, transactional checkpoints, cross-language restart and committed-response-loss proof. Global upgrade coverage/activation and runtime resolution/recovery remain required.
+
+Phase 3 decision writes: [[evidence/phase-3-audit-decision-writes]] records atomic request/terminal binding, competing-result rollback, cross-language completion and audited-runner late-result suppression. Upgrade activation and recovery administration/scanning remain required.

@@ -45,6 +45,9 @@ func (a *Audit) Append(ctx context.Context, event map[string]any) (contract.Audi
 // SDK-internal local writes only. The callback must not commit, perform remote I/O,
 // or publish a result. Audit event idempotency does not deduplicate mutations.
 func (a *Audit) appendWith(ctx context.Context, event map[string]any, mutate func(context.Context, *sql.Tx) error) (contract.AuditReceipt, error) {
+	return a.appendFinalized(ctx, event, mutate, func(context.Context, *sql.Tx, map[string]any) error { return nil })
+}
+func (a *Audit) appendFinalized(ctx context.Context, event map[string]any, mutate func(context.Context, *sql.Tx) error, finalize func(context.Context, *sql.Tx, map[string]any) error) (contract.AuditReceipt, error) {
 	empty := contract.AuditReceipt{}
 	if ctx == nil || mutate == nil {
 		return empty, contract.ErrInvalidArgument
@@ -79,7 +82,16 @@ func (a *Audit) appendWith(ctx context.Context, event map[string]any, mutate fun
 	if err = contract.CheckCancellation(ctx); err != nil {
 		return empty, err
 	}
-	tx, err := a.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	conn, err := a.db.Conn(ctx)
+	if err != nil {
+		return empty, databaseError(ctx)
+	}
+	defer conn.Close()
+	var writable bool
+	if err = conn.QueryRowContext(ctx, "SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'").Scan(&writable); err != nil || !writable {
+		return empty, databaseError(ctx)
+	}
+	tx, err := conn.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return empty, databaseError(ctx)
 	}
@@ -129,6 +141,9 @@ func (a *Audit) appendWith(ctx context.Context, event map[string]any, mutate fun
 				return empty, databaseError(ctx)
 			}
 		}
+	}
+	if err = finalize(ctx, tx, snapshot); err != nil {
+		return empty, err
 	}
 	if err = contract.CheckCancellation(ctx); err != nil {
 		return empty, err

@@ -188,3 +188,43 @@ that omitted/new scopes are safe. The deployment coordinator still must verify
 global coverage and prepared-schema integrity, enforce external quiescence, and
 publish v2 compatibility only after all gates pass. Runtime atomic resolution,
 recovery scanning, capacity policy and late-allow suppression remain required.
+
+## Prepared atomic decision writer
+
+Internal TS `PostgresAudit.appendDecision` and Go `Audit.AppendDecision` now
+persist a normal decision request/completion through the existing audit append
+transaction. They are not selected by the public factory yet: v2 upgrade/readiness
+activation and the recovery writer remain separate gates. Ordinary generic append
+is still available for v1 and other event types; it is not a substitute for this
+method after activation.
+
+The request event, original sink deliveries and pending slot commit together.
+An exact retry verifies the event digest and original request binding and returns
+the original receipt, including when the decision has subsequently terminated.
+A different request event for the same decision conflicts and rolls back its event
+and deliveries. A request receipt does not authorize repeating an old evaluation.
+
+A completion inserts/verifies its immutable event and deliveries, locks the scoped
+decision slot, verifies the original stored request and shared context binding,
+and installs the terminal reference only from pending. These operations share one
+transaction; the receipt is released only after COMMIT. An exact same terminal
+retry returns its receipt. A competing terminal conflicts, and its event/deliveries
+roll back. Orphan or corrupt/mismatched history returns audit_unavailable. Generic
+payload conflicts remain conflict. Storage/cancellation/uncertain-COMMIT errors
+retain the existing distinctions. Audited runners map failure to obtain the
+required receipt to audit_unavailable and release no allow/deny result.
+
+Normal writers reject outcome_unknown. A recovery path must also atomically write
+the required administration event; this method cannot be used to omit that audit.
+The shared append implementation keeps managed callbacks before event writes and
+runs decision finalization afterward. Existing workspace-first managed lock order
+is preserved; this checkpoint does not combine managed mutation and decision
+finalization in one transaction. Go checks primary/read-write connection state
+before BeginTx so the driver's explicit transaction mode cannot override a default
+read-only connection unnoticed.
+
+`fixtures/audit-decision-writes.json` defines shared outcomes/mismatches/concurrency.
+`tests/integration/audit-decision-writes.py` verifies atomicity, reciprocal language
+completion, competing terminal rollback, request/terminal COMMIT-loss retries,
+outbox failures and existing audited runners suppressing a late allow. The latter
+uses a competing normal terminal, not a completed recovery administration path.

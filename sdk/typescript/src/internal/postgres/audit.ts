@@ -289,6 +289,14 @@ export class PostgresAudit {
     mutate: (client: PoolClient) => Promise<void>,
     signal?: AbortSignal,
   ) {
+    return this.appendFinalized(event, mutate, async () => {}, signal);
+  }
+  private async appendFinalized(
+    event: Record<string, unknown>,
+    mutate: (client: PoolClient) => Promise<void>,
+    finalize: (client: PoolClient, event: Record<string, unknown>) => Promise<void>,
+    signal?: AbortSignal,
+  ) {
     if (typeof mutate !== "function") throw new HeimdallError("invalid_argument");
     // Snapshot before the first await; never let caller mutation change dispatched data.
     const originalDigest = auditDigest(event);
@@ -344,6 +352,7 @@ export class PostgresAudit {
               [...parameters, sink],
             );
         }
+        await finalize(client, snapshot);
         return {
           productId: this.productId,
           environment: this.environment,
@@ -351,6 +360,72 @@ export class PostgresAudit {
           recordedAt,
           payloadDigest: originalDigest,
         };
+      },
+      signal,
+    );
+  }
+  // Prepared v2 port: factory/readiness activation is a separate deployment gate.
+  async appendDecision(event: Record<string, unknown>, signal?: AbortSignal) {
+    if (
+      !["heimdall.authorization.requested", "heimdall.authorization.completed"].includes(
+        String(event.eventType),
+      ) ||
+      event.outcome === "outcome_unknown"
+    )
+      throw new HeimdallError("invalid_argument");
+    return this.appendFinalized(
+      event,
+      async () => {},
+      async (client, snapshot) => {
+        const scope = [this.productId, this.environment, snapshot.decisionId];
+        if (snapshot.eventType === "heimdall.authorization.requested") {
+          const b = bindAuditDecision(this.productId, this.environment, [snapshot]);
+          await client.query(
+            "INSERT INTO heimdall.audit_decisions(product_id,environment,decision_id,request_event_id,requested_at) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING",
+            [...scope, b.requestEventId, b.requestedAt],
+          );
+          const rows = await client.query(
+            "SELECT request_event_id,requested_at::text FROM heimdall.audit_decisions WHERE product_id=$1 AND environment=$2 AND decision_id=$3 FOR UPDATE",
+            scope,
+          );
+          if (
+            rows.rows.length !== 1 ||
+            rows.rows[0].request_event_id !== b.requestEventId ||
+            rows.rows[0].requested_at !== String(b.requestedAt)
+          )
+            throw new HeimdallError("conflict");
+          return;
+        }
+        const rows = await client.query(
+          "SELECT d.request_event_id,d.requested_at::text,d.resolution,d.terminal_event_id,d.resolved_at::text,e.recorded_at::text,e.payload_digest,e.event FROM heimdall.audit_decisions d JOIN heimdall.audit_events e ON e.product_id=d.product_id AND e.environment=d.environment AND e.event_id=d.request_event_id WHERE d.product_id=$1 AND d.environment=$2 AND d.decision_id=$3 FOR UPDATE OF d",
+          scope,
+        );
+        if (rows.rows.length !== 1) throw new HeimdallError("audit_unavailable");
+        const r = rows.rows[0];
+        const request = this.decodeStored(
+          r.event,
+          r.request_event_id,
+          Number(r.recorded_at),
+          r.payload_digest.toString("hex"),
+        );
+        const b = bindAuditDecision(this.productId, this.environment, [request, snapshot]);
+        if (r.requested_at !== String(b.requestedAt)) throw new HeimdallError("audit_unavailable");
+        if (r.resolution !== "pending") {
+          if (
+            r.resolution !== b.resolution ||
+            r.terminal_event_id !== b.terminalEventId ||
+            r.resolved_at !== String(b.resolvedAt)
+          )
+            throw new HeimdallError("conflict");
+          return;
+        }
+        if (r.terminal_event_id !== null || r.resolved_at !== null)
+          throw new HeimdallError("audit_unavailable");
+        const updated = await client.query(
+          "UPDATE heimdall.audit_decisions SET resolution=$4,terminal_event_id=$5,resolved_at=$6 WHERE product_id=$1 AND environment=$2 AND decision_id=$3 AND resolution='pending'",
+          [...scope, b.resolution, b.terminalEventId, b.resolvedAt],
+        );
+        if (updated.rowCount !== 1) throw new HeimdallError("audit_unavailable");
       },
       signal,
     );

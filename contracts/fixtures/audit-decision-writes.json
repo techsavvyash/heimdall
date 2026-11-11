@@ -1,0 +1,10 @@
+{
+  "normalOutcomes": ["allow", "deny", "invalid", "unavailable", "cancelled"],
+  "mismatches": [
+    { "tenantId": "other-tenant" },
+    { "permission": "other" },
+    { "requestId": "other-request" },
+    { "recordedAt": 999, "occurredAt": 999 }
+  ],
+  "concurrentWriters": 8
+}
