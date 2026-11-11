@@ -2,11 +2,18 @@ import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { HeimdallError, checkCancellation } from "../errors.js";
 import { encodeIdentity } from "../identity-encoding.js";
-import { parseIntent, parseBoundIntent, intentDigests, type Intent } from "../operations.js";
+import {
+  parseIntent,
+  parseBoundIntent,
+  intentDigests,
+  nextOperationState,
+  type Intent,
+} from "../operations.js";
 import { validateAuditShape } from "../audit-shape.js";
 import { validateAuditEvent } from "../audit.js";
 import { PostgresAudit } from "./audit.js";
 import { query } from "./query.js";
+import { decodeWorkspace } from "./workspaces.js";
 
 type Binding = {
   productId: string;
@@ -212,6 +219,209 @@ export class OperationRecords {
   ): Promise<ManagedOperation | null> {
     if (!token(operationId, 128)) throw new HeimdallError("invalid_argument");
     return this.read(operationId, hash(actor), false, signal);
+  }
+  // Trusted orchestration supplies definitive outcome evidence; this port never calls OpenFGA.
+  async advance(
+    operationId: string,
+    actor: Identity,
+    expectedGeneration: number,
+    transition: string,
+    metadata: Omit<Allocation, "workspaceId" | "operationId"> & { nextAttemptAt: number },
+    caller?: AbortSignal,
+  ): Promise<ManagedOperation> {
+    const signal = caller
+      ? AbortSignal.any([caller, AbortSignal.timeout(5000)])
+      : AbortSignal.timeout(5000);
+    checkCancellation(signal);
+    const m = { ...metadata };
+    if (
+      !token(operationId, 128) ||
+      !Number.isSafeInteger(expectedGeneration) ||
+      expectedGeneration < 1 ||
+      !Number.isSafeInteger(m.nextAttemptAt) ||
+      m.nextAttemptAt < 0 ||
+      !Number.isSafeInteger(m.occurredAt) ||
+      m.occurredAt < 0 ||
+      !Number.isSafeInteger(m.recordedAt) ||
+      m.recordedAt < m.occurredAt ||
+      ![
+        "dispatch",
+        "pre_dispatch_failure",
+        "retry",
+        "confirm",
+        "uncertain",
+        "rejected",
+        "complete",
+        "cancel",
+      ].includes(transition)
+    )
+      throw new HeimdallError("invalid_argument");
+    const actorHash = hash(actor),
+      b = this.binding;
+    const before = await this.read(operationId, actorHash, false, signal);
+    if (!before) throw new HeimdallError("conflict");
+    const state = nextOperationState(
+      before.state,
+      transition,
+      before.dispatchCount,
+      before.generation,
+      expectedGeneration,
+    );
+    if (
+      before.generation === Number.MAX_SAFE_INTEGER ||
+      (transition === "dispatch" && before.dispatchCount === Number.MAX_SAFE_INTEGER)
+    )
+      throw new HeimdallError("unavailable");
+    const count = before.dispatchCount + (transition === "dispatch" ? 1 : 0);
+    const family = before.intent.kind === "transfer_owner" ? "ownership" : "membership";
+    const stage =
+      transition === "dispatch" ? "attempt" : transition === "retry" ? "intent" : "completed";
+    const outcome =
+      transition === "dispatch"
+        ? "attempted"
+        : transition === "retry"
+          ? "requested"
+          : transition === "uncertain"
+            ? "outcome_unknown"
+            : ["confirm", "complete"].includes(transition)
+              ? "succeeded"
+              : "failed";
+    const event = {
+      schemaVersion: 1,
+      eventId: m.eventId,
+      eventType: `heimdall.${family}.${stage}`,
+      eventVersion: 1,
+      occurredAt: m.occurredAt,
+      recordedAt: m.recordedAt,
+      productId: b.productId,
+      environment: b.environment,
+      tenantId: before.workspaceId,
+      actor: { kind: "user", ...before.intent.actor },
+      target: { type: "workspace", id: before.workspaceId },
+      action: `${before.intent.kind}.${transition}`,
+      outcome,
+      requestId: m.requestId,
+      source: "sdk",
+      sdkVersion: "0.0.0",
+      attributes: {},
+      operationId,
+      modelId: b.modelId,
+      manifestVersion: b.manifestVersion,
+      policyVersion: m.policyVersion,
+    };
+    validateAudit(event);
+    if (
+      m.recordedAt < before.updatedAt ||
+      m.nextAttemptAt < m.recordedAt ||
+      (["dispatch", "retry"].includes(transition) && m.recordedAt < before.nextAttemptAt)
+    )
+      throw new HeimdallError("conflict");
+    let result: ManagedOperation | null = null;
+    try {
+      await this.audit.appendWith(
+        event,
+        async (tx) => {
+          // Workspace-first lock order also serializes future administrative lifecycle changes.
+          const rows = await tx.query(
+            `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
+          product_id,environment,workspace_id,name,lifecycle,mutation_blocked,revision::text,created_at::text,updated_at::text
+          FROM heimdall_managed.workspaces WHERE product_id=$1 AND environment=$2 AND workspace_id=$3 FOR UPDATE`,
+            [b.productId, b.environment, before.workspaceId],
+          );
+          if (rows.rows.length !== 1) throw new HeimdallError("unavailable");
+          const w = decodeWorkspace(rows.rows[0], {
+            productId: b.productId,
+            environment: b.environment,
+            workspaceId: before.workspaceId,
+          });
+          const creating = before.intent.kind === "create_workspace";
+          if (
+            !w ||
+            !w.mutationBlocked ||
+            m.recordedAt < w.updatedAt ||
+            (creating
+              ? w.lifecycle !== "pending"
+              : !["active", "suspended"].includes(w.lifecycle)) ||
+            (!creating && transition === "dispatch" && w.lifecycle !== "active")
+          )
+            throw new HeimdallError("conflict");
+          const changed = await tx.query(
+            `UPDATE heimdall_managed.operations SET state=$5,dispatch_count=$6,generation=generation+1,next_attempt_at=$7,updated_at=$8
+          WHERE product_id=$1 AND environment=$2 AND operation_id=$3 AND generation=$4 AND state=$9 RETURNING operation_id`,
+            [
+              b.productId,
+              b.environment,
+              operationId,
+              expectedGeneration,
+              state,
+              count,
+              m.nextAttemptAt,
+              m.recordedAt,
+              before.state,
+            ],
+          );
+          if (changed.rowCount !== 1) throw new HeimdallError("conflict");
+          if (transition === "complete") {
+            const targetHash = Buffer.from(hash(before.intent.target), "hex");
+            if (before.intent.kind === "remove_member") {
+              await tx.query(
+                "DELETE FROM heimdall_managed.membership_candidates WHERE product_id=$1 AND environment=$2 AND workspace_id=$3 AND identity_hash=$4",
+                [b.productId, b.environment, before.workspaceId, targetHash],
+              );
+            } else {
+              const inserted = await tx.query(
+                `INSERT INTO heimdall_managed.membership_candidates(product_id,environment,workspace_id,identity_hash,principal,observed_at)
+              VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(product_id,environment,identity_hash,workspace_id)
+              DO UPDATE SET observed_at=EXCLUDED.observed_at WHERE heimdall_managed.membership_candidates.principal=EXCLUDED.principal
+              AND heimdall_managed.membership_candidates.observed_at<=EXCLUDED.observed_at RETURNING position`,
+                [
+                  b.productId,
+                  b.environment,
+                  before.workspaceId,
+                  targetHash,
+                  encodeIdentity(before.intent.target.issuer, before.intent.target.subject),
+                  m.recordedAt,
+                ],
+              );
+              if (inserted.rowCount !== 1) throw new HeimdallError("conflict");
+            }
+          }
+          await tx.query(
+            `UPDATE heimdall_managed.workspaces SET lifecycle=$4,mutation_blocked=$5,updated_at=$6
+          WHERE product_id=$1 AND environment=$2 AND workspace_id=$3`,
+            [
+              b.productId,
+              b.environment,
+              before.workspaceId,
+              creating && transition === "complete"
+                ? "active"
+                : creating && transition === "cancel"
+                  ? "tombstoned"
+                  : w.lifecycle,
+              !["complete", "cancel"].includes(transition),
+              m.recordedAt,
+            ],
+          );
+          const after = await tx.query<{
+            primary: boolean;
+            record: Record<string, unknown> | null;
+          }>(select(false), [
+            b.productId,
+            b.environment,
+            Buffer.from(actorHash, "hex"),
+            operationId,
+          ]);
+          result = this.decode(after.rows, actorHash, operationId, false);
+          if (!result) throw new HeimdallError("unavailable");
+        },
+        signal,
+      );
+    } catch (e) {
+      if (e instanceof HeimdallError && e.code === "outcome_unknown")
+        throw new HeimdallError("outcome_unknown", operationId);
+      throw e;
+    }
+    return result!;
   }
   async create(
     intentJSON: string,

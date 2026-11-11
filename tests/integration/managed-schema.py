@@ -136,10 +136,10 @@ try:
         assert sorted(pool.map(contender,range(2)))==["0","1"],"unfinished operation race did not serialize"
     if not railway:
         env["HEIMDALL_TEST_MANAGED_DATABASE_URL"]=f"postgres://postgres:{env['POSTGRES_PASSWORD']}@127.0.0.1:{port}/{database}?sslmode=disable"
-        subprocess.run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-managed-schema.test.ts","test/postgres-managed-readiness.test.ts","test/postgres-workspaces.test.ts","test/postgres-managed-audit.test.ts","test/postgres-operations.test.ts"],cwd=ROOT,env=env,check=True)
+        subprocess.run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-managed-schema.test.ts","test/postgres-managed-readiness.test.ts","test/postgres-workspaces.test.ts","test/postgres-managed-audit.test.ts","test/postgres-operations.test.ts","test/postgres-operation-transitions.test.ts"],cwd=ROOT,env=env,check=True)
         env["HEIMDALL_TEST_MANAGED_READ_PEER"]="1"
-        subprocess.run(["go","test","-race","-count=1","./internal/postgres","-run","^(TestManaged(Schema|Readiness|ReadinessCancelled|Migration|AuditAtomic|AuditInvalid)|TestWorkspace(Decoder|Input|Primary)|TestOperation(Journal|Input|Create))$"],cwd=ROOT/"sdk/go",env=env,check=True)
-        subprocess.run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-managed-schema.test.ts","test/postgres-workspaces.test.ts","test/postgres-managed-audit.test.ts","test/postgres-operations.test.ts"],cwd=ROOT,env=env,check=True)
+        subprocess.run(["go","test","-race","-count=1","./internal/postgres","-run","^(TestManaged(Schema|Readiness|ReadinessCancelled|Migration|AuditAtomic|AuditInvalid)|TestWorkspace(Decoder|Input|Primary)|TestOperation(Journal|Input|Create|Transition|TransitionInput|MembershipCompletion))$"],cwd=ROOT/"sdk/go",env=env,check=True)
+        subprocess.run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-managed-schema.test.ts","test/postgres-workspaces.test.ts","test/postgres-managed-audit.test.ts","test/postgres-operations.test.ts","test/postgres-operation-transitions.test.ts"],cwd=ROOT,env=env,check=True)
         for language in ("ts","go"):
             with CommitLossProxy(int(port)) as proxy:
                 fault_env=dict(env,HEIMDALL_TEST_MANAGED_AUDIT_LOSS=direct.replace(":"+port+"/",":"+str(proxy.port)+"/"))
@@ -154,6 +154,12 @@ try:
                 command=["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-operations.test.ts","-t","operation create committed response loss and retry"] if language=="ts" else ["go","test","-race","-count=1","./internal/postgres","-run","^TestOperationCreateLoss$"]
                 subprocess.run(command,cwd=ROOT if language=="ts" else ROOT/"sdk/go",env=fault_env,check=True)
                 assert proxy.dropped.is_set() and not proxy.errors,language+" create COMMIT fault not verified"
+        for language in ("ts","go"):
+            with CommitLossProxy(int(port)) as proxy:
+                fault_env=dict(env,HEIMDALL_TEST_TRANSITION_LOSS=direct.replace(":"+port+"/",":"+str(proxy.port)+"/"))
+                command=["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-operation-transitions.test.ts","-t","transition committed response loss"] if language=="ts" else ["go","test","-race","-count=1","./internal/postgres","-run","^TestOperationTransitionLoss$"]
+                subprocess.run(command,cwd=ROOT if language=="ts" else ROOT/"sdk/go",env=fault_env,check=True)
+                assert proxy.dropped.is_set() and not proxy.errors,language+" transition COMMIT fault not verified"
         race_env=dict(env,HEIMDALL_TEST_CREATE_RACE="1")
         ts=subprocess.Popen(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-operations.test.ts","-t","cross-language create race"],cwd=ROOT,env=race_env)
         go=subprocess.Popen(["go","test","-race","-count=1","./internal/postgres","-run","^TestOperationCreateRaceCross$"],cwd=ROOT/"sdk/go",env=race_env)
@@ -162,7 +168,7 @@ try:
             assert sql("SELECT count(*) FROM heimdall_managed."+table+" WHERE product_id='creation-cross'")=="1"
         assert sql("SELECT count(*) FROM heimdall.audit_events WHERE product_id='creation-cross'")=="1"
         assert sql("SELECT count(*) FROM heimdall.audit_deliveries WHERE product_id='creation-cross'")=="2"
-    result={"run":run_id,"backend":"Railway verification application database" if railway else image,"checksums":{k:catalog[k][0]["checksum"] for k in ("session","managed")},"constraintCases":len(fixture["cases"]),"checks":["session-only install excludes managed schema","failed managed DDL transaction leaves no schema","independent managed metadata","scoped foreign keys","immutable intent and identifiers","uncertain operation retains unique slot","concurrent unfinished inserts have one winner","runtime cannot delete history, reset sequences or run DDL","workspace operation candidate audit and outbox transaction rollback"],"sdkSQLTests":"TS and Go managed creation, idempotency races, actor isolation, atomic audit rollback, confirmed COMMIT loss and bidirectional reads passed" if not railway else "same shared SQL vectors executed remotely","migrationCLI":"missing prerequisite refusal, read-only status, mid-DDL rollback, concurrent install, confirmed commit loss and replay passed" if not railway else "SQL-only probe","result":"passed","limitations":["physical SQL foundation, not managed SDK orchestration","remote dispatch and state transitions remain unimplemented","candidate coordination and public managed orchestration remain pending"]}
+    result={"run":run_id,"backend":"Railway verification application database" if railway else image,"checksums":{k:catalog[k][0]["checksum"] for k in ("session","managed")},"constraintCases":len(fixture["cases"]),"checks":["session-only install excludes managed schema","failed managed DDL transaction leaves no schema","independent managed metadata","scoped foreign keys","immutable intent and identifiers","uncertain operation retains unique slot","concurrent unfinished inserts have one winner","runtime cannot delete history, reset sequences or run DDL","workspace operation candidate audit and outbox transaction rollback"],"sdkSQLTests":"TS and Go creation and transitions, generation races, candidate completion, audit rollback, confirmed COMMIT loss and bidirectional reads passed" if not railway else "same shared SQL vectors executed remotely","migrationCLI":"missing prerequisite refusal, read-only status, mid-DDL rollback, concurrent install, confirmed commit loss and replay passed" if not railway else "SQL-only probe","result":"passed","limitations":["physical SQL foundation, not managed SDK orchestration","remote outcome verification and public managed orchestration remain pending","candidate pagination and rebuild coordination remain pending"]}
 finally:
     if created:sql("DROP DATABASE "+database,"postgres")
     if role_created:sql("DROP ROLE "+role,"postgres")

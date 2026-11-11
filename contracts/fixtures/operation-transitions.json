@@ -1,0 +1,190 @@
+{
+  "scenarios": [
+    {
+      "name": "complete",
+      "steps": [
+        {
+          "event": "dispatch",
+          "expected": "dispatching"
+        },
+        {
+          "event": "confirm",
+          "expected": "confirmed"
+        },
+        {
+          "event": "complete",
+          "expected": "completed"
+        },
+        {
+          "event": "dispatch",
+          "expected": "conflict"
+        }
+      ]
+    },
+    {
+      "name": "cancel",
+      "steps": [
+        {
+          "event": "cancel",
+          "expected": "cancelled"
+        },
+        {
+          "event": "dispatch",
+          "expected": "conflict"
+        }
+      ]
+    },
+    {
+      "name": "safe-retry",
+      "steps": [
+        {
+          "event": "pre_dispatch_failure",
+          "expected": "retryable"
+        },
+        {
+          "event": "retry",
+          "expected": "pending"
+        },
+        {
+          "event": "dispatch",
+          "expected": "dispatching"
+        },
+        {
+          "event": "rejected",
+          "expected": "retryable"
+        },
+        {
+          "event": "cancel",
+          "expected": "conflict"
+        },
+        {
+          "event": "retry",
+          "expected": "pending"
+        },
+        {
+          "event": "dispatch",
+          "expected": "dispatching"
+        },
+        {
+          "event": "uncertain",
+          "expected": "uncertain"
+        },
+        {
+          "event": "retry",
+          "expected": "conflict"
+        },
+        {
+          "event": "cancel",
+          "expected": "conflict"
+        },
+        {
+          "event": "confirm",
+          "expected": "conflict"
+        },
+        {
+          "event": "complete",
+          "expected": "conflict"
+        },
+        {
+          "event": "dispatch",
+          "expected": "conflict"
+        }
+      ]
+    },
+    {
+      "name": "invalid-order",
+      "steps": [
+        {
+          "event": "complete",
+          "expected": "conflict"
+        },
+        {
+          "event": "confirm",
+          "expected": "conflict"
+        },
+        {
+          "event": "uncertain",
+          "expected": "conflict"
+        },
+        {
+          "event": "retry",
+          "expected": "conflict"
+        }
+      ]
+    }
+  ],
+  "membership": [
+    {
+      "name": "add",
+      "kind": "add_member",
+      "lifecycle": "active",
+      "existing": false,
+      "observedAt": 101,
+      "mismatch": false,
+      "error": false
+    },
+    {
+      "name": "assign",
+      "kind": "assign_roles",
+      "lifecycle": "active",
+      "existing": true,
+      "observedAt": 101,
+      "mismatch": false,
+      "error": false
+    },
+    {
+      "name": "remove",
+      "kind": "remove_member",
+      "lifecycle": "active",
+      "existing": true,
+      "observedAt": 101,
+      "mismatch": false,
+      "error": false
+    },
+    {
+      "name": "transfer",
+      "kind": "transfer_owner",
+      "lifecycle": "active",
+      "existing": true,
+      "observedAt": 101,
+      "mismatch": false,
+      "error": false
+    },
+    {
+      "name": "suspended",
+      "kind": "assign_roles",
+      "lifecycle": "suspended",
+      "existing": true,
+      "observedAt": 101,
+      "mismatch": false,
+      "error": false
+    },
+    {
+      "name": "newer-candidate",
+      "kind": "assign_roles",
+      "lifecycle": "active",
+      "existing": true,
+      "observedAt": 201,
+      "mismatch": false,
+      "error": true
+    },
+    {
+      "name": "corrupt-principal",
+      "kind": "assign_roles",
+      "lifecycle": "active",
+      "existing": true,
+      "observedAt": 101,
+      "mismatch": true,
+      "error": true
+    },
+    {
+      "name": "tombstone",
+      "kind": "assign_roles",
+      "lifecycle": "tombstoned",
+      "existing": true,
+      "observedAt": 101,
+      "mismatch": false,
+      "error": true
+    }
+  ]
+}
