@@ -1,0 +1,56 @@
+{
+  "path": "session/0003-capacity.sql",
+  "checksum": "15da3b2fa8a64b285516dc554a9c1cb7268fec5427046722ab9854cc0710e492",
+  "cases": [
+    {
+      "name": "counter reset",
+      "sql": "UPDATE heimdall_capacity.policy SET used_events=0",
+      "sqlState": "23514"
+    },
+    {
+      "name": "policy deletion",
+      "sql": "DELETE FROM heimdall_capacity.policy",
+      "sqlState": "23514"
+    },
+    {
+      "name": "limit below commitment",
+      "sql": "UPDATE heimdall_capacity.policy SET event_limit=2",
+      "sqlState": "23514"
+    },
+    {
+      "name": "pending reservation deletion",
+      "sql": "DELETE FROM heimdall_capacity.reservations",
+      "sqlState": "23514"
+    },
+    {
+      "name": "reservation rebind",
+      "sql": "UPDATE heimdall_capacity.reservations SET request_event_id='other'",
+      "sqlState": "23514"
+    },
+    {
+      "name": "resolution without decision terminal",
+      "sql": "UPDATE heimdall_capacity.reservations SET resolution='completed',terminal_event_id='other'",
+      "sqlState": "23514"
+    },
+    {
+      "name": "charge mutation",
+      "sql": "UPDATE heimdall_capacity.event_charges SET envelope_bytes=1",
+      "sqlState": "23514"
+    },
+    {
+      "name": "charged request deletion",
+      "sql": "DELETE FROM heimdall.audit_events WHERE event_id='request'",
+      "sqlState": "23503"
+    },
+    {
+      "name": "late sink addition",
+      "sql": "INSERT INTO heimdall.audit_deliveries(product_id,environment,event_id,sink_id) VALUES('ledger','test','request','late')",
+      "sqlState": "23514"
+    },
+    {
+      "name": "delivery identity change",
+      "sql": "UPDATE heimdall.audit_deliveries SET sink_id='changed'",
+      "sqlState": "23514"
+    }
+  ]
+}
