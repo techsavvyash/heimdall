@@ -259,3 +259,35 @@ atomic administrative hold creation, or the complete bounded backfill/activation
 workflow. Future runtime transactions must create the request identity, pending
 decision and reservation together before releasing protected work. No grants or
 compatibility version are changed by this SQL.
+
+## Prepared retirement marker integrity
+
+`0004-retirement-markers.sql` adds permanent scoped retirement IDs, exact sorted
+member IDs, tenant, recorded retirement time, selected retention duration and an
+administrative audit reference. The representative must be an ordinary event or
+the request of a resolved complete decision. Markers and their membership cannot
+be rewritten or deleted. Each marker consumes one metadata slot; re-adoption
+includes these permanent records in quota usage.
+
+Before insertion, SQL locks retained member identities in stable order and current
+delivery rows, rejects active holds and validates indexed event/digest/charge/
+routing agreement. Every event and delivered acknowledgement must satisfy the
+recorded duration; pending/quarantined or missing delivery history refuses.
+The administrative reference must be separate, tenant-bound, present and recorded
+at retirement time. These are indexed checks, not full administrative event or
+actor authorization. Full SDK envelope/semantic validation remains mandatory.
+
+A deferred constraint checks at commit that all listed payloads are absent, no
+member has an active hold, and the administrative payload remains present. Thus a
+marker-only transaction cannot claim completed retirement, and a hold inserted
+later in the same transaction cannot be bypassed. Failure rolls back marker and
+metadata accounting with the attempted transaction. Existing compact identities
+remain. Exact no-op marker updates do not recharge or require retired payloads.
+
+This is prepared SQL, not an enabled purge API. The live positive test retires an
+ordinary event in a privileged disposable database with a reference stand-in.
+Authorized administrative events, explicit retry-obligation checks, whole-decision
+and cross-process retirement race proofs, marker-aware readers, bounded maintenance,
+and v4 compatibility/admission remain required. The immutable marker is the future
+reader's evidence for intentional removal; missing payload without one remains
+an integrity error. Privileged direct SQL deletion is not made safe by this schema.
