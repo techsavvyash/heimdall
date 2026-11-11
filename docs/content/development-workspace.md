@@ -47,3 +47,12 @@ The formatter and Knip target owned workspace code. Quartz's vendored engine has
 The root `pnpm-workspace.yaml` sets `minimumReleaseAge: 43200` with strict enforcement. This represents 30 days. It applies to the SDK and Quartz, including transitive dependencies. CI uses the shared frozen `pnpm-lock.yaml`. The pinned pnpm version is recorded in the root package manifest.
 
 As of November 8, 2026, the 30-day policy selects Knip's Zod 4.6.5 and Quartz's minimatch 10.2.6. The audit reports a high-severity Zod advisory and a moderate minimatch advisory. Patched releases are newer than the allowed age, so dependency updates or an explicitly approved policy exception are required to clear them. [Zod advisory](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) · [minimatch advisory](https://github.com/advisories/GHSA-g3hv-75wg-m249)
+
+### Diagram validation
+
+Every docs build runs `pnpm --filter @jackyzha0/quartz run check:mermaid`
+before Quartz. It parses every Mermaid block using Mermaid 11.4.0, matching
+the Quartz browser renderer. Errors report the Markdown path and opening line
+and fail the build. In sequence-diagram message labels, use commas instead of
+literal semicolons: Mermaid interprets semicolons as statement separators.
+Parser validation complements checking rendered diagrams in the browser.

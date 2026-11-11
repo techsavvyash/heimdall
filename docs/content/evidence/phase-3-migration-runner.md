@@ -14,7 +14,7 @@ sequenceDiagram
   Runner->>Runner: Verify SQL SHA-256 before connection
   Runner->>DB: BEGIN READ COMMITTED
   Runner->>DB: Acquire exclusive advisory transaction lock
-  Runner->>DB: Require writable primary; inspect namespace
+  Runner->>DB: Require writable primary, inspect namespace
   alt Namespace absent
     Runner->>DB: Create schema, tables and revision trigger
     Runner->>DB: Insert checksum ledger and ready metadata

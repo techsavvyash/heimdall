@@ -39,7 +39,7 @@ sequenceDiagram
   Operator->>FGA: Start replacement with new credential
   Client->>FGA: Delayed request with old credential
   FGA-->>Client: 401
-  Operator->>FGA: Read A present, B absent; reconcile with new credential
+  Operator->>FGA: Read A present, B absent, reconcile with new credential
 ```
 
 ## What this establishes and what it does not

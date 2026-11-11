@@ -24,7 +24,7 @@ sequenceDiagram
   SDK->>SDK: Verify receipt binding before releasing result
   Store->>Sink: Submit scoped batch E1 and E2
   Sink-->>Store: Acknowledge E2 only
-  Store->>Store: Verify IDs belong to batch; keep E1 pending
+  Store->>Store: Verify IDs belong to batch, keep E1 pending
 ```
 
 ## Remaining proof

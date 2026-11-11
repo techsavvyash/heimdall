@@ -53,7 +53,7 @@ sequenceDiagram
     API->>DB: Mark active and complete intent
     API-->>User: Active workspace
   else Timeout or failure
-    API->>DB: Keep pending; quarantine uncertain dispatch
+    API->>DB: Keep pending, quarantine uncertain dispatch
     API-->>User: Pending status or retryable error
   end
 ```

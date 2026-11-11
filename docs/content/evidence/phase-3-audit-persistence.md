@@ -12,12 +12,12 @@ sequenceDiagram
   participant DB as Application database
   SDK->>Store: Immutable event and cancellation context
   Store->>Store: Snapshot, validate scope/schema/semantics, digest
-  Store->>DB: BEGIN READ COMMITTED; synchronous_commit on
+  Store->>DB: BEGIN READ COMMITTED, synchronous_commit on
   Store->>DB: INSERT event ON CONFLICT DO NOTHING
   Store->>DB: Read stored event in new statement snapshot
   alt Same ID with different payload
     Store->>DB: ROLLBACK
-    Store-->>SDK: Conflict; no receipt
+    Store-->>SDK: Conflict, no receipt
   else New event
     Store->>DB: INSERT each initial sink delivery
   else Identical replay
@@ -27,7 +27,7 @@ sequenceDiagram
   alt Confirmed response
     Store-->>SDK: Scope, event ID, timestamp, digest receipt
   else Response lost
-    Store-->>SDK: Outcome unknown; no success receipt
+    Store-->>SDK: Outcome unknown, no success receipt
   end
 ```
 

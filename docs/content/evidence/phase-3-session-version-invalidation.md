@@ -15,8 +15,8 @@ sequenceDiagram
     Store-->>Refresh: Committed revision 42
     Request->>Request: Receive negative result for old token
     Request->>Store: Invalidate key + identity + revision 41
-    Store-->>Request: false; revision 42 preserved
-    Request-->>Request: Reject this request; preserve replacement cookie
+    Store-->>Request: false, revision 42 preserved
+    Request-->>Request: Reject this request, preserve replacement cookie
 ```
 
 The delete predicate includes product, environment, session kind, opaque key hash, canonical issuer/subject hash and revision. It runs under the same scoped transaction advisory lock as create/CAS and identity invalidation. A confirmed matching deletion returns true; a nonmatching observation returns false. False can mean a replacement exists, so orchestration must never turn it into an unconditional delete or apply the old negative to a newly read revision.

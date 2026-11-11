@@ -122,7 +122,7 @@ sequenceDiagram
   S->>F: Check subject B membership in Globex for this product
   F-->>S: Allow or deny
   S->>DB: Persist decision audit
-  S-->>B: Access as B or denial; no authority inherited from A
+  S-->>B: Access as B or denial, no authority inherited from A
 ```
 
 The shared live-derived fixtures already reject prior-account evidence in both TS and Go. Actual session replacement, stale-generation races, membership enforcement and durable audit must pass the Phase 4/6 runtime tests; the account-model approval does not claim these are implemented.

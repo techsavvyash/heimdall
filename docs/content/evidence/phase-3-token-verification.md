@@ -12,7 +12,7 @@ sequenceDiagram
     participant Cache as Bounded in-process key cache
     participant IdP as Configured ZITADEL JWKS endpoint
     Caller->>Verify: Token + cancellation/deadline
-    Verify->>Verify: Bound token/header size; require RS256 and kid
+    Verify->>Verify: Bound token/header size, require RS256 and kid
     Verify->>Cache: Look up configured issuer's signing key
     alt Known key within five minutes
         Cache-->>Verify: Cached public key

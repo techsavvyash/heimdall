@@ -40,14 +40,14 @@ sequenceDiagram
     participant Gate as Durable invalidation gate
     Old->>SDK: Begin online check
     New->>SDK: Observe token inactive
-    SDK->>SDK: Evict matching positives; mark matching in-flight checks negative
+    SDK->>SDK: Evict matching positives, mark matching in-flight checks negative
     SDK->>Gate: Invalidate affected token/session
     Gate-->>New: Committed acknowledgement
     New-->>New: unauthenticated
     Old->>SDK: Late positive provider response
     SDK->>Gate: Invalidate this matching session context too
     Gate-->>Old: Committed acknowledgement
-    SDK-->>Old: unauthenticated; no positive cache insertion
+    SDK-->>Old: unauthenticated, no positive cache insertion
 ```
 
 A matching negative wins over older in-flight positive responses. A negative for one token does not evict another independently valid token for the same person. No positive provider response clears the durable identity gate. `owns` checks provenance only; it is not a license for authorization code to retain a principal indefinitely.

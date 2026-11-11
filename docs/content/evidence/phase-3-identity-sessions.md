@@ -11,7 +11,7 @@ sequenceDiagram
     participant Store as Session store
     participant DB as PostgreSQL
     SDK->>Store: Create validated session payload
-    Store->>DB: Begin transaction; acquire scoped identity lock
+    Store->>DB: Begin transaction, acquire scoped identity lock
     Store->>DB: Check persistent identity denial
     alt Identity denied
         Store-->>SDK: unauthenticated
@@ -21,7 +21,7 @@ sequenceDiagram
         Store-->>SDK: Record and revision
     end
     SDK->>Store: Authoritative negative identity observation
-    Store->>DB: Begin transaction; acquire same identity lock
+    Store->>DB: Begin transaction, acquire same identity lock
     Store->>DB: Upsert denial + delete matching scoped records
     Store->>DB: COMMIT
     Store-->>SDK: Deleted count, or outcome_unknown if response lost

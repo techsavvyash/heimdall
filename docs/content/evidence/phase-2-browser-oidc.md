@@ -25,7 +25,7 @@ sequenceDiagram
   L->>Z: Dedicated Login PAT and fixed instance/public hosts
   Z-->>L: Verified password session and code redirect
   L-->>B: Redirect to registered test callback
-  Note over B,V: Capture URL; example.invalid intentionally has no server
+  Note over B,V: Capture URL, example.invalid intentionally has no server
   V->>Z: Exchange code with client secret and PKCE verifier
   Z-->>V: Signed ID and access tokens
   V->>Z: JWKS and session read using signed sid

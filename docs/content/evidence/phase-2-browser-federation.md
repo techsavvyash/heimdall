@@ -19,7 +19,7 @@ sequenceDiagram
   I->>Z: Signed SAML response or OIDC callback
   Z-->>B: Intent callback redirect
   B->>H: Cookie, flow state, intent ID and credential
-  H->>H: Validate binding, deadline and exact intent; claim once
+  H->>H: Validate binding, deadline and exact intent, claim once
   H-->>B: Redirect to token-free result page
   H->>Z: Verify intent provider, upstream subject and local subject
   H->>Z: Create session and complete downstream product OIDC via HTTP
