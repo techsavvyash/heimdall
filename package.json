@@ -17,7 +17,7 @@
     "docs:build": "pnpm --filter @jackyzha0/quartz run build",
     "docs:dev": "pnpm --filter @jackyzha0/quartz run dev",
     "check:fast": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run knip && pnpm run check:go",
-    "check": "pnpm run check:fast && pnpm test && pnpm run test:go && pnpm run build && pnpm run docs:build",
+    "check": "pnpm run check:fast && pnpm test && pnpm run test:go && pnpm run build && pnpm run check:package && pnpm run docs:build",
     "probe:openfga": "node tests/integration/openfga.mjs",
     "probe:federation": "node tests/integration/federation.mjs",
     "probe:oidc": "node tests/integration/oidc.mjs",
@@ -26,7 +26,8 @@
     "probe:openfga-recovery": "node tests/integration/openfga-recovery.mjs",
     "probe:federation-tenants": "node tests/integration/federation-tenants.mjs",
     "probe:browser-oidc": "node tests/integration/browser-oidc.mjs",
-    "probe:tenant-model": "node tests/integration/tenant-model.mjs"
+    "probe:tenant-model": "node tests/integration/tenant-model.mjs",
+    "check:package": "node scripts/check-runtime-package.mjs"
   },
   "devDependencies": {
     "@types/node": "24.19.1",

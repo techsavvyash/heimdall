@@ -3,7 +3,7 @@ title: Agreed design and implementation gates
 date: 2026-11-10
 ---
 
-The user locked the product decisions on November 10, 2026. These decisions supersede earlier proposal wording. [[release-contract]] defines the first-release acceptance boundary, [[audit-contract]] defines mandatory durable audit, and [[enterprise-contract]] defines SSO, SCIM and SIEM. SDK behavior is still unimplemented; publishing this design does not certify runtime guarantees.
+The user locked the product decisions on November 10, 2026. These decisions supersede earlier proposal wording. [[release-contract]] defines the first-release acceptance boundary, [[audit-contract]] defines mandatory durable audit, and [[enterprise-contract]] defines SSO, SCIM and SIEM. SDK implementation is in progress; checkpoint evidence documents the tested portions, and publishing this design does not certify the complete runtime guarantees.
 
 ## Locked decisions
 

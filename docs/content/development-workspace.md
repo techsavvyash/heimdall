@@ -36,7 +36,7 @@ Hooks check files without rewriting them. Use `pnpm run format` and `gofmt -w sd
 
 ## Scaffold boundaries
 
-The current SDKs contain empty entry points. Vitest temporarily permits an empty test suite, and Go reports no test files. Remove the Vitest allowance when the first contract tests land. Future meaningful tests belong alongside implementation and in shared fixtures.
+Both SDKs now expose a development core runtime for audited bearer authentication. Vitest and Go run shared contract, unit and integration tests; optional live tests require explicit verification configuration. Browser sessions, tenant authorization and public adapter composition remain pending. See [[evidence/phase-3-public-runtime]] for the current public boundary.
 
 Rolldown bundles JavaScript. TypeScript emits declarations separately. The initial package output is ESM, while supported runtime and publication targets remain implementation decisions. The Go module has no external dependencies yet.
 

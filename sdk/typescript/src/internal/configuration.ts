@@ -30,10 +30,10 @@ function string(value: unknown, max: number, pattern?: RegExp): string {
     return invalid();
   return value;
 }
-const slug = /^[a-z][a-z0-9_-]*$/;
-const role = /^[a-z][a-z0-9_]*$/;
-const permission = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/;
-const token = /^[A-Za-z0-9_-]+$/;
+const slug = /^[a-z][a-z0-9_-]*(?![\s\S])/;
+const role = /^[a-z][a-z0-9_]*(?![\s\S])/;
+const permission = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*(?![\s\S])/;
+const token = /^[A-Za-z0-9_-]+(?![\s\S])/;
 function version(v: unknown) {
   if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 2147483647) invalid();
 }

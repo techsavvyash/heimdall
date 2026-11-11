@@ -1225,6 +1225,36 @@
         ]
       ],
       "valid": false
+    },
+    {
+      "name": "reject final newline environment",
+      "config": [[["environment"], "production\n"]],
+      "valid": false
+    },
+    {
+      "name": "reject final newline clientId",
+      "config": [[["clientId"], "client-1\n"]],
+      "valid": false
+    },
+    {
+      "name": "reject final newline zitadelProjectId",
+      "config": [[["zitadelProjectId"], "project-1\n"]],
+      "valid": false
+    },
+    {
+      "name": "reject final newline openfga.storeId",
+      "config": [[["openfga", "storeId"], "store-1\n"]],
+      "valid": false
+    },
+    {
+      "name": "reject final newline openfga.modelId",
+      "config": [[["openfga", "modelId"], "model-1\n"]],
+      "valid": false
+    },
+    {
+      "name": "reject final newline permission",
+      "manifest": [[["permissions"], ["invoice.read\n"]]],
+      "valid": false
     }
   ]
 }

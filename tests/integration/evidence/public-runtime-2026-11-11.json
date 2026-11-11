@@ -1,0 +1,146 @@
+{
+  "suite": "zitadel-human-oidc-v1",
+  "runId": "694badab-ff28-4926-b382-caaf15270db0",
+  "observedAt": "2026-11-11T12:28:27.293Z",
+  "issuer": "https://capability-zitadel-verification.up.railway.app",
+  "observations": [
+    {
+      "product": "ledger",
+      "publicRuntime": {
+        "typescript": "passed",
+        "go": "passed",
+        "checks": [
+          "discovery and pinned model startup",
+          "authoritative human bearer verification",
+          "invalid token audited rejection"
+        ],
+        "storage": "recording fixture only; not a durability proof"
+      }
+    },
+    {
+      "product": "ledger",
+      "selfServiceEvidence": {
+        "productOnlySessionStatus": 401,
+        "apiAudienceOwnSessionStatus": 200,
+        "anotherUserSessionStatus": 404,
+        "ownIdentityStatus": 200,
+        "otherProductIntrospectionActive": false,
+        "credential": "user access token; no PAT or session token"
+      }
+    },
+    {
+      "product": "ledger",
+      "signatureIssuerAudienceNonce": "verified",
+      "subject": "same human",
+      "amr": ["pwd"],
+      "accessAudiences": ["399136822787061525", "399136822535403285"],
+      "introspectionActive": true,
+      "keyRejections": [
+        {
+          "scenario": "unknown signing key",
+          "localValidation": "rejected",
+          "introspectionStatus": 200,
+          "active": false
+        },
+        {
+          "scenario": "known key ID with untrusted signature",
+          "localValidation": "rejected",
+          "introspectionStatus": 200,
+          "active": false
+        }
+      ],
+      "otherProductIntrospectionActive": false,
+      "refreshBeforeDeactivation": "succeeded"
+    },
+    {
+      "product": "support",
+      "publicRuntime": {
+        "typescript": "passed",
+        "go": "passed",
+        "checks": [
+          "discovery and pinned model startup",
+          "authoritative human bearer verification",
+          "invalid token audited rejection"
+        ],
+        "storage": "recording fixture only; not a durability proof"
+      }
+    },
+    {
+      "product": "support",
+      "selfServiceEvidence": {
+        "productOnlySessionStatus": 401,
+        "apiAudienceOwnSessionStatus": 200,
+        "anotherUserSessionStatus": 404,
+        "ownIdentityStatus": 200,
+        "otherProductIntrospectionActive": false,
+        "credential": "user access token; no PAT or session token"
+      }
+    },
+    {
+      "product": "support",
+      "signatureIssuerAudienceNonce": "verified",
+      "subject": "same human",
+      "amr": ["pwd"],
+      "accessAudiences": ["399136823240046357", "399136823005165333"],
+      "introspectionActive": true,
+      "keyRejections": [
+        {
+          "scenario": "unknown signing key",
+          "localValidation": "rejected",
+          "introspectionStatus": 200,
+          "active": false
+        },
+        {
+          "scenario": "known key ID with untrusted signature",
+          "localValidation": "rejected",
+          "introspectionStatus": 200,
+          "active": false
+        }
+      ],
+      "otherProductIntrospectionActive": false,
+      "refreshBeforeDeactivation": "succeeded"
+    },
+    {
+      "providerSessionDeletion": {
+        "introspectionActive": false,
+        "refreshStatus": 200,
+        "refreshedAccessTokenActive": true,
+        "explicitRefreshRevocationStatus": 200,
+        "accessActiveAfterRefreshRevocation": false,
+        "explicitAccessRevocationStatus": 200,
+        "accessActiveAfterBothRevocations": false,
+        "refreshAfterExplicitRevocationStatus": 400,
+        "refreshAfterExplicitRevocationError": "invalid_request"
+      }
+    },
+    {
+      "product": "ledger",
+      "afterDeactivation": {
+        "authoritativeUserState": "USER_STATE_INACTIVE",
+        "introspectionActive": false,
+        "refreshStatus": 400,
+        "refreshError": "invalid_request"
+      }
+    },
+    {
+      "product": "support",
+      "afterDeactivation": {
+        "authoritativeUserState": "USER_STATE_INACTIVE",
+        "introspectionActive": false,
+        "refreshStatus": 400,
+        "refreshError": "invalid_request"
+      }
+    },
+    {
+      "afterDeletion": "user API 404; both product tokens introspect inactive"
+    }
+  ],
+  "wrongPKCE": "invalid_grant",
+  "cleanedUpOrganization": "399136820136261397",
+  "limitations": [
+    "Login client API performs password check; browser Login UI not exercised",
+    "strict upstream SAML/OIDC evidence not verified",
+    "Public runtime exercised with recording storage fixture; full production adapter assembly remains pending",
+    "deactivation samples are not a revocation latency guarantee"
+  ]
+}

@@ -26,6 +26,7 @@ Quartz and the TypeScript SDK share the root pnpm workspace and lockfile. The ve
 - `pnpm test` runs Vitest once. `pnpm run test:watch` runs the watch loop.
 - `pnpm run test:go` runs Go tests with the race detector.
 - `pnpm run build` bundles with Rolldown and emits TypeScript declarations with tsc.
+- `pnpm run check:package` verifies the built TypeScript tarball in an isolated consumer, including its declaration and principal type boundary.
 - `pnpm run check` runs all workspace checks and builds Quartz. This is the pre-push and CI gate.
 - Use `pnpm run format` and `gofmt -w sdk/go` to apply formatting. Hooks only check files.
 
@@ -33,7 +34,7 @@ Quartz and the TypeScript SDK share the root pnpm workspace and lockfile. The ve
 
 - Preserve product and tenant boundaries, identity verification, error distinctions and cancellation.
 - Add shared fixtures and focused regression tests when implementing nontrivial behavior.
-- Avoid placeholder public APIs. The initial SDK entry points intentionally contain no runtime implementation.
+- Avoid placeholder public APIs. Export only implemented, tested behavior; the current public runtime covers audited bearer authentication, not sessions or authorization.
 - Vitest must fail on an empty test suite. Both languages consume shared contract fixtures.
 - Keep package scripts and Knip entries accurate. Do not suppress unused findings broadly.
 - Keep secret values, local environment files, generated output and dependencies out of commits.

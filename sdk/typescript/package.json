@@ -2,7 +2,7 @@
   "name": "@heimdall/sdk",
   "version": "0.0.0",
   "private": true,
-  "description": "Heimdall TypeScript SDK workspace scaffold",
+  "description": "Heimdall TypeScript SDK development runtime",
   "files": [
     "dist"
   ],

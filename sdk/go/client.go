@@ -1,0 +1,147 @@
+package heimdall
+
+import (
+	"context"
+	"errors"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/auditflow"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/configuration"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/identity"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/modelbinding"
+	"regexp"
+	"strings"
+	"time"
+)
+
+type Identity = identity.Identity
+type IdentityNegative = identity.Negative
+type IdentityGate = identity.Gate
+type AuditReceipt = contract.AuditReceipt
+type Principal = identity.Principal
+type Error = contract.Error
+
+var (
+	ErrInvalidArgument  = contract.ErrInvalidArgument
+	ErrUnauthenticated  = contract.ErrUnauthenticated
+	ErrForbidden        = contract.ErrForbidden
+	ErrNotFound         = contract.ErrNotFound
+	ErrConflict         = contract.ErrConflict
+	ErrUnavailable      = contract.ErrUnavailable
+	ErrDeadlineExceeded = contract.ErrDeadlineExceeded
+	ErrCancelled        = contract.ErrCancelled
+	ErrAuditUnavailable = contract.ErrAuditUnavailable
+	ErrOutcomeUnknown   = contract.ErrOutcomeUnknown
+)
+
+type RuntimeStorage struct {
+	ProductID, Environment string
+	// Ready validates durable store readiness and scope, without migrations.
+	Ready       func(context.Context) error
+	Identity    IdentityGate
+	AppendAudit func(context.Context, map[string]any) (AuditReceipt, error)
+}
+type Credentials struct {
+	ClientSecret, OpenFGAKey func(context.Context) (string, error)
+}
+type Options struct {
+	PolicyVersion       string
+	IdentityFreshnessMs *int64
+	Credentials         Credentials
+	Storage             RuntimeStorage
+}
+type Client struct{ authentication *auditflow.Authentication }
+type Tokens struct{ authentication *auditflow.Authentication }
+
+func (c *Client) Tokens() *Tokens {
+	if c == nil {
+		return &Tokens{}
+	}
+	return &Tokens{c.authentication}
+}
+func (t *Tokens) Verify(ctx context.Context, raw string) (*Principal, error) {
+	if t == nil || t.authentication == nil || ctx == nil {
+		return nil, ErrInvalidArgument
+	}
+	return t.authentication.Verify(ctx, raw, "bearer")
+}
+
+// New constructs a scoped core runtime. Storage ports are trusted durable integrations.
+func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) (*Client, error) {
+	if ctx == nil {
+		return nil, ErrInvalidArgument
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := contract.CheckCancellation(ctx); err != nil {
+		return nil, err
+	}
+	deployment, err := configuration.Parse(configJSON, manifestJSON)
+	if err != nil {
+		return nil, err
+	}
+	cfg := deployment.Config()
+	storage := options.Storage
+	freshness := int64(60000)
+	if options.IdentityFreshnessMs != nil {
+		freshness = *options.IdentityFreshnessMs
+	}
+	if ctx == nil || !regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`).MatchString(options.PolicyVersion) || freshness < 0 || freshness > 60000 || storage.ProductID != cfg.ProductID || storage.Environment != cfg.Environment || storage.Ready == nil || storage.AppendAudit == nil || storage.Identity.Check == nil || storage.Identity.Invalidate == nil || options.Credentials.ClientSecret == nil || options.Credentials.OpenFGAKey == nil {
+		return nil, ErrInvalidArgument
+	}
+	if err = contract.CheckCancellation(ctx); err != nil {
+		return nil, err
+	}
+	ready := make(chan error, 1)
+	go func() {
+		if err := contract.CheckCancellation(ctx); err != nil {
+			ready <- err
+			return
+		}
+		ready <- storage.Ready(ctx)
+	}()
+	select {
+	case <-ctx.Done():
+		return nil, contract.CheckCancellation(ctx)
+	case err = <-ready:
+	}
+	if err != nil {
+		if cancellation := contract.CheckCancellation(ctx); cancellation != nil {
+			return nil, cancellation
+		}
+		var typed *contract.Error
+		if errors.As(err, &typed) {
+			return nil, contract.NewError(typed.Code, "")
+		}
+		return nil, ErrUnavailable
+	}
+	profile := cfg.TransportProfile
+	if profile == "" {
+		profile = "production"
+	}
+	metadata, err := identity.DiscoverOIDC(ctx, cfg.Issuer, profile)
+	if err != nil {
+		return nil, err
+	}
+	if metadata.IntrospectionEndpoint != strings.TrimSuffix(cfg.Issuer, "/")+"/oauth/v2/introspect" {
+		return nil, ErrUnavailable
+	}
+	model, err := modelbinding.New(modelbinding.Config{URL: cfg.OpenFGA.URL, StoreID: cfg.OpenFGA.StoreID, ModelID: cfg.OpenFGA.ModelID, Profile: profile}, deployment.Manifest(), contract.Binding{ProductID: cfg.ProductID, ManifestVersion: cfg.ManifestVersion, ClientKey: cfg.ClientKey, TransportProfile: profile}, deployment.Artifact(), options.Credentials.OpenFGAKey)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = model.Verify(ctx); err != nil {
+		return nil, err
+	}
+	if err = contract.CheckCancellation(ctx); err != nil {
+		return nil, err
+	}
+	authentication, err := auditflow.NewAuthentication(identity.StatusConfig{Config: identity.Config{Issuer: cfg.Issuer, Audience: cfg.Audience, JWKSURI: metadata.JWKSURI, Profile: profile}, ProductID: cfg.ProductID, Environment: cfg.Environment, PolicyVersion: options.PolicyVersion, ClientID: cfg.ClientID, FreshnessMs: &freshness}, options.Credentials.ClientSecret, storage.Identity, storage.AppendAudit, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &Client{authentication}, nil
+}
+
+// AuditEventDigest computes the portable digest for a custom durable audit implementation.
+// It does not validate event semantics or prove persistence.
+func AuditEventDigest(event map[string]any) (string, error) { return contract.AuditDigest(event) }

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import {
   randomUUID,
@@ -23,6 +24,104 @@ console.error(`OIDC probe run: ${runId}`);
 let orgId;
 const sessions = [];
 const observations = [];
+async function sdkRuntime(client, c) {
+  if (process.env.HEIMDALL_PROBE_SDK_RUNTIME !== "1") return;
+  const base = process.env.HEIMDALL_PROBE_OPENFGA_URL;
+  const key = process.env.HEIMDALL_PROBE_OPENFGA_KEY;
+  assert(base && key && new URL(base).origin === base && base.startsWith("https://"));
+  const fixture = JSON.parse(
+    readFileSync(new URL("../../contracts/fixtures/tenant-model-v1.json", import.meta.url), "utf8"),
+  ).find((f) => f.name === client.product);
+  assert(fixture);
+  const api = async (path, body, method = body === undefined ? "GET" : "POST") => {
+    const r = await fetch(base + path, {
+      method,
+      headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      redirect: "error",
+      signal: AbortSignal.timeout(15000),
+    });
+    assert(r.ok, `runtime FGA ${method}: ${r.status}`);
+    return r.status === 204 ? null : r.json();
+  };
+  const store = await api("/stores", { name: `heimdall-runtime-${client.product}-${runId}` });
+  try {
+    const model = await api(`/stores/${store.id}/authorization-models`, fixture.expected.model);
+    const manifest = structuredClone(fixture.manifest);
+    manifest.clients.web.redirectUris = [client.redirectUri];
+    const config = {
+      schemaVersion: 1,
+      productId: client.product,
+      environment: "verification",
+      issuer,
+      audience: client.projectId,
+      clientId: client.clientId,
+      zitadelProjectId: client.projectId,
+      clientKey: "web",
+      manifestVersion: manifest.version,
+      openfga: { url: base, storeId: store.id, modelId: model.authorization_model_id },
+    };
+    const env = {
+      ...process.env,
+      HEIMDALL_TEST_RUNTIME: JSON.stringify({
+        config,
+        manifest,
+        clientSecret: client.clientSecret,
+        token: c.token,
+        subject: c.subject,
+      }),
+    };
+    for (const language of ["ts", "go"]) {
+      const command =
+        language === "ts"
+          ? [
+              "pnpm",
+              "--filter",
+              "@heimdall/sdk",
+              "exec",
+              "vitest",
+              "run",
+              "test/runtime.live.test.ts",
+            ]
+          : ["go", "test", "-race", "-count=1", ".", "-run", "^TestLiveRuntime$"];
+      const child = spawnSync(command[0], command.slice(1), {
+        env,
+        cwd: new URL(language === "ts" ? "../../" : "../../sdk/go/", import.meta.url),
+        encoding: "utf8",
+        timeout: 60000,
+      });
+      if (child.status !== 0)
+        console.error(
+          JSON.stringify({
+            runtimeFailure: language,
+            codes: [
+              ...new Set(
+                (child.stdout + child.stderr).match(
+                  /\b(?:unauthenticated|unavailable|deadline_exceeded|invalid_argument|cancelled|audit_unavailable)\b/g,
+                ) ?? [],
+              ),
+            ],
+          }),
+        );
+      assert.equal(child.status, 0, `${language} public runtime verification failed`);
+    }
+    observations.push({
+      product: client.product,
+      publicRuntime: {
+        typescript: "passed",
+        go: "passed",
+        checks: [
+          "discovery and pinned model startup",
+          "authoritative human bearer verification",
+          "invalid token audited rejection",
+        ],
+        storage: "recording fixture only; not a durability proof",
+      },
+    });
+  } finally {
+    await api(`/stores/${store.id}`, undefined, "DELETE");
+  }
+}
 async function req(method, path, body, credential = pat) {
   const response = await fetch(issuer + path, {
     method,
@@ -327,6 +426,7 @@ try {
     };
     statusCases.push(statusCase);
     sdkStatus(statusCase, "human", "active");
+    await sdkRuntime(client, statusCase);
     observations.push({
       product: client.product,
       selfServiceEvidence: {
@@ -638,11 +738,13 @@ console.log(
       limitations: [
         "Login client API performs password check; browser Login UI not exercised",
         "strict upstream SAML/OIDC evidence not verified",
-        process.env.HEIMDALL_PROBE_SDK_STATUS === "1"
-          ? "SDK signature and online identity status exercised; durable gate and public flow composition still pending"
-          : process.env.HEIMDALL_PROBE_SDK_IDENTITY === "1"
-            ? "SDK signature checks exercised; authoritative SDK identity freshness still pending"
-            : "probe JWT assertions are not SDK authentication implementation",
+        process.env.HEIMDALL_PROBE_SDK_RUNTIME === "1"
+          ? "Public runtime exercised with recording storage fixture; full production adapter assembly remains pending"
+          : process.env.HEIMDALL_PROBE_SDK_STATUS === "1"
+            ? "SDK signature and online identity status exercised; durable gate and public flow composition still pending"
+            : process.env.HEIMDALL_PROBE_SDK_IDENTITY === "1"
+              ? "SDK signature checks exercised; authoritative SDK identity freshness still pending"
+              : "probe JWT assertions are not SDK authentication implementation",
         "deactivation samples are not a revocation latency guarantee",
       ],
     },

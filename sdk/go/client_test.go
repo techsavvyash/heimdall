@@ -1,0 +1,224 @@
+package heimdall_test
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"github.com/golang-jwt/jwt/v5"
+	heimdall "github.com/techsavvyash/heimdall/sdk/go"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/configuration"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"sync"
+	"testing"
+	"time"
+)
+
+type runtimeHarness struct {
+	config, manifest []byte
+	options          heimdall.Options
+	token            string
+	mu               sync.Mutex
+	events           []map[string]any
+}
+
+func setupRuntime(t *testing.T, failure string) *runtimeHarness {
+	t.Helper()
+	raw, e := os.ReadFile("../../contracts/fixtures/configuration-v1.json")
+	if e != nil {
+		t.Fatal(e)
+	}
+	var base struct {
+		Config   map[string]any
+		Manifest map[string]any
+	}
+	if json.Unmarshal(raw, &base) != nil {
+		t.Fatal("fixtures")
+	}
+	raw, e = os.ReadFile("../../contracts/fixtures/oidc-discovery.json")
+	if e != nil {
+		t.Fatal(e)
+	}
+	var discovery struct{ Metadata map[string]any }
+	if json.Unmarshal(raw, &discovery) != nil {
+		t.Fatal("metadata")
+	}
+	key, e := rsa.GenerateKey(rand.Reader, 2048)
+	if e != nil {
+		t.Fatal(e)
+	}
+	h := &runtimeHarness{}
+	var issuer string
+	var model map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var body any
+		switch r.URL.Path {
+		case "/.well-known/openid-configuration":
+			if failure == "discovery" {
+				w.WriteHeader(503)
+			}
+			body = discovery.Metadata
+		case "/stores/store-1/authorization-models/model-1":
+			body = map[string]any{"authorization_model": model}
+		case "/oauth/v2/keys":
+			body = map[string]any{"keys": []any{map[string]any{"kty": "RSA", "kid": "runtime", "alg": "RS256", "n": base64.RawURLEncoding.EncodeToString(key.N.Bytes()), "e": "AQAB"}}}
+		case "/oauth/v2/introspect":
+			body = map[string]any{"active": true, "iss": issuer, "sub": "runtime-user", "aud": "ledger-api", "exp": time.Now().Add(time.Hour).Unix()}
+		case "/v2/users/runtime-user":
+			body = map[string]any{"user": map[string]any{"userId": "runtime-user", "state": "USER_STATE_ACTIVE", "human": map[string]any{}}}
+		default:
+			w.WriteHeader(404)
+			body = map[string]any{}
+		}
+		_ = json.NewEncoder(w).Encode(body)
+	}))
+	t.Cleanup(server.Close)
+	issuer = server.URL
+	base.Config["issuer"] = issuer
+	base.Config["transportProfile"] = "loopback"
+	base.Config["openfga"].(map[string]any)["url"] = issuer
+	base.Manifest["clients"].(map[string]any)["web"].(map[string]any)["transportProfile"] = "loopback"
+	h.config, _ = json.Marshal(base.Config)
+	h.manifest, _ = json.Marshal(base.Manifest)
+	deployment, e := configuration.Parse(h.config, h.manifest)
+	if e != nil {
+		t.Fatal(e)
+	}
+	model = deployment.Artifact().Model
+	model["id"] = "model-1"
+	if failure == "model" {
+		model["id"] = "wrong"
+	}
+	for k, v := range map[string]string{"issuer": issuer, "jwks_uri": issuer + "/oauth/v2/keys", "authorization_endpoint": issuer + "/oauth/v2/authorize", "token_endpoint": issuer + "/oauth/v2/token", "introspection_endpoint": issuer + "/oauth/v2/introspect", "revocation_endpoint": issuer + "/oauth/v2/revoke"} {
+		discovery.Metadata[k] = v
+	}
+	if failure == "issuer" {
+		discovery.Metadata["issuer"] = issuer + "/"
+	}
+	if failure == "introspection" {
+		discovery.Metadata["introspection_endpoint"] = issuer + "/unexpected"
+	}
+	signed := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{"iss": issuer, "aud": "ledger-api", "sub": "runtime-user", "iat": time.Now().Unix(), "exp": time.Now().Add(time.Hour).Unix()})
+	signed.Header["kid"] = "runtime"
+	h.token, e = signed.SignedString(key)
+	if e != nil {
+		t.Fatal(e)
+	}
+	h.options = heimdall.Options{PolicyVersion: "p1", Credentials: heimdall.Credentials{ClientSecret: func(context.Context) (string, error) { return "secret", nil }, OpenFGAKey: func(context.Context) (string, error) {
+		if failure == "credential" {
+			return "", errors.New("secret")
+		}
+		return "key", nil
+	}}, Storage: heimdall.RuntimeStorage{ProductID: "ledger", Environment: "production", Ready: func(context.Context) error {
+		if failure == "storage" {
+			return errors.New("secret")
+		}
+		return nil
+	}, Identity: heimdall.IdentityGate{Check: func(context.Context, heimdall.Identity) (bool, error) { return false, nil }, Invalidate: func(context.Context, heimdall.IdentityNegative) error { return nil }}, AppendAudit: func(_ context.Context, event map[string]any) (heimdall.AuditReceipt, error) {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		h.events = append(h.events, event)
+		digest, e := heimdall.AuditEventDigest(event)
+		return heimdall.AuditReceipt{ProductID: event["productId"].(string), Environment: event["environment"].(string), EventID: event["eventId"].(string), RecordedAt: int64(event["recordedAt"].(float64)), PayloadDigest: digest}, e
+	}}}
+	if failure == "scope" {
+		h.options.Storage.ProductID = "support"
+	}
+	if failure == "policy" {
+		h.options.PolicyVersion = "bad\n"
+	}
+	if failure == "missing" {
+		h.options.Storage.Ready = nil
+	}
+	return h
+}
+func TestRuntimeStartup(t *testing.T) {
+	raw, e := os.ReadFile("../../contracts/fixtures/runtime-startup.json")
+	if e != nil {
+		t.Fatal(e)
+	}
+	var cases []struct{ Name, Failure, Expected string }
+	if json.Unmarshal(raw, &cases) != nil {
+		t.Fatal("cases")
+	}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			h := setupRuntime(t, c.Failure)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if c.Failure == "cancelled" {
+				cancel()
+			}
+			client, e := heimdall.New(ctx, h.config, h.manifest, h.options)
+			if c.Expected == "ready" {
+				if e != nil || client == nil {
+					t.Fatal(e)
+				}
+			} else if !errors.Is(e, contract.NewError(contract.Code(c.Expected), "")) {
+				t.Fatal(e)
+			}
+			if len(h.events) != 0 {
+				t.Fatal("startup emitted authentication")
+			}
+		})
+	}
+}
+func TestPublicTokens(t *testing.T) {
+	h := setupRuntime(t, "")
+	client, e := heimdall.New(context.Background(), h.config, h.manifest, h.options)
+	if e != nil {
+		t.Fatal(e)
+	}
+	h.options.Storage.AppendAudit = nil
+	h.options.Credentials.ClientSecret = nil
+	p, e := client.Tokens().Verify(context.Background(), h.token)
+	if e != nil || p.Identity().Subject != "runtime-user" || p.Kind() != "human" {
+		t.Fatal(p, e)
+	}
+	if _, e = client.Tokens().Verify(context.Background(), "invalid"); !errors.Is(e, heimdall.ErrUnauthenticated) {
+		t.Fatal(e)
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.events) != 2 || h.events[0]["outcome"] != "succeeded" || h.events[1]["outcome"] != "deny" {
+		t.Fatal("audit outcomes")
+	}
+	var zero heimdall.Client
+	if _, e = zero.Tokens().Verify(context.Background(), h.token); !errors.Is(e, heimdall.ErrInvalidArgument) {
+		t.Fatal(e)
+	}
+}
+func TestRuntimeDeadline(t *testing.T) {
+	h := setupRuntime(t, "")
+	release := make(chan struct{})
+	defer close(release)
+	h.options.Storage.Ready = func(context.Context) error { <-release; return nil }
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if _, e := heimdall.New(ctx, h.config, h.manifest, h.options); !errors.Is(e, heimdall.ErrDeadlineExceeded) {
+		t.Fatal(e)
+	}
+	h.options.Storage.AppendAudit = nil
+	if _, e := heimdall.New(context.Background(), h.config, h.manifest, h.options); !errors.Is(e, heimdall.ErrInvalidArgument) {
+		t.Fatal(e)
+	}
+}
+func TestPublicAuditFailure(t *testing.T) {
+	h := setupRuntime(t, "")
+	h.options.Storage.AppendAudit = func(context.Context, map[string]any) (heimdall.AuditReceipt, error) {
+		return heimdall.AuditReceipt{}, errors.New("sensitive store error")
+	}
+	client, e := heimdall.New(context.Background(), h.config, h.manifest, h.options)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if p, e := client.Tokens().Verify(context.Background(), h.token); p != nil || !errors.Is(e, heimdall.ErrAuditUnavailable) {
+		t.Fatal(p, e)
+	}
+}

@@ -1,6 +1,6 @@
 # Heimdall
 
-A shared authentication and authorization design built around ZITADEL, OpenFGA, and TypeScript and Go SDKs. The repository currently contains the design and SDK development scaffolding.
+A shared authentication and authorization design built around ZITADEL, OpenFGA, and TypeScript and Go SDKs. The repository contains the agreed design and SDK implementation in progress.
 
 ## Start working
 
@@ -27,7 +27,7 @@ pnpm run check
 | `pnpm run format`     | Format owned workspace files with Oxfmt                     |
 | `pnpm run docs:dev`   | Preview Quartz at localhost:8080                            |
 
-The SDK scaffold has no runtime behavior or test cases yet. Vitest allows an empty suite until the first contract tests are implemented. The TypeScript package is private during development and currently targets ESM. Runtime compatibility and publication scope will be decided with the SDK implementation.
+Both SDKs expose a development core runtime for scoped, audited bearer-token authentication. Construction validates configuration, durable-storage readiness, OIDC discovery and the exact OpenFGA model. Sessions, tenant authorization and convenience adapter assembly are not yet exposed. The TypeScript package remains private and ESM-only during development; this is not a first-release claim. See [the core runtime contract](contracts/core-runtime.md) for wiring and trust boundaries.
 
 ## Layout
 

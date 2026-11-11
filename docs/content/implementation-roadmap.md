@@ -125,3 +125,5 @@ Phase 3 discovery checkpoint: [[evidence/phase-3-oidc-discovery]] records bounde
 Phase 3 authentication-audit checkpoint: [[evidence/phase-3-audited-authentication]] connects identity verification to durable completion receipts and post-commit freshness/expiry guards in both SDKs, with PostgreSQL identity/audit composition proof. Public runtime construction remains open.
 
 Phase 3 bundled-validation checkpoint: [[evidence/phase-3-bundled-audit-validation]] removes the external schema-validation callback from audited authentication in both SDKs, with canonical-schema differential checks and PostgreSQL integration proof. Public runtime assembly remains open.
+
+Phase 3 public-runtime checkpoint: [[evidence/phase-3-public-runtime]] exposes scoped constructors and audited bearer authentication in TS/Go, with startup failures, packed TS consumer proof and Railway service composition. Public adapter assembly, sessions and authorization remain open.

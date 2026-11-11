@@ -499,3 +499,9 @@ reads, same-origin endpoints, required backend capabilities and cancellation.
 [audited-authentication.md](audited-authentication.md) defines durable authentication
 completion, verified/unknown actor construction, receipt checks, cancellation and
 post-commit expiry/freshness refusal in both SDKs.
+
+## Core runtime entry point
+
+[core-runtime.md](core-runtime.md) specifies the implemented development constructors,
+scoped durable ports, five-second startup gate and audited bearer authentication.
+Sessions and authorization are not yet exposed.
