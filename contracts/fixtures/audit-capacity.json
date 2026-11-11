@@ -1,0 +1,705 @@
+[
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "request",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 1500000,
+      "deliveries": 32
+    },
+    "name": "request reserves exact recovery maximum",
+    "expected": {
+      "used": {
+        "events": 1,
+        "envelopeBytes": 1500000,
+        "deliveries": 32
+      },
+      "reserved": {
+        "events": 2,
+        "envelopeBytes": 3000000,
+        "deliveries": 64
+      }
+    }
+  },
+  {
+    "limits": {
+      "events": 2,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "request",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 1500000,
+      "deliveries": 32
+    },
+    "name": "request refuses insufficient events",
+    "expected": "audit_unavailable"
+  },
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4499999,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "request",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 1500000,
+      "deliveries": 32
+    },
+    "name": "request refuses insufficient envelopeBytes",
+    "expected": "audit_unavailable"
+  },
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4500000,
+      "deliveries": 95
+    },
+    "state": {
+      "used": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "request",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 1500000,
+      "deliveries": 32
+    },
+    "name": "request refuses insufficient deliveries",
+    "expected": "audit_unavailable"
+  },
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 1,
+        "envelopeBytes": 1500000,
+        "deliveries": 32
+      },
+      "reserved": {
+        "events": 2,
+        "envelopeBytes": 3000000,
+        "deliveries": 64
+      }
+    },
+    "operation": "append",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 1,
+      "deliveries": 0
+    },
+    "name": "ordinary append cannot consume completion reservation",
+    "expected": "audit_unavailable"
+  },
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 1,
+        "envelopeBytes": 1500000,
+        "deliveries": 32
+      },
+      "reserved": {
+        "events": 2,
+        "envelopeBytes": 3000000,
+        "deliveries": 64
+      }
+    },
+    "operation": "complete",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 100,
+      "deliveries": 1
+    },
+    "name": "normal completion releases unused recovery allowance",
+    "expected": {
+      "used": {
+        "events": 2,
+        "envelopeBytes": 1500100,
+        "deliveries": 33
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    }
+  },
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 1,
+        "envelopeBytes": 1500000,
+        "deliveries": 32
+      },
+      "reserved": {
+        "events": 2,
+        "envelopeBytes": 3000000,
+        "deliveries": 64
+      }
+    },
+    "operation": "recover",
+    "charge": {
+      "events": 2,
+      "envelopeBytes": 3000000,
+      "deliveries": 64
+    },
+    "name": "recovery consumes exact maximum at full admission",
+    "expected": {
+      "used": {
+        "events": 3,
+        "envelopeBytes": 4500000,
+        "deliveries": 96
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    }
+  },
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "complete",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 1,
+      "deliveries": 0
+    },
+    "name": "terminal without reservation refuses",
+    "expected": "audit_unavailable"
+  },
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "append",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 10,
+      "deliveries": 0
+    },
+    "name": "append no sinks",
+    "expected": {
+      "used": {
+        "events": 1,
+        "envelopeBytes": 10,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    }
+  },
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "complete",
+    "charge": {
+      "events": 2,
+      "envelopeBytes": 1,
+      "deliveries": 0
+    },
+    "name": "invalid complete {'events': 2, 'envelopeBytes': 1, 'deliveries': 0}",
+    "expected": "invalid_argument"
+  },
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "recover",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 10,
+      "deliveries": 0
+    },
+    "name": "invalid recover {'events': 1, 'envelopeBytes': 10, 'deliveries': 0}",
+    "expected": "invalid_argument"
+  },
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "append",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 1500001,
+      "deliveries": 0
+    },
+    "name": "invalid append {'events': 1, 'envelopeBytes': 1500001, 'deliveries': 0}",
+    "expected": "invalid_argument"
+  },
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "append",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 1,
+      "deliveries": 33
+    },
+    "name": "invalid append {'events': 1, 'envelopeBytes': 1, 'deliveries': 33}",
+    "expected": "invalid_argument"
+  },
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "request",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 0,
+      "deliveries": 0
+    },
+    "name": "invalid request {'events': 1, 'envelopeBytes': 0, 'deliveries': 0}",
+    "expected": "invalid_argument"
+  },
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "unknown",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 1,
+      "deliveries": 0
+    },
+    "name": "invalid unknown {'events': 1, 'envelopeBytes': 1, 'deliveries': 0}",
+    "expected": "invalid_argument"
+  },
+  {
+    "limits": {
+      "events": 0,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "request",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 1500000,
+      "deliveries": 32
+    },
+    "name": "invalid zero policy",
+    "expected": "invalid_argument"
+  },
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": -1,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "request",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 1500000,
+      "deliveries": 32
+    },
+    "name": "corrupt negative usage",
+    "expected": "audit_unavailable"
+  },
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 2,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 2,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "request",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 1500000,
+      "deliveries": 32
+    },
+    "name": "corrupt overcommitted policy",
+    "expected": "audit_unavailable"
+  },
+  {
+    "limits": {
+      "events": 9007199254740991,
+      "envelopeBytes": 9007199254740991,
+      "deliveries": 9007199254740991
+    },
+    "state": {
+      "used": {
+        "events": 9007199254740990,
+        "envelopeBytes": 9007199254740990,
+        "deliveries": 9007199254740990
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "append",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 1,
+      "deliveries": 1
+    },
+    "name": "safe integer boundary fits",
+    "expected": {
+      "used": {
+        "events": 9007199254740991,
+        "envelopeBytes": 9007199254740991,
+        "deliveries": 9007199254740991
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    }
+  },
+  {
+    "limits": {
+      "events": 9007199254740991,
+      "envelopeBytes": 9007199254740991,
+      "deliveries": 9007199254740991
+    },
+    "state": {
+      "used": {
+        "events": 9007199254740991,
+        "envelopeBytes": 9007199254740991,
+        "deliveries": 9007199254740991
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "append",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 1,
+      "deliveries": 1
+    },
+    "name": "safe integer boundary refuses overflow",
+    "expected": "audit_unavailable"
+  },
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 1,
+        "envelopeBytes": 1,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 2,
+        "envelopeBytes": 1,
+        "deliveries": 64
+      }
+    },
+    "operation": "request",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 1500000,
+      "deliveries": 32
+    },
+    "name": "partial reservation vector",
+    "expected": "audit_unavailable"
+  },
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 2,
+        "envelopeBytes": 3000000,
+        "deliveries": 64
+      }
+    },
+    "operation": "request",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 1500000,
+      "deliveries": 32
+    },
+    "name": "reserved decision without request",
+    "expected": "audit_unavailable"
+  },
+  {
+    "limits": {
+      "events": 3,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 1
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "request",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 1500000,
+      "deliveries": 32
+    },
+    "name": "delivery count without event",
+    "expected": "audit_unavailable"
+  },
+  {
+    "limits": {
+      "events": 9007199254740992,
+      "envelopeBytes": 4500000,
+      "deliveries": 96
+    },
+    "state": {
+      "used": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      },
+      "reserved": {
+        "events": 0,
+        "envelopeBytes": 0,
+        "deliveries": 0
+      }
+    },
+    "operation": "request",
+    "charge": {
+      "events": 1,
+      "envelopeBytes": 1500000,
+      "deliveries": 32
+    },
+    "name": "policy above interoperable integer range",
+    "expected": "invalid_argument"
+  }
+]
