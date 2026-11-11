@@ -134,3 +134,29 @@ protected work. No mutation or unblocking path is exposed by this read port.
 `contracts/fixtures/managed-workspace-read.json` defines shared decode/gate cases;
 the managed integration harness tests both SDKs with real PostgreSQL and a
 SELECT-only role, including blocked-read deadlines and cross-language row reads.
+
+## Atomic audit composition
+
+The internal audit implementation now owns a transaction that can include trusted
+SDK local writes: TS `PostgresAudit.appendWith` and Go `Audit.appendWith` (unexported
+in Go). Standalone audit append delegates to this path without extra writes. It
+snapshots/validates the event before opening the transaction or invoking mutation
+code, then executes local writes, event insertion/idempotency validation and initial
+sink rows on one connection with synchronous commit. A receipt is returned only
+after the transaction commits. Callback, event or outbox failure rolls back the
+whole transaction. A lost COMMIT response returns outcome_unknown without a
+receipt even if the database committed all rows.
+
+This is SDK-internal composition, not a callback API for products. Callbacks must
+use only local SQL on the supplied transaction/context; they must not commit,
+perform remote I/O, ignore cancellation, or publish results. Higher-level managed
+methods still own scope validation, actor provenance, intent binding, lifecycle
+locks, generation CAS and audit-event meaning. An existing matching audit event
+alone does not deduplicate the callback: operation/key checks must do that inside
+the same transaction. No arbitrary mutation replay is authorized by receipt lookup.
+
+The shared `managed-audit-transaction.json` fixture proves physical atomicity across
+workspace, operation, candidate, audit event and two outbox rows. Its operation
+payload remains a synthetic physical example, not a validated onboarding command.
+Both native SDK tests exercise rollback, cancellation, immutable event snapshots
+and confirmed commit-response loss. Managed mutation APIs remain pending.

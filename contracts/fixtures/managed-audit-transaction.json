@@ -1,0 +1,75 @@
+{
+  "event": {
+    "schemaVersion": 1,
+    "eventId": "event-1",
+    "eventType": "heimdall.membership.intent",
+    "eventVersion": 1,
+    "occurredAt": 1000,
+    "recordedAt": 1001,
+    "productId": "ledger",
+    "environment": "production",
+    "tenantId": "one",
+    "actor": {
+      "kind": "user",
+      "issuer": "https://id.example.com",
+      "subject": "maya"
+    },
+    "target": {
+      "type": "workspace",
+      "id": "one"
+    },
+    "action": "workspace.create",
+    "outcome": "requested",
+    "requestId": "request-1",
+    "source": "sdk",
+    "sdkVersion": "0.0.0",
+    "attributes": {},
+    "modelId": "model-1",
+    "manifestVersion": 1,
+    "operationId": "original",
+    "policyVersion": "policy-1"
+  },
+  "writes": [
+    "INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at) VALUES('$scope','production','one','\u6771\u4eac workspace','pending',true,100,100)",
+    "INSERT INTO heimdall_managed.operations(product_id,environment,operation_id,workspace_id,kind,actor_hash,target_hash,key_digest,fingerprint,intent_payload,store_id,model_id,model_hash,manifest_version,state,dispatch_count,generation,next_attempt_at,created_at,updated_at) VALUES('$scope','production','original','one','create_workspace',decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode(repeat('a',64),'hex'),decode(repeat('b',64),'hex'),convert_to('{\"subject\":\"Maya\\u0000\u6771\u4eac\"}','UTF8'),'store','model',decode(repeat('c',64),'hex'),1,'pending',0,1,0,100,100)",
+    "INSERT INTO heimdall_managed.membership_candidates(product_id,environment,identity_hash,principal,workspace_id,observed_at) VALUES('$scope','production',decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),'user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd','one',100)"
+  ],
+  "cases": [
+    {
+      "name": "success",
+      "error": null,
+      "managedRows": 1,
+      "auditRows": 1
+    },
+    {
+      "name": "mutation_failure",
+      "error": "conflict",
+      "managedRows": 0,
+      "auditRows": 0
+    },
+    {
+      "name": "audit_conflict",
+      "error": "conflict",
+      "managedRows": 0,
+      "auditRows": 1
+    },
+    {
+      "name": "outbox_failure",
+      "error": "unavailable",
+      "managedRows": 0,
+      "auditRows": 0
+    },
+    {
+      "name": "mutation_unique",
+      "error": "conflict",
+      "managedRows": 0,
+      "auditRows": 0
+    },
+    {
+      "name": "cancel_before_commit",
+      "error": "cancelled",
+      "managedRows": 0,
+      "auditRows": 0
+    }
+  ]
+}

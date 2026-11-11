@@ -39,7 +39,16 @@ func NewAudit(db *sql.DB, product, environment string, sinks []string, validate 
 	return &Audit{db, product, environment, copySinks, validate}, nil
 }
 func (a *Audit) Append(ctx context.Context, event map[string]any) (contract.AuditReceipt, error) {
+	return a.appendWith(ctx, event, func(context.Context, *sql.Tx) error { return nil })
+}
+
+// SDK-internal local writes only. The callback must not commit, perform remote I/O,
+// or publish a result. Audit event idempotency does not deduplicate mutations.
+func (a *Audit) appendWith(ctx context.Context, event map[string]any, mutate func(context.Context, *sql.Tx) error) (contract.AuditReceipt, error) {
 	empty := contract.AuditReceipt{}
+	if ctx == nil || mutate == nil {
+		return empty, contract.ErrInvalidArgument
+	}
 	digest, err := contract.AuditDigest(event)
 	if err != nil {
 		return empty, err
@@ -76,6 +85,17 @@ func (a *Audit) Append(ctx context.Context, event map[string]any) (contract.Audi
 	}
 	defer tx.Rollback()
 	if _, err = tx.ExecContext(ctx, "SET LOCAL synchronous_commit='on'"); err != nil {
+		return empty, databaseError(ctx)
+	}
+	if err = mutate(ctx, tx); err != nil {
+		var known *contract.Error
+		if errors.As(err, &known) {
+			return empty, known
+		}
+		var pgerr *pq.Error
+		if errors.As(err, &pgerr) && pgerr.Code == "23505" {
+			return empty, contract.ErrConflict
+		}
 		return empty, databaseError(ctx)
 	}
 	storageEnvelope, _ := json.Marshal(map[string]any{"format": "ha1", "productId": a.product, "environment": a.environment, "eventId": eventID, "recordedAt": receipt.RecordedAt, "payload": base64.RawURLEncoding.EncodeToString(encoded)})

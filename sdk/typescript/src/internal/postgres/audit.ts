@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { auditDigest, validateDeliveryReceipt } from "../audit-receipts.js";
 import { HeimdallError } from "../errors.js";
 import { transaction, query } from "./query.js";
@@ -108,6 +108,16 @@ export class PostgresAudit {
     });
   }
   async append(event: Record<string, unknown>, signal?: AbortSignal) {
+    return this.appendWith(event, async () => {}, signal);
+  }
+  // SDK-internal local writes only: no remote I/O, COMMIT, or result publication
+  // inside mutate. Event idempotency does not deduplicate the mutation callback.
+  async appendWith(
+    event: Record<string, unknown>,
+    mutate: (client: PoolClient) => Promise<void>,
+    signal?: AbortSignal,
+  ) {
+    if (typeof mutate !== "function") throw new HeimdallError("invalid_argument");
     // Snapshot before the first await; never let caller mutation change dispatched data.
     const originalDigest = auditDigest(event);
     const encoded = JSON.stringify(event);
@@ -135,6 +145,7 @@ export class PostgresAudit {
     return transaction(
       this.pool,
       async (client) => {
+        await mutate(client);
         const parameters = [this.productId, this.environment, eventId];
         const inserted = await client.query(
           "INSERT INTO heimdall.audit_events(product_id,environment,event_id,payload_digest,recorded_at,event) VALUES($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT DO NOTHING RETURNING event_id",

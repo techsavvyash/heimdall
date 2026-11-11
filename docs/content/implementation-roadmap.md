@@ -143,3 +143,8 @@ Phase 3 managed deployment checkpoint: [[evidence/phase-3-managed-migrations]] a
 Phase 3 workspace-read checkpoint: [[evidence/phase-3-workspace-reads]] adds scoped,
 validated primary reads in both SDKs, with cross-language PostgreSQL and
 cancellation proof. Managed writes and atomic audit composition remain next.
+
+Phase 3 atomic managed audit checkpoint: [[evidence/phase-3-managed-audit-transactions]]
+adds the shared transaction boundary for local SDK writes and audit/outbox receipts,
+with rollback and confirmed COMMIT-response-loss proof in both languages. Semantic
+managed mutation methods and operation deduplication remain required.
