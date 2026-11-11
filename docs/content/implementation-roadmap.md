@@ -189,3 +189,5 @@ Phase 3 storage maintenance: [[evidence/phase-3-record-cleanup]] records bounded
 Phase 3 export foundation: [[evidence/phase-3-managed-export]] records sanitized, bounded workspace and per-workspace operation pages in both SDKs. Public authorization/audit composition and coordinated exit/restore remain required.
 
 Phase 3 audit recovery foundation: [[evidence/phase-3-audit-recovery-schema]] records the prepared v2 decision slot and PostgreSQL race/rollback proof. Explicit upgrade/backfill and both SDKs’ resolution/recovery paths must pass before activation.
+
+Phase 3 audit upgrade prerequisite: [[evidence/phase-3-audit-decision-binding]] records TS/Go request/outcome correlation and ambiguous-history refusal. Persistent backfill and result-release enforcement remain required.

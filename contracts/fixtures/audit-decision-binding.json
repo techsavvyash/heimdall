@@ -1,0 +1,797 @@
+{
+  "productId": "ledger",
+  "environment": "production",
+  "cases": [
+    {
+      "name": "pending",
+      "events": [
+        {
+          "base": "request"
+        }
+      ],
+      "valid": true,
+      "expected": {
+        "productId": "ledger",
+        "environment": "production",
+        "decisionId": "decision-1",
+        "requestEventId": "event-1",
+        "requestedAt": 1001,
+        "resolution": "pending",
+        "terminalEventId": null,
+        "resolvedAt": null
+      }
+    },
+    {
+      "name": "allow",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal"
+        }
+      ],
+      "valid": true,
+      "expected": {
+        "productId": "ledger",
+        "environment": "production",
+        "decisionId": "decision-1",
+        "requestEventId": "event-1",
+        "requestedAt": 1001,
+        "resolution": "completed",
+        "terminalEventId": "terminal-1",
+        "resolvedAt": 2001
+      }
+    },
+    {
+      "name": "deny",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "outcome": "deny"
+          }
+        }
+      ],
+      "valid": true,
+      "expected": {
+        "productId": "ledger",
+        "environment": "production",
+        "decisionId": "decision-1",
+        "requestEventId": "event-1",
+        "requestedAt": 1001,
+        "resolution": "completed",
+        "terminalEventId": "terminal-1",
+        "resolvedAt": 2001
+      }
+    },
+    {
+      "name": "invalid",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "outcome": "invalid"
+          }
+        }
+      ],
+      "valid": true,
+      "expected": {
+        "productId": "ledger",
+        "environment": "production",
+        "decisionId": "decision-1",
+        "requestEventId": "event-1",
+        "requestedAt": 1001,
+        "resolution": "completed",
+        "terminalEventId": "terminal-1",
+        "resolvedAt": 2001
+      }
+    },
+    {
+      "name": "unavailable",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "outcome": "unavailable"
+          }
+        }
+      ],
+      "valid": true,
+      "expected": {
+        "productId": "ledger",
+        "environment": "production",
+        "decisionId": "decision-1",
+        "requestEventId": "event-1",
+        "requestedAt": 1001,
+        "resolution": "completed",
+        "terminalEventId": "terminal-1",
+        "resolvedAt": 2001
+      }
+    },
+    {
+      "name": "cancelled",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "outcome": "cancelled"
+          }
+        }
+      ],
+      "valid": true,
+      "expected": {
+        "productId": "ledger",
+        "environment": "production",
+        "decisionId": "decision-1",
+        "requestEventId": "event-1",
+        "requestedAt": 1001,
+        "resolution": "completed",
+        "terminalEventId": "terminal-1",
+        "resolvedAt": 2001
+      }
+    },
+    {
+      "name": "outcome_unknown",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "outcome": "outcome_unknown"
+          }
+        }
+      ],
+      "valid": true,
+      "expected": {
+        "productId": "ledger",
+        "environment": "production",
+        "decisionId": "decision-1",
+        "requestEventId": "event-1",
+        "requestedAt": 1001,
+        "resolution": "recovered",
+        "terminalEventId": "terminal-1",
+        "resolvedAt": 2001
+      }
+    },
+    {
+      "name": "reverse-order",
+      "events": [
+        {
+          "base": "terminal"
+        },
+        {
+          "base": "request"
+        }
+      ],
+      "valid": true,
+      "expected": {
+        "productId": "ledger",
+        "environment": "production",
+        "decisionId": "decision-1",
+        "requestEventId": "event-1",
+        "requestedAt": 1001,
+        "resolution": "completed",
+        "terminalEventId": "terminal-1",
+        "resolvedAt": 2001
+      }
+    },
+    {
+      "name": "new-sdk-version",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "sdkVersion": "0.1.0"
+          }
+        }
+      ],
+      "valid": true,
+      "expected": {
+        "productId": "ledger",
+        "environment": "production",
+        "decisionId": "decision-1",
+        "requestEventId": "event-1",
+        "requestedAt": 1001,
+        "resolution": "completed",
+        "terminalEventId": "terminal-1",
+        "resolvedAt": 2001
+      }
+    },
+    {
+      "name": "bounded-reason",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "outcome": "unavailable",
+            "reasonCode": "unavailable"
+          }
+        }
+      ],
+      "valid": true,
+      "expected": {
+        "productId": "ledger",
+        "environment": "production",
+        "decisionId": "decision-1",
+        "requestEventId": "event-1",
+        "requestedAt": 1001,
+        "resolution": "completed",
+        "terminalEventId": "terminal-1",
+        "resolvedAt": 2001
+      }
+    },
+    {
+      "name": "changed-productId",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "productId": "other"
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-environment",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "environment": "other"
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-tenantId",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "tenantId": "other"
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-decisionId",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "decisionId": "other"
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-requestId",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "requestId": "other"
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-operationId",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "operationId": "other"
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-parentDecisionId",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "parentDecisionId": "other"
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-action",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "action": "other"
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-permission",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "permission": "other"
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-modelId",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "modelId": "other"
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-manifestVersion",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "manifestVersion": 2
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-policyVersion",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "policyVersion": "other"
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-actor",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "actor": {
+              "kind": "user",
+              "issuer": "https://id.example.com",
+              "subject": "other"
+            }
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-target",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "target": {
+              "type": "invoice",
+              "id": "other"
+            }
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-source",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "source": "operator"
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-eventId",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "eventId": "event-1"
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-recordedAt",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "recordedAt": 1000
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-occurredAt",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "occurredAt": 999
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-attributes",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "attributes": {
+              "extra": "data"
+            }
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "changed-reasonCode",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "reasonCode": "secret text"
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "empty",
+      "events": [],
+      "valid": false
+    },
+    {
+      "name": "orphan-terminal",
+      "events": [
+        {
+          "base": "terminal"
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "duplicate-request",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "request"
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "duplicate-terminal",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal"
+        },
+        {
+          "base": "terminal"
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "two-distinct-terminals",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "eventId": "another"
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "unicode-nul",
+      "events": [
+        {
+          "base": "request",
+          "patch": {
+            "actor": {
+              "kind": "user",
+              "issuer": "https://id.example.com",
+              "subject": "nul\u0000\u6771\u4eac"
+            }
+          }
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "actor": {
+              "kind": "user",
+              "issuer": "https://id.example.com",
+              "subject": "nul\u0000\u6771\u4eac"
+            }
+          }
+        }
+      ],
+      "valid": true,
+      "expected": {
+        "productId": "ledger",
+        "environment": "production",
+        "decisionId": "decision-1",
+        "requestEventId": "event-1",
+        "requestedAt": 1001,
+        "resolution": "completed",
+        "terminalEventId": "terminal-1",
+        "resolvedAt": 2001
+      }
+    },
+    {
+      "name": "missing-correlation",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "omit": ["operationId"]
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "unknown-field",
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "unexpected": "secret"
+          }
+        }
+      ],
+      "valid": false
+    },
+    {
+      "name": "same-recorded-time",
+      "valid": true,
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "occurredAt": 1001,
+            "recordedAt": 1001
+          }
+        }
+      ],
+      "expected": {
+        "productId": "ledger",
+        "environment": "production",
+        "decisionId": "decision-1",
+        "requestEventId": "event-1",
+        "requestedAt": 1001,
+        "resolution": "completed",
+        "terminalEventId": "terminal-1",
+        "resolvedAt": 1001
+      }
+    },
+    {
+      "name": "reordered-nested-context",
+      "valid": true,
+      "events": [
+        {
+          "base": "request"
+        },
+        {
+          "base": "terminal",
+          "patch": {
+            "target": {
+              "id": "invoice-1",
+              "type": "invoice"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "productId": "ledger",
+        "environment": "production",
+        "decisionId": "decision-1",
+        "requestEventId": "event-1",
+        "requestedAt": 1001,
+        "resolution": "completed",
+        "terminalEventId": "terminal-1",
+        "resolvedAt": 2001
+      }
+    }
+  ],
+  "base": {
+    "request": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "heimdall.authorization.requested",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "requested",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    "terminal": {
+      "schemaVersion": 1,
+      "eventId": "terminal-1",
+      "eventType": "heimdall.authorization.completed",
+      "eventVersion": 1,
+      "occurredAt": 2000,
+      "recordedAt": 2001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "allow",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    }
+  }
+}

@@ -108,3 +108,38 @@ Required next evidence: explicit upgrade/backfill and corruption refusal; both
 SDKs' atomic append/resolve and receipt behavior; crash/commit-loss recovery;
 bounded scanning; no late allow release; cross-language parity; audit-capacity and
 retention policy. Do not infer those properties from the physical SQL tests.
+
+## Shared decision binding validator
+
+TS `bindAuditDecision` and Go `BindAuditDecision` implement the correlation boundary
+for decoded history. They take fixed product/environment and one or two events:
+exactly one authorization.requested and zero or one authorization.completed, in
+either order. Callers must first verify each ha1 wrapper, stored payload digest and
+indexed event binding; these pure functions do not read storage or prove that an
+event was durably written.
+
+Both functions validate the full event shape, reserved event semantics, bounded
+canonical digest input and SDK source. They compare all request context using the
+portable typed-value digest, excluding only event ID/type, outcome, occurred and
+recorded timestamps, reason code and SDK version. SDK version records the emitter
+and may change across a deployment; source remains SDK. Tenant, verified-actor
+fields, target/action/permission, request/decision/operation/parent correlation and
+model/manifest/policy versions must match exactly, including optional-field
+presence. Canonical object key order does not matter; identity bytes are not
+normalized or linked by email.
+
+A terminal must have a different event ID, a recorded timestamp no earlier than
+the request's recorded timestamp, and an occurred timestamp no earlier than the
+request's occurred timestamp. Duplicate requests, multiple terminal events, an
+orphan terminal, malformed events or incompatible context return audit_unavailable.
+Invalid configured scope returns invalid_argument. No event is rewritten, merged,
+discarded as a duplicate or repaired by this validator.
+
+The result contains only scoped decision/request/terminal IDs, request/resolution
+timestamps and the slot resolution: pending without a terminal, recovered for
+outcome_unknown, otherwise completed. This classifies recorded history; recovered
+does not independently prove a recovery administration event or worker action.
+The output is a proposed validated binding, not a committed slot or durable
+receipt. Shared positive and negative vectors are in
+`fixtures/audit-decision-binding.json`. Upgrade scanning/checkpointing, database
+reconciliation and result-release enforcement remain unimplemented.
