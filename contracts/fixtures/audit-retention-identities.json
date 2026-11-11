@@ -1,0 +1,67 @@
+{
+  "path": "session/0004-retention-identities.sql",
+  "checksum": "28a4d5070ee8b1ba0c68639838201a13082207ce144fd0f921d48320660675f9",
+  "copyEvents": "INSERT INTO heimdall_retention.event_identities(product_id,environment,event_id,tenant_id,recorded_at,payload_digest,kind,decision_id,routing)\nSELECT e.product_id,e.environment,e.event_id,'tenant-1',e.recorded_at,e.payload_digest,\nCASE WHEN d.request_event_id=e.event_id THEN 'request' WHEN d.terminal_event_id=e.event_id THEN 'terminal' WHEN r.recovery_event_id=e.event_id THEN 'recovery' ELSE 'ordinary' END,\ncoalesce(d.decision_id,r.decision_id),to_jsonb(ARRAY(SELECT sink_id FROM heimdall.audit_deliveries x WHERE x.product_id=e.product_id AND x.environment=e.environment AND x.event_id=e.event_id ORDER BY sink_id COLLATE \"C\"))\nFROM heimdall.audit_events e LEFT JOIN heimdall.audit_decisions d ON d.product_id=e.product_id AND d.environment=e.environment AND e.event_id IN (d.request_event_id,d.terminal_event_id)\nLEFT JOIN heimdall_capacity.reservations r ON r.product_id=e.product_id AND r.environment=e.environment AND r.recovery_event_id=e.event_id",
+  "copyDecisions": "INSERT INTO heimdall_retention.decision_identities(product_id,environment,decision_id,tenant_id,request_event_id,requested_at,resolution,terminal_event_id,recovery_event_id,resolved_at)\nSELECT d.product_id,d.environment,d.decision_id,'tenant-1',d.request_event_id,d.requested_at,d.resolution,d.terminal_event_id,r.recovery_event_id,d.resolved_at\nFROM heimdall.audit_decisions d JOIN heimdall_capacity.reservations r USING(product_id,environment,decision_id)",
+  "negative": [
+    {
+      "name": "changed digest",
+      "sql": "INSERT INTO heimdall_retention.event_identities(product_id,environment,event_id,tenant_id,recorded_at,payload_digest,kind,decision_id,routing)\nSELECT e.product_id,e.environment,e.event_id,'tenant-1',e.recorded_at,decode(repeat('b',64),'hex'),\nCASE WHEN d.request_event_id=e.event_id THEN 'request' WHEN d.terminal_event_id=e.event_id THEN 'terminal' WHEN r.recovery_event_id=e.event_id THEN 'recovery' ELSE 'ordinary' END,\ncoalesce(d.decision_id,r.decision_id),to_jsonb(ARRAY(SELECT sink_id FROM heimdall.audit_deliveries x WHERE x.product_id=e.product_id AND x.environment=e.environment AND x.event_id=e.event_id ORDER BY sink_id COLLATE \"C\"))\nFROM heimdall.audit_events e LEFT JOIN heimdall.audit_decisions d ON d.product_id=e.product_id AND d.environment=e.environment AND e.event_id IN (d.request_event_id,d.terminal_event_id)\nLEFT JOIN heimdall_capacity.reservations r ON r.product_id=e.product_id AND r.environment=e.environment AND r.recovery_event_id=e.event_id",
+      "code": "23514"
+    },
+    {
+      "name": "changed indexed time",
+      "sql": "INSERT INTO heimdall_retention.event_identities(product_id,environment,event_id,tenant_id,recorded_at,payload_digest,kind,decision_id,routing)\nSELECT e.product_id,e.environment,e.event_id,'tenant-1',e.recorded_at+1,e.payload_digest,\nCASE WHEN d.request_event_id=e.event_id THEN 'request' WHEN d.terminal_event_id=e.event_id THEN 'terminal' WHEN r.recovery_event_id=e.event_id THEN 'recovery' ELSE 'ordinary' END,\ncoalesce(d.decision_id,r.decision_id),to_jsonb(ARRAY(SELECT sink_id FROM heimdall.audit_deliveries x WHERE x.product_id=e.product_id AND x.environment=e.environment AND x.event_id=e.event_id ORDER BY sink_id COLLATE \"C\"))\nFROM heimdall.audit_events e LEFT JOIN heimdall.audit_decisions d ON d.product_id=e.product_id AND d.environment=e.environment AND e.event_id IN (d.request_event_id,d.terminal_event_id)\nLEFT JOIN heimdall_capacity.reservations r ON r.product_id=e.product_id AND r.environment=e.environment AND r.recovery_event_id=e.event_id",
+      "code": "23514"
+    },
+    {
+      "name": "routing omitted",
+      "sql": "INSERT INTO heimdall_retention.event_identities(product_id,environment,event_id,tenant_id,recorded_at,payload_digest,kind,decision_id,routing)\nSELECT e.product_id,e.environment,e.event_id,'tenant-1',e.recorded_at,e.payload_digest,\nCASE WHEN d.request_event_id=e.event_id THEN 'request' WHEN d.terminal_event_id=e.event_id THEN 'terminal' WHEN r.recovery_event_id=e.event_id THEN 'recovery' ELSE 'ordinary' END,\ncoalesce(d.decision_id,r.decision_id),'[]'::jsonb\nFROM heimdall.audit_events e LEFT JOIN heimdall.audit_decisions d ON d.product_id=e.product_id AND d.environment=e.environment AND e.event_id IN (d.request_event_id,d.terminal_event_id)\nLEFT JOIN heimdall_capacity.reservations r ON r.product_id=e.product_id AND r.environment=e.environment AND r.recovery_event_id=e.event_id",
+      "code": "23514"
+    },
+    {
+      "name": "wrong decision member scope",
+      "sql": "INSERT INTO heimdall_retention.event_identities(product_id,environment,event_id,tenant_id,recorded_at,payload_digest,kind,decision_id,routing)\nSELECT e.product_id,e.environment,e.event_id,'wrong-tenant',e.recorded_at,e.payload_digest,\nCASE WHEN d.request_event_id=e.event_id THEN 'request' WHEN d.terminal_event_id=e.event_id THEN 'terminal' WHEN r.recovery_event_id=e.event_id THEN 'recovery' ELSE 'ordinary' END,\ncoalesce(d.decision_id,r.decision_id),to_jsonb(ARRAY(SELECT sink_id FROM heimdall.audit_deliveries x WHERE x.product_id=e.product_id AND x.environment=e.environment AND x.event_id=e.event_id ORDER BY sink_id COLLATE \"C\"))\nFROM heimdall.audit_events e LEFT JOIN heimdall.audit_decisions d ON d.product_id=e.product_id AND d.environment=e.environment AND e.event_id IN (d.request_event_id,d.terminal_event_id)\nLEFT JOIN heimdall_capacity.reservations r ON r.product_id=e.product_id AND r.environment=e.environment AND r.recovery_event_id=e.event_id;INSERT INTO heimdall_retention.decision_identities(product_id,environment,decision_id,tenant_id,request_event_id,requested_at,resolution,terminal_event_id,recovery_event_id,resolved_at)\nSELECT d.product_id,d.environment,d.decision_id,'tenant-1',d.request_event_id,d.requested_at,d.resolution,d.terminal_event_id,r.recovery_event_id,d.resolved_at\nFROM heimdall.audit_decisions d JOIN heimdall_capacity.reservations r USING(product_id,environment,decision_id)",
+      "code": "23514"
+    },
+    {
+      "name": "missing terminal identity",
+      "sql": "INSERT INTO heimdall_retention.event_identities(product_id,environment,event_id,tenant_id,recorded_at,payload_digest,kind,decision_id,routing)\nSELECT e.product_id,e.environment,e.event_id,'tenant-1',e.recorded_at,e.payload_digest,\nCASE WHEN d.request_event_id=e.event_id THEN 'request' WHEN d.terminal_event_id=e.event_id THEN 'terminal' WHEN r.recovery_event_id=e.event_id THEN 'recovery' ELSE 'ordinary' END,\ncoalesce(d.decision_id,r.decision_id),to_jsonb(ARRAY(SELECT sink_id FROM heimdall.audit_deliveries x WHERE x.product_id=e.product_id AND x.environment=e.environment AND x.event_id=e.event_id ORDER BY sink_id COLLATE \"C\"))\nFROM heimdall.audit_events e LEFT JOIN heimdall.audit_decisions d ON d.product_id=e.product_id AND d.environment=e.environment AND e.event_id IN (d.request_event_id,d.terminal_event_id)\nLEFT JOIN heimdall_capacity.reservations r ON r.product_id=e.product_id AND r.environment=e.environment AND r.recovery_event_id=e.event_id WHERE NOT EXISTS(SELECT 1 FROM heimdall.audit_decisions z WHERE z.product_id=e.product_id AND z.environment=e.environment AND z.terminal_event_id=e.event_id);INSERT INTO heimdall_retention.decision_identities(product_id,environment,decision_id,tenant_id,request_event_id,requested_at,resolution,terminal_event_id,recovery_event_id,resolved_at)\nSELECT d.product_id,d.environment,d.decision_id,'tenant-1',d.request_event_id,d.requested_at,d.resolution,d.terminal_event_id,r.recovery_event_id,d.resolved_at\nFROM heimdall.audit_decisions d JOIN heimdall_capacity.reservations r USING(product_id,environment,decision_id)",
+      "code": "23503"
+    },
+    {
+      "name": "wrong role",
+      "sql": "INSERT INTO heimdall_retention.event_identities(product_id,environment,event_id,tenant_id,recorded_at,payload_digest,kind,decision_id,routing)\nSELECT e.product_id,e.environment,e.event_id,'tenant-1',e.recorded_at,e.payload_digest,\nCASE WHEN d.request_event_id=e.event_id THEN 'terminal' WHEN d.terminal_event_id=e.event_id THEN 'terminal' WHEN r.recovery_event_id=e.event_id THEN 'recovery' ELSE 'ordinary' END,\ncoalesce(d.decision_id,r.decision_id),to_jsonb(ARRAY(SELECT sink_id FROM heimdall.audit_deliveries x WHERE x.product_id=e.product_id AND x.environment=e.environment AND x.event_id=e.event_id ORDER BY sink_id COLLATE \"C\"))\nFROM heimdall.audit_events e LEFT JOIN heimdall.audit_decisions d ON d.product_id=e.product_id AND d.environment=e.environment AND e.event_id IN (d.request_event_id,d.terminal_event_id)\nLEFT JOIN heimdall_capacity.reservations r ON r.product_id=e.product_id AND r.environment=e.environment AND r.recovery_event_id=e.event_id",
+      "code": "23514"
+    },
+    {
+      "name": "uncharged source",
+      "sql": "DELETE FROM heimdall_capacity.event_charges WHERE product_id='ledger' AND environment='production' AND event_id='ordinary';INSERT INTO heimdall_retention.event_identities(product_id,environment,event_id,tenant_id,recorded_at,payload_digest,kind,decision_id,routing)\nSELECT e.product_id,e.environment,e.event_id,'tenant-1',e.recorded_at,e.payload_digest,\nCASE WHEN d.request_event_id=e.event_id THEN 'request' WHEN d.terminal_event_id=e.event_id THEN 'terminal' WHEN r.recovery_event_id=e.event_id THEN 'recovery' ELSE 'ordinary' END,\ncoalesce(d.decision_id,r.decision_id),to_jsonb(ARRAY(SELECT sink_id FROM heimdall.audit_deliveries x WHERE x.product_id=e.product_id AND x.environment=e.environment AND x.event_id=e.event_id ORDER BY sink_id COLLATE \"C\"))\nFROM heimdall.audit_events e LEFT JOIN heimdall.audit_decisions d ON d.product_id=e.product_id AND d.environment=e.environment AND e.event_id IN (d.request_event_id,d.terminal_event_id)\nLEFT JOIN heimdall_capacity.reservations r ON r.product_id=e.product_id AND r.environment=e.environment AND r.recovery_event_id=e.event_id",
+      "code": "23514"
+    },
+    {
+      "name": "nonexistent source",
+      "sql": "INSERT INTO heimdall_retention.event_identities VALUES('ledger','production','missing','tenant-1',1000,decode(repeat('a',64),'hex'),'ordinary',NULL,'[]')",
+      "code": "23514"
+    },
+    {
+      "name": "different product source",
+      "sql": "INSERT INTO heimdall_retention.event_identities(product_id,environment,event_id,tenant_id,recorded_at,payload_digest,kind,decision_id,routing)\nSELECT 'other',e.environment,e.event_id,'tenant-1',e.recorded_at,e.payload_digest,\nCASE WHEN d.request_event_id=e.event_id THEN 'request' WHEN d.terminal_event_id=e.event_id THEN 'terminal' WHEN r.recovery_event_id=e.event_id THEN 'recovery' ELSE 'ordinary' END,\ncoalesce(d.decision_id,r.decision_id),to_jsonb(ARRAY(SELECT sink_id FROM heimdall.audit_deliveries x WHERE x.product_id=e.product_id AND x.environment=e.environment AND x.event_id=e.event_id ORDER BY sink_id COLLATE \"C\"))\nFROM heimdall.audit_events e LEFT JOIN heimdall.audit_decisions d ON d.product_id=e.product_id AND d.environment=e.environment AND e.event_id IN (d.request_event_id,d.terminal_event_id)\nLEFT JOIN heimdall_capacity.reservations r ON r.product_id=e.product_id AND r.environment=e.environment AND r.recovery_event_id=e.event_id",
+      "code": "23514"
+    },
+    {
+      "name": "missing original delivery row",
+      "sql": "DELETE FROM heimdall.audit_deliveries WHERE product_id='ledger' AND environment='production' AND event_id='ordinary';INSERT INTO heimdall_retention.event_identities(product_id,environment,event_id,tenant_id,recorded_at,payload_digest,kind,decision_id,routing)\nSELECT e.product_id,e.environment,e.event_id,'tenant-1',e.recorded_at,e.payload_digest,\nCASE WHEN d.request_event_id=e.event_id THEN 'request' WHEN d.terminal_event_id=e.event_id THEN 'terminal' WHEN r.recovery_event_id=e.event_id THEN 'recovery' ELSE 'ordinary' END,\ncoalesce(d.decision_id,r.decision_id),to_jsonb(ARRAY(SELECT sink_id FROM heimdall.audit_deliveries x WHERE x.product_id=e.product_id AND x.environment=e.environment AND x.event_id=e.event_id ORDER BY sink_id COLLATE \"C\"))\nFROM heimdall.audit_events e LEFT JOIN heimdall.audit_decisions d ON d.product_id=e.product_id AND d.environment=e.environment AND e.event_id IN (d.request_event_id,d.terminal_event_id)\nLEFT JOIN heimdall_capacity.reservations r ON r.product_id=e.product_id AND r.environment=e.environment AND r.recovery_event_id=e.event_id",
+      "code": "23514"
+    }
+  ],
+  "mutations": [
+    "UPDATE heimdall_retention.event_identities SET payload_digest=decode(repeat('b',64),'hex')",
+    "UPDATE heimdall_retention.event_identities SET routing='[]'::jsonb",
+    "DELETE FROM heimdall_retention.event_identities",
+    "UPDATE heimdall_retention.decision_identities SET tenant_id='wrong-tenant'",
+    "UPDATE heimdall_retention.decision_identities SET resolution='pending',terminal_event_id=NULL,recovery_event_id=NULL,resolved_at=NULL WHERE resolution<>'pending'",
+    "UPDATE heimdall_retention.decision_identities SET resolution='completed',terminal_event_id='normal-terminal',resolved_at=2001 WHERE product_id='ledger' AND environment='production'",
+    "DELETE FROM heimdall_retention.decision_identities"
+  ]
+}

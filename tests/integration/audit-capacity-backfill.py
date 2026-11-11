@@ -1,6 +1,7 @@
 """Bounded offline capacity accounting over real TS/Go history on pinned PostgreSQL."""
 import concurrent.futures
 import json
+import hashlib
 import os
 from pathlib import Path
 import secrets
@@ -215,10 +216,42 @@ try:
    assert int(sql("SELECT count(*) FROM heimdall_capacity.event_charges WHERE product_id='restart'",database))==restart_fixture['eventsAfterResume']
    assert int(sql("SELECT count(*) FROM heimdall.audit_deliveries WHERE product_id='restart'",database))==restart_fixture['eventsAfterResume']
 
+  identity_fixture=json.loads((ROOT/'contracts/fixtures/audit-retention-identities.json').read_text())
+  identity_sql=(ROOT/'contracts/persistence'/identity_fixture['path']).read_text()
+  assert hashlib.sha256(identity_sql.encode()).hexdigest()==identity_fixture['checksum']
+  identity_db='retention_identities'
+  sql('CREATE DATABASE '+identity_db+' TEMPLATE cli_activation')
+  sql('BEGIN;'+identity_sql+'ROLLBACK;',identity_db)
+  assert sql("SELECT to_regnamespace('heimdall_retention') IS NULL",identity_db)=='t'
+  sql(identity_sql,identity_db)
+  def reject_identity(statement,code):
+   r=subprocess.run(['docker','exec','-i',name,'psql','-U','postgres','-d',identity_db,'-At','-v','ON_ERROR_STOP=1','-v','VERBOSITY=verbose'],input='BEGIN;'+statement+';ROLLBACK;',capture_output=True,text=True)
+   assert r.returncode!=0 and code in r.stderr,(code,r.stderr)
+  for case in identity_fixture['negative']:reject_identity(case['sql'],case['code'])
+  sql(identity_fixture['copyEvents']+';'+identity_fixture['copyDecisions'],identity_db)
+  assert sql("SELECT (SELECT count(*) FROM heimdall_retention.event_identities)=(SELECT count(*) FROM heimdall.audit_events)",identity_db)=='t'
+  assert sql("SELECT (SELECT count(*) FROM heimdall_retention.decision_identities)=(SELECT count(*) FROM heimdall.audit_decisions)",identity_db)=='t'
+  for statement in identity_fixture['mutations']:reject_identity(statement,'23514')
+  # Mirror a real SDK finalization into the prepared retained decision record.
+  go('^TestRuntimeRecovery$',dict(env,HEIMDALL_TEST_RUNTIME_RECOVERY_URL=dsn(identity_db)))
+  sql("UPDATE heimdall.schema_metadata SET state='ready'",identity_db)
+  sql(identity_fixture['copyEvents']+' ON CONFLICT DO NOTHING;'+identity_fixture['copyDecisions']+' ON CONFLICT(product_id,environment,decision_id) DO UPDATE SET resolution=EXCLUDED.resolution,terminal_event_id=EXCLUDED.terminal_event_id,recovery_event_id=EXCLUDED.recovery_event_id,resolved_at=EXCLUDED.resolved_at',identity_db)
+  assert sql("SELECT resolution FROM heimdall_retention.decision_identities WHERE product_id='ledger' AND environment='production'",identity_db)=='recovered'
+
+  # Source validation and schema constraints only: this privileged test deletion
+  # is not an authorized SDK retention transaction and installs no purge API.
+  identity_snapshot=sql("SELECT jsonb_agg(to_jsonb(i) ORDER BY product_id,environment,event_id) FROM heimdall_retention.event_identities i",identity_db)
+  decision_snapshot=sql("SELECT jsonb_agg(to_jsonb(d) ORDER BY product_id,environment,decision_id) FROM heimdall_retention.decision_identities d",identity_db)
+  sql("BEGIN; DELETE FROM heimdall.audit_deliveries WHERE product_id='ledger' AND environment='production' AND event_id='ordinary'; DELETE FROM heimdall_capacity.event_charges WHERE product_id='ledger' AND environment='production' AND event_id='ordinary'; DELETE FROM heimdall.audit_events WHERE product_id='ledger' AND environment='production' AND event_id='ordinary'; DELETE FROM heimdall_capacity.reservations WHERE product_id='ledger' AND environment='staging'; DELETE FROM heimdall.audit_decisions WHERE product_id='ledger' AND environment='staging'; DELETE FROM heimdall.audit_deliveries WHERE product_id='ledger' AND environment='staging'; DELETE FROM heimdall_capacity.event_charges WHERE product_id='ledger' AND environment='staging'; DELETE FROM heimdall.audit_events WHERE product_id='ledger' AND environment='staging'; COMMIT",identity_db)
+  assert sql("SELECT jsonb_agg(to_jsonb(i) ORDER BY product_id,environment,event_id) FROM heimdall_retention.event_identities i",identity_db)==identity_snapshot
+  assert sql("SELECT jsonb_agg(to_jsonb(d) ORDER BY product_id,environment,decision_id) FROM heimdall_retention.decision_identities d",identity_db)==decision_snapshot
+  sql("UPDATE heimdall_retention.event_identities SET event_id=event_id; UPDATE heimdall_retention.decision_identities SET decision_id=decision_id",identity_db)
+  assert sql("SELECT database_version||':'||state FROM heimdall.schema_metadata",identity_db)=='3:ready'
+  assert sql("SELECT has_schema_privilege('public_capacity_runtime','heimdall_retention','USAGE')",identity_db)=='f'
   # Isolated port test only: no public compatibility activation.
   sql("UPDATE heimdall_capacity.policy SET state='ready'",'normal')
   go('^TestCapacityBackfillPendingRecovery$',dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
   ts(dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
- print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work','SIGKILL after the first committed candidate resumes in the other language with original initiators and exact event outbox and capacity counts']}))
+ print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work','SIGKILL after the first committed candidate resumes in the other language with original initiators and exact event outbox and capacity counts','prepared immutable identities bind source routing and decision members and survive privileged test payload removal']}))
 finally:
  if created:run(['docker','rm','--force',name],stdout=subprocess.DEVNULL)

@@ -72,3 +72,14 @@ test("offline capacity preparation matches the shared pinned SQL", () => {
     expect(createHash("sha256").update(sql).digest("hex")).toBe(item.checksum);
   }
 });
+
+test("prepared retention identities match the shared SQL checksum", () => {
+  const f = JSON.parse(
+    readFileSync(
+      new URL("../../../contracts/fixtures/audit-retention-identities.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const sql = readFileSync(new URL(`../../../contracts/persistence/${f.path}`, import.meta.url));
+  expect(createHash("sha256").update(sql).digest("hex")).toBe(f.checksum);
+});

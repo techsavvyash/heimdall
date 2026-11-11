@@ -69,7 +69,9 @@ identities before returning the original receipt. Changed values conflict. Such
 receipts never authorize reevaluating an old decision or replaying business work.
 A retained identity is not an exportable event: it cannot fabricate a missing
 payload or create new SIEM deliveries. Payload-dependent historical reads return not_found when retained identity exists
-but its payload is no longer locally available; they cannot pretend that
+and an immutable retirement marker proves its payload was intentionally removed.
+Missing payload without that marker is audit_unavailable, not successful retention.
+Readers cannot pretend that
 a retired event never existed or reconstruct an authorization result from hashes.
 
 This deliberately preserves retry identity without retaining the full personal
@@ -86,7 +88,8 @@ contract; it is not part of this default policy.
 The future retirement transaction must acquire current runtime/deployment and
 capacity admission, lock the complete group and its hold/routing/retry facts in a
 consistent order, revalidate history and current policy, install/verify compact
-identities, remove payload/outbox/slot material in valid reference order, transfer
+identities and an immutable retirement marker bound to the administrative audit,
+remove payload/outbox/slot material in valid reference order, transfer
 capacity accounting and commit its required administrative audit together. A new
 hold, delivery retry or competing finalizer cannot race around those checks.
 Failure rolls back the entire group. Unknown COMMIT requires inspecting immutable
@@ -99,7 +102,50 @@ Migrations must install and backfill the required identity/hold/accounting state
 validate existing history and require compatible writers before retirement is
 enabled. Existing v3 capacity alone is insufficient for this gate.
 
-Current implementation stops at the shared executable classifier. Durable holds,
-compact identities, additional accounting, atomic retirement, migration/backfill,
+Current implementation includes the shared classifier and the prepared compact
+identity schema below. Durable holds, runtime identity integration, additional
+accounting, atomic retirement, migration/backfill,
 concurrent-hold/retry fault tests and public authorized maintenance remain required
 before retention can be enabled. No current event deletion is added by this work.
+
+## Prepared compact identity storage
+
+`persistence/session/0004-retention-identities.sql` now prepares event and decision
+identity tables in the private heimdall_retention namespace. It does not register
+runtime version 4, change readiness metadata, copy history or enable deletion.
+The shared audit-retention-identities.json fixture pins its checksum. Existing
+migration ledger entries and SQL remain unchanged.
+
+Event identities preserve scope, tenant, event ID, recordedAt, digest, original
+sorted sink routing and membership kind/decision ID. Inserts must match an existing
+capacity-charged event's indexed time/digest, its actual sink rows and charged
+delivery count, and its unique
+request/terminal/recovery binding. Ambiguous bindings refuse. Every identity
+field is immutable and deletion is refused; exact no-op updates are permitted.
+No original event payload, actor or attribute body is copied into these rows.
+
+Decision identities reference these persistent event identities, not deletable
+payload rows. Inserted request/time/resolution/terminal/administration values must
+match the existing audit slot and capacity reservation. Each referenced member
+must agree on decision, tenant, role and indexed time. Pending identities can
+advance only to a matching observed source resolution. Their request binding
+never changes, and a resolved identity never changes again. Foreign keys reject
+missing members. Both schemas keep all identifiers product/environment scoped.
+
+These SQL checks validate indexed structure, not full ha1 payload semantics or
+cryptographic correctness. The future SDK/backfill port must decode the full
+original event, validate its digest/schema and derive tenant/group metadata before
+inserting identity. SQL deliberately does not parse the encoded payload, which
+can contain values PostgreSQL jsonb cannot represent directly. This file alone
+also does not serialize concurrent v3 writers with retention or prevent old
+writers from recreating payloads. Drained-writer migration, v4 admission and
+coordinated append/finalization are required before activation.
+
+Pinned PostgreSQL proof covers transactional DDL rollback, copy of live TS/Go
+history, source mismatch and immutable-field rejection, FK completeness, a real
+SDK finalization followed by a matching compact transition, and identity survival
+after privileged test-only removal of an ordinary payload and a completed group.
+The test deletion bypasses the unimplemented hold/age/authorization workflow; it
+is not a production purge procedure. Runtime roles receive no namespace access.
+Metadata accounting/reservations, holds, retirement markers, SDK identity writes/reads, complete
+backfill/activation and authorized retirement remain outstanding.

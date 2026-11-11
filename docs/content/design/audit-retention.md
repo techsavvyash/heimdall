@@ -5,8 +5,8 @@ date: 2026-11-12
 
 Retention must reclaim delivered payloads without breaking immutable event IDs,
 receipts or authorization history. The TS and Go **eligibility classifier is
-implemented and fixture-tested**. Durable holds, compact receipt storage and the
-atomic deletion transaction are still required; no purge is enabled by this work.
+implemented and fixture-tested**. [[evidence/phase-3-retention-identities]] adds prepared compact storage constraints;
+runtime integration, durable holds and atomic deletion are still required; no purge is enabled by this work.
 
 ## Selection and age
 
