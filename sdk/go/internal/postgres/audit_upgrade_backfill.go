@@ -87,11 +87,7 @@ func auditUpgradeWork(ctx context.Context, db *sql.DB, limit int) (*AuditUpgrade
 			// Recount at the apparent end: a completed checkpoint is not proof against
 			// new writes. Any drift refuses coverage; never rewind/rewrite history here.
 			var valid bool
-			if e = tx.QueryRowContext(ctx, `SELECT NOT EXISTS(
-    SELECT 1 FROM heimdall.audit_decision_backfill b
-    WHERE b.phase<>'complete' OR b.expected_count IS NULL OR b.scanned_count<>b.expected_count
-     OR b.expected_count<>(SELECT count(*) FROM heimdall.audit_events e WHERE e.product_id=b.product_id AND e.environment=b.environment)
-   ) AND NOT EXISTS(SELECT 1 FROM heimdall.audit_events e WHERE NOT EXISTS(SELECT 1 FROM heimdall.audit_decision_backfill b WHERE b.product_id=e.product_id AND b.environment=e.environment))`).Scan(&valid); e != nil {
+			if e = tx.QueryRowContext(ctx, auditCoverageSQL).Scan(&valid); e != nil {
 				return nil, databaseError(ctx)
 			}
 			if !valid {
@@ -115,3 +111,9 @@ func auditUpgradeWork(ctx context.Context, db *sql.DB, limit int) (*AuditUpgrade
 	}
 	return step, nil
 }
+
+const auditCoverageSQL = `SELECT NOT EXISTS(
+    SELECT 1 FROM heimdall.audit_decision_backfill b
+    WHERE b.phase<>'complete' OR b.expected_count IS NULL OR b.scanned_count<>b.expected_count
+     OR b.expected_count<>(SELECT count(*) FROM heimdall.audit_events e WHERE e.product_id=b.product_id AND e.environment=b.environment)
+   ) AND NOT EXISTS(SELECT 1 FROM heimdall.audit_events e WHERE NOT EXISTS(SELECT 1 FROM heimdall.audit_decision_backfill b WHERE b.product_id=e.product_id AND b.environment=e.environment))`

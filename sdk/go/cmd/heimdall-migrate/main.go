@@ -21,10 +21,11 @@ func run() int {
 	sqlPath := flag.String("sql", "", "path to the checksum-pinned selected migration 0001.sql")
 	initialize := flag.Bool("initialize-session-schema", false, "explicitly authorize installation in the selected application database")
 	managed := flag.Bool("initialize-managed-schema", false, "install managed schema after verifying session/audit readiness")
-	status := flag.String("status", "", "read-only compatibility status: session or managed")
+	status := flag.String("status", "", "read-only compatibility status: session, managed or audit-v2")
 	prepare := flag.Bool("prepare-audit-upgrade", false, "prepare audit v2 tables without activating runtime readiness")
 	directory := flag.String("sql-directory", "", "shared session SQL directory for explicit audit upgrade preparation")
 	drained := flag.Bool("writers-drained", false, "assert all old application writers and retention jobs have been stopped and cannot resume")
+	activate := flag.Bool("activate-audit-upgrade", false, "validate all historical bindings and atomically publish audit v2 compatibility")
 	backfill := flag.Bool("backfill-audit-upgrade", false, "discover missing scopes or advance one bounded audit backfill page; never activate readiness")
 	batch := flag.Int("batch-size", 100, "scope registration or event page bound for audit backfill, 1 to 100")
 	flag.Parse()
@@ -36,6 +37,9 @@ func run() int {
 	})
 	dsn := os.Getenv("HEIMDALL_MIGRATION_DATABASE_URL")
 	modes := 0
+	if *activate {
+		modes++
+	}
 	if *backfill {
 		modes++
 	}
@@ -51,13 +55,13 @@ func run() int {
 	if *status != "" {
 		modes++
 	}
-	if (*backfill && (!*drained || *directory != "" || *sqlPath != "" || *batch < 1 || *batch > 100)) || (!*backfill && batchSet) || modes != 1 || dsn == "" || flag.NArg() != 0 || (*prepare && (*directory == "" || !*drained || *sqlPath != "")) || (!*prepare && !*backfill && (*directory != "" || *drained)) || (*status != "" && (*status != "session" && *status != "managed" || *sqlPath != "")) || (!*prepare && !*backfill && *status == "" && *sqlPath == "") {
-		fmt.Fprintln(os.Stderr, "select one initialization, status, drained upgrade preparation or backfill mode with its required inputs")
+	if (*activate && (!*drained || *directory != "" || *sqlPath != "")) || (*backfill && (!*drained || *directory != "" || *sqlPath != "" || *batch < 1 || *batch > 100)) || (!*backfill && batchSet) || modes != 1 || dsn == "" || flag.NArg() != 0 || (*prepare && (*directory == "" || !*drained || *sqlPath != "")) || (!*prepare && !*backfill && !*activate && (*directory != "" || *drained)) || (*status != "" && (*status != "session" && *status != "managed" && *status != "audit-v2" || *sqlPath != "")) || (!*prepare && !*backfill && !*activate && *status == "" && *sqlPath == "") {
+		fmt.Fprintln(os.Stderr, "select one initialization, status, drained upgrade preparation, backfill or activation mode with its required inputs")
 		return 2
 	}
 	var migration []byte
 	var err error
-	if *status == "" && !*prepare && !*backfill {
+	if *status == "" && !*prepare && !*backfill && !*activate {
 		migration, err = os.ReadFile(*sqlPath)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "cannot read shared migration")
@@ -86,6 +90,10 @@ func run() int {
 	family := "session"
 	var step *postgres.AuditUpgradeStep
 	switch {
+	case *activate:
+		err = postgres.ActivateAuditUpgrade(ctx, db, *drained, validateBuiltinAudit)
+	case *status == "audit-v2":
+		err = postgres.CheckAuditReadiness(ctx, db)
 	case *backfill:
 		step, err = postgres.AdvanceAuditUpgrade(ctx, db, *batch, *drained, validateBuiltinAudit)
 	case *prepare:
@@ -112,6 +120,8 @@ func run() int {
 		if json.NewEncoder(os.Stdout).Encode(step) != nil {
 			return 1
 		}
+	} else if *activate || *status == "audit-v2" {
+		fmt.Println("audit schema v2 ready; v1 runtime is incompatible")
 	} else if *prepare {
 		fmt.Println("audit upgrade prepared; runtime remains unavailable; backfill and activation still required")
 	} else {

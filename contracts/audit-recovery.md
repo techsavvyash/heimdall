@@ -3,9 +3,10 @@
 This is the implementation protocol for the existing requirement to reconcile
 unresolved authorization attempts without inventing historical results. The
 prepared `persistence/session/0002.sql` implements its physical decision slot.
-It is not yet registered in the supported migration catalog or required by runtime
-readiness. Current deployed SDK storage still uses session/audit v1. Do not apply
-this file manually to a serving application and claim recovery is enabled.
+It is registered as session version 2, activated only through the explicit offline
+workflow below. Public SDK storage factories still require v1; internal v2
+readiness is separate until factory integration is complete. Do not apply this
+file manually to a serving application and claim recovery is enabled.
 
 ## Atomic resolution protocol
 
@@ -142,8 +143,8 @@ outcome_unknown, otherwise completed. This classifies recorded history; recovere
 does not independently prove a recovery administration event or worker action.
 The output is a proposed validated binding, not a committed slot or durable
 receipt. Shared positive and negative vectors are in
-`fixtures/audit-decision-binding.json`. The bounded deployment backfill below persists these bindings. Global upgrade
-coverage/activation and runtime result-release enforcement remain unimplemented.
+`fixtures/audit-decision-binding.json`. The bounded deployment backfill below persists these bindings. Global coverage/activation is implemented below. Public factory selection and
+production qualification remain incomplete.
 
 ## Bounded deployment backfill
 
@@ -153,8 +154,8 @@ binding. They require the prepared decision schema and
 `persistence/session/0002-backfill.sql`, an explicitly registered checkpoint for
 the configured product/environment, and base metadata in version 1/migrating with
 the exact v1 migration ledger checksum. They refuse ready or read-only state.
-These files remain outside the supported migration catalog. No public runtime API
-or automatic migration is introduced.
+The decision SQL is registered as version 2; checkpoint/preparation files remain
+separately pinned deployment inputs. No automatic migration is introduced.
 
 The deployment must drain writers and retention jobs before registering scopes.
 Every call takes the shared deployment advisory transaction lock, locks its
@@ -194,8 +195,8 @@ recovery scanning, capacity policy and late-allow suppression remain required.
 
 Internal TS `PostgresAudit.appendDecision` and Go `Audit.AppendDecision` now
 persist a normal decision request/completion through the existing audit append
-transaction. They are not selected by the public factory yet: v2 upgrade/readiness
-activation and the recovery writer remain separate gates. Ordinary generic append
+transaction. They are not selected by the public factory yet. Activation and the
+atomic recovery writer are implemented below; factory integration remains open. Ordinary generic append
 is still available for v1 and other event types; it is not a substitute for this
 method after activation.
 
@@ -270,8 +271,8 @@ byte-limited pages, storage oversized-row refusal, read-only refusal, cancellati
 and connection-pool reuse. The supported SQL caps each event at 1.5 MB; the
 scanner first-row byte-budget refusal is defense against incompatible storage,
 not a branch exercised by that live proof. This port
-remains internal until v2 upgrade/readiness activation. Scheduler, recovery
-administration and capacity/retention policies are still separate requirements.
+remains internal pending public maintenance integration. Scheduler and
+capacity/retention policies are still separate requirements.
 
 ## Atomic recovery writer
 
@@ -327,7 +328,7 @@ This is local result gating, not a fence for previously dispatched remote writes
 `tests/integration/audit-recovery-write.py` prove pair validation, normal/recovery
 race orders, competing recoveries, rollback, exact retries, missing-administration
 refusal, cross-language recovery and committed-response loss. Factory selection,
-v2 deployment upgrade/readiness, scheduling, capacity and retention remain open.
+runtime integration, activation scale qualification, scheduling, capacity and retention remain open.
 
 ## Explicit offline preparation command
 
@@ -356,17 +357,17 @@ permission to change readiness is inferred.
 Failure before COMMIT rolls back the entire installation and metadata change.
 Cancellation during lock acquisition leaves ready v1 intact. Concurrent callers
 serialize; retry inspects the committed receipt, exact migration metadata/ledger
-and required table presence rather than rerunning DDL. It refuses unrecognized
+and the structural schema profile rather than rerunning DDL. It refuses unrecognized
 partial objects, mismatched receipts and incompatible metadata. A lost COMMIT
-response is outcome_unknown and permits this same inspected retry. Neither retry
-nor the receipt asserts full physical-schema integrity; activation must verify
-that separately, together with complete global history coverage.
+response is outcome_unknown and permits this same inspected retry. The structural
+profile gate below supplements the receipt; activation additionally verifies full
+history and slot coverage.
 
 The command explicitly prints that runtime remains unavailable. It does not
 register scopes, run backfill, publish v2 compatibility or start writers. The v1
 runtime/status checks refuse migrating state; already-running old processes still
-require the external drain. Catalog versions, public SDK factories and their
-ready-v1 policy are unchanged. SQL checksum vectors and live evidence are in
+require the external drain. Preparation itself leaves v1 metadata unchanged apart
+from migrating state; public SDK factories still require ready v1. SQL checksum vectors and live evidence are in
 fixtures/audit-upgrade-prepare.json and tests/integration/audit-upgrade-prepare.py.
 
 ## Deployment scope coordinator
@@ -411,7 +412,7 @@ requirement, not a supported shortcut for custom events.
 Shared scope vectors live in fixtures/audit-upgrade-scopes.json. The live harness
 is tests/integration/audit-upgrade-backfill.py. This deployment orchestration is a
 single Go command for both SDKs; the underlying event-page/checkpoint format is
-implemented in both languages. Runtime factories and catalog readiness remain v1.
+implemented in both languages. Public factories still require v1; explicit v2 activation/readiness is described below.
 
 ## Pinned structural schema gate
 
@@ -451,3 +452,56 @@ It cannot attest physical disk/index consistency or protect against a hostile
 superuser. It does not activate v2 or imply that the complete upgrade flow is
 production-ready. Live catalog-corruption proof is in
 tests/integration/audit-upgrade-schema.py.
+
+## Atomic v2 activation and explicit compatibility
+
+The deployment CLI now supports `--activate-audit-upgrade --writers-drained` and
+read-only `--status audit-v2`. Activation uses the existing migration DSN and a
+complete event validator (the CLI currently supports reserved built-in history
+only). It does not take arbitrary SQL inputs, create missing tables or repair
+history. The session migration catalog now registers the pinned decision SQL as
+version 2. The preparation receipt continues to pin the checkpoint/preparation
+files separately; initialization remains the explicit v1 command followed by the
+upgrade workflow, never direct application of 0002.sql to a serving database.
+
+Activation requires a writable primary, a 30-second total deadline, synchronous
+commit, the deployment advisory lock and structural schema verification. SHARE
+locks on all expected session/audit tables precede the metadata decision and
+remain held until completion. Statement and lock limits are 20 and five seconds.
+All history/checkpoint/slot data remains stable under these table locks. The
+operator must still drain writers and prevent competing function/schema changes;
+locks do not prove quiescence outside the transaction.
+
+From prepared migrating v1, activation first checks global checkpoint completion
+and current event counts. It then rereads the entire history in product/environment/
+event-ID C order, with up to 100 events and 4 MiB of encoded event JSON per page
+plus routing framing. Every event passes full schema, ha1/digest and indexed-field
+validation. Every authorization request/outcome must select its exact slot. The
+original request and any terminal are decoded and passed through shared binding
+validation; timestamps, decision identity and resolution must match. Total slot
+count must equal validated request count, rejecting extra slots as well as missing
+ones. Historical outcome_unknown events do not acquire invented administration
+records. Nothing is reevaluated or rewritten.
+
+Only after verification succeeds does the same transaction insert the version-2
+ledger checksum and set database_version=2, state=ready and exact reader/writer
+ranges 2..2. Failure before COMMIT preserves migrating v1 and its ledger. Lost
+COMMIT returns outcome_unknown. An inspected retry accepts matching ready-v2
+metadata/ledger, preparation receipt and schema without changing applied_at or
+rechecking historical counts that new v2 events may legitimately have changed.
+Unknown or altered state is refused.
+
+The final scan bounds memory and total duration, but is not checkpoint-resumable.
+A history that cannot validate within 30 seconds remains unavailable and needs
+further deployment/scale work before release; do not extend a readiness claim to
+unmeasured history sizes. The live proof covers 136 events, including byte-limited
+pages, not production throughput or arbitrary-scale upgrade time.
+
+Internal TS checkAuditReadiness and Go CheckAuditReadiness require activated v2
+metadata and the exact two-entry ledger in one primary snapshot. Legacy v1
+readiness refuses v2. Public storage factories and combined managed readiness
+still require v1 at this checkpoint; decision-aware factory selection is the next
+integration gate. Do not activate a serving product expecting current public
+factories to work. Capacity, retention and other Phase 3 acceptance remain open.
+Shared cases and live proof: fixtures/audit-activation.json and
+tests/integration/audit-activation.py.

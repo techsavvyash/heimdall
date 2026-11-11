@@ -5,6 +5,11 @@
       "version": 1,
       "path": "session/0001.sql",
       "checksum": "f71db3eece51c3230c27c89a4e154bda18e15de3276b2e7eb0001a3e38c79cc4"
+    },
+    {
+      "version": 2,
+      "path": "session/0002.sql",
+      "checksum": "f7e859c78a6d099ad4a4d35c96e553ba10a53e3ae7e23440237c769efcd50722"
     }
   ],
   "managed": [

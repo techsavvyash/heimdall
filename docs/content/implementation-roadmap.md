@@ -205,3 +205,5 @@ Phase 3 upgrade preparation: [[evidence/phase-3-audit-upgrade-prepare]] records 
 Phase 3 upgrade coordination: [[evidence/phase-3-audit-upgrade-backfill]] records automatic scope discovery, bounded CLI steps, concurrent restart and count-drift refusal. Physical-schema validation, readiness activation and custom-history registry integration remain required.
 
 Phase 3 schema gate: [[evidence/phase-3-audit-upgrade-schema]] records pinned structural catalog verification, 25 corruption cases, locking/cancellation and preparation rollback. Readiness activation and runtime factory selection remain required; structural matching does not attest grants, data integrity or quiescence.
+
+Phase 3 activation: [[evidence/phase-3-audit-activation]] records final history/binding validation, atomic v2 metadata publication, ambiguous-COMMIT retry and TS/Go readiness parity. Public/managed storage wiring and scale qualification remain required before using activated storage in a serving product.
