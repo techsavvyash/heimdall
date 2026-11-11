@@ -1,0 +1,105 @@
+# Audit retention and immutable retry identity
+
+This completes the retention semantics behind the selected 30-day delivered-event
+policy. It does not authorize a production purge or claim the persistence adapter
+implements deletion yet. Existing pinned migrations remain unchanged.
+
+## Scope and retention units
+
+Retention always selects one exact product, environment and tenant. A null tenant
+selects product-level events; it is not a wildcard for all tenants. Authentication
+and privileged tenant-scoped authorization precede any retention invocation.
+
+An ordinary event is one unit. Authorization decisions are indivisible groups:
+requested only while pending; requested and normal completion when completed;
+requested, outcome_unknown completion and recovery administration when recovered.
+All member identities, full envelope/digest/context bindings and original routing
+must validate before a unit can be considered. A recovery administration record
+cannot be purged separately from its decision. Missing or corrupt history is an
+error, not a reason to skip validation or discard data.
+
+## Executable eligibility classifier
+
+Internal TS classifyAuditRetention and Go ClassifyAuditRetention accept a validated
+metadata snapshot of a group, an exact expected scope, explicit current time and
+retention duration. The default duration constant is 2592000000 milliseconds
+(30 days). Deployment policy may select another positive safe-integer duration;
+changing that policy requires privileged authorization and durable audit.
+
+The classifier validates every member and delivery before returning a retention
+reason, even if the group is held. It checks exact group cardinality, scope,
+unique event IDs, unique sink IDs (at most 32 per event), safe timestamps, known
+states and coherent acknowledgement timestamps. Pending/quarantined routing has
+no acknowledgement time; delivered routing requires one. No configured sinks is
+an explicit empty list, not missing metadata. Product-level tenant omission and
+null normalize to the same scope here; full event digests still distinguish the
+original payloads.
+
+Reasons, in deterministic priority order, are retain_held, retain_unresolved,
+retain_undelivered, retain_retry, retain_age and candidate. A hold on any member
+protects the group. A pending decision protects its original request. Pending or
+quarantined delivery to any original sink protects the whole group. An explicit
+active retry obligation protects the payload even if other conditions are clear.
+
+Age starts from the maximum recordedAt or deliveredAt across every member. Thus
+late SIEM acknowledgement does not immediately erase an old backlog. A clock
+regression or future timestamp retains the group rather than shortening its age.
+Equality at the retention boundary is eligible; one millisecond earlier is not.
+The calculation uses subtraction so adding duration to a near-maximum timestamp
+cannot overflow the shared JSON safe-integer range.
+
+A candidate is not purge authorization or evidence that receipt obligations have
+been fulfilled. The classifier performs no I/O, DDL, mutation or archival and
+cannot replace full history validation. Shared fixture audit-retention.json pins
+TS/Go behavior. Hold state and retry state are explicit validated storage facts,
+not untrusted request flags or lease-expiry guesses.
+
+## Preserve exact retry semantics after payload retirement
+
+The existing contract promises that identical appends return their original
+receipt and changed payloads under the same scoped event ID conflict. Payload
+retention must not silently turn a previously used ID into a new event. Before
+removing payloads, retain immutable compact identities containing the scoped event
+ID, recordedAt, portable payload digest and original routing/binding metadata.
+Resolved decision identity and its request/terminal/administration links must also
+survive. A new request must not reuse a retired decision ID.
+
+Exact retries validate the supplied full event and compare these immutable
+identities before returning the original receipt. Changed values conflict. Such
+receipts never authorize reevaluating an old decision or replaying business work.
+A retained identity is not an exportable event: it cannot fabricate a missing
+payload or create new SIEM deliveries. Payload-dependent historical reads return not_found when retained identity exists
+but its payload is no longer locally available; they cannot pretend that
+a retired event never existed or reconstruct an authorization result from hashes.
+
+This deliberately preserves retry identity without retaining the full personal
+payload forever. Compact identities still consume storage. They require explicit
+count/byte budgets and accounting, including terminal/recovery reservations;
+retirement must move charges rather than pretend that all bytes were freed.
+Capacity exhaustion blocks new work instead of dropping identity metadata. No
+unbounded, unmetered receipt cache or automatic ID recycling is acceptable.
+Supported identity archival/removal would require a separately reviewed retry
+contract; it is not part of this default policy.
+
+## Required persistence transaction and deployment gate
+
+The future retirement transaction must acquire current runtime/deployment and
+capacity admission, lock the complete group and its hold/routing/retry facts in a
+consistent order, revalidate history and current policy, install/verify compact
+identities, remove payload/outbox/slot material in valid reference order, transfer
+capacity accounting and commit its required administrative audit together. A new
+hold, delivery retry or competing finalizer cannot race around those checks.
+Failure rolls back the entire group. Unknown COMMIT requires inspecting immutable
+retirement identity; it does not authorize a blind second deletion or refund.
+
+The runtime role receives no general DELETE grant. A bounded, privileged
+maintenance port must enforce scope, count, bytes, cancellation and audit. The
+policy clock is explicit and trusted; there are no implicit cleanup timers.
+Migrations must install and backfill the required identity/hold/accounting state,
+validate existing history and require compatible writers before retirement is
+enabled. Existing v3 capacity alone is insufficient for this gate.
+
+Current implementation stops at the shared executable classifier. Durable holds,
+compact identities, additional accounting, atomic retirement, migration/backfill,
+concurrent-hold/retry fault tests and public authorized maintenance remain required
+before retention can be enabled. No current event deletion is added by this work.

@@ -76,6 +76,10 @@ The first reference transport is authenticated HTTPS JSON batch delivery to an o
 
 No required event is sampled. Default local delivered-event retention is 30 days, configurable by authorized deployment policy; undelivered, unresolved and held records are not purged by that timer. SIEM retention is explicitly configured by the operator. Export failure preserves the backlog. Capacity limits are deployment-configured and validated at startup; reaching a hard persistence limit blocks new protected work, rather than dropping events. Alert on oldest pending age, backlog, poison events, storage usage and failure rate. Bulk export and retention settings need privileged, tenant-scoped authorization.
 
+[[audit-retention]] defines group eligibility, the 30-day age anchor and preservation
+of immutable retry identity. Its classifier is implemented; durable retention
+storage and deletion remain gated.
+
 The cost of all-decision audit is a durable write before evaluation plus a write before releasing the result, substantial storage and an availability dependency on audit persistence. Batching is permitted only if each invocation waits for its committed receipt. Scope filtering is mandatory even when one organization maps to several products. Minimize personal data and never treat a shared company name as tenant routing authority.
 
 ## Acceptance tests

@@ -1,0 +1,1326 @@
+[
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "exact thirty days after latest delivery",
+    "expected": "candidate"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592001999,
+    "retainForMs": 2592000000,
+    "name": "one millisecond early",
+    "expected": "retain_age"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "held",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "held record",
+    "expected": "retain_held"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "pending",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "unresolved decision",
+    "expected": "retain_unresolved"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "protected",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "active retry obligation",
+    "expected": "retain_retry"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "pending",
+              "deliveredAt": null
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "pending delivery retained",
+    "expected": "retain_undelivered"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "quarantined",
+              "deliveredAt": null
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "quarantined delivery retained",
+    "expected": "retain_undelivered"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": []
+        }
+      ]
+    },
+    "now": 2592001000,
+    "retainForMs": 2592000000,
+    "name": "no configured sinks uses event age",
+    "expected": "candidate"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2592002000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "late delivery restarts age",
+    "expected": "retain_age"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2592002001
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "future acknowledgement retains",
+    "expected": "retain_age"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 3000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 1000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "regressed acknowledgement uses recorded time",
+    "expected": "retain_age"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "support",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "cross productId",
+    "expected": "audit_unavailable"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "staging",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "cross environment",
+    "expected": "audit_unavailable"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "globex",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "cross tenantId",
+    "expected": "audit_unavailable"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": null
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "product scope is not a tenant wildcard",
+    "expected": "audit_unavailable"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": null
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": null,
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "product scoped event",
+    "expected": "candidate"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "recovered",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "missing decision group member",
+    "expected": "audit_unavailable"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "completed",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        },
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "duplicate event identity",
+    "expected": "audit_unavailable"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "duplicate sink",
+    "expected": "audit_unavailable"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "held",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": null
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "corrupt held group still errors",
+    "expected": "audit_unavailable"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 0,
+    "name": "zero duration refused",
+    "expected": "invalid_argument"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": -1,
+    "retainForMs": 2592000000,
+    "name": "invalid now refused",
+    "expected": "invalid_argument"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 9007199254740991,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 9007199254740991,
+    "retainForMs": 2592000000,
+    "name": "safe integer boundary never overflows",
+    "expected": "retain_age"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "completed",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        },
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "terminal",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "complete pair candidate",
+    "expected": "candidate"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "recovered",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        },
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "terminal",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        },
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "administration",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "quarantined",
+              "deliveredAt": null
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "administration delivery protects whole recovery",
+    "expected": "retain_undelivered"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "missing routing metadata refuses",
+    "expected": "audit_unavailable"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 9007199254740992,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "unsafe stored timestamp",
+    "expected": "audit_unavailable"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "lost",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "invalid sink state",
+    "expected": "audit_unavailable"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "expired_lease",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "unvalidated hold state",
+    "expected": "audit_unavailable"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "expired_lease",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "unvalidated retry state",
+    "expected": "audit_unavailable"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "sink-0",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-1",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-2",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-3",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-4",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-5",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-6",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-7",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-8",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-9",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-10",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-11",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-12",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-13",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-14",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-15",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-16",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-17",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-18",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-19",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-20",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-21",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-22",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-23",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-24",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-25",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-26",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-27",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-28",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-29",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-30",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-31",
+              "state": "delivered",
+              "deliveredAt": 2000
+            },
+            {
+              "sinkId": "sink-32",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "too many sink routes",
+    "expected": "audit_unavailable"
+  },
+  {
+    "scope": {
+      "productId": "bad/product",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "ordinary",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "invalid expected scope",
+    "expected": "invalid_argument"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "deleted",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "unknown group resolution",
+    "expected": "audit_unavailable"
+  },
+  {
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "acme"
+    },
+    "group": {
+      "resolution": "recovered",
+      "holdState": "clear",
+      "retryState": "clear",
+      "events": [
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "event-1",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        },
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "terminal",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        },
+        {
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "acme",
+          "eventId": "administration",
+          "recordedAt": 1000,
+          "deliveries": [
+            {
+              "sinkId": "siem",
+              "state": "delivered",
+              "deliveredAt": 2000
+            }
+          ]
+        }
+      ]
+    },
+    "now": 2592002000,
+    "retainForMs": 2592000000,
+    "name": "complete recovery candidate",
+    "expected": "candidate"
+  }
+]
