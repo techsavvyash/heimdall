@@ -7,5 +7,11 @@
       "checksum": "f71db3eece51c3230c27c89a4e154bda18e15de3276b2e7eb0001a3e38c79cc4"
     }
   ],
-  "managed": []
+  "managed": [
+    {
+      "version": 1,
+      "path": "managed/0001.sql",
+      "checksum": "3df4dc62f6271691c56ac605c51012a97301b98c70454af62984cf253c066c55"
+    }
+  ]
 }

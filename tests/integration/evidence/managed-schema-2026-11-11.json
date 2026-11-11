@@ -1,0 +1,56 @@
+{
+  "local": {
+    "run": "f6e49fdb945f491d99fefc62d0c14504",
+    "backend": "postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac",
+    "checksums": {
+      "session": "f71db3eece51c3230c27c89a4e154bda18e15de3276b2e7eb0001a3e38c79cc4",
+      "managed": "3df4dc62f6271691c56ac605c51012a97301b98c70454af62984cf253c066c55"
+    },
+    "constraintCases": 18,
+    "checks": [
+      "session-only install excludes managed schema",
+      "failed managed DDL transaction leaves no schema",
+      "independent managed metadata",
+      "scoped foreign keys",
+      "immutable intent and identifiers",
+      "uncertain operation retains unique slot",
+      "concurrent unfinished inserts have one winner",
+      "runtime cannot delete history, reset sequences or run DDL",
+      "workspace operation candidate audit and outbox transaction rollback"
+    ],
+    "sdkSQLTests": "TS and Go constraints and bidirectional byte reads passed",
+    "result": "passed",
+    "limitations": [
+      "physical SQL foundation, not managed SDK orchestration",
+      "payload binding and state transitions must be validated by future adapters",
+      "deployment migration/status integration remains pending"
+    ]
+  },
+  "railway": {
+    "run": "241c4eafb1354d298c2531903a4b973e",
+    "backend": "Railway verification application database",
+    "checksums": {
+      "session": "f71db3eece51c3230c27c89a4e154bda18e15de3276b2e7eb0001a3e38c79cc4",
+      "managed": "3df4dc62f6271691c56ac605c51012a97301b98c70454af62984cf253c066c55"
+    },
+    "constraintCases": 18,
+    "checks": [
+      "session-only install excludes managed schema",
+      "failed managed DDL transaction leaves no schema",
+      "independent managed metadata",
+      "scoped foreign keys",
+      "immutable intent and identifiers",
+      "uncertain operation retains unique slot",
+      "concurrent unfinished inserts have one winner",
+      "runtime cannot delete history, reset sequences or run DDL",
+      "workspace operation candidate audit and outbox transaction rollback"
+    ],
+    "sdkSQLTests": "same shared SQL vectors executed remotely",
+    "result": "passed",
+    "limitations": [
+      "physical SQL foundation, not managed SDK orchestration",
+      "payload binding and state transitions must be validated by future adapters",
+      "deployment migration/status integration remains pending"
+    ]
+  }
+}

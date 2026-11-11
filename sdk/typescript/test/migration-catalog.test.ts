@@ -2,22 +2,23 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { validateStorageCompatibility } from "../src/internal/storage-contract.js";
-it("binds real shared SQL bytes to the storage compatibility policy", () => {
+it.each(["session", "managed"] as const)("binds %s SQL bytes to compatibility policy", (family) => {
   const root = new URL("../../../contracts/persistence/", import.meta.url);
   const catalog = JSON.parse(readFileSync(new URL("catalog.json", root), "utf8")) as {
     formatVersion: number;
     session: Array<{ version: number; path: string; checksum: string }>;
+    managed: Array<{ version: number; path: string; checksum: string }>;
   };
   expect(catalog.formatVersion).toBe(1);
-  expect(catalog.session.length).toBeGreaterThan(0);
-  for (const [index, migration] of catalog.session.entries()) {
+  expect(catalog[family].length).toBeGreaterThan(0);
+  for (const [index, migration] of catalog[family].entries()) {
     expect(migration.version).toBe(index + 1);
-    expect(migration.path).toMatch(/^session\/[0-9]{4}\.sql$/);
+    expect(migration.path).toBe(`${family}/${String(index + 1).padStart(4, "0")}.sql`);
     const sql = readFileSync(new URL(migration.path, root));
     expect(sql.includes(13)).toBe(false);
     expect(createHash("sha256").update(sql).digest("hex")).toBe(migration.checksum);
   }
-  const migrations = catalog.session.map(({ version, checksum }) => ({ version, checksum }));
+  const migrations = catalog[family].map(({ version, checksum }) => ({ version, checksum }));
   const metadata = {
     databaseVersion: migrations.length,
     state: "ready" as const,

@@ -133,3 +133,6 @@ Phase 3 PostgreSQL runtime checkpoint: [[evidence/phase-3-postgres-runtime]] exp
 
 
 Current Phase 3 readiness review: [[evidence/phase-3-readiness-audit]] records the successful combined live-provider/PostgreSQL runtime proof and missing managed storage and operational foundations. Phase 3 remains open; no ticket or phase is closed by the checkpoint.
+
+
+Phase 3 managed schema checkpoint: [[evidence/phase-3-managed-schema]] adds independent SQL metadata, scoped workspace/operation/candidate tables and database constraints, with local TS/Go driver tests and Railway SQL evidence. Managed migration/readiness integration and SDK adapters remain open.

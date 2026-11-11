@@ -21,7 +21,7 @@ any ticket. Later-phase capabilities remain mandatory in both SDKs.
 | Public authorization rejects fabricated principals (#34) | Public exports currently expose bearer verification only | Not yet verifiable; the Phase 4 authorization boundary is absent, so #34 cannot be closed wholesale |
 | Shared immutable SQL, migration serialization and runtime no-DDL (#52) | Session-v1 checksum/catalog, [[phase-3-migration-runner]], [[phase-3-storage-readiness]] | Session/audit schema implemented and tested |
 | Scoped encrypted records, expiry and non-repeating CAS (#52) | [[phase-3-postgres-records]], [[phase-3-identity-sessions]], [[phase-3-session-version-invalidation]] | Session/login primitives and cross-language storage proof exist |
-| Managed workspace, operation and candidate-index transactional storage (#52) | `contracts/persistence/catalog.json` has an empty managed list; only session/0001.sql exists | Missing physical schema and TS/Go managed storage implementation |
+| Managed workspace, operation and candidate-index transactional storage (#52) | [[phase-3-managed-schema]] adds a separate checksum-pinned physical schema and SQL proofs | Physical schema exists; managed migration/readiness and TS/Go storage adapters remain missing |
 | Explicit deployment migration and status commands (#52) | Go migration CLI requires initialization flag and SQL path | Initialization exists; separate read-only status mode is missing |
 | Expand/contract, sanitized export, bounded cleanup and restore procedures (#52) | Compatibility fixtures/readiness and initial migration fault tests | Operational implementation and complete restore proof are missing; initial-install tests are insufficient |
 | Atomic audit/outbox append, receipt/idempotency/conflict (#46 foundation) | [[phase-3-audit-persistence]], [[phase-3-audited-decisions]], [[phase-3-audited-authentication]] | Implemented primitives and commit-loss proof exist |
@@ -36,8 +36,8 @@ differ from early ticket sketches; required behavior does not.
 
 ## Work before Phase 3 acceptance
 
-1. Implement the missing managed persistence foundation: separate migration and
-   compatibility metadata, scoped workspace/operation/candidate storage, atomic
+1. Complete the managed persistence foundation: deployment migration/readiness
+   for the separate schema, scoped TS/Go workspace/operation/candidate adapters, atomic
    transaction boundaries, and shared TS/Go concurrency/rollback tests. This must
    preserve quarantine of uncertain dispatched operations, not introduce an
    automatic replay or lease-fencing claim.
