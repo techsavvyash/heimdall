@@ -82,6 +82,30 @@ export class PostgresAudit {
   }
   // Prepared primary inspection only; never a fresh authorization result.
   async inspectRetainedEvent(tenantId: string | null, eventId: string, signal?: AbortSignal) {
+    return this.inspectRetainedHistory(tenantId, eventId, true, signal);
+  }
+  // Receipt resolution is read-only. It cannot authorize re-executing old work.
+  async resolveRetainedReceipt(event: Record<string, unknown>, signal?: AbortSignal) {
+    const p = this.prepare(event);
+    const tenant = (p.snapshot.tenantId ?? null) as string | null;
+    const result = await this.inspectRetainedHistory(tenant, p.eventId, false, signal);
+    if (!result) return null;
+    if (result.identity.digest !== p.originalDigest || result.identity.recordedAt !== p.recordedAt)
+      throw new HeimdallError("conflict");
+    return {
+      productId: this.productId,
+      environment: this.environment,
+      eventId: p.eventId,
+      recordedAt: result.identity.recordedAt,
+      payloadDigest: result.identity.digest,
+    };
+  }
+  private async inspectRetainedHistory(
+    tenantId: string | null,
+    eventId: string,
+    filterTenant: boolean,
+    signal?: AbortSignal,
+  ) {
     if ((tenantId !== null && !token(tenantId, 128)) || !token(eventId, 128))
       throw new HeimdallError("invalid_argument");
     const rows = await query(
@@ -105,7 +129,7 @@ export class PostgresAudit {
       if (row.live || row.markers !== 0) throw new HeimdallError("audit_unavailable");
       return null;
     }
-    if (row.tenant_id !== tenantId) return null;
+    if (filterTenant && row.tenant_id !== tenantId) return null;
     if (!row.valid || row.markers !== (row.live ? 0 : 1))
       throw new HeimdallError("audit_unavailable");
     const identity = row.identity as ReturnType<typeof buildRetentionIdentities>[number];
@@ -121,7 +145,7 @@ export class PostgresAudit {
             ? "recovery"
             : "ordinary";
     if (
-      (event.tenantId ?? null) !== tenantId ||
+      (event.tenantId ?? null) !== row.tenant_id ||
       kind !== identity.kind ||
       (kind !== "ordinary" && event.decisionId !== identity.decisionId)
     )

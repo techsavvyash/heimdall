@@ -15,6 +15,32 @@ type RetainedEventInspection struct {
 
 // InspectRetainedEvent is prepared primary inspection, never fresh authorization.
 func (a *Audit) InspectRetainedEvent(ctx context.Context, tenant *string, eventID string) (*RetainedEventInspection, error) {
+	return a.inspectRetainedHistory(ctx, tenant, eventID, true)
+}
+
+// ResolveRetainedReceipt compares an immutable retry; it never recreates payloads.
+func (a *Audit) ResolveRetainedReceipt(ctx context.Context, event map[string]any) (*contract.AuditReceipt, error) {
+	if ctx == nil {
+		return nil, contract.ErrInvalidArgument
+	}
+	p, e := a.prepare(event)
+	if e != nil {
+		return nil, e
+	}
+	var tenant *string
+	if value, ok := p.snapshot["tenantId"].(string); ok {
+		tenant = &value
+	}
+	result, e := a.inspectRetainedHistory(ctx, tenant, p.receipt.EventID, false)
+	if e != nil || result == nil {
+		return nil, e
+	}
+	if result.Identity.Digest != p.receipt.PayloadDigest || result.Identity.RecordedAt != p.receipt.RecordedAt {
+		return nil, contract.ErrConflict
+	}
+	return &p.receipt, nil
+}
+func (a *Audit) inspectRetainedHistory(ctx context.Context, tenant *string, eventID string, filterTenant bool) (*RetainedEventInspection, error) {
 	if ctx == nil || (tenant != nil && !valid(*tenant, 128)) || !valid(eventID, 128) {
 		return nil, contract.ErrInvalidArgument
 	}
@@ -48,7 +74,7 @@ func (a *Audit) InspectRetainedEvent(ctx context.Context, tenant *string, eventI
 		}
 		return nil, nil
 	}
-	if !sameText(storedTenant, expectedTenant) {
+	if filterTenant && !sameText(storedTenant, expectedTenant) {
 		return nil, nil
 	}
 	expectedMarkers := 1
@@ -85,7 +111,7 @@ func (a *Audit) InspectRetainedEvent(ctx context.Context, tenant *string, eventI
 	if v, ok := event["tenantId"].(string); ok {
 		eventTenant = &v
 	}
-	if !sameText(eventTenant, expectedTenant) || kind != identity.Kind || (kind != "ordinary" && (identity.DecisionID == nil || event["decisionId"] != *identity.DecisionID)) {
+	if !sameText(eventTenant, storedTenant) || kind != identity.Kind || (kind != "ordinary" && (identity.DecisionID == nil || event["decisionId"] != *identity.DecisionID)) {
 		return nil, contract.ErrAuditUnavailable
 	}
 	result.State = "live"

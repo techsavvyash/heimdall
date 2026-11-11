@@ -318,3 +318,28 @@ internal diagnostic/read foundation; an authorized payload-only public reader
 will translate intentional retirement into not_found. Public receipt retry
 integration, full decision/recovery inspection qualification, complete v4 catalog
 admission and runtime orchestration remain outstanding.
+
+## Prepared retained receipt resolution
+
+Internal TS resolveRetainedReceipt and Go ResolveRetainedReceipt now validate and
+snapshot a complete retry event, inspect its scoped retained history, and compare
+the original digest and recorded time. An identical live or retired event returns
+its original receipt fields. A changed event under an existing product/environment
+ID returns conflict, including a change of tenant; it must not masquerade as a new
+ID merely because tenant-filtered inspection would return no record. A genuinely
+unknown ID returns no receipt. Invalid input, readiness/cancellation and integrity
+errors retain their existing distinctions.
+
+This resolver performs reads only. It does not append a replacement payload,
+recreate deliveries, alter metadata accounting, finalize a decision or authorize
+re-execution of business work. Tenant-filtered inspection remains unchanged for
+its existing callers; the retry comparison privately resolves the globally scoped
+ID before comparing the validated full event. The original payload is never
+returned from this receipt path.
+
+Shared retained-retry fixtures and live tests cover completed and recovered
+retired members, changed payload/tenant, unknown IDs and invalid input, with
+unchanged event/outbox/metadata snapshots after both SDK suites. Public append
+integration must call this logic within the compatible atomic write protocol;
+this standalone internal resolver does not itself make a subsequent insert safe
+against a concurrent writer or publish v4.
