@@ -29,9 +29,9 @@ sequenceDiagram
 
 Strict enterprise mode is SSO-only: no password fallback, email-based automatic account linking or implicit guest bypass. Existing sessions and every tenant switch must satisfy the target tenant's policy version and provider/organization authentication evidence; otherwise start compliant reauthentication or deny. Evidence must come from verified provider claims/APIs, not a browser organization hint. If the pinned ZITADEL release cannot prove required evidence, strict mode cannot ship by guessing. Break-glass operator access is an explicit audited deployment procedure, not a hidden local-login route. Guest/fallback policies may be explicitly configured and tested, but never inferred from membership.
 
-[[evidence/phase-2-provider-organization]] records a pinned-service constraint: the user-link APIs reject an organization-scoped provider outside the user's home organization, even with the bootstrap administrator. A workspace membership does not bypass that boundary. The cross-tenant account topology must be verified before claiming stable-subject switching between independently owned providers. A callback with a different issuer/subject must use that principal's own memberships and must not carry over prior identity authority. Instance-level provider alternatives remain unapproved.
+[[evidence/phase-2-provider-organization]] records a pinned-service constraint: the user-link APIs reject an organization-scoped provider outside the user's home organization, even with the bootstrap administrator. A workspace membership does not bypass that boundary. The selected v1 model uses separate tenant-owned accounts for independently administered directories, verified in [[evidence/phase-2-two-tenant-federation]] and now accepted by the user. Stable-subject linking across those directories is outside v1. A callback with a different issuer/subject must use that principal's own memberships and must not carry over prior identity authority. Instance-level provider alternatives remain unapproved.
 
-Account linking requires verified identity ownership and authorized provider configuration; matching email alone cannot merge principals. Bind identities by issuer/subject. Provider-policy changes invalidate applicable policy evidence so existing sessions are re-evaluated. Users switching between Acme SAML and Globex OIDC cannot reuse noncompliant evidence just because they belong to both.
+Provider links within a user’s owning organization require verified identity ownership and authorized configuration. Cross-directory account merging is outside v1; matching email alone cannot merge principals. Bind identities by issuer/subject. Provider-policy changes invalidate applicable policy evidence so existing sessions are re-evaluated. Users switching between Acme SAML and Globex OIDC cannot reuse noncompliant evidence just because they belong to both.
 
 Pinned-service progress: [[evidence/phase-2-federation-binding]] verifies an intent-to-session-to-token evidence chain for both SAML and OIDC. The implementation still needs strict target-policy and browser-transaction checks, and atomic persistence. [[evidence/phase-2-enterprise-contract]] records the structured evidence schema and shared TS/Go policy-gate amendment; those internal validators do not verify provider provenance. This is evidence of capability, not completed SDK enforcement.
 
@@ -93,3 +93,36 @@ Provider intent expiry must not substitute for the local browser-transaction dea
 [[evidence/phase-2-lifecycle-events]] verifies aggregate-local event sequences and an instance-scoped reader. Never use one numeric sequence across users or organizations. Known-identity lifecycle checks can reconcile authoritative state with per-aggregate checkpoints; complete discovery/export still requires verified gap handling. Historical activation events cannot override a current inactive/deleted authoritative state.
 
 Bounded time-window scans can discover multiple aggregates, as measured in the same evidence page, but short pages alone do not certify a complete moving time watermark. The pinned reader drains instance writers through an advisory lock and applies a transaction-time position cap; retention and unsupported time boundaries still require explicit handling. Export must retain its checkpoint on incomplete/saturated windows and require a verified visibility strategy before claiming complete delivery.
+
+
+## Account-switch acceptance scenarios
+
+The approved account model changes no serialized principal format: issuer/subject remains canonical. Different directory accounts remain different principals even with identical email addresses. Memberships are not copied, combined or implicitly granted during login.
+
+| Scenario | Required SDK behavior |
+| --- | --- |
+| Acme SAML account signs into Globex OIDC as a different subject | Verify the new provider evidence, atomically replace the local identity-bound session, and evaluate the new subject’s own memberships |
+| New subject has no target workspace membership | No protected access or inherited roles; any authenticated account session carries only the new principal |
+| Old session, discovery cursor or unfinished login returns after replacement | Reject old identity/generation-bound authority; never retarget an existing operation to the new principal |
+| Same issuer/subject enters another product sharing its organization | Use that product’s audience and independently granted memberships; sign-in alone grants nothing |
+| New account is disabled or provider evidence fails | Deny; a failed switch cannot relabel the old account as the target identity |
+| Browser sends equal email or old role hints | Ignore them as identity-linking or authorization evidence |
+
+```mermaid
+sequenceDiagram
+  participant B as Browser
+  participant S as Product SDK
+  participant Z as ZITADEL
+  participant DB as Session and audit database
+  participant F as OpenFGA
+  B->>S: Switch to Globex
+  S->>Z: Authenticate against Globex provider policy
+  Z-->>S: Verified Globex subject B evidence
+  S->>DB: Atomically replace subject A context with B and record audit
+  S->>F: Check subject B membership in Globex for this product
+  F-->>S: Allow or deny
+  S->>DB: Persist decision audit
+  S-->>B: Access as B or denial; no authority inherited from A
+```
+
+The shared live-derived fixtures already reject prior-account evidence in both TS and Go. Actual session replacement, stale-generation races, membership enforcement and durable audit must pass the Phase 4/6 runtime tests; the account-model approval does not claim these are implemented.

@@ -40,7 +40,7 @@ These are internal contract checks over previously verified evidence. They do no
 
 ## Account-model boundary
 
-This result supports separate tenant-owned accounts authenticating to one product. It does not establish a single stable subject across independently administered directories. The product choice about cross-directory identity linking remains open; no new aliasing or account merge mechanism is approved by this test. Existing issuer/subject identity and organization isolation remain in force while that choice is resolved.
+This result supports separate tenant-owned accounts authenticating to one product. It does not establish a single stable subject across independently administered directories. The user subsequently accepted separate tenant-owned accounts for v1; see [[phase-2-acceptance]]. No new aliasing or account merge mechanism is approved. Existing issuer/subject identity and organization isolation remain in force while that choice is resolved.
 
 If a compliant reauthentication produces another subject, the runtime must evaluate that subject's membership and permissions, invalidate old identity-bound context, and handle session replacement atomically. An equal email, existing browser cookie or membership of the previous account cannot supply the new account's authority. Actual HTTP/session switching, membership enforcement, recovery and audit integration still require later runtime tests.
 

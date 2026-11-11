@@ -13,6 +13,7 @@ The user locked the product decisions on November 10, 2026. These decisions supe
 | Languages | TypeScript and Go together | Shared behavioral fixtures and release parity |
 | Trust | Product backends are operated by one trusted operator | No promise of isolation from hostile backend owners; end-user tenant isolation remains mandatory |
 | Products and environments | One ZITADEL project and OpenFGA store per product/environment | Separate audiences/configuration/model rollout; service credentials still need least privilege |
+| Cross-directory accounts | Separate tenant-owned accounts for independently administered directories | Approved by the user after Phase 2 evidence; no stable-subject linking or email-based merge in v1 |
 | Product membership | Shared sign-in, independently granted memberships | Joining Acme Ledger does not enroll a person in Acme Support |
 | Roles | Product-defined, versioned tenant roles for human users | Tenants assign allowed roles; runtime tenant-defined roles, service principals and resource sharing are deferred |
 | Adapters | PostgreSQL sessions and optional managed workspaces | Core interfaces remain supported; see [[design/built-in-adapters]] |
@@ -49,3 +50,7 @@ flowchart LR
 ```
 
 The earlier discussion and [[explorations/built-in-adapters]] remain historical context. [[implementation-roadmap]] is the execution index.
+
+## Cross-directory decision accepted
+
+The user accepted separate tenant-owned accounts after reviewing the pinned provider boundary. Shared organizations may still use one issuer/subject across products with independently granted memberships. Independent directories use their own accounts; an account switch replaces identity-bound session context and evaluates only the new principal’s memberships. This resolves the Phase 2 account-model gate without changing canonical identity encoding or adding an alias table. See [[enterprise-contract]].

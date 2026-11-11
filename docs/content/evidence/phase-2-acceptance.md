@@ -3,7 +3,7 @@ title: Phase 2 acceptance audit — pinned service capabilities
 date: 2026-11-11
 ---
 
-**Phase 2 is not complete.** This audit consolidates the accumulated service evidence and identifies the remaining decision. It does not advance to Phase 3 or claim working SDKs. Historical checkpoint pages retain the limitations that applied when each probe ran; the matrix below links later evidence that supersedes some of those open items.
+**Phase 2 service acceptance and the account-model decision are satisfied; final publication verification is pending.** This audit consolidates the accumulated service evidence. It does not claim working SDKs. Historical checkpoint pages retain the limitations that applied when each probe ran; the matrix below links later evidence that supersedes some of those open items.
 
 ## Service acceptance matrix
 
@@ -18,15 +18,15 @@ date: 2026-11-11
 | Uncertain-write recovery controls | [[phase-2-openfga-recovery]], [[phase-2-railway-recovery]] | Lost committed response and blocked database write tested. Stop/remove, database drain, sole credential retirement and reconciliation verified for the single-replica trusted topology. SDK quarantine/journal/generation enforcement remains Phase 3/5/7. |
 | SCIM lifecycle and state visibility | [[phase-2-scim]], [[phase-2-scim-credentials]], [[phase-2-oidc]] | Users create/disable/repeated-disable/reactivate/delete, domain behavior and cross-org denial verified. Identity/token observations cover disable/delete. SDK freshness and local-deny propagation still require implementation. Groups remain excluded. |
 | SAML/OIDC provenance and browser binding | [[phase-2-federation-binding]], [[phase-2-browser-federation]], [[phase-2-enterprise-contract]] | Real providers, selected intent/user binding, session-to-token sid/auth_time, expiry and replay rejection verified; browser callback binding tested. Shared TS/Go fixtures reject password-only, changed-policy, wrong-tenant and prior-account evidence. Durable runtime strict-policy enforcement is Phase 4/6. |
-| Cross-directory account topology | [[phase-2-provider-organization]], [[phase-2-two-tenant-federation]] | **Decision pending.** Organization-scoped providers cannot link to users owned by another organization. Separate tenant-owned accounts work with one product client, but adopting that v1 account model requires the user's decision. Stable identity linking is not implicitly approved. |
+| Cross-directory account topology | [[phase-2-provider-organization]], [[phase-2-two-tenant-federation]] | **Resolved by user approval.** Separate tenant-owned accounts are selected for independent directories. They work with one product client; cross-directory stable-subject linking and email merges are outside v1. |
 | Upstream event collection capability | [[phase-2-lifecycle-events]] | Scoped reads, per-aggregate replay, aggregate-local sequences, time-window discovery, saturated-boundary refusal and actual SQL writer-drain behavior verified. Never use one global sequence. Durable ingestion, retention-gap handling, export receipts and full moving-checkpoint concurrency tests belong to Phase 3/6/7. |
-| Assumptions disproved by services | Evidence above and [[design/enterprise-contract]], [[design/release-contract]] | Explicitly recorded: session deletion does not revoke refresh; ListObjects is incomplete; credentials have broader scope; session factors omit provider identity; upstream expiry overrides fallback; event sequences are local; database time precision matters. Cross-directory account choice remains unresolved. |
+| Assumptions disproved by services | Evidence above and [[design/enterprise-contract]], [[design/release-contract]] | Explicitly recorded: session deletion does not revoke refresh; ListObjects is incomplete; credentials have broader scope; session factors omit provider identity; upstream expiry overrides fallback; event sequences are local; database time precision matters. Cross-directory account choice is now recorded in the agreed design. |
 
-## What blocks advancement
+## Account-model gate resolved
 
-The account model is the remaining explicit product decision: use separate tenant-owned accounts for independently administered directories, or extend the design with a verified identity-linking model. This choice affects principal identity, sessions, memberships, SSO setup and account switching. Matching email is not authorization to merge accounts. No alias table or silent identity carryover may be implemented as a workaround.
+The user accepted separate tenant-owned accounts for independently administered directories. The agreed decisions and enterprise contract now specify account replacement, fresh membership checks, rejection of prior identity context and no automatic merge. Existing canonical issuer/subject encoding and live-derived TS/Go previous-account fixtures already represent this behavior; no schema migration or new public API is needed for the decision.
 
-Once the decision is recorded, review its impact on the contracts and acceptance scenarios, run the affected checks, and publish a final Phase 2 completion record with exact commit, CI and Railway evidence. This audit itself is not that completion record.
+The service evidence and this decision satisfy the Phase 2 scope. Final advancement waits for the affected contract checks, full gate, commit/push, CI and verified Railway publication. A completion record will bind that proof to the source commit before Phase 3 begins.
 
 ## Later-phase obligations remain mandatory
 
@@ -35,9 +35,8 @@ A service capability probe cannot certify database CAS, durable audit, SDK HTTP 
 ```mermaid
 flowchart TD
   Proof[Pinned service evidence] --> Audit[Acceptance matrix]
-  Audit --> Choice{Cross-directory account model decided?}
-  Choice -->|No| Stay[Remain in Phase 2]
-  Choice -->|Yes| Update[Update affected contracts and scenarios]
+  Audit --> Choice[Separate tenant-owned accounts approved]
+  Choice --> Update[Update affected contracts and scenarios]
   Update --> Gate[Tests commit CI Railway final evidence]
   Gate --> Foundation[Phase 3 persistence and security]
   Foundation --> Integration[Phases 4 to 7 runtime and release proof]
