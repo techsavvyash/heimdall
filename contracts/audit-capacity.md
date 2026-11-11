@@ -260,3 +260,26 @@ intact. This is logical sizing, not proof of payload validity or physical disk
 headroom. Independent manual changes after preparation remain unsupported; the
 backfill still refuses over-budget accounting rather than publishing partial
 reservations.
+
+## Atomic activation transaction (internal deployment primitive)
+
+`ActivateAuditCapacityUpgrade` rechecks the pinned extended schema and prepared
+receipt under exclusive deployment admission and table locks. A completed
+checkpoint must match full charge/reservation coverage before semantic validation
+starts. It then revalidates every stored envelope, decision pair and recovered
+administration using the bounded backfill readers, without changing the durable
+checkpoint. Missing accounting is an error, not an implicit repair.
+
+Only after validation succeeds does one synchronous transaction insert migration
+3 (the pinned capacity SQL checksum), set the capacity policy to `ready`, and
+publish database/reader/writer version 3. Failure before COMMIT leaves the prepared
+state intact. An uncertain COMMIT returns `outcome_unknown`; an exact retry checks
+the activated schema, receipt, policy and protocol without comparing historical
+checkpoint counts to legitimate post-activation writes.
+
+The operation has a 30-second overall deadline, a 5-second lock timeout and a
+20-second statement timeout. Its full historical scan is not resumable and remains
+unqualified for large histories. External writer drain remains required.
+This primitive is internal: CLI exposure, shared v3 readiness/catalog declarations
+and public TS/Go runtime composition are still required before operators can use
+this as a supported serving upgrade. Existing public v2 factories reject v3.

@@ -119,10 +119,34 @@ try:
   decision_steps=[s for s in budget_steps if s['phase']=='decisions' and s['processed']>0]
   assert len(decision_steps)>1 and all(s['processed']<7 for s in decision_steps)
   assert budget_steps[-1]['scannedEvents']==121 and budget_steps[-1]['scannedDecisions']==7
+  # Activation revalidates accounted history and commits policy/protocol together.
+  cases={
+   'activate_ok':None,
+   'activate_validator':None,
+   'activate_loss':None,
+   'activate_incomplete':"UPDATE heimdall_capacity.backfill SET phase='decisions'",
+   'activate_digest':"UPDATE heimdall.audit_events SET payload_digest=decode(repeat('00',32),'hex') WHERE product_id='support'",
+   'activate_missing':"DELETE FROM heimdall_capacity.event_charges c WHERE product_id='ledger' AND NOT EXISTS(SELECT 1 FROM heimdall.audit_decisions d WHERE d.product_id=c.product_id AND d.environment=c.environment AND (d.request_event_id=c.event_id OR d.terminal_event_id=c.event_id))",
+   'activate_schema_drift':"ALTER TABLE heimdall_capacity.reservations DISABLE TRIGGER guard_reservation",
+  }
+  for database,mutation in cases.items():
+   sql('CREATE DATABASE '+database+' TEMPLATE normal')
+   if mutation:sql(mutation,database)
+   mode='validator' if database=='activate_validator' else ('reject' if mutation else '')
+   if database=='activate_loss':
+    with CommitLossProxy(int(port)) as proxy:
+     go('^TestCapacityActivationLive$',dict(env,HEIMDALL_TEST_CAPACITY_ACTIVATE_URL=dsn(database,proxy.port),HEIMDALL_TEST_CAPACITY_ACTIVATE_MODE='unknown'))
+     assert proxy.dropped.is_set() and not proxy.errors
+   go('^TestCapacityActivationLive$',dict(env,HEIMDALL_TEST_CAPACITY_ACTIVATE_URL=dsn(database),HEIMDALL_TEST_CAPACITY_ACTIVATE_MODE=mode))
+  sql('CREATE DATABASE activate_publish_failure TEMPLATE normal')
+  sql("CREATE ROLE activation_limited; GRANT USAGE ON SCHEMA heimdall,heimdall_capacity TO activation_limited; GRANT ALL ON ALL TABLES IN SCHEMA heimdall,heimdall_capacity TO activation_limited; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA heimdall,heimdall_capacity TO activation_limited; REVOKE UPDATE ON heimdall.schema_metadata FROM activation_limited",'activate_publish_failure')
+  go('^TestCapacityActivationLive$',dict(env,HEIMDALL_TEST_CAPACITY_ACTIVATE_URL=dsn('activate_publish_failure')+'&options=-c%20role%3Dactivation_limited',HEIMDALL_TEST_CAPACITY_ACTIVATE_MODE='reject'))
+  assert sql("SELECT state FROM heimdall_capacity.policy",'activate_publish_failure')=='preparing'
+  assert sql("SELECT count(*) FROM heimdall.migrations WHERE version=3",'activate_publish_failure')=='0'
   # Isolated port test only: no public compatibility activation.
   sql("UPDATE heimdall_capacity.policy SET state='ready'",'normal')
   go('^TestCapacityBackfillPendingRecovery$',dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
   ts(dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
- print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse']}))
+ print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse']}))
 finally:
  if created:run(['docker','rm','--force',name],stdout=subprocess.DEVNULL)
