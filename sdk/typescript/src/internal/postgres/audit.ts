@@ -80,6 +80,54 @@ export class PostgresAudit {
       throw new HeimdallError("audit_unavailable");
     }
   }
+  // Prepared primary inspection only; never a fresh authorization result.
+  async inspectRetainedEvent(tenantId: string | null, eventId: string, signal?: AbortSignal) {
+    if ((tenantId !== null && !token(tenantId, 128)) || !token(eventId, 128))
+      throw new HeimdallError("invalid_argument");
+    const rows = await query(
+      this.pool,
+      retainedReadSQL,
+      [
+        sessionChecksum,
+        decisionChecksum,
+        capacityChecksum,
+        capacityPreparationChecksum,
+        this.productId,
+        this.environment,
+        eventId,
+      ],
+      false,
+      signal,
+    );
+    if (rows.length !== 1 || rows[0]?.ready !== true) throw new HeimdallError("unavailable");
+    const row = rows[0]!;
+    if (!row.present) {
+      if (row.live || row.markers !== 0) throw new HeimdallError("audit_unavailable");
+      return null;
+    }
+    if (row.tenant_id !== tenantId) return null;
+    if (!row.valid || row.markers !== (row.live ? 0 : 1))
+      throw new HeimdallError("audit_unavailable");
+    const identity = row.identity as ReturnType<typeof buildRetentionIdentities>[number];
+    if (!row.live) return { state: "retired" as const, identity, event: null };
+    const event = this.decodeStored(row.payload, eventId, identity.recordedAt, identity.digest);
+    const kind =
+      event.eventType === "heimdall.authorization.requested"
+        ? "request"
+        : event.eventType === "heimdall.authorization.completed"
+          ? "terminal"
+          : event.eventType === "heimdall.recovery.completed" &&
+              event.action === "authorization.recover"
+            ? "recovery"
+            : "ordinary";
+    if (
+      (event.tenantId ?? null) !== tenantId ||
+      kind !== identity.kind ||
+      (kind !== "ordinary" && event.decisionId !== identity.decisionId)
+    )
+      throw new HeimdallError("audit_unavailable");
+    return { state: "live" as const, identity, event };
+  }
   // Prepared deployment port only: callers drain writers and install the pinned
   // identity schema. This does not activate retention or provide a runtime API.
   async retainIdentityGroup(
@@ -1055,3 +1103,32 @@ const resolutionSQL = `SELECT readiness.ready, CASE WHEN d.decision_id IS NULL T
  LEFT JOIN heimdall.audit_events r ON r.product_id=d.product_id AND r.environment=d.environment AND r.event_id=d.request_event_id
  LEFT JOIN heimdall.audit_events t ON t.product_id=d.product_id AND t.environment=d.environment AND t.event_id=d.terminal_event_id
  LEFT JOIN heimdall.audit_events a ON a.product_id=d.product_id AND a.environment=d.environment AND a.event_id=c.recovery_event_id`;
+
+const retainedReadSQL = `SELECT readiness.ready, i.event_id IS NOT NULL AS present, e.event_id IS NOT NULL AS live,
+ (SELECT count(*)::int FROM (SELECT 1 FROM heimdall_retention.retirements r WHERE r.product_id=$5 AND r.environment=$6 AND r.member_event_ids ? $7 LIMIT 2) matches) AS markers,
+ i.tenant_id,
+ CASE WHEN i.event_id IS NULL THEN NULL ELSE jsonb_build_object('productId',i.product_id,'environment',i.environment,'tenantId',i.tenant_id,'eventId',i.event_id,'recordedAt',i.recorded_at,'digest',encode(i.payload_digest,'hex'),'kind',i.kind,'decisionId',i.decision_id,'routing',i.routing) END AS identity,
+ e.event AS payload,
+ coalesce(
+  (i.kind='ordinary' OR (d.tenant_id IS NOT DISTINCT FROM i.tenant_id AND CASE i.kind WHEN 'request' THEN d.request_event_id=i.event_id WHEN 'terminal' THEN d.terminal_event_id=i.event_id WHEN 'recovery' THEN d.recovery_event_id=i.event_id ELSE false END))
+  AND CASE WHEN e.event_id IS NOT NULL THEN
+   m.retirement_id IS NULL AND e.recorded_at=i.recorded_at AND e.payload_digest=i.payload_digest
+   AND c.envelope_bytes=octet_length(e.event::text) AND c.delivery_rows=jsonb_array_length(i.routing)
+   AND i.routing=to_jsonb(ARRAY(SELECT sink_id FROM heimdall.audit_deliveries x WHERE x.product_id=$5 AND x.environment=$6 AND x.event_id=$7 ORDER BY sink_id COLLATE "C"))
+  ELSE
+   m.retirement_id IS NOT NULL AND m.tenant_id IS NOT DISTINCT FROM i.tenant_id
+   AND m.target_event_id=CASE WHEN i.kind='ordinary' THEN i.event_id ELSE d.request_event_id END
+   AND (i.kind='ordinary' OR d.resolution IN ('completed','recovered'))
+   AND m.member_event_ids=CASE WHEN i.kind='ordinary' THEN jsonb_build_array(i.event_id) ELSE
+    to_jsonb(ARRAY(SELECT id FROM unnest(array_remove(ARRAY[d.request_event_id,d.terminal_event_id,d.recovery_event_id],NULL)) id ORDER BY id COLLATE "C")) END
+   AND m.retired_at>=i.recorded_at+m.retain_for_ms
+   AND EXISTS(SELECT 1 FROM heimdall_retention.event_identities a WHERE a.product_id=$5 AND a.environment=$6 AND a.event_id=m.administration_event_id AND a.tenant_id IS NOT DISTINCT FROM i.tenant_id AND a.recorded_at=m.retired_at)
+   AND NOT EXISTS(SELECT 1 FROM heimdall.audit_events remaining WHERE remaining.product_id=$5 AND remaining.environment=$6 AND m.member_event_ids ? remaining.event_id)
+  END,false) AS valid
+FROM (${capacitySQL}) readiness
+LEFT JOIN heimdall_retention.event_identities i ON i.product_id=$5 AND i.environment=$6 AND i.event_id=$7
+LEFT JOIN heimdall.audit_events e ON e.product_id=$5 AND e.environment=$6 AND e.event_id=$7
+LEFT JOIN heimdall_capacity.event_charges c ON c.product_id=$5 AND c.environment=$6 AND c.event_id=$7
+LEFT JOIN heimdall_retention.decision_identities d ON d.product_id=i.product_id AND d.environment=i.environment AND d.decision_id=i.decision_id
+LEFT JOIN LATERAL (SELECT r.* FROM heimdall_retention.retirements r WHERE r.product_id=$5 AND r.environment=$6 AND r.member_event_ids ? $7 LIMIT 1) m ON true
+`;

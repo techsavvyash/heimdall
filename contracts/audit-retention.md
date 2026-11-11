@@ -291,3 +291,30 @@ and cross-process retirement race proofs, marker-aware readers, bounded maintena
 and v4 compatibility/admission remain required. The immutable marker is the future
 reader's evidence for intentional removal; missing payload without one remains
 an integrity error. Privileged direct SQL deletion is not made safe by this schema.
+
+## Prepared marker-aware inspection
+
+Internal TS inspectRetainedEvent and Go InspectRetainedEvent now inspect one scoped
+event from a single primary PostgreSQL statement, gated by existing v3 readiness.
+The prepared identity and retirement schemas must already exist. This does not
+publish v4 or change public audit reads/writes. Inputs require an exact tenant
+(including null for product-level history) and event ID. A different tenant or
+unknown ID returns no record. A live payload without its expected compact identity,
+or an identity whose payload disappeared without a matching marker, fails with
+audit_unavailable rather than being silently treated as absent.
+
+A live result includes the decoded, schema/digest-validated original event and
+compact identity. Indexed time/digest, charged bytes and original routing must
+agree; its retained member role must match the event and retained decision links.
+A retired result includes immutable identity metadata and no event payload. It
+requires exactly one marker, matching tenant, representative, complete sorted
+member list, resolved decision (where applicable), age and administrative identity,
+and absence of every listed payload. A marker plus a still-live payload is an
+integrity failure. Inspection never reconstructs an authorization result or
+creates export deliveries from retained hashes.
+
+Both ports preserve five-second operation bounds and cancellation. This is an
+internal diagnostic/read foundation; an authorized payload-only public reader
+will translate intentional retirement into not_found. Public receipt retry
+integration, full decision/recovery inspection qualification, complete v4 catalog
+admission and runtime orchestration remain outstanding.

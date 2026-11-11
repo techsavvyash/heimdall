@@ -1,0 +1,20 @@
+{
+  "productId": "ledger",
+  "environment": "staging",
+  "cases": [
+    {
+      "name": "intentional retirement",
+      "tenantId": "tenant-1",
+      "eventId": "ordinary",
+      "state": "retired"
+    },
+    {
+      "name": "live completion",
+      "tenantId": "tenant-1",
+      "eventId": "normal-terminal",
+      "state": "live"
+    },
+    { "name": "unknown ID", "tenantId": "tenant-1", "eventId": "missing", "state": "absent" },
+    { "name": "different tenant", "tenantId": "other", "eventId": "ordinary", "state": "absent" }
+  ]
+}
