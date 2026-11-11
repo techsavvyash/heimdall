@@ -1,0 +1,8 @@
+{
+  "productId": "restart",
+  "environment": "production",
+  "decisionIds": ["restart-decision-1", "restart-decision-2"],
+  "requestIds": ["restart-request-1", "restart-request-2"],
+  "eventsAfterCrash": 4,
+  "eventsAfterResume": 6
+}

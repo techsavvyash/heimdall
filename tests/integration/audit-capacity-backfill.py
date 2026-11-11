@@ -188,10 +188,37 @@ try:
       batch()
       assert proxy.dropped.is_set() and not proxy.errors
     else:batch()
+  restart_fixture=json.loads((ROOT/'contracts/fixtures/recovery-restart.json').read_text())
+  restart_binary=Path(directory)/'recovery-restart.test'
+  subprocess.run(['go','test','-race','-c','-o',str(restart_binary),'./internal/postgres'],cwd=ROOT/'sdk/go',check=True)
+  def restart_worker(language,mode,database):
+   selected=dict(env,HEIMDALL_TEST_RECOVERY_RESTART_URL=dsn(database),HEIMDALL_TEST_RECOVERY_RESTART_MODE=mode)
+   args=[str(restart_binary),'-test.run','^TestRecoveryRestartProcess$','-test.timeout','30s'] if language=='go' else ['node','--import','tsx',str(ROOT/'sdk/typescript/test/fixtures/recovery-restart-worker.ts')]
+   cwd=ROOT/'sdk/go/internal/postgres' if language=='go' else ROOT/'docs'
+   r=subprocess.run(args,cwd=cwd,env=selected,capture_output=True,text=True,timeout=40)
+   expected=-9 if mode=='crash' else 0
+   assert r.returncode==expected,(language,mode,r.returncode,r.stdout,r.stderr)
+  for first,second in [('go','ts'),('ts','go')]:
+   database='restart_'+first
+   sql('CREATE DATABASE '+database+' TEMPLATE cli_activation')
+   restart_worker(first,'seed',database)
+   sql("UPDATE heimdall_capacity.policy SET event_limit=used_events+reserved_events; UPDATE heimdall_capacity.upgrade SET event_limit=(SELECT event_limit FROM heimdall_capacity.policy)",database)
+   budget=json.loads(sql("SELECT json_build_array(used_events,reserved_events)::text FROM heimdall_capacity.policy",database))
+   restart_worker(first,'crash',database)
+   assert json.loads(sql("SELECT json_build_array(used_events,reserved_events)::text FROM heimdall_capacity.policy",database))==[budget[0]+2,budget[1]-2]
+   assert sql("SELECT string_agg(resolution,',' ORDER BY decision_id) FROM heimdall.audit_decisions WHERE product_id='restart'",database)=='recovered,pending'
+   assert int(sql("SELECT count(*) FROM heimdall.audit_events WHERE product_id='restart'",database))==restart_fixture['eventsAfterCrash']
+   restart_worker(second,'resume',database)
+   assert sql("SELECT string_agg(resolution,',' ORDER BY decision_id) FROM heimdall.audit_decisions WHERE product_id='restart'",database)=='recovered,recovered'
+   assert int(sql("SELECT count(*) FROM heimdall.audit_events WHERE product_id='restart'",database))==restart_fixture['eventsAfterResume']
+   assert json.loads(sql("SELECT json_build_array(used_events,reserved_events)::text FROM heimdall_capacity.policy",database))==[budget[0]+4,budget[1]-4]
+   assert int(sql("SELECT count(*) FROM heimdall_capacity.event_charges WHERE product_id='restart'",database))==restart_fixture['eventsAfterResume']
+   assert int(sql("SELECT count(*) FROM heimdall.audit_deliveries WHERE product_id='restart'",database))==restart_fixture['eventsAfterResume']
+
   # Isolated port test only: no public compatibility activation.
   sql("UPDATE heimdall_capacity.policy SET state='ready'",'normal')
   go('^TestCapacityBackfillPendingRecovery$',dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
   ts(dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
- print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work']}))
+ print(json.dumps({'run':name,'result':'passed','checks':['mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work','SIGKILL after the first committed candidate resumes in the other language with original initiators and exact event outbox and capacity counts']}))
 finally:
  if created:run(['docker','rm','--force',name],stdout=subprocess.DEVNULL)

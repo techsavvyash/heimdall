@@ -651,7 +651,7 @@ hint, not a completion guarantee under concurrency. There are no exactly-once
 batch counts, durable batch IDs, implicit scheduling or background workers. Empty
 scans do not attest v3 readiness; each finalization and resolution observation
 checks it. Retention must preserve pending slots and any in-flight retry/read
-obligations. Public authenticated maintenance composition, metrics, process-kill
+obligations. Public authenticated maintenance composition, metrics, additional crash-boundary
 proof and scale/retention qualification remain release work.
 
 ### Observed driver deadline gap
@@ -668,3 +668,15 @@ caller-supplied Go pools too. Go postgres.NewConnector now closes startup socket
 on cancellation and bounds total establishment to five seconds, with loopback
 stall and live pool-reuse proof. Both deployment CLIs use it. See core-runtime.md;
 custom pools still must independently satisfy this requirement.
+
+### Process interruption evidence
+
+The live capacity harness now kills standalone Go and TS maintenance processes
+with SIGKILL after the first candidate's committed resolution is observed and
+before constructing the second proposal. The opposite language then resumes the
+same scoped pending queue. It processes only the pending candidate and preserves
+the first terminal and administration initiator. Exact event, charge, outbox and
+reservation counts remain consistent at a full event budget; a subsequent call
+performs no work. Shared fixture recovery-restart.json defines the two candidates.
+This proves the between-candidate process boundary, not every crash point inside
+SQL execution or COMMIT. Managed remote-write recovery is unaffected.

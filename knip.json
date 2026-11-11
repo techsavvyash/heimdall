@@ -6,7 +6,8 @@
       "project": ["scripts/**/*.mjs", "tests/integration/**/*.mjs"]
     },
     "sdk/typescript": {
-      "project": ["src/**/*.ts", "*.config.ts"]
+      "project": ["src/**/*.ts", "*.config.ts"],
+      "entry": ["test/fixtures/recovery-restart-worker.ts"]
     }
   },
   "ignoreBinaries": ["go"],
