@@ -252,3 +252,11 @@ its returned count reports rows deleted by that invocation, not earlier attempts
 No claim of success is inferred from a connection close. SDK factories must apply
 this invalidation to every relevant product binding when processing a provider-wide
 negative observation; this scoped store does not discover products or run a worker.
+
+The session adapter now exposes a scoped IsIdentityDenied/isIdentityDenied read for
+identity verification, including warm positive status-cache hits. It reads the
+existing product/environment/identity-hash denial directly through the adapter's
+primary-database connection. SQL, cancellation and schema failures are errors, not
+an absent denial. The later built-in factory must connect this read and durable
+session invalidation to the internal identity verifier; no end-to-end factory is
+claimed by these independently tested primitives.

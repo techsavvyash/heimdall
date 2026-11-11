@@ -65,6 +65,59 @@ async function redirect(url) {
   assert([302, 303, 307].includes(r.status), `Expected redirect, got ${r.status}`);
   return new URL(r.headers.get("location"), url);
 }
+function sdkStatus(c, expected, stage) {
+  if (process.env.HEIMDALL_PROBE_SDK_STATUS !== "1") return;
+  const env = { ...process.env, HEIMDALL_TEST_STATUS_CASE: JSON.stringify({ ...c, expected }) };
+  for (const language of ["ts", "go"]) {
+    const command =
+      language === "ts"
+        ? [
+            "pnpm",
+            "--filter",
+            "@heimdall/sdk",
+            "exec",
+            "vitest",
+            "run",
+            "test/identity-verifier.live.test.ts",
+          ]
+        : ["go", "test", "-race", "-count=1", "./internal/identity", "-run", "^TestLiveStatus$"];
+    const child = spawnSync(command[0], command.slice(1), {
+      env,
+      cwd: new URL(language === "ts" ? "../../" : "../../sdk/go/", import.meta.url),
+      encoding: "utf8",
+      timeout: 60000,
+    });
+    if (child.status !== 0) {
+      const diagnostic = child.stdout + child.stderr;
+      console.error(
+        JSON.stringify({
+          sdkStatusFailure: language,
+          stage,
+          codes: [
+            ...new Set(
+              diagnostic.match(
+                /\b(?:unauthenticated|unavailable|deadline_exceeded|invalid_argument|cancelled)\b/g,
+              ) ?? [],
+            ),
+          ],
+          locations:
+            diagnostic.match(/(?:identity-verifier|status_test)[^\s]*:\d+(?::\d+)?/g) ?? [],
+        }),
+      );
+    }
+    assert.equal(child.status, 0, `${language} SDK authoritative status failed at ${stage}`);
+  }
+  observations.push({
+    product: c.product,
+    sdkIdentityStatus: {
+      stage,
+      expected,
+      typescript: "passed",
+      go: "passed",
+      gate: "invalidation recording fixture; not a durable adapter integration",
+    },
+  });
+}
 function validateJWT(token, keys, audience, subject, nonce) {
   const parts = token.split(".");
   assert(parts.length === 3, "Expected JWT");
@@ -159,6 +212,7 @@ try {
   );
   sessions.push(otherSession.sessionId);
   const tokens = [];
+  const statusCases = [];
   async function authorize(client, apiAudience = false) {
     const verifier = randomBytes(32).toString("base64url");
     const nonce = randomUUID();
@@ -261,6 +315,18 @@ try {
     const ownUser = await req("GET", `/v2/users/${user.id}`, undefined, apiToken.body.access_token);
     assert.equal(ownUser.status, 200, "API-audience user token must read own identity state");
     assert.equal(ownUser.body.user.state, "USER_STATE_ACTIVE");
+    const statusCase = {
+      issuer,
+      audience: client.projectId,
+      jwksUri: discovery.jwks_uri,
+      clientId: client.clientId,
+      clientSecret: client.clientSecret,
+      product: client.product,
+      token: apiToken.body.access_token,
+      subject: user.id,
+    };
+    statusCases.push(statusCase);
+    sdkStatus(statusCase, "human", "active");
     observations.push({
       product: client.product,
       selfServiceEvidence: {
@@ -537,6 +603,7 @@ try {
       },
     });
   }
+  for (const c of statusCases) sdkStatus(c, "unauthenticated", "disabled");
   await ok("DELETE", `/v2/users/${user.id}`);
   assert((await req("GET", `/v2/users/${user.id}`)).status === 404, "Deleted user must be missing");
   for (const token of tokens) {
@@ -546,6 +613,7 @@ try {
       "Deleted identity token must be inactive",
     );
   }
+  for (const c of statusCases) sdkStatus(c, "unauthenticated", "deleted");
   observations.push({ afterDeletion: "user API 404; both product tokens introspect inactive" });
 } finally {
   const cleanup = await Promise.allSettled(
@@ -570,9 +638,11 @@ console.log(
       limitations: [
         "Login client API performs password check; browser Login UI not exercised",
         "strict upstream SAML/OIDC evidence not verified",
-        process.env.HEIMDALL_PROBE_SDK_IDENTITY === "1"
-          ? "SDK signature checks exercised; authoritative SDK identity freshness still pending"
-          : "probe JWT assertions are not SDK authentication implementation",
+        process.env.HEIMDALL_PROBE_SDK_STATUS === "1"
+          ? "SDK signature and online identity status exercised; durable gate and public flow composition still pending"
+          : process.env.HEIMDALL_PROBE_SDK_IDENTITY === "1"
+            ? "SDK signature checks exercised; authoritative SDK identity freshness still pending"
+            : "probe JWT assertions are not SDK authentication implementation",
         "deactivation samples are not a revocation latency guarantee",
       ],
     },

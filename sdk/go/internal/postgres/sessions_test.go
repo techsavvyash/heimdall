@@ -139,6 +139,9 @@ func TestSessionRecords(t *testing.T) {
 	}
 	s, _ := sessionSetup(t, runtime, "identity-go")
 	value := sessionPayload(f, "identity-go", "")
+	if denied, e := s.IsIdentityDenied(ctx, "https://id.example.com", "Maya\x00東京"); e != nil || denied {
+		t.Fatal("initial deny gate", e)
+	}
 	if _, err = s.CreateSession(ctx, "invalid", []byte("{}"), f.ExpiresAt); !errors.Is(err, contract.ErrInvalidArgument) {
 		t.Fatal(err)
 	}
@@ -169,6 +172,12 @@ func TestSessionRecords(t *testing.T) {
 	}
 	if n, e := s.InvalidateIdentity(ctx, "https://id.example.com", "Maya\x00東京", 5000, "inactive"); e != nil || n != 2 {
 		t.Fatal(n, e)
+	}
+	if denied, e := s.IsIdentityDenied(ctx, "https://id.example.com", "Maya\x00東京"); e != nil || !denied {
+		t.Fatal("persisted deny gate", e)
+	}
+	if denied, e := s.IsIdentityDenied(ctx, "https://id.example.com", "other"); e != nil || denied {
+		t.Fatal("other identity gate", e)
 	}
 	if r, e := s.GetSession(ctx, "go-one"); e != nil || r != nil {
 		t.Fatal("denied read", e)

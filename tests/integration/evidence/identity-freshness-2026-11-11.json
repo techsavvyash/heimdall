@@ -1,0 +1,247 @@
+{
+  "suite": "identity-freshness-v1",
+  "result": "passed",
+  "live": {
+    "suite": "zitadel-human-oidc-v1",
+    "runId": "3952bfca-603d-40ac-b3c3-2106447b841e",
+    "observedAt": "2026-11-11T10:20:24.478Z",
+    "issuer": "https://capability-zitadel-verification.up.railway.app",
+    "observations": [
+      {
+        "product": "ledger",
+        "sdkIdentityStatus": {
+          "stage": "active",
+          "expected": "human",
+          "typescript": "passed",
+          "go": "passed",
+          "gate": "invalidation recording fixture; not a durable adapter integration"
+        }
+      },
+      {
+        "product": "ledger",
+        "selfServiceEvidence": {
+          "productOnlySessionStatus": 401,
+          "apiAudienceOwnSessionStatus": 200,
+          "anotherUserSessionStatus": 404,
+          "ownIdentityStatus": 200,
+          "otherProductIntrospectionActive": false,
+          "credential": "user access token; no PAT or session token"
+        }
+      },
+      {
+        "product": "ledger",
+        "signatureIssuerAudienceNonce": "verified",
+        "subject": "same human",
+        "amr": ["pwd"],
+        "accessAudiences": ["399123919178577685", "399123918876587797"],
+        "introspectionActive": true,
+        "keyRejections": [
+          {
+            "scenario": "unknown signing key",
+            "localValidation": "rejected",
+            "introspectionStatus": 200,
+            "active": false
+          },
+          {
+            "scenario": "known key ID with untrusted signature",
+            "localValidation": "rejected",
+            "introspectionStatus": 200,
+            "active": false
+          }
+        ],
+        "otherProductIntrospectionActive": false,
+        "refreshBeforeDeactivation": "succeeded"
+      },
+      {
+        "product": "support",
+        "sdkIdentityStatus": {
+          "stage": "active",
+          "expected": "human",
+          "typescript": "passed",
+          "go": "passed",
+          "gate": "invalidation recording fixture; not a durable adapter integration"
+        }
+      },
+      {
+        "product": "support",
+        "selfServiceEvidence": {
+          "productOnlySessionStatus": 401,
+          "apiAudienceOwnSessionStatus": 200,
+          "anotherUserSessionStatus": 404,
+          "ownIdentityStatus": 200,
+          "otherProductIntrospectionActive": false,
+          "credential": "user access token; no PAT or session token"
+        }
+      },
+      {
+        "product": "support",
+        "signatureIssuerAudienceNonce": "verified",
+        "subject": "same human",
+        "amr": ["pwd"],
+        "accessAudiences": ["399123919681894165", "399123919430235925"],
+        "introspectionActive": true,
+        "keyRejections": [
+          {
+            "scenario": "unknown signing key",
+            "localValidation": "rejected",
+            "introspectionStatus": 200,
+            "active": false
+          },
+          {
+            "scenario": "known key ID with untrusted signature",
+            "localValidation": "rejected",
+            "introspectionStatus": 200,
+            "active": false
+          }
+        ],
+        "otherProductIntrospectionActive": false,
+        "refreshBeforeDeactivation": "succeeded"
+      },
+      {
+        "providerSessionDeletion": {
+          "introspectionActive": false,
+          "refreshStatus": 200,
+          "refreshedAccessTokenActive": true,
+          "explicitRefreshRevocationStatus": 200,
+          "accessActiveAfterRefreshRevocation": false,
+          "explicitAccessRevocationStatus": 200,
+          "accessActiveAfterBothRevocations": false,
+          "refreshAfterExplicitRevocationStatus": 400,
+          "refreshAfterExplicitRevocationError": "invalid_request"
+        }
+      },
+      {
+        "product": "ledger",
+        "afterDeactivation": {
+          "authoritativeUserState": "USER_STATE_INACTIVE",
+          "introspectionActive": false,
+          "refreshStatus": 400,
+          "refreshError": "invalid_request"
+        }
+      },
+      {
+        "product": "support",
+        "afterDeactivation": {
+          "authoritativeUserState": "USER_STATE_INACTIVE",
+          "introspectionActive": false,
+          "refreshStatus": 400,
+          "refreshError": "invalid_request"
+        }
+      },
+      {
+        "product": "ledger",
+        "sdkIdentityStatus": {
+          "stage": "disabled",
+          "expected": "unauthenticated",
+          "typescript": "passed",
+          "go": "passed",
+          "gate": "invalidation recording fixture; not a durable adapter integration"
+        }
+      },
+      {
+        "product": "support",
+        "sdkIdentityStatus": {
+          "stage": "disabled",
+          "expected": "unauthenticated",
+          "typescript": "passed",
+          "go": "passed",
+          "gate": "invalidation recording fixture; not a durable adapter integration"
+        }
+      },
+      {
+        "product": "ledger",
+        "sdkIdentityStatus": {
+          "stage": "deleted",
+          "expected": "unauthenticated",
+          "typescript": "passed",
+          "go": "passed",
+          "gate": "invalidation recording fixture; not a durable adapter integration"
+        }
+      },
+      {
+        "product": "support",
+        "sdkIdentityStatus": {
+          "stage": "deleted",
+          "expected": "unauthenticated",
+          "typescript": "passed",
+          "go": "passed",
+          "gate": "invalidation recording fixture; not a durable adapter integration"
+        }
+      },
+      {
+        "afterDeletion": "user API 404; both product tokens introspect inactive"
+      }
+    ],
+    "wrongPKCE": "invalid_grant",
+    "cleanedUpOrganization": "399123916460668693",
+    "limitations": [
+      "Login client API performs password check; browser Login UI not exercised",
+      "strict upstream SAML/OIDC evidence not verified",
+      "SDK signature and online identity status exercised; durable gate and public flow composition still pending",
+      "deactivation samples are not a revocation latency guarantee"
+    ]
+  },
+  "storage": {
+    "run": "heimdall-records-938c89a2996744618b48c5c5abe7a561",
+    "postgres": "postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac",
+    "result": "passed",
+    "checks": [
+      "TS and Go CRUD",
+      "8-way CAS single winner",
+      "expiry and product isolation",
+      "delete/recreate revision",
+      "tampered expiry denied",
+      "cancelled blocked write unknown",
+      "pool recovery",
+      "TS reads Go",
+      "Go reads TS",
+      "11 readiness states in both languages",
+      "read-only connection rejected",
+      "missing metadata table rejected",
+      "migration transaction visibility",
+      "concurrent deployment migration processes",
+      "idempotent migration and incompatible state refusal",
+      "mid-migration permission failure rolls back entire schema",
+      "held migration lock deadline and retry",
+      "confirmed COMMIT response loss returns outcome_unknown and safe rerun",
+      "TS and Go atomic audit append rollback race and conflict",
+      "bidirectional audit receipts and original sink routing",
+      "TS and Go audit committed response loss and receipt recovery",
+      "audit append with SELECT INSERT privileges only",
+      "shared U+0000 and Unicode event survives TS write and Go replay",
+      "both SDKs delivery receipt matrix and atomic partial acknowledgement",
+      "both SDKs acknowledgement committed response loss and idempotent recovery",
+      "pending selection scope time count and byte budgets",
+      "invalid payload and cross-scope corruption withheld",
+      "pending readers decode both language writers",
+      "delivery attempt races stale callbacks defer and quarantine",
+      "explicit quarantine unblocks healthy backlog without deletion",
+      "both SDKs claim defer quarantine COMMIT response loss",
+      "identity-bound session cross-language reads and shared advisory lock",
+      "session creation versus invalidation race and persistent denial",
+      "identity and product isolation with generic CRUD bypass prevention",
+      "both SDKs identity invalidation COMMIT response loss and safe replay"
+    ]
+  },
+  "additionalStorageAssertions": [
+    "scoped durable denial read before and after invalidation in TS and Go",
+    "another identity remains undenied"
+  ],
+  "initialAttempt": {
+    "runId": "1e8a67c1-cc44-4c47-8d9b-82adeacbc56a",
+    "stage": "deleted",
+    "language": "go",
+    "error": "deadline_exceeded",
+    "result": "failed closed; resource cleanup ran; deadline unchanged"
+  },
+  "localGate": {
+    "typescriptPassed": 951,
+    "optionalSkipped": 17,
+    "go": "race detector passed",
+    "quartzPages": 70
+  },
+  "limitations": [
+    "live provider tests use a recording invalidation gate; PostgreSQL primitives tested independently",
+    "public session factory and durable audit composition remain pending"
+  ]
+}

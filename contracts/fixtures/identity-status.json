@@ -1,0 +1,566 @@
+[
+  {
+    "name": "active-human",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "active"
+  },
+  {
+    "name": "inactive-token",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": false
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unauthenticated",
+    "negativeReason": "token_inactive"
+  },
+  {
+    "name": "malformed-introspection-iss-2",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://wrong.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "malformed-introspection-sub-3",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "other",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "malformed-introspection-aud-4",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["support"],
+      "exp": 2000003600
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "malformed-introspection-exp-5",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003601
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "malformed-introspection-exp-6",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": "wrong"
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "malformed-introspection-active-7",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": "true",
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "introspection-http-401",
+    "introspectionStatus": 401,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "introspection-http-403",
+    "introspectionStatus": 403,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "introspection-http-429",
+    "introspectionStatus": 429,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "introspection-http-500",
+    "introspectionStatus": 500,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "introspection-http-302",
+    "introspectionStatus": 302,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "USER_STATE_INACTIVE",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_INACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unauthenticated",
+    "negativeReason": "identity_inactive"
+  },
+  {
+    "name": "USER_STATE_LOCKED",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_LOCKED",
+        "human": {}
+      }
+    },
+    "expected": "unauthenticated",
+    "negativeReason": "identity_inactive"
+  },
+  {
+    "name": "USER_STATE_INITIAL",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_INITIAL",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "USER_STATE_UNSPECIFIED",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_UNSPECIFIED",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "unknown",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "unknown",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "wrong-user",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "other",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "machine-user",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "machine": {}
+      }
+    },
+    "expected": "unauthenticated",
+    "negativeReason": "token_inactive"
+  },
+  {
+    "name": "self-user-http-401",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 401,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unauthenticated",
+    "negativeReason": "token_inactive"
+  },
+  {
+    "name": "self-user-http-404",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 404,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unauthenticated",
+    "negativeReason": "token_inactive"
+  },
+  {
+    "name": "self-user-http-403",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 403,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "self-user-http-429",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 429,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "self-user-http-500",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 500,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "self-user-http-302",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 302,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "introspection-expired",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000000000
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_ACTIVE",
+        "human": {}
+      }
+    },
+    "expected": "unauthenticated",
+    "negativeReason": "token_inactive"
+  },
+  {
+    "name": "deleted-user-state",
+    "introspectionStatus": 200,
+    "introspection": {
+      "active": true,
+      "iss": "https://issuer.example",
+      "sub": "Maya\u0000\u6771\u4eac",
+      "aud": ["ledger", "api"],
+      "exp": 2000003600
+    },
+    "userStatus": 200,
+    "user": {
+      "user": {
+        "userId": "Maya\u0000\u6771\u4eac",
+        "state": "USER_STATE_DELETED",
+        "human": {}
+      }
+    },
+    "expected": "unauthenticated",
+    "negativeReason": "identity_deleted"
+  }
+]

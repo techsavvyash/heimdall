@@ -107,3 +107,5 @@ Phase 3 delivery-transition checkpoint: [[evidence/phase-3-audit-transitions]] r
 Phase 3 identity-session checkpoint: [[evidence/phase-3-identity-sessions]] records identity-bound encryption, atomic persistent denial/session deletion, cross-language locking and uncertain-COMMIT recovery. Provider freshness, reactivation and audited lifecycle composition remain open.
 
 Phase 3 signature-verification checkpoint: [[evidence/phase-3-token-verification]] adds maintained-library JWT verification, bounded issuer-pinned JWKS retrieval, rotation/outage/cancellation tests and direct TS/Go verification of Railway-issued product tokens. Authoritative identity freshness and audited lifecycle composition remain open.
+
+Phase 3 identity-freshness checkpoint: [[evidence/phase-3-identity-freshness]] adds authoritative human status, bounded positive freshness, local deny checks, distinct token/identity invalidation and late-positive race rejection in both SDKs. Durable factory/session/audit composition remains open.

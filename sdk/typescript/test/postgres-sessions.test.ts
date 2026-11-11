@@ -45,6 +45,9 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
     });
     const sessions = store(pool, "identity-ts");
     try {
+      expect(await sessions.isIdentityDenied(fixture.record.issuer, fixture.record.subject)).toBe(
+        false,
+      );
       const first = await sessions.createSession(
         "ts-one",
         payload("identity-ts"),
@@ -112,6 +115,10 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
           "inactive",
         ),
       ).toBe(2);
+      expect(await sessions.isIdentityDenied(fixture.record.issuer, fixture.record.subject)).toBe(
+        true,
+      );
+      expect(await sessions.isIdentityDenied(fixture.record.issuer, "someone-else")).toBe(false);
       expect(await sessions.getSession("ts-one")).toBeNull();
       expect(await sessions.getSession("ts-two")).toBeNull();
       expect(await sessions.getSession("ts-other")).not.toBeNull();

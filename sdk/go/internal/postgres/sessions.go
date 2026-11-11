@@ -207,3 +207,24 @@ func (s *SessionRecords) InvalidateIdentity(ctx context.Context, issuer, subject
 		return result.RowsAffected()
 	})
 }
+
+func (s *SessionRecords) IsIdentityDenied(ctx context.Context, issuer, subject string) (bool, error) {
+	identity, err := identityBinding(issuer, subject)
+	if err != nil {
+		return false, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err = contract.CheckCancellation(ctx); err != nil {
+		return false, err
+	}
+	var denied bool
+	err = s.records.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM heimdall.identity_denials WHERE product_id=$1 AND environment=$2 AND identity_hash=$3)", s.records.product, s.records.environment, identity).Scan(&denied)
+	if err != nil {
+		return false, databaseError(ctx)
+	}
+	if err = contract.CheckCancellation(ctx); err != nil {
+		return false, err
+	}
+	return denied, nil
+}

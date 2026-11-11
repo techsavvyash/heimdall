@@ -129,6 +129,18 @@ export class SessionRecords extends PostgresRecords {
       signal,
     );
   }
+  async isIdentityDenied(issuer: string, subject: string, signal?: AbortSignal) {
+    const identity = this.identity(issuer, subject);
+    const rows = await query<{ denied: boolean }>(
+      this.pool,
+      "SELECT EXISTS(SELECT 1 FROM heimdall.identity_denials WHERE product_id=$1 AND environment=$2 AND identity_hash=$3) AS denied",
+      [this.productId, this.environment, identity],
+      false,
+      signal,
+    );
+    if (typeof rows[0]?.denied !== "boolean") throw new HeimdallError("unavailable");
+    return rows[0].denied;
+  }
   async invalidateIdentity(
     issuer: string,
     subject: string,
