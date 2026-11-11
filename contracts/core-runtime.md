@@ -106,14 +106,17 @@ no I/O. Runtime startup invokes the existing read-only primary/schema/checksum
 readiness check. Readiness is not an exhaustive privilege audit and does not fence
 later schema or permission changes. Storage operations fail closed if privileges
 or availability subsequently fail. The caller supplies one existing Pool/*sql.DB,
-initializes the immutable session-v1 schema with the migration command beforehand,
-and retains ownership of connection limits, TLS configuration and pool shutdown.
+initializes the immutable session-v1 schema and explicitly prepares/backfills/
+activates audit v2 with deployment commands beforehand. It retains ownership of
+connection limits, TLS configuration and pool shutdown. Unactivated v1 or migrating
+storage is refused by the public factory's readiness and audit append ports.
 No DDL or background delivery runs on construction or verification.
 
 The pool role needs schema USAGE; SELECT on schema_metadata, migrations,
 identity_denials, records, audit_events and audit_deliveries; INSERT and UPDATE on
-identity_denials; DELETE on records; and INSERT on audit_events/audit_deliveries.
-It does not need schema-changing privileges, audit UPDATE/DELETE or session
+identity_denials; DELETE on records; INSERT on audit_events/audit_deliveries; and
+SELECT, INSERT and UPDATE on audit_decisions. It does not need decision DELETE,
+metadata writes, schema-changing privileges, audit UPDATE/DELETE or session
 INSERT/UPDATE for this bearer-only composition. This is a shared trusted backend
 scope, not database row-level isolation against a hostile product process.
 
@@ -164,3 +167,28 @@ pool, credentials and deployment, and enforce tenant business predicates. Public
 SIEM delivery, backpressure policy, retention, session orchestration, authorization
 and managed lifecycle composition remain release work, not implicit guarantees of
 this development factory.
+
+## Activated v2 audit admission
+
+Public audit append uses a shared deployment advisory transaction lock and checks
+v2 metadata/ledger inside the same transaction before writing. The coordinated
+deployment commands take that lock exclusively. A factory that previously passed
+startup does not cache audit-write admission: migrating or incompatible state
+rejects even an exact receipt retry, with no new event/slot/outbox writes. Five-second
+append cancellation and explicit ambiguous-COMMIT errors remain unchanged. This
+coordinates SDK audit writes with deployment; it does not fence identity/session
+writes, direct SQL, old processes or remote requests, so external drain is required.
+
+Authorization requested/completed events use atomic decision-slot persistence.
+Ordinary authentication and other supported SDK events remain event/outbox writes.
+The public append port rejects authorization outcome_unknown, which requires the
+separate recovery administration pair. Actor verification and event origin remain
+trusted SDK/product-layer responsibilities; this is not a public permission API.
+
+Managed installations can be initialized against recognized ready audit v1 or v2.
+`--status managed-v2` (internal CheckManagedAuditReadiness/checkManagedAuditReadiness)
+checks audit v2 and managed v1 metadata/ledgers in one primary SQL snapshot.
+Legacy `--status session` and `--status managed` deliberately retain v1 semantics
+for deployment compatibility; they are not the current public factory's readiness.
+Use `--status audit-v2` for the public bearer storage composition. A read-only
+connection is rejected before migration starts a read/write transaction.

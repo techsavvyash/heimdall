@@ -53,3 +53,10 @@ func checkReadiness(ctx context.Context, db *sql.DB, query string, args ...any) 
 	}
 	return nil
 }
+
+var managedAuditReadinessSQL = "SELECT base.ready AND managed.ready AS ready FROM (" + auditReadinessSQL + ") base CROSS JOIN (" + strings.ReplaceAll(managedOnlyReadinessSQL, "$1", "$3") + ") managed"
+
+// CheckManagedAuditReadiness observes activated audit v2 and managed v1 together.
+func CheckManagedAuditReadiness(ctx context.Context, db *sql.DB) error {
+	return checkReadiness(ctx, db, managedAuditReadinessSQL, sessionChecksum, decisionChecksum, managedChecksum)
+}

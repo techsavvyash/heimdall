@@ -86,3 +86,27 @@ func (a *Audit) persistDecision(ctx context.Context, tx *sql.Tx, event map[strin
 	}
 	return true, nil
 }
+
+// AppendRuntime is the public factory's v2 path. Admission and event/slot writes
+// share one transaction; deployment transitions take the exclusive advisory lock.
+func (a *Audit) AppendRuntime(ctx context.Context, event map[string]any) (contract.AuditReceipt, error) {
+	if (event["eventType"] == "heimdall.authorization.requested" || event["eventType"] == "heimdall.authorization.completed") && event["outcome"] == "outcome_unknown" {
+		return contract.AuditReceipt{}, contract.ErrInvalidArgument
+	}
+	return a.appendFinalized(ctx, event, func(ctx context.Context, tx *sql.Tx) error {
+		if _, e := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock_shared(74162401)"); e != nil {
+			return databaseError(ctx)
+		}
+		var ready bool
+		if e := tx.QueryRowContext(ctx, auditReadinessSQL, sessionChecksum, decisionChecksum).Scan(&ready); e != nil || !ready {
+			return databaseError(ctx)
+		}
+		return nil
+	}, func(ctx context.Context, tx *sql.Tx, snapshot map[string]any) error {
+		if snapshot["eventType"] == "heimdall.authorization.requested" || snapshot["eventType"] == "heimdall.authorization.completed" {
+			_, e := a.persistDecision(ctx, tx, snapshot, nil)
+			return e
+		}
+		return nil
+	})
+}

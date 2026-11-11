@@ -1,5 +1,5 @@
+import { auditSQL, sessionChecksum, decisionChecksum } from "./readiness.js";
 import { validateRecoveryPair } from "../audit-recovery.js";
-import { sessionChecksum } from "./readiness.js";
 import { bindAuditDecision } from "../audit-decision-binding.js";
 import type { Pool, PoolClient } from "pg";
 import { auditDigest, validateDeliveryReceipt } from "../audit-receipts.js";
@@ -403,6 +403,36 @@ WITH selected AS MATERIALIZED (
       }
       return { eventId: row.event_id, attempts: row.attempts, event };
     });
+  }
+  // Public v2 writes hold shared deployment admission through COMMIT.
+  async appendRuntime(event: Record<string, unknown>, signal?: AbortSignal) {
+    if (
+      ["heimdall.authorization.requested", "heimdall.authorization.completed"].includes(
+        String(event?.eventType),
+      ) &&
+      event?.outcome === "outcome_unknown"
+    )
+      throw new HeimdallError("invalid_argument");
+    return this.appendFinalized(
+      event,
+      async (client) => {
+        await client.query("SELECT pg_advisory_xact_lock_shared(74162401)");
+        const result = await client.query<{ ready: boolean }>(auditSQL, [
+          sessionChecksum,
+          decisionChecksum,
+        ]);
+        if (result.rows.length !== 1 || result.rows[0]?.ready !== true)
+          throw new HeimdallError("unavailable");
+      },
+      async (client, snapshot) => {
+        if (
+          snapshot.eventType === "heimdall.authorization.requested" ||
+          snapshot.eventType === "heimdall.authorization.completed"
+        )
+          await this.persistDecision(client, snapshot);
+      },
+      signal,
+    );
   }
   async append(event: Record<string, unknown>, signal?: AbortSignal) {
     return this.appendWith(event, async () => {}, signal);

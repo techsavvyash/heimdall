@@ -1,0 +1,92 @@
+[
+  {
+    "name": "audit: ready v2",
+    "sql": [],
+    "ready": true
+  },
+  {
+    "name": "audit: migrating",
+    "sql": ["UPDATE heimdall.schema_metadata SET state='migrating'"],
+    "ready": false
+  },
+  {
+    "name": "audit: old protocol",
+    "sql": ["UPDATE heimdall.schema_metadata SET reader_min=1,writer_min=1"],
+    "ready": false
+  },
+  {
+    "name": "audit: missing ledger",
+    "sql": ["DELETE FROM heimdall.migrations WHERE version=2"],
+    "ready": false
+  },
+  {
+    "name": "audit: changed checksum",
+    "sql": ["UPDATE heimdall.migrations SET checksum=repeat('0',64) WHERE version=2"],
+    "ready": false
+  },
+  {
+    "name": "audit: extra ledger",
+    "sql": ["INSERT INTO heimdall.migrations(version,checksum) VALUES(3,repeat('0',64))"],
+    "ready": false
+  },
+  {
+    "name": "audit: future database",
+    "sql": ["UPDATE heimdall.schema_metadata SET database_version=3"],
+    "ready": false
+  },
+  {
+    "name": "managed: ready v1",
+    "sql": [],
+    "ready": true
+  },
+  {
+    "name": "managed: compatible wider protocols",
+    "sql": ["UPDATE heimdall_managed.schema_metadata SET reader_max=2,writer_max=2"],
+    "ready": true
+  },
+  {
+    "name": "managed: missing metadata",
+    "sql": ["DELETE FROM heimdall_managed.schema_metadata"],
+    "ready": false
+  },
+  {
+    "name": "managed: migrating",
+    "sql": ["UPDATE heimdall_managed.schema_metadata SET state='migrating'"],
+    "ready": false
+  },
+  {
+    "name": "managed: future database",
+    "sql": ["UPDATE heimdall_managed.schema_metadata SET database_version=2"],
+    "ready": false
+  },
+  {
+    "name": "managed: new reader only",
+    "sql": ["UPDATE heimdall_managed.schema_metadata SET reader_min=2,reader_max=2"],
+    "ready": false
+  },
+  {
+    "name": "managed: new writer only",
+    "sql": ["UPDATE heimdall_managed.schema_metadata SET writer_min=2,writer_max=2"],
+    "ready": false
+  },
+  {
+    "name": "managed: missing ledger",
+    "sql": ["DELETE FROM heimdall_managed.migrations"],
+    "ready": false
+  },
+  {
+    "name": "managed: changed checksum",
+    "sql": ["UPDATE heimdall_managed.migrations SET checksum=repeat('0',64)"],
+    "ready": false
+  },
+  {
+    "name": "managed: extra ledger",
+    "sql": ["INSERT INTO heimdall_managed.migrations(version,checksum) VALUES(2,repeat('0',64))"],
+    "ready": false
+  },
+  {
+    "name": "managed: ledger gap",
+    "sql": ["UPDATE heimdall_managed.migrations SET version=2"],
+    "ready": false
+  }
+]

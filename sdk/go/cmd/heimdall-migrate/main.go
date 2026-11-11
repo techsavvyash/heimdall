@@ -21,7 +21,7 @@ func run() int {
 	sqlPath := flag.String("sql", "", "path to the checksum-pinned selected migration 0001.sql")
 	initialize := flag.Bool("initialize-session-schema", false, "explicitly authorize installation in the selected application database")
 	managed := flag.Bool("initialize-managed-schema", false, "install managed schema after verifying session/audit readiness")
-	status := flag.String("status", "", "read-only compatibility status: session, managed or audit-v2")
+	status := flag.String("status", "", "read-only compatibility status: session, managed, audit-v2 or managed-v2")
 	prepare := flag.Bool("prepare-audit-upgrade", false, "prepare audit v2 tables without activating runtime readiness")
 	directory := flag.String("sql-directory", "", "shared session SQL directory for explicit audit upgrade preparation")
 	drained := flag.Bool("writers-drained", false, "assert all old application writers and retention jobs have been stopped and cannot resume")
@@ -55,7 +55,7 @@ func run() int {
 	if *status != "" {
 		modes++
 	}
-	if (*activate && (!*drained || *directory != "" || *sqlPath != "")) || (*backfill && (!*drained || *directory != "" || *sqlPath != "" || *batch < 1 || *batch > 100)) || (!*backfill && batchSet) || modes != 1 || dsn == "" || flag.NArg() != 0 || (*prepare && (*directory == "" || !*drained || *sqlPath != "")) || (!*prepare && !*backfill && !*activate && (*directory != "" || *drained)) || (*status != "" && (*status != "session" && *status != "managed" && *status != "audit-v2" || *sqlPath != "")) || (!*prepare && !*backfill && !*activate && *status == "" && *sqlPath == "") {
+	if (*activate && (!*drained || *directory != "" || *sqlPath != "")) || (*backfill && (!*drained || *directory != "" || *sqlPath != "" || *batch < 1 || *batch > 100)) || (!*backfill && batchSet) || modes != 1 || dsn == "" || flag.NArg() != 0 || (*prepare && (*directory == "" || !*drained || *sqlPath != "")) || (!*prepare && !*backfill && !*activate && (*directory != "" || *drained)) || (*status != "" && (*status != "session" && *status != "managed" && *status != "audit-v2" && *status != "managed-v2" || *sqlPath != "")) || (!*prepare && !*backfill && !*activate && *status == "" && *sqlPath == "") {
 		fmt.Fprintln(os.Stderr, "select one initialization, status, drained upgrade preparation, backfill or activation mode with its required inputs")
 		return 2
 	}
@@ -98,6 +98,8 @@ func run() int {
 		step, err = postgres.AdvanceAuditUpgrade(ctx, db, *batch, *drained, validateBuiltinAudit)
 	case *prepare:
 		err = postgres.PrepareAuditUpgrade(ctx, db, upgrade[0], upgrade[1], upgrade[2], *drained)
+	case *status == "managed-v2":
+		err = postgres.CheckManagedAuditReadiness(ctx, db)
 	case *status == "managed":
 		family = "managed"
 		err = postgres.CheckManagedReadiness(ctx, db)
@@ -120,6 +122,8 @@ func run() int {
 		if json.NewEncoder(os.Stdout).Encode(step) != nil {
 			return 1
 		}
+	} else if *status == "managed-v2" {
+		fmt.Println("audit schema v2 and managed schema v1 ready")
 	} else if *activate || *status == "audit-v2" {
 		fmt.Println("audit schema v2 ready; v1 runtime is incompatible")
 	} else if *prepare {

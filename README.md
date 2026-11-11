@@ -27,7 +27,7 @@ pnpm run check
 | `pnpm run format`     | Format owned workspace files with Oxfmt                     |
 | `pnpm run docs:dev`   | Preview Quartz at localhost:8080                            |
 
-Both SDKs expose a development core runtime for scoped, audited bearer-token authentication. Construction validates configuration, durable-storage readiness, OIDC discovery and the exact OpenFGA model. Sessions, tenant authorization and convenience adapter assembly are not yet exposed. The TypeScript package remains private and ESM-only during development; this is not a first-release claim. See [the core runtime contract](contracts/core-runtime.md) for wiring and trust boundaries.
+Both SDKs expose a development core runtime for scoped, audited bearer-token authentication. Construction validates configuration, durable-storage readiness, OIDC discovery and the exact OpenFGA model. Sessions, tenant authorization and convenience adapter assembly are not yet exposed. The built-in PostgreSQL factories require explicit audit-v2 activation before startup; see [the upgrade protocol](contracts/audit-recovery.md). The TypeScript package remains private and ESM-only during development; this is not a first-release claim. See [the core runtime contract](contracts/core-runtime.md) for wiring and trust boundaries.
 
 ## Layout
 

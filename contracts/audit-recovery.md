@@ -4,8 +4,8 @@ This is the implementation protocol for the existing requirement to reconcile
 unresolved authorization attempts without inventing historical results. The
 prepared `persistence/session/0002.sql` implements its physical decision slot.
 It is registered as session version 2, activated only through the explicit offline
-workflow below. Public SDK storage factories still require v1; internal v2
-readiness is separate until factory integration is complete. Do not apply this
+workflow below. Public SDK storage factories require activated v2 and route authorization audit
+writes through atomic decision-slot persistence. Do not apply this
 file manually to a serving application and claim recovery is enabled.
 
 ## Atomic resolution protocol
@@ -143,8 +143,8 @@ outcome_unknown, otherwise completed. This classifies recorded history; recovere
 does not independently prove a recovery administration event or worker action.
 The output is a proposed validated binding, not a committed slot or durable
 receipt. Shared positive and negative vectors are in
-`fixtures/audit-decision-binding.json`. The bounded deployment backfill below persists these bindings. Global coverage/activation is implemented below. Public factory selection and
-production qualification remain incomplete.
+`fixtures/audit-decision-binding.json`. The bounded deployment backfill below persists these bindings. Global coverage/activation is implemented below. Public factory selection is implemented below; production qualification remains
+incomplete.
 
 ## Bounded deployment backfill
 
@@ -195,8 +195,9 @@ recovery scanning, capacity policy and late-allow suppression remain required.
 
 Internal TS `PostgresAudit.appendDecision` and Go `Audit.AppendDecision` now
 persist a normal decision request/completion through the existing audit append
-transaction. They are not selected by the public factory yet. Activation and the
-atomic recovery writer are implemented below; factory integration remains open. Ordinary generic append
+transaction. The public factory now selects this decision-slot behavior through
+its v2-gated append port. Activation and the atomic recovery writer are implemented
+below. Ordinary internal generic append
 is still available for v1 and other event types; it is not a substitute for this
 method after activation.
 
@@ -367,7 +368,7 @@ The command explicitly prints that runtime remains unavailable. It does not
 register scopes, run backfill, publish v2 compatibility or start writers. The v1
 runtime/status checks refuse migrating state; already-running old processes still
 require the external drain. Preparation itself leaves v1 metadata unchanged apart
-from migrating state; public SDK factories still require ready v1. SQL checksum vectors and live evidence are in
+from migrating state; public SDK factories require activated ready v2. SQL checksum vectors and live evidence are in
 fixtures/audit-upgrade-prepare.json and tests/integration/audit-upgrade-prepare.py.
 
 ## Deployment scope coordinator
@@ -412,7 +413,7 @@ requirement, not a supported shortcut for custom events.
 Shared scope vectors live in fixtures/audit-upgrade-scopes.json. The live harness
 is tests/integration/audit-upgrade-backfill.py. This deployment orchestration is a
 single Go command for both SDKs; the underlying event-page/checkpoint format is
-implemented in both languages. Public factories still require v1; explicit v2 activation/readiness is described below.
+implemented in both languages. Public factories require v2; explicit activation/readiness is described below.
 
 ## Pinned structural schema gate
 
@@ -499,9 +500,33 @@ pages, not production throughput or arbitrary-scale upgrade time.
 
 Internal TS checkAuditReadiness and Go CheckAuditReadiness require activated v2
 metadata and the exact two-entry ledger in one primary snapshot. Legacy v1
-readiness refuses v2. Public storage factories and combined managed readiness
-still require v1 at this checkpoint; decision-aware factory selection is the next
-integration gate. Do not activate a serving product expecting current public
-factories to work. Capacity, retention and other Phase 3 acceptance remain open.
+readiness refuses v2. Public storage factories require v2 and use the transactional
+admission path below. The explicit combined managed-v2 checker observes audit v2
+and managed v1 together. Capacity, retention and other Phase 3 acceptance remain open.
 Shared cases and live proof: fixtures/audit-activation.json and
 tests/integration/audit-activation.py.
+
+## Public factory selection
+
+TS createPostgresStorage and Go postgres.NewStorage now require activated audit v2.
+Their audit callback takes the shared deployment advisory lock and rechecks v2
+readiness inside the event transaction. Normal authorization requests/completions
+write or verify their decision slot through the existing shared finalizer; ordinary
+events use the same atomic event/outbox writer without a decision slot. Both paths
+use captured, validated event snapshots. Authorization outcome_unknown remains
+invalid here and must use the recovery pair port. Cross-language replay preserves
+original event receipts and sink routing.
+
+Deployment commands take the exclusive advisory lock. An audit append already
+holding shared admission completes before a cooperating transition; an append
+waiting behind a transition reads the resulting metadata before writing. The
+ordinary runtime role receives no metadata writes, DDL, event UPDATE/DELETE or
+decision DELETE. Startup/readiness does not attest all privileges, and this audit
+admission protocol does not fence unrelated record/identity writes or uncooperative
+processes. External stop/drain requirements remain unchanged.
+
+See core-runtime.md for current grants and mixed audit-v2/managed-v1 readiness.
+The underlying v1 primitives and deployment compatibility checks remain tested;
+they are not an option to bypass v2 in public factories. Live public-factory proof
+is tests/integration/public-runtime-v2.py; legacy and bearer-runtime regressions
+use separate v1 and activated-v2 databases in postgres-records.py.

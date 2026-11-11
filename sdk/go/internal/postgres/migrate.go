@@ -36,7 +36,16 @@ func migrate(ctx context.Context, db *sql.DB, migration []byte, managed bool) er
 	if err := contract.CheckCancellation(ctx); err != nil {
 		return err
 	}
-	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return databaseError(ctx)
+	}
+	defer conn.Close()
+	var writable bool
+	if err = conn.QueryRowContext(ctx, "SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'").Scan(&writable); err != nil || !writable {
+		return databaseError(ctx)
+	}
+	tx, err := conn.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return databaseError(ctx)
 	}
@@ -55,7 +64,7 @@ func migrate(ctx context.Context, db *sql.DB, migration []byte, managed bool) er
 	}
 	if managed {
 		var baseReady bool
-		if err = tx.QueryRowContext(ctx, readinessSQL, sessionChecksum).Scan(&baseReady); err != nil || !baseReady {
+		if err = tx.QueryRowContext(ctx, "SELECT old.ready OR upgraded.ready FROM ("+readinessSQL+") old CROSS JOIN ("+auditReadinessSQL+") upgraded", sessionChecksum, decisionChecksum).Scan(&baseReady); err != nil || !baseReady {
 			return databaseError(ctx)
 		}
 	}

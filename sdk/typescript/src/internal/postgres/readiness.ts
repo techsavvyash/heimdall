@@ -36,7 +36,7 @@ export async function checkManagedReadiness(pool: Pool, signal?: AbortSignal): P
 
 // Activated decision-aware protocol. Kept separate from legacy v1 readers.
 export const decisionChecksum = "f7e859c78a6d099ad4a4d35c96e553ba10a53e3ae7e23440237c769efcd50722";
-const auditSQL = `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'
+export const auditSQL = `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'
  AND (SELECT count(*) FROM heimdall.schema_metadata)=1
  AND EXISTS(SELECT 1 FROM heimdall.schema_metadata WHERE singleton AND database_version=2 AND state='ready' AND reader_min=2 AND reader_max=2 AND writer_min=2 AND writer_max=2)
  AND (SELECT count(*) FROM heimdall.migrations)=2
@@ -48,6 +48,18 @@ export async function checkAuditReadiness(pool: Pool, signal?: AbortSignal): Pro
     pool,
     auditSQL,
     [sessionChecksum, decisionChecksum],
+    false,
+    signal,
+  );
+  if (rows.length !== 1 || rows[0]?.ready !== true) throw new HeimdallError("unavailable");
+}
+
+const managedAuditSQL = `SELECT base.ready AND managed.ready AS ready FROM (${auditSQL}) base CROSS JOIN (${sql.replaceAll("heimdall.", "heimdall_managed.").replaceAll("$1", "$3")}) managed`;
+export async function checkManagedAuditReadiness(pool: Pool, signal?: AbortSignal): Promise<void> {
+  const rows = await query<{ ready: boolean }>(
+    pool,
+    managedAuditSQL,
+    [sessionChecksum, decisionChecksum, managedChecksum],
     false,
     signal,
   );

@@ -61,11 +61,19 @@ try:
     admin("CREATE ROLE heimdall_audit_runtime NOLOGIN; GRANT USAGE ON SCHEMA heimdall TO heimdall_audit_runtime; GRANT SELECT ON heimdall.audit_events,heimdall.audit_deliveries TO heimdall_audit_runtime; GRANT INSERT ON heimdall.audit_events,heimdall.audit_deliveries TO heimdall_audit_runtime;")
     admin("CREATE ROLE heimdall_audit_delivery NOLOGIN; GRANT USAGE ON SCHEMA heimdall TO heimdall_audit_delivery; GRANT SELECT,UPDATE ON heimdall.audit_deliveries TO heimdall_audit_delivery;")
     admin("CREATE ROLE heimdall_identity_runtime NOLOGIN; GRANT USAGE ON SCHEMA heimdall TO heimdall_identity_runtime; GRANT SELECT,INSERT,UPDATE,DELETE ON heimdall.records,heimdall.identity_denials TO heimdall_identity_runtime; GRANT USAGE ON SEQUENCE heimdall.record_revision_seq TO heimdall_identity_runtime;")
-    admin("CREATE ROLE heimdall_public_runtime NOLOGIN; GRANT USAGE ON SCHEMA heimdall TO heimdall_public_runtime; GRANT SELECT ON heimdall.schema_metadata,heimdall.migrations,heimdall.identity_denials,heimdall.records,heimdall.audit_events,heimdall.audit_deliveries TO heimdall_public_runtime; GRANT INSERT,UPDATE ON heimdall.identity_denials TO heimdall_public_runtime; GRANT DELETE ON heimdall.records TO heimdall_public_runtime; GRANT INSERT ON heimdall.audit_events,heimdall.audit_deliveries TO heimdall_public_runtime;")
-    run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/runtime.test.ts"], env=env)
-    subprocess.run(["go", "test", "-race", "-count=1", ".", "-run", "TestPublicPostgresRuntime|TestPostgresFactory"], cwd=ROOT / "sdk/go", env=env, check=True)
+    # Public factories require activated v2. Keep legacy v1 persistence suites
+    # on their original database so neither protocol is silently relabelled.
+    admin("CREATE DATABASE public_runtime OWNER migration_owner")
+    runtime_dsn = f"postgres://postgres:{password}@127.0.0.1:{port}/public_runtime?sslmode=disable"
+    runtime_env = dict(env, HEIMDALL_TEST_DATABASE_URL=runtime_dsn, HEIMDALL_MIGRATION_DATABASE_URL=f"postgres://migration_owner:{password}@127.0.0.1:{port}/public_runtime?sslmode=disable")
+    subprocess.run(command, cwd=ROOT / "sdk/go", env=runtime_env, check=True)
+    for args in (["--prepare-audit-upgrade","--writers-drained","--sql-directory",str(ROOT / "contracts/persistence/session")],["--activate-audit-upgrade","--writers-drained"]):
+        subprocess.run(["go","run","./cmd/heimdall-migrate",*args],cwd=ROOT / "sdk/go",env=runtime_env,check=True)
+    run(["docker","exec","-i",name,"psql","-U","postgres","-d","public_runtime","-v","ON_ERROR_STOP=1"],input="CREATE ROLE heimdall_public_runtime NOLOGIN; GRANT USAGE ON SCHEMA heimdall TO heimdall_public_runtime; GRANT SELECT ON heimdall.schema_metadata,heimdall.migrations,heimdall.identity_denials,heimdall.records,heimdall.audit_events,heimdall.audit_deliveries TO heimdall_public_runtime; GRANT INSERT,UPDATE ON heimdall.identity_denials TO heimdall_public_runtime; GRANT DELETE ON heimdall.records TO heimdall_public_runtime; GRANT INSERT ON heimdall.audit_events,heimdall.audit_deliveries TO heimdall_public_runtime; GRANT SELECT,INSERT,UPDATE ON heimdall.audit_decisions TO heimdall_public_runtime;",capture_output=True,text=True)
+    run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/runtime.test.ts"], env=runtime_env)
+    subprocess.run(["go", "test", "-race", "-count=1", ".", "-run", "TestPublicPostgresRuntime|TestPostgresFactory"], cwd=ROOT / "sdk/go", env=runtime_env, check=True)
     if os.environ.get("HEIMDALL_PROBE_DURABLE_RUNTIME") == "1":
-        live_env = dict(env, HEIMDALL_PROBE_SDK_RUNTIME="1", HEIMDALL_TEST_RUNTIME_DATABASE_URL=env["HEIMDALL_TEST_DATABASE_URL"])
+        live_env = dict(env, HEIMDALL_PROBE_SDK_RUNTIME="1", HEIMDALL_TEST_RUNTIME_DATABASE_URL=runtime_dsn)
         live = subprocess.run(["node", "tests/integration/oidc.mjs"], cwd=ROOT, env=live_env, capture_output=True, text=True, timeout=240)
         if live.returncode != 0:
             # Never emit child assertions or environment containing tokens/credentials.

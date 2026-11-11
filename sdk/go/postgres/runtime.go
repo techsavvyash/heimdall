@@ -51,7 +51,7 @@ func NewStorage(db *sql.DB, options StorageOptions) (heimdall.RuntimeStorage, er
 			if ctx == nil {
 				return heimdall.ErrInvalidArgument
 			}
-			return internal.CheckReadiness(ctx, db)
+			return internal.CheckAuditReadiness(ctx, db)
 		},
 		Identity: heimdall.IdentityGate{
 			Check: func(ctx context.Context, value heimdall.Identity) (bool, error) {
@@ -71,7 +71,7 @@ func NewStorage(db *sql.DB, options StorageOptions) (heimdall.RuntimeStorage, er
 			if ctx == nil {
 				return heimdall.AuditReceipt{}, heimdall.ErrInvalidArgument
 			}
-			return audit.Append(ctx, event)
+			return audit.AppendRuntime(ctx, event)
 		},
 	}, nil
 }
