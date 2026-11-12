@@ -67,7 +67,7 @@ func (a *Audit) inspectRetainedHistory(ctx context.Context, tenant *string, even
 	}
 	var row retainedRow
 	var identityRaw, payload []byte
-	e := a.db.QueryRowContext(ctx, retainedReadSQL, sessionChecksum, decisionChecksum, capacityUpgradeChecksums[0], capacityUpgradeChecksums[1], a.product, a.environment, eventID).Scan(&row.Ready, &row.Present, &row.Live, &row.Markers, &row.Tenant, &identityRaw, &payload, &row.Valid)
+	e := a.db.QueryRowContext(ctx, a.retainedHistorySQL(retainedReadSQL), a.retainedHistoryArgs(eventID)...).Scan(&row.Ready, &row.Present, &row.Live, &row.Markers, &row.Tenant, &identityRaw, &payload, &row.Valid)
 	if e != nil {
 		return nil, databaseError(ctx)
 	}

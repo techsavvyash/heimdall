@@ -6,6 +6,8 @@ import {
   capacityChecksum,
   capacityPreparationChecksum,
   capacitySQL,
+  retentionSQL,
+  retentionChecksums,
 } from "./readiness.js";
 import {
   capacityWrite,
@@ -37,6 +39,46 @@ type RetainedRow = {
 // Internal persistence port. Factory must supply schema + semantic validation;
 // actor verification and event origin remain the authenticated SDK layer's job.
 export class PostgresAudit {
+  private retainedRuntime = false;
+  static forRetainedRuntime(
+    pool: Pool,
+    productId: string,
+    environment: string,
+    sinks: readonly string[],
+    validate: (event: Record<string, unknown>) => void,
+  ) {
+    const audit = new PostgresAudit(pool, productId, environment, sinks, validate);
+    audit.retainedRuntime = true;
+    return Object.freeze({
+      append: audit.appendRetained.bind(audit),
+      recover: audit.recoverRetained.bind(audit),
+      inspect: audit.inspectRetainedEvent.bind(audit),
+      resolveReceipt: audit.resolveRetainedReceipt.bind(audit),
+      eligibility: audit.inspectRetentionEligibility.bind(audit),
+    });
+  }
+  private retainedHistorySQL(sql: string) {
+    return this.retainedRuntime
+      ? sql.replaceAll(
+          capacitySQL,
+          retentionSQL.replace(/\$[56]/g, (x) => (x === "$5" ? "$8" : "$9")),
+        )
+      : sql;
+  }
+  private retainedHistoryArgs(id: string) {
+    const args: unknown[] = [
+      sessionChecksum,
+      decisionChecksum,
+      capacityChecksum,
+      capacityPreparationChecksum,
+      this.productId,
+      this.environment,
+      id,
+    ];
+    if (this.retainedRuntime) args.push(retentionChecksums, retentionChecksums[0]);
+    return args;
+  }
+
   private readonly sinks: string[];
   constructor(
     private readonly pool: Pool,
@@ -121,16 +163,8 @@ export class PostgresAudit {
       throw new HeimdallError("invalid_argument");
     const rows = await query<RetainedRow>(
       this.pool,
-      retainedReadSQL,
-      [
-        sessionChecksum,
-        decisionChecksum,
-        capacityChecksum,
-        capacityPreparationChecksum,
-        this.productId,
-        this.environment,
-        eventId,
-      ],
+      this.retainedHistorySQL(retainedReadSQL),
+      this.retainedHistoryArgs(eventId),
       false,
       signal,
     );
@@ -201,16 +235,8 @@ export class PostgresAudit {
       }[];
     }>(
       this.pool,
-      retentionEligibilitySQL,
-      [
-        sessionChecksum,
-        decisionChecksum,
-        capacityChecksum,
-        capacityPreparationChecksum,
-        this.productId,
-        this.environment,
-        eventId,
-      ],
+      this.retainedHistorySQL(retentionEligibilitySQL),
+      this.retainedHistoryArgs(eventId),
       false,
       signal,
     );
@@ -949,22 +975,30 @@ WITH selected AS MATERIALIZED (
     );
   }
   private async lockRetainedCapacity(client: PoolClient) {
-    await lockRuntimeCapacity(client);
+    if (this.retainedRuntime) {
+      await client.query("SELECT pg_advisory_xact_lock_shared(74162401)");
+      const ready = await client.query<{ ready: boolean }>(retentionSQL, [
+        sessionChecksum,
+        decisionChecksum,
+        capacityChecksum,
+        capacityPreparationChecksum,
+        retentionChecksums,
+        retentionChecksums[0],
+      ]);
+      if (ready.rows.length !== 1 || ready.rows[0]?.ready !== true)
+        throw new HeimdallError("unavailable");
+      await lockAuditCapacity(client);
+    } else await lockRuntimeCapacity(client);
     const result = await client.query(
       "SELECT singleton FROM heimdall_retention.capacity WHERE singleton FOR UPDATE",
     );
     if (result.rows.length !== 1) throw new HeimdallError("audit_unavailable");
   }
   private async readRetainedTx(client: PoolClient, id: string) {
-    const rows = await client.query<RetainedRow>(retainedReadSQL, [
-      sessionChecksum,
-      decisionChecksum,
-      capacityChecksum,
-      capacityPreparationChecksum,
-      this.productId,
-      this.environment,
-      id,
-    ]);
+    const rows = await client.query<RetainedRow>(
+      this.retainedHistorySQL(retainedReadSQL),
+      this.retainedHistoryArgs(id),
+    );
     if (rows.rows.length !== 1) throw new HeimdallError("unavailable");
     return this.decodeRetainedRow(rows.rows[0]!, null, id, false);
   }

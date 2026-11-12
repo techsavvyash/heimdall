@@ -32,7 +32,12 @@ func (a *Audit) RecoverRetained(ctx context.Context, terminal, administration ma
 	if e = contract.CheckCancellation(ctx); e != nil {
 		return nil, e
 	}
-	tx, e := a.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	conn, e := a.retainedConnection(ctx)
+	if e != nil {
+		return nil, databaseError(ctx)
+	}
+	defer conn.Close()
+	tx, e := conn.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if e != nil {
 		return nil, databaseError(ctx)
 	}
@@ -40,7 +45,7 @@ func (a *Audit) RecoverRetained(ctx context.Context, terminal, administration ma
 	if _, e = tx.ExecContext(ctx, "SET LOCAL synchronous_commit='on'"); e != nil {
 		return nil, databaseError(ctx)
 	}
-	if e = lockRetainedCapacity(ctx, tx); e != nil {
+	if e = a.lockRetainedCapacity(ctx, tx); e != nil {
 		return nil, e
 	}
 	completed, e := a.readRetainedTx(ctx, tx, t.receipt.EventID)

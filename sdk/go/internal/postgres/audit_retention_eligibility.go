@@ -28,7 +28,7 @@ func (a *Audit) InspectRetentionEligibility(ctx context.Context, tenant *string,
 	var rootRaw, membersRaw []byte
 	var resolution *string
 	var held, retry, bound bool
-	e := a.db.QueryRowContext(ctx, retentionEligibilitySQL, sessionChecksum, decisionChecksum, capacityUpgradeChecksums[0], capacityUpgradeChecksums[1], a.product, a.environment, eventID).Scan(&rootRaw, &resolution, &membersRaw, &bound, &held, &retry)
+	e := a.db.QueryRowContext(ctx, a.retainedHistorySQL(retentionEligibilitySQL), a.retainedHistoryArgs(eventID)...).Scan(&rootRaw, &resolution, &membersRaw, &bound, &held, &retry)
 	if e != nil {
 		return "", databaseError(ctx)
 	}

@@ -27,7 +27,12 @@ func (a *Audit) AppendRetained(ctx context.Context, event map[string]any) (contr
 	if e = contract.CheckCancellation(ctx); e != nil {
 		return empty, e
 	}
-	tx, e := a.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	conn, e := a.retainedConnection(ctx)
+	if e != nil {
+		return empty, databaseError(ctx)
+	}
+	defer conn.Close()
+	tx, e := conn.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if e != nil {
 		return empty, databaseError(ctx)
 	}
@@ -35,7 +40,7 @@ func (a *Audit) AppendRetained(ctx context.Context, event map[string]any) (contr
 	if _, e = tx.ExecContext(ctx, "SET LOCAL synchronous_commit='on'"); e != nil {
 		return empty, databaseError(ctx)
 	}
-	if e = lockRetainedCapacity(ctx, tx); e != nil {
+	if e = a.lockRetainedCapacity(ctx, tx); e != nil {
 		return empty, e
 	}
 	read := func(id string) (*RetainedEventInspection, error) { return a.readRetainedTx(ctx, tx, id) }
@@ -107,8 +112,12 @@ func (a *Audit) AppendRetained(ctx context.Context, event map[string]any) (contr
 	return p.receipt, nil
 }
 
-func lockRetainedCapacity(ctx context.Context, tx *sql.Tx) error {
-	if e := lockRuntimeCapacity(ctx, tx); e != nil {
+func (a *Audit) lockRetainedCapacity(ctx context.Context, tx *sql.Tx) error {
+	gate := lockRuntimeCapacity
+	if a.retainedRuntime {
+		gate = lockRetainedRuntime
+	}
+	if e := gate(ctx, tx); e != nil {
 		return e
 	}
 	var initialized bool
@@ -123,7 +132,7 @@ func lockRetainedCapacity(ctx context.Context, tx *sql.Tx) error {
 func (a *Audit) readRetainedTx(ctx context.Context, tx *sql.Tx, id string) (*RetainedEventInspection, error) {
 	var row retainedRow
 	var identity, payload []byte
-	if e := tx.QueryRowContext(ctx, retainedReadSQL, sessionChecksum, decisionChecksum, capacityUpgradeChecksums[0], capacityUpgradeChecksums[1], a.product, a.environment, id).Scan(&row.Ready, &row.Present, &row.Live, &row.Markers, &row.Tenant, &identity, &payload, &row.Valid); e != nil {
+	if e := tx.QueryRowContext(ctx, a.retainedHistorySQL(retainedReadSQL), a.retainedHistoryArgs(id)...).Scan(&row.Ready, &row.Present, &row.Live, &row.Markers, &row.Tenant, &identity, &payload, &row.Valid); e != nil {
 		return nil, databaseError(ctx)
 	}
 	row.Identity, row.Payload = identity, payload

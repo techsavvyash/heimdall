@@ -561,3 +561,21 @@ checks with shared mutation fixtures. These are compatibility checks, not comple
 catalog/history validation. Public v4 writer/read/recovery wiring and grants remain
 unimplemented. Keep applications drained until that integration is qualified;
 activation alone does not enable retention or satisfy Phase 3 acceptance.
+
+## Internal retained runtime admission
+
+Both SDKs expose an internal restricted retained runtime port for append, recovery,
+inspection, receipt resolution and advisory eligibility. It cannot call legacy
+append primitives. Writes acquire shared deployment admission, require the v4
+protocol receipt, then lock payload capacity and metadata capacity in that order.
+Exact retries are subject to the same readiness check. Read operations preserve
+one primary snapshot with the v4 receipt predicate and existing scope validation.
+Go checks the connection's read-write state before an explicit read-write BEGIN;
+read-only and legacy-v3 connections refuse in both SDKs.
+
+The retained-runtime fixture and pinned PostgreSQL harness cover normal/decision
+writes, recovery, changed-tenant conflict, migrating refusal, restricted grants,
+read-only admission and reciprocal confirmed-COMMIT loss. Activation retry after
+new v4 history must preserve all data and accounting. These internal ports do not
+yet change public factories, identity admission or managed composition. No deletion
+is exposed and operational qualification remains required before serving v4.

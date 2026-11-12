@@ -17,6 +17,7 @@ import (
 // Audit is an internal persistence port. Validation must include schema and
 // semantics; verified actor/origin are supplied by the authenticated SDK layer.
 type Audit struct {
+	retainedRuntime      bool
 	db                   *sql.DB
 	product, environment string
 	sinks                []string
@@ -36,7 +37,7 @@ func NewAudit(db *sql.DB, product, environment string, sinks []string, validate 
 	}
 	copySinks := append([]string{}, sinks...)
 	sort.Strings(copySinks)
-	return &Audit{db, product, environment, copySinks, validate}, nil
+	return &Audit{db: db, product: product, environment: environment, sinks: copySinks, validate: validate}, nil
 }
 func (a *Audit) Append(ctx context.Context, event map[string]any) (contract.AuditReceipt, error) {
 	return a.appendWith(ctx, event, func(context.Context, *sql.Tx) error { return nil })

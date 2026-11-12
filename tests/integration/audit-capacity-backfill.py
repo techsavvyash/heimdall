@@ -306,6 +306,29 @@ try:
   stable=retention_snapshot('retention_activation_loss');cli(retention_activate,'retention_activation_loss');assert retention_snapshot('retention_activation_loss')==stable
   cli(retention_activate,'retention_empty')
   print('Retention activation passed: read-only semantic revalidation, atomic publication, old-writer exclusion, TS/Go readiness and lost COMMIT retry',flush=True)
+  sql('CREATE ROLE retained_runtime_profile','retention_activation')
+  runtime_grants="GRANT USAGE ON SCHEMA heimdall,heimdall_capacity,heimdall_retention TO retained_runtime_profile; GRANT SELECT ON heimdall.schema_metadata,heimdall.migrations,heimdall.audit_events,heimdall.audit_deliveries,heimdall.audit_decisions TO retained_runtime_profile; GRANT SELECT ON ALL TABLES IN SCHEMA heimdall_capacity,heimdall_retention TO retained_runtime_profile; GRANT INSERT ON heimdall.audit_events,heimdall.audit_deliveries,heimdall_capacity.event_charges TO retained_runtime_profile; GRANT INSERT,UPDATE ON heimdall.audit_decisions,heimdall_capacity.reservations,heimdall_retention.event_identities,heimdall_retention.decision_identities TO retained_runtime_profile; GRANT UPDATE(used_events,used_bytes,used_deliveries,reserved_events,reserved_bytes,reserved_deliveries) ON heimdall_capacity.policy TO retained_runtime_profile; GRANT UPDATE(used_rows,reserved_rows) ON heimdall_retention.capacity TO retained_runtime_profile"
+  def runtime_profile(language,selected):
+   if language=='go':go('^TestRetainedRuntime$',selected)
+   else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-runtime.test.ts'],env=selected)
+  for language in ['go','ts']:
+   database='retained_runtime_'+language
+   sql('CREATE DATABASE '+database+' TEMPLATE retention_activation');sql(runtime_grants,database)
+   runtime_profile(language,dict(env,HEIMDALL_TEST_RETAINED_RUNTIME_URL=dsn(database)+'&options=-c%20role%3Dretained_runtime_profile',HEIMDALL_TEST_RETAINED_RUNTIME_ADMIN=dsn(database)))
+   runtime_profile(language,dict(env,HEIMDALL_TEST_RETAINED_RUNTIME_URL=dsn('cli_activation'),HEIMDALL_TEST_RETAINED_RUNTIME_ADMIN=dsn('cli_activation'),HEIMDALL_TEST_RETAINED_RUNTIME_REJECT='1'))
+   runtime_profile(language,dict(env,HEIMDALL_TEST_RETAINED_RUNTIME_URL=dsn(database)+'&options=-c%20default_transaction_read_only%3Don%20-c%20role%3Dretained_runtime_profile',HEIMDALL_TEST_RETAINED_RUNTIME_ADMIN=dsn(database),HEIMDALL_TEST_RETAINED_RUNTIME_REJECT='1'))
+   stable=retention_snapshot(database);cli(retention_activate,database);assert retention_snapshot(database)==stable
+  for first,peer in [('go','ts'),('ts','go')]:
+   database='retained_runtime_loss_'+first
+   sql('CREATE DATABASE '+database+' TEMPLATE retention_activation');sql(runtime_grants,database)
+   selected=dict(env,HEIMDALL_TEST_RETAINED_RUNTIME_LOSS='1',HEIMDALL_TEST_RETAINED_RUNTIME_ADMIN=dsn(database))
+   with CommitLossProxy(int(port)) as proxy:
+    runtime_profile(first,dict(selected,HEIMDALL_TEST_RETAINED_RUNTIME_FAULT='1',HEIMDALL_TEST_RETAINED_RUNTIME_URL=dsn(database,proxy.port)+'&options=-c%20role%3Dretained_runtime_profile'))
+    assert proxy.dropped.is_set() and not proxy.errors
+   stable=sql(json.loads((ROOT/'contracts/fixtures/retained-writes.json').read_text())['snapshot'],database)
+   runtime_profile(peer,dict(selected,HEIMDALL_TEST_RETAINED_RUNTIME_URL=dsn(database)+'&options=-c%20role%3Dretained_runtime_profile'))
+   assert sql(json.loads((ROOT/'contracts/fixtures/retained-writes.json').read_text())['snapshot'],database)==stable
+  print('Retained v4 runtime passed: scoped writes recovery reads eligibility legacy refusal restricted privileges and reciprocal COMMIT loss',flush=True)
   for language in ['go','ts']:
    for lost in [False,True]:
     database='runtime_recovery_'+language+('_loss' if lost else '')
