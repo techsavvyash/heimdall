@@ -12,6 +12,17 @@ export type AuditRetirementRequest = {
   policyVersion: string;
 };
 
+export function auditRetirementEventId(r: AuditRetirementRequest): string {
+  return (
+    "retirement-" +
+    createHash("sha256")
+      .update(
+        `heimdall.audit-retirement.v1\0${r.productId}\0${r.environment}\0${r.retirementId}\0${r.retainForMs}`,
+      )
+      .digest("hex")
+  );
+}
+
 // Called after full audit-event validation. This binds the request, actor and policy.
 export function validateAuditRetirement(
   r: AuditRetirementRequest,
@@ -32,13 +43,7 @@ export function validateAuditRetirement(
     r.retainForMs < 1
   )
     throw new HeimdallError("invalid_argument");
-  const id =
-    "retirement-" +
-    createHash("sha256")
-      .update(
-        `heimdall.audit-retirement.v1\0${r.productId}\0${r.environment}\0${r.retirementId}\0${r.retainForMs}`,
-      )
-      .digest("hex");
+  const id = auditRetirementEventId(r);
   const actor = event.actor as { kind: string };
   const target = event.target as { type: string; id: string };
   if (

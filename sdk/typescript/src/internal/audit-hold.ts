@@ -14,7 +14,7 @@ export type AuditHoldRequest = {
   at: number;
   policyVersion: string;
 };
-function auditHoldEventId(r: AuditHoldRequest): string {
+export function auditHoldEventId(r: AuditHoldRequest): string {
   return (
     "hold-" +
     createHash("sha256")

@@ -787,3 +787,18 @@ The operator policy configuration and production command wiring must bind the
 authorized scope to the storage operation's immutable request. The bounded
 internal storage ports remain responsible for current eligibility, audit
 binding, transaction semantics and exact retry resolution.
+
+The internal maintenance command binds that callback to the retained storage
+port. The operator proposal supplies the exact tenant, action, target, operation
+ID and a stable timestamp. The deployment supplies the model, policy version,
+retention duration and clock. The command refuses a future timestamp and
+rechecks it at dispatch. It constructs the administrative event and storage
+request from the verified actor and authorized scope, with no caller-supplied
+audit envelope. Retrying an unchanged proposal with the same actor and policy
+uses the same administrative identity. A retry receives its own authorization
+decision before reaching the idempotent storage operation.
+
+Each invocation applies one operation. Product scheduling and durable storage
+of the original proposal belong to the integrating deployment. For retry hold
+release, its trusted policy must verify that the underlying retry obligation
+has ended.

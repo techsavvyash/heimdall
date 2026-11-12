@@ -46,8 +46,8 @@ tenant requirement.
 A new maintenance authorization needs room for its own durable decision.
 The v5 release reservation covers the release event after authorization.
 Authentication and policy failures keep the maintenance operation closed.
-Operator policy configuration, binding the authorized callback to production
-maintenance commands, and scheduling remain open.
+Operator policy configuration and production scheduling remain open. The bound
+command below connects the authorization result to storage.
 
 ## Verification
 
@@ -63,3 +63,37 @@ that missing or mismatched receipts, denial, revocation and stale identity keep
 the callback from running. Workspace checks passed with 1,729 TypeScript tests,
 125 environment-dependent skips and Go race tests. The documentation check
 parsed 197 Mermaid diagrams.
+
+## Bound maintenance command
+
+Both SDKs compose the authorization boundary with the privileged retirement and
+hold ports. The command takes a stable operation proposal and uses the
+deployment's model, policy version, retention duration and trusted clock. It
+builds the storage request and administrative event from the authorized scope
+and verified actor. Callers can retry the same proposal and receive the same
+administrative receipt. Each retry is independently authorized and audited.
+
+```mermaid
+flowchart LR
+  Proposal[Scoped operation ID and time] --> Auth[Verify actor and audit scoped decision]
+  Config[Deployment policy and clock] --> Auth
+  Auth -->|Allow and current identity| Bind[Build administrative audit and bound request]
+  Bind -->|Hold action| Hold[Apply hold transition]
+  Bind -->|Retirement action| Retire[Retire eligible payload group]
+  Hold --> Receipt[Durable receipt]
+  Retire --> Receipt
+```
+
+The shared command profile exercises both hold purposes, cross-tenant denial,
+future-time refusal and idempotent retirement. It can use the real v5 port
+with a dedicated PostgreSQL role. Production policy setup and scheduling remain
+deployment integrations.
+
+Pinned PostgreSQL run `heimdall-capacity-backfill-5c9c0425023e43f18a40c566cc78091b`
+passed the bound command profile in both languages using a dedicated maintenance
+role. The two product-level targets each received two released holds and one
+retirement marker. Their payloads were removed. Both SDKs verified the stored
+retirement actor and policy, and the original receipt survived an authorized
+retry. Cross-tenant release and future-time proposals were refused. Workspace
+verification passed with 1,730 TypeScript tests, 125 environment-dependent skips,
+Go race tests and 198 Mermaid diagrams.

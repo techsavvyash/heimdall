@@ -182,6 +182,10 @@ func TestAuditedMaintenance(t *testing.T) {
 			}
 		})
 	}
+	t.Run("bound maintenance command", func(t *testing.T) {
+		testMaintenanceCommand(t, raw, token.Now, token.Issuer, token.Audience, token.Subject)
+	})
+
 }
 func tenantValue(t *string) any {
 	if t == nil {

@@ -17,6 +17,11 @@ type AuditRetirementRequest struct {
 	PolicyVersion string  `json:"policyVersion"`
 }
 
+func AuditRetirementEventID(r AuditRetirementRequest) string {
+	h := sha256.Sum256([]byte("heimdall.audit-retirement.v1\x00" + r.ProductID + "\x00" + r.Environment + "\x00" + r.RetirementID + "\x00" + strconv.FormatInt(r.RetainForMS, 10)))
+	return "retirement-" + hex.EncodeToString(h[:])
+}
+
 // ValidateAuditRetirement binds an already validated event to its retirement.
 func ValidateAuditRetirement(r AuditRetirementRequest, event map[string]any) error {
 	if !auditScopeToken.MatchString(r.ProductID) || !auditScopeToken.MatchString(r.Environment) ||
@@ -26,8 +31,7 @@ func ValidateAuditRetirement(r AuditRetirementRequest, event map[string]any) err
 		r.RetainForMS < 1 || r.RetainForMS > 9007199254740991 {
 		return ErrInvalidArgument
 	}
-	h := sha256.Sum256([]byte("heimdall.audit-retirement.v1\x00" + r.ProductID + "\x00" + r.Environment + "\x00" + r.RetirementID + "\x00" + strconv.FormatInt(r.RetainForMS, 10)))
-	id := "retirement-" + hex.EncodeToString(h[:])
+	id := AuditRetirementEventID(r)
 	target, _ := event["target"].(map[string]any)
 	actor, _ := event["actor"].(map[string]any)
 	var tenant any

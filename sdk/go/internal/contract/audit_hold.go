@@ -19,7 +19,7 @@ type AuditHoldRequest struct {
 	PolicyVersion string  `json:"policyVersion"`
 }
 
-func auditHoldEventID(r AuditHoldRequest) string {
+func AuditHoldEventID(r AuditHoldRequest) string {
 	h := sha256.Sum256([]byte("heimdall.audit-hold.v1\x00" + r.ProductID + "\x00" + r.Environment + "\x00" + r.HoldID + "\x00" + r.Operation))
 	return "hold-" + hex.EncodeToString(h[:])
 }
@@ -48,7 +48,7 @@ func ValidateAuditHold(r AuditHoldRequest, event map[string]any) error {
 		tenant = *r.TenantID
 	}
 	_, decision := event["decisionId"]
-	if event["eventId"] != auditHoldEventID(r) || event["eventId"] == r.EventID || event["eventType"] != "heimdall.policy.completed" || event["source"] != "sdk" || event["outcome"] != "succeeded" || actor["kind"] == "unknown" || event["productId"] != r.ProductID || event["environment"] != r.Environment || event["tenantId"] != tenant || event["operationId"] != r.HoldID || event["policyVersion"] != r.PolicyVersion || event["action"] != "audit.hold."+r.Purpose+"."+r.Operation || target["type"] != "audit_event" || target["id"] != r.EventID || event["recordedAt"] != float64(r.At) || event["occurredAt"] != float64(r.At) || decision {
+	if event["eventId"] != AuditHoldEventID(r) || event["eventId"] == r.EventID || event["eventType"] != "heimdall.policy.completed" || event["source"] != "sdk" || event["outcome"] != "succeeded" || actor["kind"] == "unknown" || event["productId"] != r.ProductID || event["environment"] != r.Environment || event["tenantId"] != tenant || event["operationId"] != r.HoldID || event["policyVersion"] != r.PolicyVersion || event["action"] != "audit.hold."+r.Purpose+"."+r.Operation || target["type"] != "audit_event" || target["id"] != r.EventID || event["recordedAt"] != float64(r.At) || event["occurredAt"] != float64(r.At) || decision {
 		return ErrInvalidArgument
 	}
 	return nil

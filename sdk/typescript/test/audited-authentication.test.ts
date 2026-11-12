@@ -1,3 +1,6 @@
+import { MaintenanceCommand } from "../src/internal/maintenance-command.js";
+import { validateAuditHold } from "../src/internal/audit-hold.js";
+import { validateAuditRetirement } from "../src/internal/audit-retire.js";
 import { Pool } from "pg";
 import { PostgresAudit } from "../src/internal/postgres/audit.js";
 import { validateAuditShape } from "../src/internal/audit-shape.js";
@@ -288,6 +291,109 @@ test.each(
             permission: request.action,
           }
         : null,
+    );
+  } finally {
+    if (pool) await pool.end();
+  }
+});
+
+test("bound maintenance command", async () => {
+  provider(cases.find((p) => p.expected === "active")!);
+  const url = process.env.HEIMDALL_TEST_MAINTENANCE_COMMAND_URL;
+  const pool = url ? new Pool({ connectionString: url }) : null;
+  const durable = pool
+    ? PostgresAudit.forRetainedRuntime(pool, "ledger", "production", [], validateAuditShape)
+    : null;
+  const target = "bound-maintenance-ts";
+  let calls = 0;
+  const check = (event: Record<string, unknown>) => {
+    calls++;
+    expect(event.actor).toEqual({ kind: "user", issuer: f.issuer, subject: f.subject });
+    expect(event.tenantId).toBe(null);
+    expect(event.productId).toBe("ledger");
+    expect(event.environment).toBe("production");
+    expect(event.policyVersion).toBe("p1");
+    return receipt(event);
+  };
+  const fake: ConstructorParameters<typeof MaintenanceCommand>[1] = {
+    applyHold: async (r, event) => {
+      validateAuditHold(r, event);
+      return check(event);
+    },
+    retire: async (r, event) => {
+      validateAuditRetirement(r, event);
+      expect(r.retainForMs).toBe(1000);
+      return check(event);
+    },
+  };
+  try {
+    if (durable)
+      await durable.append({
+        schemaVersion: 1,
+        eventId: target,
+        eventType: "heimdall.policy.completed",
+        eventVersion: 1,
+        occurredAt: f.now - 5000,
+        recordedAt: f.now - 5000,
+        productId: "ledger",
+        environment: "production",
+        tenantId: null,
+        actor: { kind: "system", id: "test-seed" },
+        target: { type: "audit_event", id: target },
+        action: "audit.test.seed",
+        outcome: "succeeded",
+        requestId: target,
+        source: "sdk",
+        sdkVersion: "0.0.0",
+        attributes: {},
+        policyVersion: "p1",
+      });
+    const auth = setup(durable ? durable.append : async (event) => receipt(event));
+    const command = new MaintenanceCommand(
+      auth,
+      durable ?? fake,
+      "pinned-model",
+      7,
+      1000,
+      async (scope) =>
+        scope.tenantId === null &&
+        scope.actor.issuer === f.issuer &&
+        scope.actor.subject === f.subject &&
+        scope.modelId === "pinned-model" &&
+        scope.manifestVersion === 7 &&
+        scope.targetEventId === target,
+      () => f.now,
+    );
+    const shared = read("fixtures/maintenance-command.json") as (Pick<
+      Parameters<typeof command.run>[1],
+      "tenantId" | "action" | "operationId"
+    > & { name: string; expected: string; future?: boolean; retry?: boolean })[];
+    let original: ReturnType<typeof receipt> | undefined;
+    for (const c of shared) {
+      const before = calls;
+      const op = {
+        tenantId: c.tenantId,
+        action: c.action,
+        operationId: c.operationId + "-ts",
+        targetEventId: target,
+        at: f.now + (c.future ? 1 : 0),
+      };
+      const result = await command.run(raw, op).then(
+        (value) => ({ status: "receipt", value }),
+        (e: HeimdallError) => ({ status: e.code, value: undefined }),
+      );
+      expect({ name: c.name, status: result.status }).toEqual({ name: c.name, status: c.expected });
+      expect(result.status === "receipt" || calls === before).toBe(true);
+      expect(!c.retry || JSON.stringify(result.value) === JSON.stringify(original)).toBe(true);
+      if (result.value && c.action === "audit.retention.retire") original = result.value;
+    }
+    const persisted = durable && original ? await durable.inspect(null, original.eventId) : null;
+    expect(persisted?.event?.actor ?? null).toEqual(
+      durable ? { kind: "user", issuer: f.issuer, subject: f.subject } : null,
+    );
+    expect(persisted?.event?.policyVersion ?? null).toBe(durable ? "p1" : null);
+    expect(durable ? (await durable.inspect(null, target))?.state : calls).toBe(
+      durable ? "retired" : 6,
     );
   } finally {
     if (pool) await pool.end();
