@@ -406,8 +406,8 @@ try:
      hold_test(language,dict(selected,HEIMDALL_TEST_HOLD_OPERATION=operation,HEIMDALL_TEST_HOLD_FAULT='1',HEIMDALL_TEST_HOLD_URL=dsn(database,proxy.port)+'&options=-c%20role%3Dretained_hold_runtime'))
      assert proxy.dropped.is_set() and not proxy.errors
     hold_test('go' if language=='ts' else 'ts',dict(selected,HEIMDALL_TEST_HOLD_OPERATION=operation,HEIMDALL_TEST_HOLD_RETRY='1'))
-   concurrent=dict(selected,HEIMDALL_TEST_HOLD_OPERATION='concurrent')
-   writers=[subprocess.Popen(['go','test','-race','-count=1','./internal/postgres','-run','^TestRetainedHolds$'],cwd=ROOT/'sdk/go',env=concurrent),subprocess.Popen(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-hold.test.ts'],cwd=ROOT,env=concurrent)]
+   concurrent_hold_env=dict(selected,HEIMDALL_TEST_HOLD_OPERATION='concurrent')
+   writers=[subprocess.Popen(['go','test','-race','-count=1','./internal/postgres','-run','^TestRetainedHolds$'],cwd=ROOT/'sdk/go',env=concurrent_hold_env),subprocess.Popen(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-hold.test.ts'],cwd=ROOT,env=concurrent_hold_env)]
    results=[writer.wait() for writer in writers]
    assert results==[0,0],results
    assert sql("SELECT count(*) FROM heimdall_retention.event_holds WHERE product_id='holds-"+language+"' AND hold_id='concurrent'",database)=='1'
