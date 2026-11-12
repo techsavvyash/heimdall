@@ -1,11 +1,28 @@
+import { isAuditMaintenanceAction } from "./audit.js";
 import { validateAuditShape } from "./audit-shape.js";
 import { randomUUID } from "node:crypto";
 import { IdentityVerifier } from "./identity-verifier.js";
-import { bounded, commitAuditEvent, known } from "./audited-decision.js";
+import { AuditedDecision, bounded, commitAuditEvent, known } from "./audited-decision.js";
 import { checkCancellation, HeimdallError } from "./errors.js";
 
 type Arguments = ConstructorParameters<typeof IdentityVerifier>;
 type Principal = Awaited<ReturnType<IdentityVerifier["verify"]>>;
+type MaintenanceRequest = {
+  tenantId: string | null;
+  action: string;
+  targetEventId: string;
+  operationId: string;
+  modelId: string;
+  manifestVersion: number;
+};
+type MaintenanceContext = Readonly<
+  MaintenanceRequest & {
+    productId: string;
+    environment: string;
+    policyVersion: string;
+    actor: Readonly<{ issuer: string; subject: string }>;
+  }
+>;
 // Internal composition. Identity metadata comes only from this captured verifier.
 export class AuditedAuthentication {
   private readonly verifier: IdentityVerifier;
@@ -33,6 +50,86 @@ export class AuditedAuthentication {
   }
   owns(value: unknown): boolean {
     return this.verifier.owns(value);
+  }
+  // Internal boundary. The deployment supplies read-only policy and the trusted port.
+  async runMaintenance(
+    raw: string,
+    request: MaintenanceRequest,
+    policy: (scope: MaintenanceContext, signal: AbortSignal) => Promise<boolean>,
+    apply: (
+      scope: MaintenanceContext,
+      signal?: AbortSignal,
+    ) => ReturnType<Parameters<typeof commitAuditEvent>[1]>,
+    signal?: AbortSignal,
+  ) {
+    if (!request) throw new HeimdallError("invalid_argument");
+    const { tenantId, action, targetEventId, operationId, modelId, manifestVersion } = request;
+    const r = { tenantId, action, targetEventId, operationId, modelId, manifestVersion };
+    const token = (v: unknown) =>
+      typeof v === "string" && /^[A-Za-z0-9_-]{1,128}(?![\s\S])/.test(v);
+    if (
+      !isAuditMaintenanceAction(r.action) ||
+      (r.tenantId !== null && !token(r.tenantId)) ||
+      ![r.targetEventId, r.operationId, r.modelId].every(token) ||
+      !Number.isInteger(r.manifestVersion) ||
+      r.manifestVersion < 1 ||
+      r.manifestVersion > 2147483647 ||
+      typeof policy !== "function" ||
+      typeof apply !== "function"
+    )
+      throw new HeimdallError("invalid_argument");
+    if (signal) checkCancellation(signal);
+    const principal = await this.verify(raw, "bearer", signal);
+    const actor = Object.freeze({ issuer: principal.issuer, subject: principal.subject });
+    const scope = Object.freeze({
+      ...r,
+      productId: this.productId,
+      environment: this.environment,
+      policyVersion: this.policyVersion,
+      actor,
+    });
+    const at = this.now();
+    const decision = new AuditedDecision(
+      this.productId,
+      this.environment,
+      this.append,
+      validateAuditShape,
+      this.now,
+    );
+    const allowed = await decision.run(
+      {
+        schemaVersion: 1,
+        eventId: "pending",
+        eventType: "heimdall.authorization.requested",
+        eventVersion: 1,
+        occurredAt: at,
+        recordedAt: at,
+        productId: this.productId,
+        environment: this.environment,
+        tenantId: r.tenantId,
+        actor: { kind: "user", ...actor },
+        target: { type: "audit_event", id: r.targetEventId },
+        action: r.action,
+        permission: r.action,
+        outcome: "requested",
+        requestId: r.operationId,
+        source: "sdk",
+        sdkVersion: "0.0.0",
+        attributes: {},
+        decisionId: "pending",
+        operationId: r.operationId,
+        modelId: r.modelId,
+        manifestVersion: r.manifestVersion,
+        policyVersion: this.policyVersion,
+      },
+      (signal) => policy(scope, signal),
+      signal,
+    );
+    if (!allowed) throw new HeimdallError("forbidden");
+    if (signal) checkCancellation(signal);
+    await this.verifier.checkCurrent(principal, signal);
+    if (signal) checkCancellation(signal);
+    return apply(scope, signal);
   }
   async verify(raw: string, context: string, caller?: AbortSignal): Promise<Principal> {
     const operation = AbortSignal.any([AbortSignal.timeout(5000), ...(caller ? [caller] : [])]);

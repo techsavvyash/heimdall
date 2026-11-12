@@ -28,7 +28,8 @@ type AuditEvent struct {
 	OccurredAt, RecordedAt                                      int64
 	Actor                                                       struct{ Kind string }
 	TenantID                                                    *string
-	Source, Outcome                                             string
+	Source, Outcome, Action                                     string
+	Target                                                      struct{ Type string }
 	Attributes                                                  map[string]any
 	DecisionID, OperationID, Permission, ModelID, PolicyVersion string
 	ManifestVersion                                             int
@@ -131,7 +132,7 @@ func ValidateAuditEvent(e AuditEvent, origin string, custom func(string, int, ma
 		return ErrInvalidArgument
 	}
 	hasTenant := e.TenantID != nil && *e.TenantID != ""
-	if strings.HasPrefix(e.EventType, "heimdall.authorization.") && (e.DecisionID == "" || e.ModelID == "" || e.ManifestVersion == 0 || ((e.Outcome == "allow" || e.Outcome == "deny") && (!hasTenant || e.Permission == ""))) {
+	if strings.HasPrefix(e.EventType, "heimdall.authorization.") && (e.DecisionID == "" || e.ModelID == "" || e.ManifestVersion == 0 || ((e.Outcome == "allow" || e.Outcome == "deny") && ((!hasTenant && !maintenanceAuditScope(e)) || e.Permission == ""))) {
 		return ErrInvalidArgument
 	}
 	if (strings.HasPrefix(e.EventType, "heimdall.membership.") || strings.HasPrefix(e.EventType, "heimdall.ownership.")) &&
@@ -142,4 +143,19 @@ func ValidateAuditEvent(e AuditEvent, origin string, custom func(string, int, ma
 		return ErrInvalidArgument
 	}
 	return nil
+}
+
+// IsAuditMaintenanceAction identifies the privileged actions with product-level scope.
+func IsAuditMaintenanceAction(action string) bool {
+	switch action {
+	case "audit.retention.retire", "audit.hold.administrative.acquire", "audit.hold.administrative.release", "audit.hold.retry.acquire", "audit.hold.retry.release":
+		return true
+	}
+	return false
+}
+
+func maintenanceAuditScope(e AuditEvent) bool {
+	return e.TenantID == nil && e.Source == "sdk" && e.Actor.Kind == "user" &&
+		e.Target.Type == "audit_event" && e.OperationID != "" && e.PolicyVersion != "" &&
+		e.Permission == e.Action && IsAuditMaintenanceAction(e.Action)
 }

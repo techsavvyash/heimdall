@@ -29,6 +29,8 @@ type AuditEvent = {
   recordedAt: number;
   actor: { kind: "user" | "unknown" | "system" };
   tenantId: string | null;
+  action?: string;
+  target?: { type: string };
   source: string;
   outcome: string;
   attributes: Record<string, unknown>;
@@ -142,7 +144,8 @@ export function validateAuditEvent(
     (!event.decisionId ||
       !event.modelId ||
       !event.manifestVersion ||
-      (["allow", "deny"].includes(event.outcome) && (!event.tenantId || !event.permission)))
+      (["allow", "deny"].includes(event.outcome) &&
+        ((!event.tenantId && !maintenanceAuditScope(event)) || !event.permission)))
   )
     invalid();
   if (
@@ -156,4 +159,26 @@ export function validateAuditEvent(
   )
     invalid();
   if (event.eventType === "heimdall.policy.completed" && !event.policyVersion) invalid();
+}
+
+export function isAuditMaintenanceAction(action: unknown): action is string {
+  return [
+    "audit.retention.retire",
+    "audit.hold.administrative.acquire",
+    "audit.hold.administrative.release",
+    "audit.hold.retry.acquire",
+    "audit.hold.retry.release",
+  ].includes(action as string);
+}
+function maintenanceAuditScope(event: AuditEvent): boolean {
+  return (
+    event.tenantId === null &&
+    event.source === "sdk" &&
+    event.actor.kind === "user" &&
+    event.target?.type === "audit_event" &&
+    !!event.operationId &&
+    !!event.policyVersion &&
+    event.permission === event.action &&
+    isAuditMaintenanceAction(event.action)
+  );
 }

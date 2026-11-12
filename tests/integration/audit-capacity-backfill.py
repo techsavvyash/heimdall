@@ -519,6 +519,18 @@ try:
   assert sql("SELECT database_version FROM heimdall.schema_metadata",database)=='5'
   print('v5 public factory proof passed in TS and Go',flush=True)
   # END v5 public factory proof
+  # Exercise the authorization boundary with the real v5 append port.
+  database='maintenance_authorization_v5'
+  sql('CREATE DATABASE '+database+' TEMPLATE hold_release_public_v5')
+  sql("""UPDATE heimdall_capacity.policy SET event_limit=100000,byte_limit=1000000000,delivery_limit=100000;
+   UPDATE heimdall_capacity.upgrade SET event_limit=100000,byte_limit=1000000000,delivery_limit=100000;
+   UPDATE heimdall_retention.capacity SET row_limit=100000,byte_limit=819200000;
+   UPDATE heimdall_retention.upgrade SET row_limit=100000,byte_limit=819200000""",database)
+  maintenance_env=dict(env,HEIMDALL_TEST_MAINTENANCE_AUDIT_URL=dsn(database)+'&options=-c%20role%3Dpublic_capacity_runtime')
+  subprocess.run(['go','test','-race','-count=1','./internal/auditflow','-run','^TestAuditedMaintenance$'],cwd=ROOT/'sdk/go',env=maintenance_env,check=True)
+  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/audited-authentication.test.ts','-t','audited maintenance'],env=maintenance_env)
+  assert sql("SELECT count(*) FROM heimdall_retention.decision_identities WHERE product_id='ledger' AND environment='production' AND tenant_id IS NULL AND resolution='completed'",database)=='10'
+  print('Audited maintenance passed with durable v5 requests and decisions in TS and Go',flush=True)
   # BEGIN audited retirement proof
   retirement_grants=(runtime_grants.replace('retained_runtime_profile','retained_retirement_runtime')+
     '; GRANT INSERT ON heimdall_retention.retirements TO retained_retirement_runtime; GRANT UPDATE(state) ON heimdall.audit_deliveries TO retained_retirement_runtime; GRANT DELETE ON heimdall.audit_events,heimdall.audit_deliveries,heimdall.audit_decisions,heimdall_capacity.event_charges,heimdall_capacity.reservations TO retained_retirement_runtime')

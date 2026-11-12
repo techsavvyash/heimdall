@@ -144,6 +144,23 @@ export class IdentityVerifier {
     if (typeof denied !== "boolean") throw new HeimdallError("unavailable");
     return denied;
   }
+  async checkCurrent(principal: Principal, signal?: AbortSignal): Promise<void> {
+    if (!this.owns(principal)) throw new HeimdallError("invalid_argument");
+    const bounded = AbortSignal.any([AbortSignal.timeout(5000), ...(signal ? [signal] : [])]);
+    checkCancellation(bounded);
+    const denied = await this.localDenied(
+      { issuer: principal.issuer, subject: principal.subject },
+      bounded,
+    );
+    checkCancellation(bounded);
+    const now = this.now();
+    if (denied || now >= principal.expiresAt) throw new HeimdallError("unauthenticated");
+    if (
+      now < principal.identityValidatedAt ||
+      now - principal.identityValidatedAt >= (this.freshness || 5000)
+    )
+      throw new HeimdallError("unavailable");
+  }
   async verify(raw: string, context = "bearer", signal?: AbortSignal): Promise<Principal> {
     const bounded = AbortSignal.any([AbortSignal.timeout(5000), ...(signal ? [signal] : [])]);
     checkCancellation(bounded);

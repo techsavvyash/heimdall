@@ -93,6 +93,39 @@ func NewIdentityVerifier(config StatusConfig, secret func(context.Context) (stri
 	return &IdentityVerifier{config: config, tokens: tokens, secret: secret, gate: gate, now: now, freshness: freshness, cache: map[string]cacheEntry{}, inflight: map[*statusObservation]struct{}{}}, nil
 }
 func (v *IdentityVerifier) Owns(p *Principal) bool { return p != nil && p.owner == v }
+
+// CheckCurrent rechecks the durable deny gate and freshness of a verifier-owned
+// principal immediately before a privileged action.
+func (v *IdentityVerifier) CheckCurrent(ctx context.Context, p *Principal) error {
+	if ctx == nil || !v.Owns(p) {
+		return contract.ErrInvalidArgument
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if e := contract.CheckCancellation(ctx); e != nil {
+		return e
+	}
+	denied, e := boundedCall(ctx, func() (bool, error) { return v.gate.Check(ctx, p.identity) }, false)
+	if e != nil {
+		return e
+	}
+	if e = contract.CheckCancellation(ctx); e != nil {
+		return e
+	}
+	now := v.now().UnixMilli()
+	if denied || now >= p.expiresAt {
+		return contract.ErrUnauthenticated
+	}
+	window := v.freshness
+	if window == 0 {
+		window = 5000
+	}
+	if now < p.validatedAt || now-p.validatedAt >= window {
+		return contract.ErrUnavailable
+	}
+	return nil
+}
+
 func boundedCall[T any](ctx context.Context, action func() (T, error), mutation bool) (T, error) {
 	var zero T
 	if err := contract.CheckCancellation(ctx); err != nil {

@@ -1,0 +1,105 @@
+[
+  {
+    "name": "exact product-level grant",
+    "tenantId": null,
+    "grantedTenant": null,
+    "expected": "receipt",
+    "outcomes": ["succeeded", "requested", "allow"],
+    "policyCalls": 1
+  },
+  {
+    "name": "exact tenant grant",
+    "tenantId": "one",
+    "grantedTenant": "one",
+    "expected": "receipt",
+    "outcomes": ["succeeded", "requested", "allow"],
+    "policyCalls": 1
+  },
+  {
+    "name": "product-level grant does not cover a tenant",
+    "tenantId": "one",
+    "grantedTenant": null,
+    "expected": "forbidden",
+    "outcomes": ["succeeded", "requested", "deny"],
+    "policyCalls": 1
+  },
+  {
+    "name": "tenant grant does not cover product-level events",
+    "tenantId": null,
+    "grantedTenant": "one",
+    "expected": "forbidden",
+    "outcomes": ["succeeded", "requested", "deny"],
+    "policyCalls": 1
+  },
+  {
+    "name": "wrong tenant",
+    "tenantId": "two",
+    "grantedTenant": "one",
+    "expected": "forbidden",
+    "outcomes": ["succeeded", "requested", "deny"],
+    "policyCalls": 1
+  },
+  {
+    "name": "ordinary permission is not a maintenance action",
+    "tenantId": "one",
+    "grantedTenant": "one",
+    "fault": "action",
+    "expected": "invalid_argument",
+    "outcomes": [],
+    "policyCalls": 0
+  },
+  {
+    "name": "invalid bearer",
+    "tenantId": "one",
+    "grantedTenant": "one",
+    "fault": "token",
+    "expected": "unauthenticated",
+    "outcomes": ["deny"],
+    "policyCalls": 0
+  },
+  {
+    "name": "missing durable request receipt",
+    "tenantId": "one",
+    "grantedTenant": "one",
+    "fault": "request",
+    "expected": "audit_unavailable",
+    "outcomes": ["succeeded", "requested"],
+    "policyCalls": 0
+  },
+  {
+    "name": "mismatched durable allow receipt",
+    "tenantId": "one",
+    "grantedTenant": "one",
+    "fault": "terminal",
+    "expected": "audit_unavailable",
+    "outcomes": ["succeeded", "requested", "allow"],
+    "policyCalls": 1
+  },
+  {
+    "name": "read-only policy outage",
+    "tenantId": null,
+    "grantedTenant": null,
+    "fault": "policy",
+    "expected": "unavailable",
+    "outcomes": ["succeeded", "requested", "unavailable"],
+    "policyCalls": 1
+  },
+  {
+    "name": "revocation during the decision",
+    "tenantId": null,
+    "grantedTenant": null,
+    "fault": "revoked",
+    "expected": "unauthenticated",
+    "outcomes": ["succeeded", "requested", "allow"],
+    "policyCalls": 1
+  },
+  {
+    "name": "stale identity after the decision",
+    "tenantId": null,
+    "grantedTenant": null,
+    "fault": "stale",
+    "expected": "unavailable",
+    "outcomes": ["succeeded", "requested", "allow"],
+    "policyCalls": 1
+  }
+]

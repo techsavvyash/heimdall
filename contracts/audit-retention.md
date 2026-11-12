@@ -759,3 +759,31 @@ acquisition automatically reserves release capacity and release consumes the
 matching reservation before charging its audit event. Grant the hold maintenance
 role SELECT on `heimdall_retention.hold_release_reservations` and UPDATE on its
 `release_event_id` column, alongside its existing hold and audit privileges. Ordinary audit writers need no reservation write access.
+
+## Audited maintenance authorization boundary
+
+Internal TS `runMaintenance` and Go `RunMaintenance` verify the operator's
+bearer against the captured deployment. The deployment supplies the pinned
+model and manifest metadata and a trusted read-only policy. That policy
+receives the verified actor and exact product, environment, nullable tenant,
+action, target and operation ID. A product-level grant applies only when the
+tenant is null. Policy must evaluate the specific scope it receives.
+
+The existing audited decision transaction persists the request before policy
+evaluation and commits the matching outcome before invoking the trusted
+operation callback. Product-level allow and deny events require a reserved
+retirement or hold action, an equal permission, a known SDK user, an audit
+event target, an operation ID and a policy version. The default tenant
+requirement for application decisions still applies.
+
+After a durable allow, the boundary rechecks the verifier-owned principal,
+local deny gate, token expiry, freshness and cancellation before passing the
+bound actor and scope to the callback. An unauthenticated, denied, stale or
+unrecorded decision cannot invoke the callback. The authorization decision
+has its own capacity cost. The v5 hold-release reservation is consumed by the
+release transaction after authorization.
+
+The operator policy configuration and production command wiring must bind the
+authorized scope to the storage operation's immutable request. The bounded
+internal storage ports remain responsible for current eligibility, audit
+binding, transaction semantics and exact retry resolution.

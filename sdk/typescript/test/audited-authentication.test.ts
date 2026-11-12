@@ -1,3 +1,7 @@
+import { Pool } from "pg";
+import { PostgresAudit } from "../src/internal/postgres/audit.js";
+import { validateAuditShape } from "../src/internal/audit-shape.js";
+import { HeimdallError } from "../src/internal/errors.js";
 import { readFileSync } from "node:fs";
 import { afterEach, expect, test, vi } from "vitest";
 import { AuditedAuthentication } from "../src/internal/audited-authentication.js";
@@ -185,4 +189,107 @@ test("failed corrective audit blocks a completed observation", async () => {
   });
   await expect(runner.verify(raw, "bearer", abort.signal)).rejects.toThrow("audit_unavailable");
   expect(calls).toBe(2);
+});
+
+test.each(
+  read("fixtures/audited-maintenance.json") as {
+    name: string;
+    tenantId: string | null;
+    grantedTenant: string | null;
+    fault?: string;
+    expected: string;
+    outcomes: string[];
+    policyCalls: number;
+  }[],
+)("audited maintenance $name", async (c) => {
+  const url = process.env.HEIMDALL_TEST_MAINTENANCE_AUDIT_URL;
+  const pool = url ? new Pool({ connectionString: url }) : null;
+  const durable = pool
+    ? PostgresAudit.forRetainedRuntime(pool, "ledger", "production", ["siem"], validateAuditShape)
+    : null;
+  try {
+    provider(cases.find((p) => p.expected === "active")!);
+    const events: Record<string, unknown>[] = [];
+    let denied = false;
+    let now = f.now as number;
+    const runner = new AuditedAuthentication(
+      config,
+      async () => "secret",
+      { check: async () => denied, invalidate: async () => {} },
+      async (event) => {
+        events.push(event);
+        if (c.fault === "request" && event.outcome === "requested")
+          throw new HeimdallError("unavailable");
+        const r = durable ? await durable.append(event) : receipt(event);
+        if (c.fault === "terminal" && event.outcome === "allow") r.eventId = "mismatch";
+        return r;
+      },
+      () => now,
+    );
+    const request = {
+      tenantId: c.tenantId,
+      action: c.fault === "action" ? "invoice.approve" : "audit.retention.retire",
+      targetEventId: "target",
+      operationId: "retire-1",
+      modelId: "model",
+      manifestVersion: 1,
+    };
+    const policy = vi.fn<Parameters<typeof runner.runMaintenance>[2]>(
+      async (scope: Parameters<Parameters<typeof runner.runMaintenance>[2]>[0]) => {
+        if (c.fault === "policy") throw new HeimdallError("unavailable");
+        if (c.fault === "revoked") denied = true;
+        if (c.fault === "stale") now += 60000;
+        const allowed = scope.tenantId === c.grantedTenant;
+        expect(Reflect.set(scope, "tenantId", "mutated")).toBe(false);
+        return allowed;
+      },
+    );
+    const apply = vi.fn<Parameters<typeof runner.runMaintenance>[3]>(
+      async (scope: Parameters<Parameters<typeof runner.runMaintenance>[3]>[0]) => {
+        expect(events.map((e) => e.outcome)).toEqual(["succeeded", "requested", "allow"]);
+        expect(scope).toEqual({
+          ...request,
+          productId: "ledger",
+          environment: "production",
+          policyVersion: "p1",
+          actor: { issuer: f.issuer, subject: f.subject },
+        });
+        return receipt(events[2]!);
+      },
+    );
+    const status = await runner
+      .runMaintenance(c.fault === "token" ? "invalid" : raw, request, policy, apply)
+      .then(
+        () => "receipt",
+        (e: HeimdallError) => e.code,
+      );
+    expect(status).toBe(c.expected);
+    expect(events.map((e) => e.outcome)).toEqual(c.outcomes);
+    expect(policy).toHaveBeenCalledTimes(c.policyCalls);
+    expect(apply).toHaveBeenCalledTimes(c.expected === "receipt" ? 1 : 0);
+    const decision = events[1];
+    expect(
+      decision
+        ? {
+            productId: decision.productId,
+            environment: decision.environment,
+            tenantId: decision.tenantId,
+            operationId: decision.operationId,
+            permission: decision.permission,
+          }
+        : null,
+    ).toEqual(
+      c.outcomes.length >= 2
+        ? {
+            productId: "ledger",
+            environment: "production",
+            tenantId: c.tenantId,
+            operationId: request.operationId,
+            permission: request.action,
+          }
+        : null,
+    );
+  } finally {
+    if (pool) await pool.end();
+  }
 });

@@ -2178,5 +2178,189 @@
     },
     "valid": false,
     "origin": "product"
+  },
+  {
+    "name": "maintenance-product-allow",
+    "event": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "heimdall.authorization.completed",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": null,
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "target"
+      },
+      "action": "audit.retention.retire",
+      "outcome": "allow",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "audit.retention.retire",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "retire-1",
+      "policyVersion": "p1"
+    },
+    "valid": true,
+    "origin": "sdk"
+  },
+  {
+    "name": "maintenance-product-deny",
+    "event": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "heimdall.authorization.completed",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": null,
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "target"
+      },
+      "action": "audit.retention.retire",
+      "outcome": "deny",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "audit.retention.retire",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "retire-1",
+      "policyVersion": "p1"
+    },
+    "valid": true,
+    "origin": "sdk"
+  },
+  {
+    "name": "maintenance-wrong-permission",
+    "event": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "heimdall.authorization.completed",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": null,
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "target"
+      },
+      "action": "audit.retention.retire",
+      "outcome": "allow",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "retire-1",
+      "policyVersion": "p1"
+    },
+    "valid": false,
+    "origin": "sdk"
+  },
+  {
+    "name": "maintenance-wrong-target",
+    "event": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "heimdall.authorization.completed",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": null,
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "target"
+      },
+      "action": "audit.retention.retire",
+      "outcome": "allow",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "audit.retention.retire",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "retire-1",
+      "policyVersion": "p1"
+    },
+    "valid": false,
+    "origin": "sdk"
+  },
+  {
+    "name": "maintenance-missing-policy",
+    "event": {
+      "schemaVersion": 1,
+      "eventId": "event-1",
+      "eventType": "heimdall.authorization.completed",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": null,
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "target"
+      },
+      "action": "audit.retention.retire",
+      "outcome": "allow",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "audit.retention.retire",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "retire-1"
+    },
+    "valid": false,
+    "origin": "sdk"
   }
 ]
