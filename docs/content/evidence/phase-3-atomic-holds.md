@@ -81,3 +81,29 @@ when that capacity is exhausted. Safe release at a completely full store needs a
 reserved audit budget or another tested solution before Phase 3 acceptance. The
 older SQL proof with a pre-existing administration reference does not prove this
 runtime property. See [[phase-3-readiness-audit]].
+
+## Prepared release reservations
+
+The next storage extension adds one durable release reservation per active hold.
+It uses the same logical quotas as existing audit writes and keeps decision recovery
+reservations separate. The hold row and its reservation record fit within the
+existing hold metadata slot. The release event reserves its own identity slot.
+
+The SQL in `contracts/persistence/session/0005-hold-release-reservations.sql`
+adopts existing holds transactionally. The quota triggers protect the reservation
+during ordinary writes and limit changes. A deferred constraint binds consumption
+to the same hold's recorded release and preserves the reserve if the transaction
+rolls back. Ordinary writer credentials cannot update the aggregate reserve count.
+
+The pinned PostgreSQL profile in run
+`heimdall-capacity-backfill-1c3e7c681bbf47a0a5b84c9348f43ad6`
+adopted two active holds and two released holds.
+It rejected preparation without headroom and verified that failed preparation
+left no reservation table. Reducing any of the five exact-fit limits by one failed.
+Rollback preserved the active count, and the deferred constraint rejected
+reservation consumption without a corresponding release. Separate probes on
+the same clone showed that a legacy audit charge and a hold release without
+consumption both roll back.
+
+This checkpoint prepares the physical schema. Explicit migration publication and
+TS/Go consumption of the reservation during an authorized release remain open.

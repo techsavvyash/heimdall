@@ -335,6 +335,64 @@ try:
   go('^TestRetainedHolds$',dict(hold_env,HEIMDALL_TEST_HOLD_PEER='1'))
   run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-hold.test.ts'],env=dict(hold_env,HEIMDALL_TEST_HOLD_PEER='1'))
   print('Retained holds passed: atomic acquire and release, immutable retries, late rollback and reciprocal TS/Go receipts',flush=True)
+  # Prepared hold release accounting, independent of runtime protocol publication.
+  sql('CREATE DATABASE hold_release_reservations TEMPLATE retained_holds_v4')
+  database='hold_release_reservations'
+  reserve_sql=(ROOT/'contracts/persistence/session/0005-hold-release-reservations.sql').read_text()
+  def refusal(statement, reason):
+   try:
+    sql(statement,database)
+   except RuntimeError as error:
+    assert reason in str(error),str(error)
+   else:
+    raise AssertionError('hold reserve accepted invalid operation')
+  sql('UPDATE heimdall_capacity.policy SET event_limit=used_events+reserved_events',database)
+  refusal('BEGIN;'+reserve_sql+'COMMIT;', 'insufficient audit hold release capacity')
+  assert sql("SELECT to_regclass('heimdall_retention.hold_release_reservations') IS NULL",database)=='t'
+  sql('UPDATE heimdall_capacity.policy SET event_limit=100000',database)
+  sql('BEGIN;'+reserve_sql+'COMMIT;',database)
+  assert sql('SELECT active_count FROM heimdall_retention.hold_release_capacity',database)=='2'
+  assert sql("SELECT count(*) FROM heimdall_retention.hold_release_reservations WHERE release_event_id IS NOT NULL",database)=='2'
+  assert sql("SELECT database_version FROM heimdall.schema_metadata",database)=='4'
+  sql("""UPDATE heimdall_capacity.policy SET
+    event_limit=used_events+reserved_events+2,
+    byte_limit=used_bytes+reserved_bytes+3000000,
+    delivery_limit=used_deliveries+reserved_deliveries+64;
+   UPDATE heimdall_retention.capacity SET row_limit=used_rows+reserved_rows+2,
+    byte_limit=(used_rows+reserved_rows+2)*8192""",database)
+  for relation,column in [('heimdall_capacity.policy','event_limit'),('heimdall_capacity.policy','byte_limit'),
+      ('heimdall_capacity.policy','delivery_limit'),('heimdall_retention.capacity','row_limit'),
+      ('heimdall_retention.capacity','byte_limit')]:
+   refusal(f'UPDATE {relation} SET {column}={column}-1','insufficient audit hold release capacity')
+  consume="""UPDATE heimdall_retention.hold_release_reservations SET release_event_id=(
+    SELECT release_event_id FROM heimdall_retention.event_holds
+    WHERE product_id='holds-ts' AND environment='production' AND hold_id='hold-1')
+    WHERE product_id='holds-ts' AND environment='production' AND hold_id='retry-1'"""
+  sql('BEGIN;'+consume+'; ROLLBACK;',database)
+  assert sql('SELECT active_count FROM heimdall_retention.hold_release_capacity',database)=='2'
+  refusal('BEGIN;'+consume+'; COMMIT;', 'hold release reservation does not match hold')
+  assert sql('SELECT active_count FROM heimdall_retention.hold_release_capacity',database)=='2'
+  refusal("SET ROLE retained_hold_runtime; UPDATE heimdall_retention.hold_release_capacity SET active_count=0",
+    'permission denied')
+  # A legacy charge reaches the same database quota guard.
+  ordinary_charge="""SET LOCAL ROLE retained_hold_runtime;
+   INSERT INTO heimdall.audit_events(product_id,environment,event_id,payload_digest,recorded_at,event)
+   SELECT product_id,environment,'reserve-probe',payload_digest,recorded_at,
+     jsonb_set(event,'{eventId}','"reserve-probe"')
+   FROM heimdall.audit_events
+   WHERE product_id='holds-ts' AND environment='production' AND event_id='ordinary';
+   INSERT INTO heimdall_capacity.event_charges(product_id,environment,event_id)
+     VALUES('holds-ts','production','reserve-probe')"""
+  refusal('BEGIN;'+ordinary_charge+'; COMMIT;', 'insufficient audit hold release capacity')
+  assert sql("SELECT count(*) FROM heimdall.audit_events WHERE event_id='reserve-probe'",database)=='0'
+  legacy_release="""UPDATE heimdall_retention.event_holds AS h
+   SET released_at=prior.released_at, release_event_id=prior.release_event_id
+   FROM heimdall_retention.event_holds AS prior
+   WHERE h.product_id='holds-ts' AND h.environment='production' AND h.hold_id='retry-1'
+     AND prior.product_id=h.product_id AND prior.environment=h.environment AND prior.hold_id='hold-1'"""
+  refusal('BEGIN;'+legacy_release+'; COMMIT;', 'hold release reservation does not match hold')
+  assert sql("SELECT released_at IS NULL FROM heimdall_retention.event_holds WHERE product_id='holds-ts' AND hold_id='retry-1'",database)=='t'
+  print('Hold release preparation passed: adoption, five exact-fit limits, rollback, deferred binding and quota privileges',flush=True)
   # BEGIN retained hold fault proof
   for language in ['ts','go']:
    database='retained_holds_loss_'+language

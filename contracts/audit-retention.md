@@ -672,3 +672,53 @@ Shared `audit-hold-storage.json` and the activated profile in
 retries, rollback, cross-language receipts, concurrent calls, lost COMMIT responses,
 whole-decision protection/corruption and incompatible runtime admission. This port
 does not expose public hold endpoints, enable retirement or schedule maintenance.
+
+## Capacity reserved for hold release
+
+An active hold needs capacity for its eventual audited release. Reserve one audit
+record, 1,500,000 encoded envelope bytes, 32 outbox deliveries and one retained
+identity slot (8,192 logical bytes). These are the existing per-event maxima.
+Both administrative and retry holds need the same reservation. The hold row
+itself remains a separate used slot.
+
+Use a durable reservation bound to the scoped hold ID and its immutable
+placement. Maintain a count of active release reservations under the existing
+payload and metadata quota locks. Keep decision reservations in their existing
+counters, which enforce a two-event reservation per pending decision. Every
+writer and quota update must enforce both reservation classes in addition to
+used capacity. With `n` active hold release reservations, require:
+
+| Limit                  | Required remaining capacity after used and decision-reserved capacity |
+| ---------------------- | --------------------------------------------------------------------- |
+| Audit records          | `n`                                                                   |
+| Encoded envelope bytes | `n * 1500000`                                                         |
+| Outbox deliveries      | `n * 32`                                                              |
+| Retained rows          | `n`                                                                   |
+| Retained logical bytes | `n * 8192`                                                            |
+
+Use division of remaining capacity by the per-release bound for admission, so
+checking a large or corrupt count cannot overflow. Reserve on successful hold
+acquisition in the same transaction as placement and its administrative event.
+When releasing, consume only the reservation for that exact hold under the quota
+locks before charging the release event. Hold release and its original receipt
+must commit with the reservation consumption. Defer the integrity check until
+commit so the transaction can consume the reservation before writing the event,
+while a partial operation cannot commit. Return unused headroom to the shared
+budget. A failed transaction retains the reservation and an exact committed
+retry makes no further charge. Release does not refund the historical hold row.
+
+Install and publish the extension explicitly under the deployment writer gate.
+Before publication, validate existing holds and account one reservation per
+active hold. If any dimension lacks headroom, refuse adoption without changing
+readiness. Pinned v4 migrations remain immutable. Activation must prove the
+reservation records agree with durable holds and their aggregate count, and the
+runtime must refuse incompatible writers before allowing reserved operations.
+
+Acceptance requires TS and Go to prove exact-fit acquire, overflow refusal for
+each budget dimension, a release with ordinary writes blocked by full capacity,
+and independence from pending decision recovery. Test rollback after reservation
+consumption, concurrent acquire/release across languages, and retries following
+lost COMMIT responses. Test adoption with active and released historical holds,
+insufficient headroom, and a restart between preparation and publication. These
+reservations cover logical database quotas. Physical disk exhaustion remains a
+storage failure.
