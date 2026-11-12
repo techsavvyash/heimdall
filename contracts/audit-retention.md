@@ -489,3 +489,29 @@ the primary; complete payload/source/identity/accounting snapshots must remain
 unchanged. This is local database recovery, not permission to replay an uncertain
 remote OpenFGA or provider mutation. Public v4 activation, catalog/backfill and
 maintenance integration remain outstanding.
+
+## Offline retention upgrade preparation
+
+The shared Go deployment CLI now accepts --prepare-retention-upgrade with an
+explicit drained-writer assertion, six checksum-pinned SQL files and positive
+metadata row/byte limits. Both TS and Go applications use this tooling. It requires
+an exact activated v3 catalog and readiness receipts before any installation.
+Under the exclusive deployment lock and source SHARE locks, it preflights one
+slot per existing event and decision plus two per pending decision, at 8192 bytes
+per slot. Either insufficient limit refuses without changing readiness.
+
+All prepared retention DDL, quota initialization, six-checksum/limit receipt,
+backfill checkpoint and state=migrating transition commit atomically. The schema
+version remains 3; no version 4 ledger entry or runtime grants are installed. Old
+TS/Go admission refuses while migrating. Exact retries validate the full expanded
+catalog and same limits and preserve state; different limits conflict. Partial or
+altered schemas refuse rather than being adopted. Lost COMMIT returns unknown and
+is resolved by retrying preparation against the primary. The 30-second operation,
+five-second lock and 20-second statement bounds preserve cancellation.
+
+The initial checkpoint is ordinary history with no cursor and zero scanned counts;
+future bounded backfill must copy complete validated groups and charge metadata,
+then prove full coverage before activation. Preparation is not semantic validation
+of every historical payload, automatic rollback to v3, or a usable serving state.
+Writers and maintenance jobs must remain externally drained until a compatible
+activation is implemented and verified. This step does not enable retention.
