@@ -26,6 +26,17 @@ func (a *RetainedRuntimeAudit) Append(ctx context.Context, event map[string]any)
 func (a *RetainedRuntimeAudit) Recover(ctx context.Context, terminal, administration map[string]any, cutoff int64) (*AuditRecoveryReceipt, error) {
 	return a.audit.RecoverRetained(ctx, terminal, administration, cutoff)
 }
+
+// RecoverRuntime satisfies the bounded maintenance port using retained recovery.
+func (a *RetainedRuntimeAudit) RecoverRuntime(ctx context.Context, terminal, administration map[string]any, cutoff int64) (*AuditRecoveryReceipt, error) {
+	return a.Recover(ctx, terminal, administration, cutoff)
+}
+func (a *RetainedRuntimeAudit) ScanPendingDecisions(ctx context.Context, cutoff int64, after *AuditDecisionCursor, limit int) (*AuditDecisionPage, error) {
+	return a.audit.ScanPendingDecisions(ctx, cutoff, after, limit)
+}
+func (a *RetainedRuntimeAudit) ReadResolution(ctx context.Context, id string) (*AuditResolution, error) {
+	return a.audit.ReadRetainedResolution(ctx, id)
+}
 func (a *RetainedRuntimeAudit) Inspect(ctx context.Context, tenant *string, id string) (*RetainedEventInspection, error) {
 	return a.audit.InspectRetainedEvent(ctx, tenant, id)
 }

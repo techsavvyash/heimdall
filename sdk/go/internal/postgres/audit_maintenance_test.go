@@ -109,14 +109,19 @@ func TestRecoveryBatchPostgres(t *testing.T) {
 	if _, e = admin.Exec("UPDATE heimdall_capacity.policy SET event_limit=used_events+reserved_events; UPDATE heimdall_capacity.upgrade SET event_limit=(SELECT event_limit FROM heimdall_capacity.policy)"); e != nil {
 		t.Fatal(e)
 	}
+	if os.Getenv("HEIMDALL_TEST_RECOVERY_BATCH_V4") == "1" {
+		if _, e = admin.Exec("UPDATE heimdall_retention.capacity SET row_limit=used_rows+reserved_rows; UPDATE heimdall_retention.upgrade SET row_limit=(SELECT row_limit FROM heimdall_retention.capacity)"); e != nil {
+			t.Fatal(e)
+		}
+	}
 	data := capacityWritesData(t)
-	a := backfillPort(t, db, "ledger")
+	a := recoveryBatchPort(t, db, "ledger")
 	fault, e := sql.Open("postgres", selected+"&options=-c%20role%3Dpublic_capacity_runtime")
 	if e != nil {
 		t.Fatal(e)
 	}
 	defer fault.Close()
-	port := batchSplitPort{Audit: a, writer: backfillPort(t, fault, "ledger")}
+	port := batchSplitPort{recoveryPort: a, writer: recoveryBatchPort(t, fault, "ledger")}
 
 	calls := 0
 	propose := func(request map[string]any) (*contract.RecoveryProposal, error) {
@@ -163,10 +168,23 @@ func TestRecoveryBatchRejectsBeforeIO(t *testing.T) {
 
 // Only the write goes through the single-connection COMMIT-loss proxy.
 type batchSplitPort struct {
-	*Audit
-	writer *Audit
+	recoveryPort
+	writer recoveryPort
 }
 
 func (p batchSplitPort) RecoverRuntime(ctx context.Context, terminal, administration map[string]any, cutoff int64) (*AuditRecoveryReceipt, error) {
 	return p.writer.RecoverRuntime(ctx, terminal, administration, cutoff)
+}
+
+func recoveryBatchPort(t *testing.T, db *sql.DB, product string) recoveryPort {
+	t.Helper()
+	a := backfillPort(t, db, product)
+	if os.Getenv("HEIMDALL_TEST_RECOVERY_BATCH_V4") != "1" {
+		return a
+	}
+	r, e := NewRetainedRuntimeAudit(db, product, "production", []string{"siem"}, a.validate)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return r
 }

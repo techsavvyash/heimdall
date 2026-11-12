@@ -69,6 +69,20 @@
       "readState": "absent",
       "readError": "",
       "expectedError": "audit_unavailable"
+    },
+    {
+      "name": "retired payload after confirmed write",
+      "writeError": "",
+      "readState": "",
+      "readError": "not_found",
+      "expectedError": "not_found"
+    },
+    {
+      "name": "retired payload preserves uncertain commit",
+      "writeError": "outcome_unknown",
+      "readState": "",
+      "readError": "not_found",
+      "expectedError": "outcome_unknown"
     }
   ]
 }

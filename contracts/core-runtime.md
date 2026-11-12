@@ -230,7 +230,7 @@ invalidation locks deployment admission before its identity lock; both identity-
 denial and exact-session deletion refuse incompatible storage. Go verifies writable
 primary connection state before BEGIN to prevent transaction options from bypassing
 read-only configuration. No automatic migrations, recovery scheduler or retention
-administration API is exposed. Managed audit composition and historical recovery
-inspection remain separate internal integration work; v4 readiness does not certify
-them. `tests/integration/public-runtime-v4.py` verifies the actual public factories
+administration API is exposed. Managed audit composition remains separate integration work. The internal retained
+runtime now supports bounded recovery maintenance and marker-aware history reads;
+this does not expose or authenticate public administration. `tests/integration/public-runtime-v4.py` verifies the actual public factories
 with restricted credentials, cross-language retries and confirmed COMMIT loss.

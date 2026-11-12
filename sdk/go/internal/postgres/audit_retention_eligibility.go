@@ -94,7 +94,10 @@ var retentionEligibilitySQL = `SELECT to_jsonb(root) AS root,
  coalesce(root.identity->>'kind'='ordinary' OR (
   (d.request_event_id,d.requested_at,d.resolution,d.terminal_event_id,d.resolved_at) IS NOT DISTINCT FROM (source.request_event_id,source.requested_at,source.resolution,source.terminal_event_id,source.resolved_at)
   AND (d.request_event_id,d.resolution,d.terminal_event_id,d.recovery_event_id) IS NOT DISTINCT FROM (reservation.request_event_id,reservation.resolution,reservation.terminal_event_id,reservation.recovery_event_id)
-  AND source.decision_id IS NOT NULL AND reservation.decision_id IS NOT NULL),false) AS bound,
+  AND source.decision_id IS NOT NULL AND reservation.decision_id IS NOT NULL
+  AND d.requested_at=(root.identity->>'recordedAt')::bigint
+  AND (d.resolution='pending' OR EXISTS(SELECT 1 FROM heimdall_retention.event_identities terminal
+   WHERE terminal.product_id=d.product_id AND terminal.environment=d.environment AND terminal.event_id=d.terminal_event_id AND terminal.recorded_at=d.resolved_at))),false) AS bound,
  EXISTS(SELECT 1 FROM heimdall_retention.event_holds h WHERE h.product_id=$5 AND h.environment=$6 AND h.event_id=ANY(chosen.ids) AND h.purpose='administrative' AND h.released_at IS NULL) AS held,
  EXISTS(SELECT 1 FROM heimdall_retention.event_holds h WHERE h.product_id=$5 AND h.environment=$6 AND h.event_id=ANY(chosen.ids) AND h.purpose='retry' AND h.released_at IS NULL) AS retry
 FROM (` + eligibilityReadSQL + `) root

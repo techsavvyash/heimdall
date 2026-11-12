@@ -4,28 +4,39 @@
       "name": "ordinary",
       "operation": "append",
       "base": "ordinary",
-      "patch": { "eventId": "v4-ordinary" },
+      "patch": {
+        "eventId": "v4-ordinary"
+      },
       "expected": "receipt"
     },
     {
       "name": "request",
       "operation": "append",
       "base": "request",
-      "patch": { "eventId": "v4-request", "decisionId": "v4-decision" },
+      "patch": {
+        "eventId": "v4-request",
+        "decisionId": "v4-decision"
+      },
       "expected": "receipt"
     },
     {
       "name": "completion",
       "operation": "append",
       "base": "normal",
-      "patch": { "eventId": "v4-terminal", "decisionId": "v4-decision" },
+      "patch": {
+        "eventId": "v4-terminal",
+        "decisionId": "v4-decision"
+      },
       "expected": "receipt"
     },
     {
       "name": "completion-retry",
       "operation": "append",
       "base": "normal",
-      "patch": { "eventId": "v4-terminal", "decisionId": "v4-decision" },
+      "patch": {
+        "eventId": "v4-terminal",
+        "decisionId": "v4-decision"
+      },
       "expected": "receipt",
       "stable": true
     },
@@ -33,18 +44,32 @@
       "name": "changed-tenant",
       "operation": "append",
       "base": "ordinary",
-      "patch": { "eventId": "v4-ordinary", "tenantId": "other" },
+      "patch": {
+        "eventId": "v4-ordinary",
+        "tenantId": "other"
+      },
       "expected": "conflict",
       "stable": true
     },
-    { "name": "recover", "operation": "recover", "expected": "receipt" },
-    { "name": "recover-retry", "operation": "recover", "expected": "receipt", "stable": true },
+    {
+      "name": "recover",
+      "operation": "recover",
+      "expected": "receipt"
+    },
+    {
+      "name": "recover-retry",
+      "operation": "recover",
+      "expected": "receipt",
+      "stable": true
+    },
     {
       "name": "migrating-append",
       "before": "UPDATE heimdall.schema_metadata SET state='migrating'",
       "operation": "append",
       "base": "ordinary",
-      "patch": { "eventId": "v4-ordinary" },
+      "patch": {
+        "eventId": "v4-ordinary"
+      },
       "expected": "unavailable",
       "stable": true
     },
@@ -67,6 +92,18 @@
       "stable": true
     },
     {
+      "name": "migrating-scan",
+      "operation": "scan",
+      "expected": "unavailable",
+      "stable": true
+    },
+    {
+      "name": "migrating-resolution",
+      "operation": "resolution",
+      "expected": "unavailable",
+      "stable": true
+    },
+    {
       "name": "ready-inspection",
       "before": "UPDATE heimdall.schema_metadata SET state='ready'",
       "operation": "inspect",
@@ -78,7 +115,21 @@
       "operation": "eligibility",
       "expected": "retain_undelivered",
       "stable": true
+    },
+    {
+      "name": "empty-ready-scan",
+      "operation": "scan",
+      "expected": "empty",
+      "stable": true
+    },
+    {
+      "name": "ready-resolution",
+      "operation": "resolution",
+      "expected": "recovered",
+      "stable": true
     }
   ],
-  "loss": { "eventId": "v4-loss" }
+  "loss": {
+    "eventId": "v4-loss"
+  }
 }

@@ -679,3 +679,28 @@ reservation counts remain consistent at a full event budget; a subsequent call
 performs no work. Shared fixture recovery-restart.json defines the two candidates.
 This proves the between-candidate process boundary, not every crash point inside
 SQL execution or COMMIT. Managed remote-write recovery is unaffected.
+
+## Retained v4 recovery maintenance
+
+The internal retained runtime now satisfies the bounded recovery maintenance port.
+Its pending scan checks v4 readiness in the same primary statement, including an
+empty queue, while retaining the existing 100-candidate and 4 MiB page limits.
+Candidate validation is not finalization authority. Retained recovery independently
+rechecks admission, pending state, complete history and both capacity reservations.
+
+Resolution reads start from compact decision identities and read the entire group
+in one primary snapshot. Unknown IDs return absent; surviving source/event rows
+without their compact decision are corruption, not absence. Complete valid retired
+history returns not_found because original payloads are locally unavailable. The
+reader never reconstructs actors or outcomes from compact metadata. Missing members,
+mixed live/retired groups, invalid tenant links and corrupt payloads fail with
+audit_unavailable. Live results require full group semantic validation and source
+slot/reservation binding, including request and resolution timestamps matched to
+retained request/terminal identities. Individual envelopes are bounded to 1500000 bytes and at
+most three members plus a representative request are read within five seconds.
+
+Maintenance preserves outcome_unknown if a resolution observation fails, including
+not_found after retirement. It does not skip the candidate as known failure or
+report a new successful recovery. This is trusted internal scheduling composition;
+operator authentication, managed lifecycle integration and operational qualification
+remain separate release gates. No retention deletion API is enabled.

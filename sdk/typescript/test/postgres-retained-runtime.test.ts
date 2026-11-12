@@ -47,6 +47,8 @@ test.skipIf(!process.env.HEIMDALL_TEST_RETAINED_RUNTIME_URL)(
         await assert.rejects(port.recover(f.terminal!, f.administration!, 2001), {
           code: "unavailable",
         });
+        await assert.rejects(port.scanPendingDecisions(2001, null, 1), { code: "unavailable" });
+        await assert.rejects(port.readResolution("decision-1"), { code: "unavailable" });
         return;
       }
       if (process.env.HEIMDALL_TEST_RETAINED_RUNTIME_LOSS === "1") {
@@ -74,6 +76,15 @@ test.skipIf(!process.env.HEIMDALL_TEST_RETAINED_RUNTIME_URL)(
             }
             case "recover":
               await port.recover(f.terminal!, f.administration!, 2001);
+              break;
+            case "scan":
+              status =
+                (await port.scanPendingDecisions(2001, null, 1)).items.length === 0
+                  ? "empty"
+                  : "items";
+              break;
+            case "resolution":
+              status = (await port.readResolution("decision-1"))?.state ?? "absent";
               break;
             case "inspect":
               status = (await port.inspect("tenant-1", "ordinary"))?.state ?? "absent";

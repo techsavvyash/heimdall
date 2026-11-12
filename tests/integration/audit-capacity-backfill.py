@@ -304,6 +304,9 @@ try:
    assert proxy.dropped.is_set() and not proxy.errors
   stable=retention_snapshot('retention_activation_loss');cli(retention_activate,'retention_activation_loss');assert retention_snapshot('retention_activation_loss')==stable
   cli(retention_activate,'retention_empty')
+  resolution_env=dict(env,HEIMDALL_TEST_RETAINED_RESOLUTION_URL=dsn('retention_activation'))
+  go('^TestRetainedResolution$',resolution_env)
+  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-resolution.test.ts'],env=resolution_env)
   print('Retention activation passed: read-only semantic revalidation, atomic publication, old-writer exclusion, TS/Go readiness and lost COMMIT retry',flush=True)
   # Public factories run on an independent activated clone; v3 migration history stays fixed.
   sql('CREATE DATABASE public_v4_capacity TEMPLATE retention_activation')
@@ -334,6 +337,20 @@ try:
    runtime_profile(peer,dict(selected,HEIMDALL_TEST_RETAINED_RUNTIME_URL=dsn(database)+'&options=-c%20role%3Dretained_runtime_profile'))
    assert sql(json.loads((ROOT/'contracts/fixtures/retained-writes.json').read_text())['snapshot'],database)==stable
   print('Retained v4 runtime passed: scoped writes recovery reads eligibility legacy refusal restricted privileges and reciprocal COMMIT loss',flush=True)
+  for language in ['go','ts']:
+   for lost in [False,True]:
+    database='retained_batch_'+language+('_loss' if lost else '')
+    sql('CREATE DATABASE '+database+' TEMPLATE retention_activation')
+    sql(runtime_grants.replace('retained_runtime_profile','public_capacity_runtime'),database)
+    selected=dict(env,HEIMDALL_TEST_RECOVERY_BATCH_URL=dsn(database),HEIMDALL_TEST_RECOVERY_BATCH_V4='1')
+    def retained_batch():
+     if language=='go':go('^TestRecoveryBatchPostgres$',selected)
+     else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-recovery-batch.test.ts'],env=selected)
+    if lost:
+     with CommitLossProxy(int(port)) as proxy:
+      selected['HEIMDALL_TEST_RECOVERY_BATCH_LOSS']=dsn(database,proxy.port)
+      retained_batch();assert proxy.dropped.is_set() and not proxy.errors
+    else:retained_batch()
   for language in ['go','ts']:
    for lost in [False,True]:
     database='runtime_recovery_'+language+('_loss' if lost else '')
@@ -701,6 +718,25 @@ try:
   selected=dict(env,HEIMDALL_TEST_RETIRED_DECISION_URL=dsn(decision_db))
   go('^TestRetiredDecisionInspection$',selected)
   run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retired-decision.test.ts'],env=selected)
+  # Exercise retired resolution on an actually activated v4 database as well.
+  sql('CREATE DATABASE retired_resolution_v4 TEMPLATE retention_activation')
+  sql("UPDATE heimdall_capacity.policy SET event_limit=event_limit+10; UPDATE heimdall_capacity.upgrade SET event_limit=(SELECT event_limit FROM heimdall_capacity.policy)",'retired_resolution_v4')
+  go('^TestRetirementReferences$',dict(env,HEIMDALL_TEST_RETIREMENT_REFERENCE_URL=dsn('retired_resolution_v4'),HEIMDALL_TEST_RETIREMENT_REFERENCE_V4='1'))
+  for scope in decision_retirement['scopes']:
+   product,environment=scope['productId'],scope['environment']
+   where=f"product_id='{product}' AND environment='{environment}'"
+   ids=json.loads(sql("SELECT to_jsonb(array_remove(ARRAY[request_event_id,terminal_event_id,recovery_event_id],NULL)) FROM heimdall_retention.decision_identities WHERE "+where,'retired_resolution_v4'))
+   member_list=json.dumps(sorted(ids));array="ARRAY["+','.join("'"+id+"'" for id in ids)+"]";members=where+' AND event_id=ANY('+array+')'
+   sql("UPDATE heimdall.audit_deliveries SET state='delivered',delivered_at=2001 WHERE "+members,'retired_resolution_v4')
+   retirement=f"INSERT INTO heimdall_retention.retirements(product_id,environment,retirement_id,target_event_id,tenant_id,retired_at,retain_for_ms,administration_event_id,member_event_ids) VALUES('{product}','{environment}','decision-retirement','z-request','tenant-1',3001,1000,'retirement-reference','{member_list}')"
+   detach="DELETE FROM heimdall_capacity.reservations WHERE "+where+"; DELETE FROM heimdall.audit_decisions WHERE "+where+';'
+   sql('BEGIN;'+retirement+';'+detach+remove_members(members)+';COMMIT;','retired_resolution_v4')
+  resolution_v4=dict(env,HEIMDALL_TEST_RETAINED_RESOLUTION_URL=dsn('retired_resolution_v4'),HEIMDALL_TEST_RETAINED_RESOLUTION_RETIRED='1',HEIMDALL_TEST_RETAINED_RESOLUTION_V4='1')
+  go('^TestRetainedResolution$',resolution_v4)
+  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-resolution.test.ts'],env=resolution_v4)
+  resolution_env=dict(env,HEIMDALL_TEST_RETAINED_RESOLUTION_URL=dsn(decision_db),HEIMDALL_TEST_RETAINED_RESOLUTION_RETIRED='1')
+  go('^TestRetainedResolution$',resolution_env)
+  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-resolution.test.ts'],env=resolution_env)
   retry_snapshot="SELECT jsonb_build_object('events',(SELECT jsonb_agg(to_jsonb(e) ORDER BY product_id,environment,event_id) FROM heimdall.audit_events e),'deliveries',(SELECT jsonb_agg(to_jsonb(d) ORDER BY product_id,environment,event_id,sink_id) FROM heimdall.audit_deliveries d),'metadata',(SELECT to_jsonb(c) FROM heimdall_retention.capacity c))"
   before_retry=sql(retry_snapshot,decision_db)
   selected=dict(env,HEIMDALL_TEST_RETAINED_RETRY_URL=dsn(decision_db))

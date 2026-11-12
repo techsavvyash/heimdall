@@ -53,6 +53,13 @@ func TestRetirementReferences(t *testing.T) {
 		event["recordedAt"] = float64(f.RetiredAt)
 		a := backfillPort(t, db, scope.ProductID)
 		a.environment = scope.Environment
+		if os.Getenv("HEIMDALL_TEST_RETIREMENT_REFERENCE_V4") == "1" {
+			a.retainedRuntime = true
+			if _, e = a.AppendRetained(context.Background(), event); e != nil {
+				t.Fatal(e)
+			}
+			continue
+		}
 		if _, e = a.AppendRuntime(context.Background(), event); e != nil {
 			t.Fatal(e)
 		}

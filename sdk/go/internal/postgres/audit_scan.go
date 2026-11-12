@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
+	"strings"
 	"time"
 )
 
@@ -55,7 +56,7 @@ func (a *Audit) ScanPendingDecisions(ctx context.Context, cutoff int64, after *A
 	var primary bool
 	var total int
 	var raw []byte
-	e := a.db.QueryRowContext(ctx, `WITH selected AS MATERIALIZED (
+	statement := `WITH selected AS MATERIALIZED (
  SELECT d.decision_id,d.requested_at,d.request_event_id,e.recorded_at,e.payload_digest,e.event
  FROM heimdall.audit_decisions d LEFT JOIN heimdall.audit_events e ON e.product_id=d.product_id AND e.environment=d.environment AND e.event_id=d.request_event_id
  WHERE d.product_id=$1 AND d.environment=$2 AND d.resolution='pending' AND d.requested_at<=$3
@@ -66,7 +67,14 @@ func (a *Audit) ScanPendingDecisions(ctx context.Context, cutoff int64, after *A
 ), sized AS (
  SELECT *,sum(octet_length(record::text)) OVER(ORDER BY requested_at,decision_id COLLATE "C") AS size FROM encoded
 ) SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off',
- (SELECT count(*)::int FROM selected),COALESCE(jsonb_agg(record ORDER BY requested_at,decision_id COLLATE "C"),'[]'::jsonb) FROM sized WHERE size<=4194304`, a.product, a.environment, cutoff, at, id, limit+1).Scan(&primary, &total, &raw)
+ (SELECT count(*)::int FROM selected),COALESCE(jsonb_agg(record ORDER BY requested_at,decision_id COLLATE "C"),'[]'::jsonb) FROM sized WHERE size<=4194304`
+	args := []any{a.product, a.environment, cutoff, at, id, limit + 1}
+	if a.retainedRuntime {
+		readiness := strings.NewReplacer("$1", "$7", "$2", "$8", "$3", "$9", "$4", "$10", "$5", "$11", "$6", "$12").Replace(retentionReadinessSQL)
+		statement = strings.Replace(statement, "NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'", "(SELECT ready FROM ("+readiness+") admission)", 1)
+		args = append(args, retentionReadinessArgs()...)
+	}
+	e := a.db.QueryRowContext(ctx, statement, args...).Scan(&primary, &total, &raw)
 	if e != nil {
 		return nil, databaseError(ctx)
 	}

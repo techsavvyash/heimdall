@@ -58,6 +58,12 @@ func TestRetainedRuntime(t *testing.T) {
 		if _, e = port.Recover(ctx, f.Terminal, f.Administration, 2001); !errors.Is(e, contract.ErrUnavailable) {
 			t.Fatal(e)
 		}
+		if _, e = port.ScanPendingDecisions(ctx, 2001, nil, 1); !errors.Is(e, contract.ErrUnavailable) {
+			t.Fatal(e)
+		}
+		if _, e = port.ReadResolution(ctx, "decision-1"); !errors.Is(e, contract.ErrUnavailable) {
+			t.Fatal(e)
+		}
 		return
 	}
 	if os.Getenv("HEIMDALL_TEST_RETAINED_RUNTIME_LOSS") == "1" {
@@ -111,6 +117,18 @@ func TestRetainedRuntime(t *testing.T) {
 				}
 			case "recover":
 				_, err = port.Recover(ctx, f.Terminal, f.Administration, 2001)
+			case "scan":
+				var page *AuditDecisionPage
+				page, err = port.ScanPendingDecisions(ctx, 2001, nil, 1)
+				if page != nil && len(page.Items) == 0 {
+					status = "empty"
+				}
+			case "resolution":
+				var found *AuditResolution
+				found, err = port.ReadResolution(ctx, "decision-1")
+				if found != nil {
+					status = found.State
+				}
 			case "inspect":
 				var found *RetainedEventInspection
 				found, err = port.Inspect(ctx, &tenant, "ordinary")

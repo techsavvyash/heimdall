@@ -558,9 +558,10 @@ counts as live counters. Old v3 admission refuses the activated database.
 
 TS and Go now have internal single-snapshot standalone and managed v4 readiness
 checks with shared mutation fixtures. These are compatibility checks, not complete
-catalog/history validation. Public v4 writer/read/recovery wiring and grants remain
-unimplemented. Keep applications drained until that integration is qualified;
-activation alone does not enable retention or satisfy Phase 3 acceptance.
+catalog/history validation. Public bearer storage now uses v4 admission and retained
+audit writes; trusted internal recovery maintenance also uses retained history.
+Managed composition and operational qualification remain incomplete. Activation
+alone does not enable retention or satisfy Phase 3 acceptance.
 
 ## Internal retained runtime admission
 
@@ -576,6 +577,8 @@ read-only and legacy-v3 connections refuse in both SDKs.
 The retained-runtime fixture and pinned PostgreSQL harness cover normal/decision
 writes, recovery, changed-tenant conflict, migrating refusal, restricted grants,
 read-only admission and reciprocal confirmed-COMMIT loss. Activation retry after
-new v4 history must preserve all data and accounting. These internal ports do not
-yet change public factories, identity admission or managed composition. No deletion
-is exposed and operational qualification remains required before serving v4.
+new v4 history must preserve all data and accounting. Public factories now compose
+retained writes with v4 identity admission. Internal bounded recovery maintenance
+also uses these ports and checks readiness even for empty scans. Managed composition
+remains unfinished. No deletion is exposed and operational qualification remains
+required before production use.

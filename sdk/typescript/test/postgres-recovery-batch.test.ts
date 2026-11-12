@@ -27,16 +27,17 @@ test.skipIf(!process.env.HEIMDALL_TEST_RECOVERY_BATCH_URL)(
         "utf8",
       ),
     );
-    const a = new PostgresAudit(pool, "support", "staging", ["siem"], (event) => {
-      validateAuditShape(event);
-      validateAuditEvent(event as Parameters<typeof validateAuditEvent>[0], "sdk", () => false);
-    });
-    const writer = fault
-      ? new PostgresAudit(fault, "support", "staging", ["siem"], (event) => {
-          validateAuditShape(event);
-          validateAuditEvent(event as Parameters<typeof validateAuditEvent>[0], "sdk", () => false);
-        })
-      : a;
+    const make = (pool: Pool) => {
+      const validate = (event: Record<string, unknown>) => {
+        validateAuditShape(event);
+        validateAuditEvent(event as Parameters<typeof validateAuditEvent>[0], "sdk", () => false);
+      };
+      return process.env.HEIMDALL_TEST_RECOVERY_BATCH_V4 === "1"
+        ? PostgresAudit.forRetainedRuntime(pool, "support", "staging", ["siem"], validate)
+        : new PostgresAudit(pool, "support", "staging", ["siem"], validate);
+    };
+    const a = make(pool),
+      writer = fault ? make(fault) : a;
     const port = {
       scanPendingDecisions: a.scanPendingDecisions.bind(a),
       readResolution: a.readResolution.bind(a),
@@ -46,6 +47,10 @@ test.skipIf(!process.env.HEIMDALL_TEST_RECOVERY_BATCH_URL)(
       await admin.query(
         "UPDATE heimdall_capacity.policy SET event_limit=used_events+reserved_events; UPDATE heimdall_capacity.upgrade SET event_limit=(SELECT event_limit FROM heimdall_capacity.policy)",
       );
+      if (process.env.HEIMDALL_TEST_RECOVERY_BATCH_V4 === "1")
+        await admin.query(
+          "UPDATE heimdall_retention.capacity SET row_limit=used_rows+reserved_rows; UPDATE heimdall_retention.upgrade SET row_limit=(SELECT row_limit FROM heimdall_retention.capacity)",
+        );
       let proposals = 0;
       const propose = (request: Record<string, unknown>) => {
         proposals++;

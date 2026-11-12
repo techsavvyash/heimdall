@@ -8,6 +8,7 @@ import {
   capacitySQL,
   retentionSQL,
   retentionChecksums,
+  retentionArgs,
   lockRetentionAdmission,
 } from "./readiness.js";
 import {
@@ -53,7 +54,10 @@ export class PostgresAudit {
     return Object.freeze({
       append: audit.appendRetained.bind(audit),
       recover: audit.recoverRetained.bind(audit),
+      recoverRuntime: audit.recoverRetained.bind(audit),
+      scanPendingDecisions: audit.scanPendingDecisions.bind(audit),
       inspect: audit.inspectRetainedEvent.bind(audit),
+      readResolution: audit.readRetainedResolution.bind(audit),
       resolveReceipt: audit.resolveRetainedReceipt.bind(audit),
       eligibility: audit.inspectRetentionEligibility.bind(audit),
     });
@@ -281,6 +285,97 @@ export class PostgresAudit {
       now,
       retainForMs,
     );
+  }
+  // Unknown decisions are absent; retired payloads are explicitly unavailable.
+  async readRetainedResolution(decisionId: string, signal?: AbortSignal) {
+    if (!token(decisionId, 128)) throw new HeimdallError("invalid_argument");
+    const rows = await query<{
+      root: RetainedRow;
+      resolution: string | null;
+      bound: boolean;
+      source_present: boolean;
+      members: { eventId: string; row: RetainedRow }[];
+    }>(
+      this.pool,
+      this.retainedHistorySQL(retainedResolutionSQL),
+      this.retainedHistoryArgs(decisionId),
+      false,
+      signal,
+    );
+    if (rows.length !== 1) throw new HeimdallError("unavailable");
+    const r = rows[0]!;
+    const root = this.decodeRetainedRow(
+      r.root,
+      r.root.tenant_id,
+      r.root.identity?.eventId ?? "",
+      true,
+    );
+    if (!root) {
+      if (r.source_present) throw new HeimdallError("audit_unavailable");
+      return null;
+    }
+    if (
+      root.identity.kind !== "request" ||
+      root.identity.decisionId !== decisionId ||
+      r.resolution === null
+    )
+      throw new HeimdallError("audit_unavailable");
+    const expected = ({ pending: 1, completed: 2, recovered: 3 } as Record<string, number>)[
+      r.resolution
+    ];
+    if (!expected || !Array.isArray(r.members) || r.members.length !== expected)
+      throw new HeimdallError("audit_unavailable");
+    const sources = [];
+    const seen = new Set<string>();
+    let request: Record<string, unknown> | null = null;
+    let terminal: Record<string, unknown> | null = null;
+    let administration: Record<string, unknown> | null = null;
+    for (const m of r.members) {
+      const member = this.decodeRetainedRow(m.row, r.root.tenant_id, m.eventId, true);
+      if (
+        !member ||
+        member.state !== root.state ||
+        seen.has(m.eventId) ||
+        member.identity.decisionId !== decisionId
+      )
+        throw new HeimdallError("audit_unavailable");
+      seen.add(m.eventId);
+      if (member.state === "live") {
+        sources.push({
+          event: member.event,
+          digest: member.identity.digest,
+          routing: member.identity.routing,
+          deliveryRows: member.identity.routing.length,
+        });
+        switch (member.identity.kind) {
+          case "request":
+            request = member.event;
+            break;
+          case "terminal":
+            terminal = member.event;
+            break;
+          case "recovery":
+            administration = member.event;
+            break;
+          default:
+            throw new HeimdallError("audit_unavailable");
+        }
+      }
+    }
+    if (root.state === "retired") throw new HeimdallError("not_found");
+    if (!r.bound) throw new HeimdallError("audit_unavailable");
+    buildRetentionIdentities(
+      { productId: this.productId, environment: this.environment, tenantId: r.root.tenant_id },
+      r.resolution,
+      sources,
+    );
+    return {
+      decisionId,
+      state: r.resolution as "pending" | "completed" | "recovered",
+      request: request!,
+      terminal,
+      administration,
+    };
   }
   // Prepared deployment port only: callers drain writers and install the pinned
   // identity schema. This does not activate retention or provide a runtime API.
@@ -552,6 +647,14 @@ export class PostgresAudit {
     );
   }
   // Internal maintenance cursor, not an authenticated public pagination token.
+  private pendingReadSQL(sql: string) {
+    if (!this.retainedRuntime) return sql;
+    const readiness = retentionSQL.replace(/\$[1-6]/g, (x) => "$" + (Number(x.slice(1)) + 6));
+    return sql.replace(
+      "NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'",
+      `(SELECT ready FROM (${readiness}) admission)`,
+    );
+  }
   async scanPendingDecisions(
     cutoff: number,
     after: {
@@ -595,7 +698,7 @@ export class PostgresAudit {
       }[];
     }>(
       this.pool,
-      `
+      this.pendingReadSQL(`
 WITH selected AS MATERIALIZED (
  SELECT d.decision_id,d.requested_at,d.request_event_id,e.recorded_at,e.payload_digest,e.event
  FROM heimdall.audit_decisions d LEFT JOIN heimdall.audit_events e ON e.product_id=d.product_id AND e.environment=d.environment AND e.event_id=d.request_event_id
@@ -607,7 +710,7 @@ WITH selected AS MATERIALIZED (
 ), sized AS (
  SELECT *,sum(octet_length(record::text)) OVER(ORDER BY requested_at,decision_id COLLATE "C") AS size FROM encoded
 ) SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
- (SELECT count(*)::int FROM selected) AS total,COALESCE(jsonb_agg(record ORDER BY requested_at,decision_id COLLATE "C"),'[]'::jsonb) AS records FROM sized WHERE size<=4194304`,
+ (SELECT count(*)::int FROM selected) AS total,COALESCE(jsonb_agg(record ORDER BY requested_at,decision_id COLLATE "C"),'[]'::jsonb) AS records FROM sized WHERE size<=4194304`),
       [
         this.productId,
         this.environment,
@@ -615,6 +718,7 @@ WITH selected AS MATERIALIZED (
         after?.requestedAt ?? null,
         after?.decisionId ?? null,
         limit + 1,
+        ...(this.retainedRuntime ? retentionArgs : []),
       ],
       false,
       signal,
@@ -1488,7 +1592,10 @@ const retentionEligibilitySQL = `SELECT to_jsonb(root) AS root,
  coalesce(root.identity->>'kind'='ordinary' OR (
   (d.request_event_id,d.requested_at,d.resolution,d.terminal_event_id,d.resolved_at) IS NOT DISTINCT FROM (source.request_event_id,source.requested_at,source.resolution,source.terminal_event_id,source.resolved_at)
   AND (d.request_event_id,d.resolution,d.terminal_event_id,d.recovery_event_id) IS NOT DISTINCT FROM (reservation.request_event_id,reservation.resolution,reservation.terminal_event_id,reservation.recovery_event_id)
-  AND source.decision_id IS NOT NULL AND reservation.decision_id IS NOT NULL),false) AS bound,
+  AND source.decision_id IS NOT NULL AND reservation.decision_id IS NOT NULL
+  AND d.requested_at=(root.identity->>'recordedAt')::bigint
+  AND (d.resolution='pending' OR EXISTS(SELECT 1 FROM heimdall_retention.event_identities terminal
+   WHERE terminal.product_id=d.product_id AND terminal.environment=d.environment AND terminal.event_id=d.terminal_event_id AND terminal.recorded_at=d.resolved_at))),false) AS bound,
  EXISTS(SELECT 1 FROM heimdall_retention.event_holds h WHERE h.product_id=$5 AND h.environment=$6 AND h.event_id=ANY(chosen.ids) AND h.purpose='administrative' AND h.released_at IS NULL) AS held,
  EXISTS(SELECT 1 FROM heimdall_retention.event_holds h WHERE h.product_id=$5 AND h.environment=$6 AND h.event_id=ANY(chosen.ids) AND h.purpose='retry' AND h.released_at IS NULL) AS retry
 FROM (${eligibilityReadSQL}) root
@@ -1503,3 +1610,9 @@ LEFT JOIN LATERAL (
  LEFT JOIN LATERAL (SELECT jsonb_agg(jsonb_build_object('sinkId',sink_id,'state',state,'deliveredAt',delivered_at) ORDER BY sink_id COLLATE "C") AS rows FROM (SELECT sink_id,state,delivered_at FROM heimdall.audit_deliveries WHERE product_id=$5 AND environment=$6 AND event_id=member.event_id LIMIT 33) bounded) delivery ON true
 ) group_rows ON true
 `;
+
+const retainedResolutionSQL = `SELECT snapshot.*,
+ EXISTS(SELECT 1 FROM heimdall.audit_decisions WHERE product_id=$5 AND environment=$6 AND decision_id=$7)
+ OR EXISTS(SELECT 1 FROM heimdall_retention.event_identities WHERE product_id=$5 AND environment=$6 AND decision_id=$7)
+ OR EXISTS(SELECT 1 FROM heimdall_retention.decision_identities WHERE product_id=$5 AND environment=$6 AND decision_id=$7) AS source_present
+ FROM (${retentionEligibilitySQL.replaceAll("$7", "(SELECT request_event_id FROM heimdall_retention.decision_identities WHERE product_id=$5 AND environment=$6 AND decision_id=$7)")}) snapshot`;
