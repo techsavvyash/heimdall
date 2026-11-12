@@ -519,6 +519,58 @@ try:
   assert sql("SELECT database_version FROM heimdall.schema_metadata",database)=='5'
   print('v5 public factory proof passed in TS and Go',flush=True)
   # END v5 public factory proof
+  # BEGIN audited retirement proof
+  database='retirement_runtime_v5'
+  sql('CREATE DATABASE '+database+' TEMPLATE retained_holds_v4')
+  sql('ALTER TABLE heimdall_retention.event_holds DROP CONSTRAINT test_late_hold_failure',database)
+  cli(command,database)
+  cli(activate_release,database)
+  sql('CREATE ROLE retained_retirement_runtime',database)
+  sql(runtime_grants.replace('retained_runtime_profile','retained_retirement_runtime')+
+    '; GRANT INSERT ON heimdall_retention.retirements TO retained_retirement_runtime; GRANT UPDATE(state) ON heimdall.audit_deliveries TO retained_retirement_runtime; GRANT DELETE ON heimdall.audit_events,heimdall.audit_deliveries,heimdall.audit_decisions,heimdall_capacity.event_charges,heimdall_capacity.reservations TO retained_retirement_runtime',database)
+  role='&options=-c%20role%3Dretained_retirement_runtime'
+  retirement_env=dict(env,HEIMDALL_TEST_RETIRE_URL=dsn(database)+role,HEIMDALL_TEST_RETIRE_ADMIN=dsn(database))
+  def retire_test(language,settings):
+   if language=='go':go('^TestRetainedRetirement$',settings)
+   else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retire.test.ts'],env=settings)
+  for language in ['ts','go']:
+   retire_test(language,dict(retirement_env,HEIMDALL_TEST_RETIRE_CASE='ordinary',HEIMDALL_TEST_RETIRE_EXPECT='conflict'))
+  sql("UPDATE heimdall.audit_deliveries SET state='delivered',delivered_at=6001",database)
+  for language in ['ts','go']:
+   for case in ['pending','held','too-young','wrong-tenant']:
+    retire_test(language,dict(retirement_env,HEIMDALL_TEST_RETIRE_CASE=case))
+   retire_test(language,dict(retirement_env,HEIMDALL_TEST_RETIRE_CASE='ordinary',HEIMDALL_TEST_RETIRE_EXPECT='unavailable',HEIMDALL_TEST_RETIRE_URL=dsn(database)+'&options=-c%20role%3Dretained_hold_runtime'))
+  sql("""CREATE FUNCTION heimdall.test_retire_failure() RETURNS trigger LANGUAGE plpgsql AS $$
+   BEGIN RAISE EXCEPTION 'test retirement rollback' USING ERRCODE='23514'; END $$;
+   CREATE TRIGGER test_retire_failure BEFORE DELETE ON heimdall.audit_events FOR EACH ROW EXECUTE FUNCTION heimdall.test_retire_failure()""",database)
+  for language in ['ts','go']:
+   retire_test(language,dict(retirement_env,HEIMDALL_TEST_RETIRE_CASE='ordinary',HEIMDALL_TEST_RETIRE_EXPECT='audit_unavailable'))
+  sql('DROP TRIGGER test_retire_failure ON heimdall.audit_events; DROP FUNCTION heimdall.test_retire_failure()',database)
+  for case,first,second,product,environment,count in [('ordinary','go','ts','ledger','staging',1),
+    ('completed','ts','go','ledger','staging',2),('recovered','go','ts','support','production',3)]:
+   selected=dict(retirement_env,HEIMDALL_TEST_RETIRE_CASE=case)
+   where=f"product_id='{product}' AND environment='{environment}'"
+   charged_before=int(sql('SELECT used_events FROM heimdall_capacity.policy',database))
+   identities_before=int(sql('SELECT count(*) FROM heimdall_retention.event_identities',database))
+   metadata_before=int(sql('SELECT used_rows FROM heimdall_retention.capacity',database))
+   if case=='completed':
+    retire_test(first,selected)
+   else:
+    with CommitLossProxy(int(port)) as proxy:
+     retire_test(first,dict(selected,HEIMDALL_TEST_RETIRE_EXPECT='outcome_unknown',HEIMDALL_TEST_RETIRE_URL=dsn(database,proxy.port)+role))
+     assert proxy.dropped.is_set() and not proxy.errors
+   retire_test(second,dict(selected,HEIMDALL_TEST_RETIRE_RETRY='1'))
+   assert sql(f"SELECT jsonb_array_length(member_event_ids) FROM heimdall_retention.retirements WHERE {where} AND retirement_id='retire-{case}'",database)==str(count)
+   assert int(sql('SELECT used_events FROM heimdall_capacity.policy',database))==charged_before+1-count
+   assert int(sql('SELECT count(*) FROM heimdall_retention.event_identities',database))==identities_before+1
+   assert int(sql('SELECT used_rows FROM heimdall_retention.capacity',database))==metadata_before+2
+   assert sql("""SELECT (p.used_events,p.used_bytes,p.used_deliveries)=(c.events,c.bytes,c.deliveries)
+    FROM heimdall_capacity.policy p CROSS JOIN (
+      SELECT count(*) AS events,coalesce(sum(envelope_bytes),0) AS bytes,coalesce(sum(delivery_rows),0) AS deliveries
+      FROM heimdall_capacity.event_charges
+    ) c""",database)=='t'
+  print('Audited retirement passed: all group shapes, refusal, restricted role, rollback and cross-language receipts',flush=True)
+  # END audited retirement proof
   # BEGIN retained hold fault proof
   for language in ['ts','go']:
    database='retained_holds_loss_'+language

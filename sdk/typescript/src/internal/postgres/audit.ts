@@ -1,3 +1,4 @@
+import { validateAuditRetirement, type AuditRetirementRequest } from "../audit-retire.js";
 import { validateAuditHold, type AuditHoldRequest } from "../audit-hold.js";
 import { classifyAuditRetention, defaultAuditRetentionMs } from "../audit-retention.js";
 import { buildRetentionIdentities } from "../retention-identities.js";
@@ -29,6 +30,18 @@ import { HeimdallError } from "../errors.js";
 import { transaction, query } from "./query.js";
 const token = (v: unknown, max: number): v is string =>
   typeof v === "string" && v.length > 0 && v.length <= max && !/[^A-Za-z0-9_-]/.test(v);
+type RetentionEligibilityRow = {
+  root: RetainedRow;
+  bound: boolean;
+  resolution: string;
+  held: boolean;
+  retry: boolean;
+  members: {
+    eventId: string;
+    row: RetainedRow;
+    deliveries: { sinkId: string; state: string; deliveredAt: number | null }[];
+  }[];
+};
 type RetainedRow = {
   ready: boolean;
   present: boolean;
@@ -54,6 +67,7 @@ export class PostgresAudit {
     audit.retainedRuntime = true;
     return Object.freeze({
       append: audit.appendRetained.bind(audit),
+      retire: audit.retire.bind(audit),
       applyHold: audit.applyHold.bind(audit),
       appendWith: audit.appendRetainedWith.bind(audit),
       recover: audit.recoverRetained.bind(audit),
@@ -230,18 +244,7 @@ export class PostgresAudit {
       retainForMs < 1
     )
       throw new HeimdallError("invalid_argument");
-    const rows = await query<{
-      root: RetainedRow;
-      bound: boolean;
-      resolution: string;
-      held: boolean;
-      retry: boolean;
-      members: {
-        eventId: string;
-        row: RetainedRow;
-        deliveries: { sinkId: string; state: string; deliveredAt: number | null }[];
-      }[];
-    }>(
+    const rows = await query<RetentionEligibilityRow>(
       this.pool,
       this.retainedHistorySQL(retentionEligibilitySQL),
       this.retainedHistoryArgs(eventId),
@@ -249,7 +252,17 @@ export class PostgresAudit {
       signal,
     );
     if (rows.length !== 1) throw new HeimdallError("unavailable");
-    const r = rows[0]!;
+    return (
+      this.decodeRetirementCandidate(rows[0]!, tenantId, eventId, now, retainForMs)?.reason ?? null
+    );
+  }
+  private decodeRetirementCandidate(
+    r: RetentionEligibilityRow,
+    tenantId: string | null,
+    eventId: string,
+    now: number,
+    retainForMs: number,
+  ) {
     const root = this.decodeRetainedRow(r.root, tenantId, eventId, true);
     if (!root) return null;
     if (root.state === "retired") throw new HeimdallError("not_found");
@@ -277,7 +290,7 @@ export class PostgresAudit {
       });
     }
     buildRetentionIdentities(scope, r.resolution, sources);
-    return classifyAuditRetention(
+    const reason = classifyAuditRetention(
       scope,
       {
         resolution: r.resolution,
@@ -288,6 +301,7 @@ export class PostgresAudit {
       now,
       retainForMs,
     );
+    return { reason, ids: events.map((e) => e.eventId), decisionId: root.identity.decisionId };
   }
   // Unknown decisions are absent; retired payloads are explicitly unavailable.
   async readRetainedResolution(decisionId: string, signal?: AbortSignal) {
@@ -1099,6 +1113,105 @@ WITH selected AS MATERIALIZED (
         await this.retainIdentityGroupTx(client, tenant, resolution, ids);
         await finalize(client);
         return receipt;
+      },
+      signal,
+    );
+  }
+  // Privileged persistence. Trusted orchestration supplies authorization and the policy clock.
+  private async retire(
+    request: AuditRetirementRequest,
+    administration: Record<string, unknown>,
+    signal?: AbortSignal,
+  ) {
+    const r = { ...request };
+    if (r.productId !== this.productId || r.environment !== this.environment)
+      throw new HeimdallError("invalid_argument");
+    const p = this.prepare(administration);
+    validateAuditRetirement(r, p.snapshot);
+    const marker = [
+      r.productId,
+      r.environment,
+      r.retirementId,
+      r.eventId,
+      r.tenantId,
+      r.at,
+      r.retainForMs,
+      p.eventId,
+    ];
+    let candidate: ReturnType<PostgresAudit["decodeRetirementCandidate"]> = null;
+    return this.appendRetainedFinalized(
+      p.snapshot,
+      async (client) => {
+        const previous = await client.query<{ same: boolean }>(
+          `SELECT retirement_id=$3 AND target_event_id=$4 AND tenant_id IS NOT DISTINCT FROM $5::text
+            AND retired_at=$6 AND retain_for_ms=$7 AND administration_event_id=$8 AS same
+            FROM heimdall_retention.retirements WHERE product_id=$1 AND environment=$2
+            AND (retirement_id=$3 OR (target_event_id=$4 AND tenant_id IS NOT DISTINCT FROM $5::text))`,
+          marker,
+        );
+        const prior = await this.readRetainedTx(client, p.eventId);
+        if (previous.rows.length) {
+          if (previous.rows.length !== 1 || previous.rows[0]?.same !== true)
+            throw new HeimdallError("conflict");
+          const root = await this.readRetainedTx(client, r.eventId);
+          if (!prior || root?.state !== "retired" || root.identity.tenantId !== r.tenantId)
+            throw new HeimdallError("audit_unavailable");
+          return;
+        }
+        if (prior) throw new HeimdallError("audit_unavailable");
+        const result = await client.query<RetentionEligibilityRow>(
+          this.retainedHistorySQL(retentionEligibilitySQL),
+          this.retainedHistoryArgs(r.eventId),
+        );
+        if (result.rows.length !== 1) throw new HeimdallError("unavailable");
+        candidate = this.decodeRetirementCandidate(
+          result.rows[0]!,
+          r.tenantId,
+          r.eventId,
+          r.at,
+          r.retainForMs,
+        );
+        if (!candidate) throw new HeimdallError("not_found");
+        if (candidate.reason !== "candidate") throw new HeimdallError("conflict");
+      },
+      async (client) => {
+        if (!candidate) return;
+        await capacityWrite(
+          client,
+          `INSERT INTO heimdall_retention.retirements
+          (product_id,environment,retirement_id,target_event_id,tenant_id,retired_at,retain_for_ms,administration_event_id,member_event_ids)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
+          [...marker, JSON.stringify(candidate.ids)],
+        );
+        const remove = async (
+          table: string,
+          where: string,
+          key: unknown,
+          expected: number | null,
+        ) => {
+          const result = await capacityWrite(
+            client,
+            `DELETE FROM ${table} WHERE product_id=$1 AND environment=$2 AND ${where}`,
+            [r.productId, r.environment, key],
+          );
+          if (expected !== null && result.rowCount !== expected)
+            throw new HeimdallError("audit_unavailable");
+        };
+        if (candidate.decisionId !== null) {
+          for (const table of ["heimdall_capacity.reservations", "heimdall.audit_decisions"])
+            await remove(table, "decision_id=$3", candidate.decisionId, 1);
+        }
+        for (const table of [
+          "heimdall.audit_deliveries",
+          "heimdall_capacity.event_charges",
+          "heimdall.audit_events",
+        ])
+          await remove(
+            table,
+            "event_id=ANY($3)",
+            candidate.ids,
+            table === "heimdall.audit_deliveries" ? null : candidate.ids.length,
+          );
       },
       signal,
     );

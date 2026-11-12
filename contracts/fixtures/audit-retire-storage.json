@@ -1,0 +1,353 @@
+{
+  "snapshot": "SELECT jsonb_build_object('retirements',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_retention.retirements t),'holds',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_retention.event_holds t),'events',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall.audit_events t),'deliveries',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall.audit_deliveries t),'decisions',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall.audit_decisions t),'charges',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_capacity.event_charges t),'reservations',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_capacity.reservations t),'payloadCapacity',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_capacity.policy t),'identities',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_retention.event_identities t),'retainedDecisions',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_retention.decision_identities t),'metadata',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_retention.capacity t))::text AS snapshot",
+  "cases": [
+    {
+      "name": "ordinary",
+      "request": {
+        "productId": "ledger",
+        "environment": "staging",
+        "tenantId": "tenant-1",
+        "retirementId": "retire-ordinary",
+        "eventId": "ordinary",
+        "at": 100000,
+        "retainForMs": 1000,
+        "policyVersion": "retention-1"
+      },
+      "administration": {
+        "schemaVersion": 1,
+        "eventId": "retirement-d8ef56c38514642d23efec04c9ca68d2da822d999765d986babe914091097fa1",
+        "eventType": "heimdall.policy.completed",
+        "eventVersion": 1,
+        "occurredAt": 100000,
+        "recordedAt": 100000,
+        "productId": "ledger",
+        "environment": "staging",
+        "tenantId": "tenant-1",
+        "actor": {
+          "kind": "system",
+          "id": "maintenance"
+        },
+        "target": {
+          "type": "audit_event",
+          "id": "ordinary"
+        },
+        "action": "audit.retention.retire",
+        "outcome": "succeeded",
+        "requestId": "request-1",
+        "source": "sdk",
+        "sdkVersion": "0.0.0",
+        "attributes": {},
+        "operationId": "retire-ordinary",
+        "policyVersion": "retention-1"
+      },
+      "expected": "receipt"
+    },
+    {
+      "name": "completed",
+      "request": {
+        "productId": "ledger",
+        "environment": "staging",
+        "tenantId": "tenant-1",
+        "retirementId": "retire-completed",
+        "eventId": "z-request",
+        "at": 100000,
+        "retainForMs": 1000,
+        "policyVersion": "retention-1"
+      },
+      "administration": {
+        "schemaVersion": 1,
+        "eventId": "retirement-5e4601fc629cc6da9af40e0f06f68e6d5f5fde3c2dc21dc3f7f0413decd6a22f",
+        "eventType": "heimdall.policy.completed",
+        "eventVersion": 1,
+        "occurredAt": 100000,
+        "recordedAt": 100000,
+        "productId": "ledger",
+        "environment": "staging",
+        "tenantId": "tenant-1",
+        "actor": {
+          "kind": "system",
+          "id": "maintenance"
+        },
+        "target": {
+          "type": "audit_event",
+          "id": "z-request"
+        },
+        "action": "audit.retention.retire",
+        "outcome": "succeeded",
+        "requestId": "request-1",
+        "source": "sdk",
+        "sdkVersion": "0.0.0",
+        "attributes": {},
+        "operationId": "retire-completed",
+        "policyVersion": "retention-1"
+      },
+      "expected": "receipt"
+    },
+    {
+      "name": "recovered",
+      "request": {
+        "productId": "support",
+        "environment": "production",
+        "tenantId": "tenant-1",
+        "retirementId": "retire-recovered",
+        "eventId": "z-request",
+        "at": 100000,
+        "retainForMs": 1000,
+        "policyVersion": "retention-1"
+      },
+      "administration": {
+        "schemaVersion": 1,
+        "eventId": "retirement-f125ddf58d1d682483aef6d6e0b9e572e5f214c7947ebeabc45a33de5c628752",
+        "eventType": "heimdall.policy.completed",
+        "eventVersion": 1,
+        "occurredAt": 100000,
+        "recordedAt": 100000,
+        "productId": "support",
+        "environment": "production",
+        "tenantId": "tenant-1",
+        "actor": {
+          "kind": "system",
+          "id": "maintenance"
+        },
+        "target": {
+          "type": "audit_event",
+          "id": "z-request"
+        },
+        "action": "audit.retention.retire",
+        "outcome": "succeeded",
+        "requestId": "request-1",
+        "source": "sdk",
+        "sdkVersion": "0.0.0",
+        "attributes": {},
+        "operationId": "retire-recovered",
+        "policyVersion": "retention-1"
+      },
+      "expected": "receipt"
+    },
+    {
+      "name": "pending",
+      "request": {
+        "productId": "ledger",
+        "environment": "production",
+        "tenantId": "tenant-1",
+        "retirementId": "retire-pending",
+        "eventId": "z-request",
+        "at": 100000,
+        "retainForMs": 1000,
+        "policyVersion": "retention-1"
+      },
+      "administration": {
+        "schemaVersion": 1,
+        "eventId": "retirement-48f143f83680f38f0f8be33d3674ea5b44e272d339641ca99d6b98ad3b0fa1da",
+        "eventType": "heimdall.policy.completed",
+        "eventVersion": 1,
+        "occurredAt": 100000,
+        "recordedAt": 100000,
+        "productId": "ledger",
+        "environment": "production",
+        "tenantId": "tenant-1",
+        "actor": {
+          "kind": "system",
+          "id": "maintenance"
+        },
+        "target": {
+          "type": "audit_event",
+          "id": "z-request"
+        },
+        "action": "audit.retention.retire",
+        "outcome": "succeeded",
+        "requestId": "request-1",
+        "source": "sdk",
+        "sdkVersion": "0.0.0",
+        "attributes": {},
+        "operationId": "retire-pending",
+        "policyVersion": "retention-1"
+      },
+      "expected": "conflict"
+    },
+    {
+      "name": "held",
+      "request": {
+        "productId": "holds-ts",
+        "environment": "production",
+        "tenantId": "tenant-1",
+        "retirementId": "retire-held",
+        "eventId": "ordinary",
+        "at": 100000,
+        "retainForMs": 1000,
+        "policyVersion": "retention-1"
+      },
+      "administration": {
+        "schemaVersion": 1,
+        "eventId": "retirement-0ce5d557ef52bddc93d0843da9f3eb2a07571657047dc51ee3b4cb1d06a42ac1",
+        "eventType": "heimdall.policy.completed",
+        "eventVersion": 1,
+        "occurredAt": 100000,
+        "recordedAt": 100000,
+        "productId": "holds-ts",
+        "environment": "production",
+        "tenantId": "tenant-1",
+        "actor": {
+          "kind": "system",
+          "id": "maintenance"
+        },
+        "target": {
+          "type": "audit_event",
+          "id": "ordinary"
+        },
+        "action": "audit.retention.retire",
+        "outcome": "succeeded",
+        "requestId": "request-1",
+        "source": "sdk",
+        "sdkVersion": "0.0.0",
+        "attributes": {},
+        "operationId": "retire-held",
+        "policyVersion": "retention-1"
+      },
+      "expected": "conflict"
+    },
+    {
+      "name": "too-young",
+      "request": {
+        "productId": "ledger",
+        "environment": "production",
+        "tenantId": "tenant-1",
+        "retirementId": "retire-too-young",
+        "eventId": "ordinary",
+        "at": 6500,
+        "retainForMs": 1000,
+        "policyVersion": "retention-1"
+      },
+      "administration": {
+        "schemaVersion": 1,
+        "eventId": "retirement-a26e884462b5e95080af1a7df70fd27af977a013e5d518d44a292b08171e7eba",
+        "eventType": "heimdall.policy.completed",
+        "eventVersion": 1,
+        "occurredAt": 6500,
+        "recordedAt": 6500,
+        "productId": "ledger",
+        "environment": "production",
+        "tenantId": "tenant-1",
+        "actor": {
+          "kind": "system",
+          "id": "maintenance"
+        },
+        "target": {
+          "type": "audit_event",
+          "id": "ordinary"
+        },
+        "action": "audit.retention.retire",
+        "outcome": "succeeded",
+        "requestId": "request-1",
+        "source": "sdk",
+        "sdkVersion": "0.0.0",
+        "attributes": {},
+        "operationId": "retire-too-young",
+        "policyVersion": "retention-1"
+      },
+      "expected": "conflict"
+    },
+    {
+      "name": "wrong-tenant",
+      "request": {
+        "productId": "ledger",
+        "environment": "production",
+        "tenantId": "elsewhere",
+        "retirementId": "retire-wrong-tenant",
+        "eventId": "ordinary",
+        "at": 100000,
+        "retainForMs": 1000,
+        "policyVersion": "retention-1"
+      },
+      "administration": {
+        "schemaVersion": 1,
+        "eventId": "retirement-6448e80594b725b39a738f35689bce692317f26309132cfb79c712de838110e0",
+        "eventType": "heimdall.policy.completed",
+        "eventVersion": 1,
+        "occurredAt": 100000,
+        "recordedAt": 100000,
+        "productId": "ledger",
+        "environment": "production",
+        "tenantId": "elsewhere",
+        "actor": {
+          "kind": "system",
+          "id": "maintenance"
+        },
+        "target": {
+          "type": "audit_event",
+          "id": "ordinary"
+        },
+        "action": "audit.retention.retire",
+        "outcome": "succeeded",
+        "requestId": "request-1",
+        "source": "sdk",
+        "sdkVersion": "0.0.0",
+        "attributes": {},
+        "operationId": "retire-wrong-tenant",
+        "policyVersion": "retention-1"
+      },
+      "expected": "not_found"
+    }
+  ],
+  "bindingMutations": [
+    {
+      "name": "different retention duration",
+      "request": {
+        "retainForMs": 1001
+      }
+    },
+    {
+      "name": "different time",
+      "request": {
+        "at": 100001
+      }
+    },
+    {
+      "name": "different policy",
+      "request": {
+        "policyVersion": "other"
+      }
+    },
+    {
+      "name": "invalid duration",
+      "request": {
+        "retainForMs": 0
+      }
+    },
+    {
+      "name": "wrong event scope",
+      "event": {
+        "tenantId": null
+      }
+    },
+    {
+      "name": "wrong audit operation",
+      "event": {
+        "operationId": "other"
+      }
+    },
+    {
+      "name": "wrong audit action",
+      "event": {
+        "action": "audit.hold.retry.acquire"
+      }
+    },
+    {
+      "name": "unverified actor",
+      "event": {
+        "actor": {
+          "kind": "unknown"
+        }
+      }
+    },
+    {
+      "name": "wrong target",
+      "event": {
+        "target": {
+          "type": "audit_event",
+          "id": "other"
+        }
+      }
+    }
+  ]
+}

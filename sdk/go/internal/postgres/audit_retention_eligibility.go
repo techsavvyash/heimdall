@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"strings"
@@ -25,32 +26,46 @@ func (a *Audit) InspectRetentionEligibility(ctx context.Context, tenant *string,
 	if e := contract.CheckCancellation(ctx); e != nil {
 		return "", e
 	}
+	candidate, e := a.readRetirementCandidate(ctx, a.db, expectedTenant, eventID, now, retainForMS)
+	return candidate.reason, e
+}
+
+type retirementCandidate struct {
+	reason     string
+	ids        []string
+	decisionID *string
+}
+type retentionReader interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func (a *Audit) readRetirementCandidate(ctx context.Context, reader retentionReader, expectedTenant *string, eventID string, now, retainForMS int64) (retirementCandidate, error) {
 	var rootRaw, membersRaw []byte
 	var resolution *string
 	var held, retry, bound bool
-	e := a.db.QueryRowContext(ctx, a.retainedHistorySQL(retentionEligibilitySQL), a.retainedHistoryArgs(eventID)...).Scan(&rootRaw, &resolution, &membersRaw, &bound, &held, &retry)
+	e := reader.QueryRowContext(ctx, a.retainedHistorySQL(retentionEligibilitySQL), a.retainedHistoryArgs(eventID)...).Scan(&rootRaw, &resolution, &membersRaw, &bound, &held, &retry)
 	if e != nil {
-		return "", databaseError(ctx)
+		return retirementCandidate{}, databaseError(ctx)
 	}
 	if e = contract.CheckCancellation(ctx); e != nil {
-		return "", e
+		return retirementCandidate{}, e
 	}
 	var row retainedRow
 	if json.Unmarshal(rootRaw, &row) != nil {
-		return "", contract.ErrAuditUnavailable
+		return retirementCandidate{}, contract.ErrAuditUnavailable
 	}
 	root, e := a.decodeRetainedRow(row, expectedTenant, eventID, true)
 	if e != nil || root == nil {
-		return "", e
+		return retirementCandidate{}, e
 	}
 	if root.State == "retired" {
-		return "", contract.ErrNotFound
+		return retirementCandidate{}, contract.ErrNotFound
 	}
 	if root.Identity.Kind != "ordinary" && root.Identity.Kind != "request" {
-		return "", contract.ErrInvalidArgument
+		return retirementCandidate{}, contract.ErrInvalidArgument
 	}
 	if resolution == nil || !bound {
-		return "", contract.ErrAuditUnavailable
+		return retirementCandidate{}, contract.ErrAuditUnavailable
 	}
 	var members []struct {
 		EventID    string                       `json:"eventId"`
@@ -58,7 +73,7 @@ func (a *Audit) InspectRetentionEligibility(ctx context.Context, tenant *string,
 		Deliveries []contract.RetentionDelivery `json:"deliveries"`
 	}
 	if json.Unmarshal(membersRaw, &members) != nil {
-		return "", contract.ErrAuditUnavailable
+		return retirementCandidate{}, contract.ErrAuditUnavailable
 	}
 	scope := contract.RetentionScope{ProductID: a.product, Environment: a.environment, TenantID: expectedTenant}
 	sources := []contract.RetentionSource{}
@@ -72,19 +87,27 @@ func (a *Audit) InspectRetentionEligibility(ctx context.Context, tenant *string,
 	for _, m := range members {
 		result, err := a.decodeRetainedRow(m.Row, expectedTenant, m.EventID, true)
 		if err != nil {
-			return "", err
+			return retirementCandidate{}, err
 		}
 		if result == nil || result.State != "live" {
-			return "", contract.ErrAuditUnavailable
+			return retirementCandidate{}, contract.ErrAuditUnavailable
 		}
 		i := result.Identity
 		sources = append(sources, contract.RetentionSource{Event: result.Event, Digest: i.Digest, Routing: i.Routing, DeliveryRows: len(m.Deliveries)})
 		group.Events = append(group.Events, contract.RetentionEvent{RetentionScope: scope, EventID: i.EventID, RecordedAt: i.RecordedAt, Deliveries: m.Deliveries})
 	}
 	if _, e = contract.BuildRetentionIdentities(scope, *resolution, sources); e != nil {
-		return "", e
+		return retirementCandidate{}, e
 	}
-	return contract.ClassifyAuditRetention(scope, group, now, retainForMS)
+	reason, e := contract.ClassifyAuditRetention(scope, group, now, retainForMS)
+	if e != nil {
+		return retirementCandidate{}, e
+	}
+	candidate := retirementCandidate{reason: reason, decisionID: root.Identity.DecisionID}
+	for _, m := range members {
+		candidate.ids = append(candidate.ids, m.EventID)
+	}
+	return candidate, nil
 }
 
 var eligibilityReadSQL = strings.ReplaceAll(retainedReadSQL, "e.event AS payload", "CASE WHEN octet_length(e.event::text)<=1500000 THEN e.event ELSE NULL END AS payload")

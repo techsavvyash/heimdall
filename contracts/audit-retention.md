@@ -1,8 +1,8 @@
 # Audit retention and immutable retry identity
 
-This completes the retention semantics behind the selected 30-day delivered-event
-policy. It does not authorize a production purge or claim the persistence adapter
-implements deletion yet. Existing pinned migrations remain unchanged.
+This defines the retention semantics behind the selected 30-day delivered-event
+policy. The privileged retirement adapter implements the atomic removal transaction.
+Production scheduling and authenticated scope authorization are separate gates.
 
 ## Scope and retention units
 
@@ -85,7 +85,7 @@ contract; it is not part of this default policy.
 
 ## Required persistence transaction and deployment gate
 
-The future retirement transaction must acquire current runtime/deployment and
+The retirement transaction must acquire current runtime/deployment and
 capacity admission, lock the complete group and its hold/routing/retry facts in a
 consistent order, revalidate history and current policy, install/verify compact
 identities and an immutable retirement marker bound to the administrative audit,
@@ -102,12 +102,30 @@ Migrations must install and backfill the required identity/hold/accounting state
 validate existing history and require compatible writers before retirement is
 enabled. Existing v3 capacity alone is insufficient for this gate.
 
-Current implementation includes the shared classifier, prepared compact identities,
-durable holds, metadata quotas, retirement markers, internal identity/receipt reads
-and privileged atomic-removal proofs described below. None enables public runtime
-retention. Compatible atomic runtime identity writes, explicit retry obligations,
-authorized administrative composition, bounded migration/backfill and v4 activation
-remain required before retention can be enabled.
+The internal TS `retire` and Go `Retire` ports accept a pre-authorized exact
+scope, immutable retirement ID, target event ID, policy version, trusted time,
+retention duration and full administrative event. The administrative event uses
+`heimdall.policy.completed` and the action `audit.retention.retire`. Its ID is
+`retirement-` plus the SHA-256 hex digest of the domain
+`heimdall.audit-retirement.v1`, product, environment, retirement ID and decimal
+retention duration joined by NUL. The scope, target, policy version, operation ID,
+actor and time must agree with the request.
+
+The transaction classifies one group inside the audit transaction. The marker
+trigger locks the group and its deliveries and rechecks eligibility before
+removal. It retains the compact identities, writes the new audit event and
+marker, and deletes only the group's delivery, charge, decision and payload
+rows. A protected group returns conflict. An exact retry returns the original
+audit receipt only after checking the immutable marker and retired target.
+Changed event content or marker fields conflict.
+
+A dedicated maintenance connection needs the retained audit grants plus INSERT on
+retirement markers, column-level UPDATE on delivery state for the marker's row
+locks, and DELETE on the payload, delivery, charge, decision and decision
+reservation tables. Its privileges are intended for trusted operator maintenance.
+The new audit event and marker require headroom before payload reclamation. The
+per-hold release reservation serves hold release only. Production operation also
+requires actor authentication, scoped authorization and configured policy lookup.
 
 ## Prepared compact identity storage
 
