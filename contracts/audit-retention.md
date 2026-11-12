@@ -634,3 +634,41 @@ implementation must still lock/validate complete target history, preserve hold
 immutability, commit audit/identity/hold/accounting together, and handle lost
 COMMIT without publishing false success. These validators do not enable holds or
 retirement by themselves.
+
+## Internal atomic hold persistence
+
+The retained runtime ports now expose internal TS `applyHold(request, administration,
+signal?)` and Go `ApplyHold(ctx, request, administration)`. They require v4 admission
+and the full binding above. The caller must authenticate/authorize the actor and
+exact scope and supply trusted policy/time. Release authority includes establishing
+that a retry obligation has ended; database state alone cannot establish that fact.
+
+The transaction takes the deployment gate, payload-capacity lock and metadata-capacity
+lock before hold state and sorted member identity locks. New transitions validate
+the live target and every member of its decision, including source decision and
+reservation bindings, full events, retained identities and original routing. Missing
+or retired target payload returns not_found; corrupt member history refuses. Each
+member read is capped at 1.5 MB and a decision has at most three members.
+
+Administrative audit, retained identity, outbox and accounting are written before
+the hold mutation in the same transaction. A late hold constraint failure rolls back
+every write. The maintenance role adds INSERT/UPDATE on the hold ledger to retained
+runtime privileges; it receives no general DELETE or DDL grant. Five-second bounds
+and cancellation apply. A failed COMMIT reports outcome_unknown. Independent exact
+retry observes the immutable hold and administrative receipt; changed payloads
+conflict. An acquire retry after release returns its original receipt and never
+reactivates the hold. Missing/inconsistent hold-versus-audit state is not repaired.
+
+The existing hold row consumes one metadata slot. Release adds no hold-row charge
+and refunds no history, but its mandatory new administrative event still needs
+payload/outbox and retained-identity capacity. This implementation refuses if that
+capacity is unavailable. Safe administrative release at total capacity exhaustion
+still needs reserved audit capacity or another proven mechanism; the earlier SQL
+row-update proof with pre-existing audit references does not establish that runtime
+guarantee. This gap remains a Phase 3 acceptance obligation, not a waived requirement.
+
+Shared `audit-hold-storage.json` and the activated profile in
+`tests/integration/audit-capacity-backfill.py` cover atomic transitions, immutable
+retries, rollback, cross-language receipts, concurrent calls, lost COMMIT responses,
+whole-decision protection/corruption and incompatible runtime admission. This port
+does not expose public hold endpoints, enable retirement or schedule maintenance.

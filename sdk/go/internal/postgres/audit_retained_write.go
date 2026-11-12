@@ -17,8 +17,12 @@ func (a *Audit) AppendRetained(ctx context.Context, event map[string]any) (contr
 
 // Local SDK mutations retain their own operation-key and generation checks.
 func (a *Audit) appendRetainedWith(ctx context.Context, event map[string]any, mutate func(context.Context, *sql.Tx) error) (contract.AuditReceipt, error) {
+	return a.appendRetainedFinalized(ctx, event, mutate, func(context.Context, *sql.Tx) error { return nil })
+}
+
+func (a *Audit) appendRetainedFinalized(ctx context.Context, event map[string]any, mutate, finalize func(context.Context, *sql.Tx) error) (contract.AuditReceipt, error) {
 	empty := contract.AuditReceipt{}
-	if ctx == nil || mutate == nil {
+	if ctx == nil || mutate == nil || finalize == nil {
 		return empty, contract.ErrInvalidArgument
 	}
 	p, e := a.prepare(event)
@@ -121,6 +125,9 @@ func (a *Audit) appendRetainedWith(ctx context.Context, event map[string]any, mu
 			return empty, e
 		}
 	}
+	if e = finalize(ctx, tx); e != nil {
+		return empty, e
+	}
 	if e = contract.CheckCancellation(ctx); e != nil {
 		return empty, e
 	}
@@ -150,7 +157,7 @@ func (a *Audit) lockRetainedCapacity(ctx context.Context, tx *sql.Tx) error {
 func (a *Audit) readRetainedTx(ctx context.Context, tx *sql.Tx, id string) (*RetainedEventInspection, error) {
 	var row retainedRow
 	var identity, payload []byte
-	if e := tx.QueryRowContext(ctx, a.retainedHistorySQL(retainedReadSQL), a.retainedHistoryArgs(id)...).Scan(&row.Ready, &row.Present, &row.Live, &row.Markers, &row.Tenant, &identity, &payload, &row.Valid); e != nil {
+	if e := tx.QueryRowContext(ctx, a.retainedHistorySQL(eligibilityReadSQL), a.retainedHistoryArgs(id)...).Scan(&row.Ready, &row.Present, &row.Live, &row.Markers, &row.Tenant, &identity, &payload, &row.Valid); e != nil {
 		return nil, databaseError(ctx)
 	}
 	row.Identity, row.Payload = identity, payload

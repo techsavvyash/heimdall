@@ -1,3 +1,4 @@
+import { validateAuditHold, type AuditHoldRequest } from "../audit-hold.js";
 import { classifyAuditRetention, defaultAuditRetentionMs } from "../audit-retention.js";
 import { buildRetentionIdentities } from "../retention-identities.js";
 import {
@@ -53,6 +54,7 @@ export class PostgresAudit {
     audit.retainedRuntime = true;
     return Object.freeze({
       append: audit.appendRetained.bind(audit),
+      applyHold: audit.applyHold.bind(audit),
       appendWith: audit.appendRetainedWith.bind(audit),
       recover: audit.recoverRetained.bind(audit),
       recoverRuntime: audit.recoverRetained.bind(audit),
@@ -1027,7 +1029,16 @@ WITH selected AS MATERIALIZED (
     mutate: (client: PoolClient) => Promise<void>,
     signal?: AbortSignal,
   ) {
-    if (typeof mutate !== "function") throw new HeimdallError("invalid_argument");
+    return this.appendRetainedFinalized(event, mutate, async () => {}, signal);
+  }
+  private async appendRetainedFinalized(
+    event: Record<string, unknown>,
+    mutate: (client: PoolClient) => Promise<void>,
+    finalize: (client: PoolClient) => Promise<void>,
+    signal?: AbortSignal,
+  ) {
+    if (typeof mutate !== "function" || typeof finalize !== "function")
+      throw new HeimdallError("invalid_argument");
     const p = this.prepare(event);
     const receipt = {
       productId: this.productId,
@@ -1050,6 +1061,7 @@ WITH selected AS MATERIALIZED (
             existing.identity.recordedAt !== p.recordedAt
           )
             throw new HeimdallError("conflict");
+          await finalize(client);
           return receipt;
         }
         const request = p.snapshot.eventType === "heimdall.authorization.requested";
@@ -1085,7 +1097,117 @@ WITH selected AS MATERIALIZED (
         if (!inserted) throw new HeimdallError("audit_unavailable");
         await this.finalizeCapacityEvent(client, p.snapshot, inserted);
         await this.retainIdentityGroupTx(client, tenant, resolution, ids);
+        await finalize(client);
         return receipt;
+      },
+      signal,
+    );
+  }
+  // Privileged internal persistence; trusted orchestration supplies actor, policy and release authority.
+  private async applyHold(
+    request: AuditHoldRequest,
+    administration: Record<string, unknown>,
+    signal?: AbortSignal,
+  ) {
+    const r = { ...request };
+    if (r.productId !== this.productId || r.environment !== this.environment)
+      throw new HeimdallError("invalid_argument");
+    const p = this.prepare(administration);
+    validateAuditHold(r, p.snapshot);
+    let change = false;
+    return this.appendRetainedFinalized(
+      p.snapshot,
+      async (client) => {
+        const rows = await client.query(
+          "SELECT event_id,tenant_id,purpose,placed_at::text,placement_event_id,released_at::text,release_event_id FROM heimdall_retention.event_holds WHERE product_id=$1 AND environment=$2 AND hold_id=$3 FOR UPDATE",
+          [this.productId, this.environment, r.holdId],
+        );
+        const h = rows.rows[0];
+        if (
+          h &&
+          (h.event_id !== r.eventId || h.tenant_id !== r.tenantId || h.purpose !== r.purpose)
+        )
+          throw new HeimdallError("conflict");
+        if (r.operation === "acquire" && h) {
+          if (h.placed_at !== String(r.at) || h.placement_event_id !== p.eventId)
+            throw new HeimdallError("conflict");
+        } else if (r.operation === "release") {
+          if (!h) throw new HeimdallError("not_found");
+          if (r.at < Number(h.placed_at)) throw new HeimdallError("invalid_argument");
+          if (
+            h.released_at !== null &&
+            (h.released_at !== String(r.at) || h.release_event_id !== p.eventId)
+          )
+            throw new HeimdallError("conflict");
+        }
+        change = !h || (r.operation === "release" && h.released_at === null);
+        const prior = await this.readRetainedTx(client, p.eventId);
+        if ((change && prior) || (!change && !prior)) throw new HeimdallError("audit_unavailable");
+        if (!change) return;
+        const root = await this.readRetainedTx(client, r.eventId);
+        if (!root || root.identity.tenantId !== r.tenantId || root.state === "retired")
+          throw new HeimdallError("not_found");
+        if (r.at < root.identity.recordedAt) throw new HeimdallError("invalid_argument");
+        let resolution = "ordinary";
+        let ids = [r.eventId];
+        if (root.identity.kind !== "ordinary") {
+          const result = await client.query(holdDecisionSQL, [
+            this.productId,
+            this.environment,
+            root.identity.decisionId,
+          ]);
+          const d = result.rows[0];
+          if (!d) throw new HeimdallError("audit_unavailable");
+          resolution = d.resolution;
+          ids = d.ids;
+        }
+        if (ids.length < 1 || ids.length > 3) throw new HeimdallError("audit_unavailable");
+        const locked = await client.query(
+          'SELECT event_id FROM heimdall_retention.event_identities WHERE product_id=$1 AND environment=$2 AND event_id=ANY($3) ORDER BY event_id COLLATE "C" FOR UPDATE',
+          [this.productId, this.environment, ids],
+        );
+        if (locked.rows.length !== ids.length) throw new HeimdallError("audit_unavailable");
+        const sources = [];
+        for (const id of ids) {
+          const member = await this.readRetainedTx(client, id);
+          if (!member || member.state !== "live" || member.identity.tenantId !== r.tenantId)
+            throw new HeimdallError("audit_unavailable");
+          sources.push({
+            event: member.event,
+            digest: member.identity.digest,
+            routing: member.identity.routing,
+            deliveryRows: member.identity.routing.length,
+          });
+        }
+        buildRetentionIdentities(
+          { productId: this.productId, environment: this.environment, tenantId: r.tenantId },
+          resolution,
+          sources,
+        );
+      },
+      async (client) => {
+        if (!change) return;
+        if (r.operation === "acquire")
+          await capacityWrite(
+            client,
+            "INSERT INTO heimdall_retention.event_holds(product_id,environment,hold_id,event_id,tenant_id,purpose,placed_at,placement_event_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+            [
+              this.productId,
+              this.environment,
+              r.holdId,
+              r.eventId,
+              r.tenantId,
+              r.purpose,
+              r.at,
+              p.eventId,
+            ],
+          );
+        else
+          await capacityWrite(
+            client,
+            "UPDATE heimdall_retention.event_holds SET released_at=$4,release_event_id=$5 WHERE product_id=$1 AND environment=$2 AND hold_id=$3",
+            [this.productId, this.environment, r.holdId, r.at, p.eventId],
+          );
       },
       signal,
     );
@@ -1102,7 +1224,7 @@ WITH selected AS MATERIALIZED (
   }
   private async readRetainedTx(client: PoolClient, id: string) {
     const rows = await client.query<RetainedRow>(
-      this.retainedHistorySQL(retainedReadSQL),
+      this.retainedHistorySQL(eligibilityReadSQL),
       this.retainedHistoryArgs(id),
     );
     if (rows.rows.length !== 1) throw new HeimdallError("unavailable");
@@ -1627,3 +1749,5 @@ const retainedResolutionSQL = `SELECT snapshot.*,
  OR EXISTS(SELECT 1 FROM heimdall_retention.event_identities WHERE product_id=$5 AND environment=$6 AND decision_id=$7)
  OR EXISTS(SELECT 1 FROM heimdall_retention.decision_identities WHERE product_id=$5 AND environment=$6 AND decision_id=$7) AS source_present
  FROM (${retentionEligibilitySQL.replaceAll("$7", "(SELECT request_event_id FROM heimdall_retention.decision_identities WHERE product_id=$5 AND environment=$6 AND decision_id=$7)")}) snapshot`;
+
+const holdDecisionSQL = `SELECT d.resolution,array_remove(ARRAY[d.request_event_id,d.terminal_event_id,d.recovery_event_id],NULL) AS ids FROM heimdall_retention.decision_identities d JOIN heimdall.audit_decisions s USING(product_id,environment,decision_id) JOIN heimdall_capacity.reservations r USING(product_id,environment,decision_id) WHERE d.product_id=$1 AND d.environment=$2 AND d.decision_id=$3 AND (s.request_event_id,s.requested_at,s.resolution,s.terminal_event_id,s.resolved_at) IS NOT DISTINCT FROM (d.request_event_id,d.requested_at,d.resolution,d.terminal_event_id,d.resolved_at) AND (r.request_event_id,r.resolution,r.terminal_event_id,r.recovery_event_id) IS NOT DISTINCT FROM (d.request_event_id,d.resolution,d.terminal_event_id,d.recovery_event_id)`;

@@ -324,6 +324,52 @@ try:
   subprocess.run(['go','test','-race','-count=1','.', '-run','^TestPublicCapacity$'],cwd=ROOT/'sdk/go',env=public_env,check=True)
   sql('CREATE ROLE retained_runtime_profile','retention_activation')
   runtime_grants="GRANT USAGE ON SCHEMA heimdall,heimdall_capacity,heimdall_retention TO retained_runtime_profile; GRANT SELECT ON heimdall.schema_metadata,heimdall.migrations,heimdall.audit_events,heimdall.audit_deliveries,heimdall.audit_decisions TO retained_runtime_profile; GRANT SELECT ON ALL TABLES IN SCHEMA heimdall_capacity,heimdall_retention TO retained_runtime_profile; GRANT INSERT ON heimdall.audit_events,heimdall.audit_deliveries,heimdall_capacity.event_charges TO retained_runtime_profile; GRANT INSERT,UPDATE ON heimdall.audit_decisions,heimdall_capacity.reservations,heimdall_retention.event_identities,heimdall_retention.decision_identities TO retained_runtime_profile; GRANT UPDATE(used_events,used_bytes,used_deliveries,reserved_events,reserved_bytes,reserved_deliveries) ON heimdall_capacity.policy TO retained_runtime_profile; GRANT UPDATE(used_rows,reserved_rows) ON heimdall_retention.capacity TO retained_runtime_profile"
+  # Hold administration and retained audit commit in one v4 transaction.
+  sql('CREATE DATABASE retained_holds_v4 TEMPLATE retention_activation')
+  sql('CREATE ROLE retained_hold_runtime', 'retained_holds_v4')
+  sql(runtime_grants.replace('retained_runtime_profile','retained_hold_runtime')+'; GRANT INSERT,UPDATE ON heimdall_retention.event_holds TO retained_hold_runtime', 'retained_holds_v4')
+  sql("UPDATE heimdall_capacity.policy SET event_limit=100000,byte_limit=1000000000,delivery_limit=100000; UPDATE heimdall_capacity.upgrade SET event_limit=100000,byte_limit=1000000000,delivery_limit=100000; UPDATE heimdall_retention.capacity SET row_limit=100000,byte_limit=819200000; UPDATE heimdall_retention.upgrade SET row_limit=100000,byte_limit=819200000; ALTER TABLE heimdall_retention.event_holds ADD CONSTRAINT test_late_hold_failure CHECK(hold_id<>'rollback')", 'retained_holds_v4')
+  hold_env=dict(env,HEIMDALL_TEST_HOLD_URL=dsn('retained_holds_v4')+'&options=-c%20role%3Dretained_hold_runtime',HEIMDALL_TEST_HOLD_ADMIN=dsn('retained_holds_v4'))
+  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-hold.test.ts'],env=hold_env)
+  go('^TestRetainedHolds$',hold_env)
+  go('^TestRetainedHolds$',dict(hold_env,HEIMDALL_TEST_HOLD_PEER='1'))
+  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-hold.test.ts'],env=dict(hold_env,HEIMDALL_TEST_HOLD_PEER='1'))
+  print('Retained holds passed: atomic acquire and release, immutable retries, late rollback and reciprocal TS/Go receipts',flush=True)
+  # BEGIN retained hold fault proof
+  for language in ['ts','go']:
+   database='retained_holds_loss_'+language
+   sql('CREATE DATABASE '+database+' TEMPLATE retained_holds_v4')
+   selected=dict(env,HEIMDALL_TEST_HOLD_URL=dsn(database)+'&options=-c%20role%3Dretained_hold_runtime',HEIMDALL_TEST_HOLD_ADMIN=dsn(database),HEIMDALL_TEST_HOLD_PROFILE=language)
+   def hold_test(which,settings):
+    if which=='go':go('^TestRetainedHolds$',settings)
+    else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-hold.test.ts'],env=settings)
+   for operation in ['acquire','release']:
+    with CommitLossProxy(int(port)) as proxy:
+     hold_test(language,dict(selected,HEIMDALL_TEST_HOLD_OPERATION=operation,HEIMDALL_TEST_HOLD_FAULT='1',HEIMDALL_TEST_HOLD_URL=dsn(database,proxy.port)+'&options=-c%20role%3Dretained_hold_runtime'))
+     assert proxy.dropped.is_set() and not proxy.errors
+    hold_test('go' if language=='ts' else 'ts',dict(selected,HEIMDALL_TEST_HOLD_OPERATION=operation,HEIMDALL_TEST_HOLD_RETRY='1'))
+   concurrent=dict(selected,HEIMDALL_TEST_HOLD_OPERATION='concurrent')
+   writers=[subprocess.Popen(['go','test','-race','-count=1','./internal/postgres','-run','^TestRetainedHolds$'],cwd=ROOT/'sdk/go',env=concurrent),subprocess.Popen(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-hold.test.ts'],cwd=ROOT,env=concurrent)]
+   results=[writer.wait() for writer in writers]
+   assert results==[0,0],results
+   assert sql("SELECT count(*) FROM heimdall_retention.event_holds WHERE product_id='holds-"+language+"' AND hold_id='concurrent'",database)=='1'
+   assert sql("SELECT count(*) FROM heimdall_retention.event_identities i JOIN heimdall.audit_events e USING(product_id,environment,event_id) WHERE i.product_id='holds-"+language+"'",database)=='7'
+  print('Retained hold fault proof passed: reciprocal acquire/release COMMIT loss and concurrent TS/Go exact retries',flush=True)
+  sql('CREATE DATABASE retained_holds_groups TEMPLATE retained_holds_v4')
+  group_env=dict(env,HEIMDALL_TEST_HOLD_URL=dsn('retained_holds_groups')+'&options=-c%20role%3Dretained_hold_runtime',HEIMDALL_TEST_HOLD_ADMIN=dsn('retained_holds_groups'),HEIMDALL_TEST_HOLD_GROUP='1')
+  go('^TestRetainedHolds$',group_env)
+  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-hold.test.ts'],env=group_env)
+  print('Retained hold group proof passed: terminal hold protects complete decision and corrupt sibling refuses without writes',flush=True)
+  # BEGIN retained hold readiness proof
+  sql('CREATE DATABASE retained_holds_legacy TEMPLATE retained_holds_v4')
+  sql('UPDATE heimdall.schema_metadata SET database_version=3', 'retained_holds_legacy')
+  for database,options in [('retained_holds_legacy',''),('retained_holds_v4','&options=-c%20default_transaction_read_only%3Don%20-c%20role%3Dretained_hold_runtime')]:
+   rejected=dict(env,HEIMDALL_TEST_HOLD_URL=dsn(database)+options,HEIMDALL_TEST_HOLD_ADMIN=dsn(database),HEIMDALL_TEST_HOLD_REJECT='1')
+   go('^TestRetainedHolds$',rejected)
+   run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-hold.test.ts'],env=rejected)
+  print('Retained hold readiness proof passed: legacy and read-only refusal without writes',flush=True)
+  # END retained hold readiness proof
+  # END retained hold fault proof
   # Retained audit and local managed writes share one v4 transaction.
   sql('CREATE DATABASE managed_retained_v4 TEMPLATE retention_activation')
   sql('CREATE ROLE heimdall_managed_runtime', 'managed_retained_v4')
