@@ -45,6 +45,20 @@ func TestRetainedOperationsAdmission(t *testing.T) {
 	ctx := context.Background()
 	reject := func(t *testing.T, s *OperationRecords) {
 		t.Helper()
+		workspace, err := NewRetainedWorkspaceRecords(s.db, b.ProductID, b.Environment)
+		if err != nil {
+			t.Fatal(err)
+		}
+		candidates, err := NewRetainedCandidateRecords(s.db, b.ProductID, b.Environment)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := workspace.Get(ctx, "absent"); !errors.Is(err, contract.ErrUnavailable) {
+			t.Fatal("workspace", err)
+		}
+		if _, err := candidates.Scan(ctx, f.CreateIntent.Actor, "0", 10); !errors.Is(err, contract.ErrUnavailable) {
+			t.Fatal("candidates", err)
+		}
 		if _, e := s.Get(ctx, "absent", f.CreateIntent.Actor); !errors.Is(e, contract.ErrUnavailable) {
 			t.Fatal("get", e)
 		}

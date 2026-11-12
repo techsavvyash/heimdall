@@ -7,11 +7,13 @@ A managed composition requires both in the same application database so workspac
 operation, candidate and audit/outbox writes can share a transaction. Session-only
 installation does not create managed tables. No service internal database is used.
 
-The deployment CLI now installs this family explicitly after verifying session v1.
-Both SDKs expose internal combined readiness checks, observing both families in one
-statement snapshot. Internal workspace readers now validate scoped primary rows in both SDKs. Managed
-write/CAS and operation/candidate adapters remain pending; there is no managed
-public factory yet.
+The deployment CLI installs this family explicitly after checking a supported
+base schema. Current internal retained factories require audit v4 and managed v1.
+Operation, workspace and candidate adapters check both families in one statement
+snapshot; managed writes compose retained audit atomically. Public managed
+orchestration remains pending. The v1 commands below describe initial installation;
+retained runtime deployment additionally requires the explicit audit upgrades
+through v4 and `-status managed-v4`. No runtime constructor migrates schemas.
 
 From `sdk/go`, with `HEIMDALL_MIGRATION_DATABASE_URL` set to the selected application
 database by deployment configuration:

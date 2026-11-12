@@ -1,8 +1,7 @@
-import { operationRecords } from "./operation-store.js";
+import { operationRecords, workspaceRecords } from "./managed-store.js";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { expect, test } from "vitest";
-import { WorkspaceRecords } from "../src/internal/postgres/workspaces.js";
 const read = (name: string) =>
   JSON.parse(
     readFileSync(new URL(`../../../contracts/fixtures/${name}.json`, import.meta.url), "utf8"),
@@ -92,7 +91,7 @@ test.skipIf(!enabled || peer)(
     });
     const scope = "membership-ts",
       s = store(p, scope),
-      w = new WorkspaceRecords(p, scope, "production");
+      w = workspaceRecords(p, scope, "production");
     try {
       for (const c of vectors.kinds) {
         const revision = await seed(admin, scope, c.kind);
@@ -341,7 +340,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_MEMBERSHIP_LOSS)(
       expect(r).toMatchObject({ state: "pending", dispatchCount: 0 });
       expect(await s.beginMembership(raw, "key", allocation("lost", "retry"), revision)).toEqual(r);
       expect(
-        (await new WorkspaceRecords(direct, scope, "production").get("lost"))?.mutationBlocked,
+        (await workspaceRecords(direct, scope, "production").get("lost"))?.mutationBlocked,
       ).toBe(true);
     } finally {
       await proxy.end();

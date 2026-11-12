@@ -94,3 +94,27 @@ mandatory regardless of hint contents.
 Shared repair inputs: fixtures/candidate-repair.json. The managed PostgreSQL harness
 covers partial batches, stale revisions/timestamps, mutation races, audit rollback,
 TS/Go reads and committed-response-loss behavior.
+
+## Retained runtime read composition
+
+TypeScript `WorkspaceRecords.forRetainedRuntime` and
+`CandidateRecords.forRetainedRuntime`, and Go `NewRetainedWorkspaceRecords` and
+`NewRetainedCandidateRecords`, require audit-v4 and managed-v1 readiness in the
+same primary SQL snapshot as every result. The query checks both schema families
+before returning absence or an empty page as success. Migrating/legacy protocols,
+incompatible ledgers and read-only transactions fail unavailable. A SELECT-only
+role can read when it has access to the readiness tables and requested data; a
+read-only PostgreSQL transaction remains intentionally incompatible with runtime
+admission.
+
+Constructors do no I/O. These factories preserve scope, lifecycle filtering,
+validation of every row including lookahead, decimal bigint positions, five-second
+bounds and cancellation. They do not mutate or generate authorization decisions.
+Candidate hints still require current membership checks at the future discovery
+boundary. The legacy internal constructors remain available for migration tests;
+runtime callers select the retained factories explicitly.
+
+The shared managed-retained-runtime fixture now covers these reads alongside
+operations. The activated database harness runs the full workspace/candidate
+fixtures and reciprocal reads, including hints produced by retained operation
+completion and repair.

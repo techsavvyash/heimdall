@@ -15,16 +15,28 @@ type ManagedWorkspace struct {
 	Name, Revision string
 }
 type WorkspaceRecords struct {
+	retainedRuntime      bool
 	db                   *sql.DB
 	product, environment string
 }
 
 // NewWorkspaceRecords owns neither the pool nor schema lifecycle.
+// Legacy schema constructor; runtime callers use NewRetainedWorkspaceRecords.
 func NewWorkspaceRecords(db *sql.DB, product, environment string) (*WorkspaceRecords, error) {
 	if db == nil || !valid(product, 64) || !valid(environment, 64) {
 		return nil, contract.ErrInvalidArgument
 	}
-	return &WorkspaceRecords{db, product, environment}, nil
+	return &WorkspaceRecords{db: db, product: product, environment: environment}, nil
+}
+
+// NewRetainedWorkspaceRecords reads only compatible audit-v4 and managed-v1 snapshots.
+func NewRetainedWorkspaceRecords(db *sql.DB, product, environment string) (*WorkspaceRecords, error) {
+	store, e := NewWorkspaceRecords(db, product, environment)
+	if e != nil {
+		return nil, e
+	}
+	store.retainedRuntime = true
+	return store, nil
 }
 
 type workspaceRow struct {
@@ -82,9 +94,11 @@ func (w *WorkspaceRecords) Get(ctx context.Context, id string) (*ManagedWorkspac
 		return nil, e
 	}
 	var r workspaceRow
-	e := w.db.QueryRowContext(ctx, `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
+	statement := `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
  w.product_id,w.environment,w.workspace_id,w.name,w.lifecycle,w.mutation_blocked,w.revision::text,w.created_at::text,w.updated_at::text
- FROM (SELECT 1) seed LEFT JOIN heimdall_managed.workspaces w ON w.product_id=$1 AND w.environment=$2 AND w.workspace_id=$3`, w.product, w.environment, id).Scan(&r.Primary, &r.Product, &r.Environment, &r.Workspace, &r.Name, &r.Lifecycle, &r.Blocked, &r.Revision, &r.Created, &r.Updated)
+ FROM (SELECT 1) seed LEFT JOIN heimdall_managed.workspaces w ON w.product_id=$1 AND w.environment=$2 AND w.workspace_id=$3`
+	statement, args := managedReadQuery(statement, []any{w.product, w.environment, id}, w.retainedRuntime)
+	e := w.db.QueryRowContext(ctx, statement, args...).Scan(&r.Primary, &r.Product, &r.Environment, &r.Workspace, &r.Name, &r.Lifecycle, &r.Blocked, &r.Revision, &r.Created, &r.Updated)
 	if e != nil {
 		return nil, databaseError(ctx)
 	}

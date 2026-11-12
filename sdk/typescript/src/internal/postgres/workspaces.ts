@@ -1,3 +1,4 @@
+import { managedReadQuery } from "./readiness.js";
 import type { Pool } from "pg";
 import { HeimdallError } from "../errors.js";
 import { query } from "./query.js";
@@ -78,6 +79,14 @@ export function decodeWorkspace(
 }
 // Read-only primary port. No cache, migration, lifecycle mutation or authorization decision.
 export class WorkspaceRecords {
+  private retainedRuntime = false;
+  static forRetainedRuntime(pool: Pool, productId: string, environment: string) {
+    const store = new WorkspaceRecords(pool, productId, environment);
+    store.retainedRuntime = true;
+    return store;
+  }
+
+  // Legacy schema constructor; runtime callers use forRetainedRuntime.
   constructor(
     private readonly pool: Pool,
     private readonly productId: string,
@@ -95,12 +104,15 @@ export class WorkspaceRecords {
     if (!token(workspaceId, 128)) throw new HeimdallError("invalid_argument");
     const rows = await query<Record<string, unknown>>(
       this.pool,
-      `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
+      ...managedReadQuery(
+        `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
        w.product_id,w.environment,w.workspace_id,w.name,w.lifecycle,w.mutation_blocked,
        w.revision::text,w.created_at::text,w.updated_at::text
        FROM (SELECT 1) seed LEFT JOIN heimdall_managed.workspaces w
        ON w.product_id=$1 AND w.environment=$2 AND w.workspace_id=$3`,
-      [this.productId, this.environment, workspaceId],
+        [this.productId, this.environment, workspaceId],
+        this.retainedRuntime,
+      ),
       false,
       signal,
     );

@@ -60,7 +60,7 @@ func TestOperationTransition(t *testing.T) {
 	f := journalData(t)
 	scope := "transition-go"
 	s := operationStore(t, db, f, scope, []string{"primary"})
-	w, _ := NewWorkspaceRecords(db, scope, f.Binding.Environment)
+	w, _ := testWorkspaceRecords(db, scope, f.Binding.Environment)
 	ctx := context.Background()
 	var vectors struct {
 		Scenarios []struct {
@@ -228,7 +228,7 @@ func TestOperationTransitionLoss(t *testing.T) {
 	if _, e = s.Advance(context.Background(), "lost", f.CreateIntent.Actor, 1, "dispatch", transitionMeta("retry", 103)); !errors.Is(e, contract.ErrConflict) {
 		t.Fatal(e)
 	}
-	w, _ := NewWorkspaceRecords(direct, "transition-loss-go", f.Binding.Environment)
+	w, _ := testWorkspaceRecords(direct, "transition-loss-go", f.Binding.Environment)
 	wr, e := w.Get(context.Background(), "lost")
 	if e != nil || !wr.MutationBlocked {
 		t.Fatal(wr, e)
@@ -247,7 +247,7 @@ func TestOperationMembershipCompletion(t *testing.T) {
 	f := journalData(t)
 	scope := "candidate-go"
 	s := operationStore(t, db, f, scope, []string{"primary"})
-	w, _ := NewWorkspaceRecords(db, scope, f.Binding.Environment)
+	w, _ := testWorkspaceRecords(db, scope, f.Binding.Environment)
 	ctx := context.Background()
 	var vectors struct {
 		Membership []struct {

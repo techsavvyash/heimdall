@@ -1,9 +1,7 @@
-import { operationRecords } from "./operation-store.js";
+import { candidateRecords, operationRecords, workspaceRecords } from "./managed-store.js";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { expect, test } from "vitest";
-import { CandidateRecords } from "../src/internal/postgres/candidates.js";
-import { WorkspaceRecords } from "../src/internal/postgres/workspaces.js";
 const read = (name: string) =>
   JSON.parse(
     readFileSync(new URL(`../../../contracts/fixtures/${name}.json`, import.meta.url), "utf8"),
@@ -76,7 +74,7 @@ test.skipIf(!enabled || peer)(
       });
     const scope = "repair-ts",
       s = store(p, scope),
-      w = new WorkspaceRecords(p, scope, "production");
+      w = workspaceRecords(p, scope, "production");
     const candidates = async (id: string) =>
       (
         await admin.query(
@@ -221,10 +219,10 @@ test.skipIf(!enabled || !peer)(
   async () => {
     const p = new Pool({ connectionString: process.env.HEIMDALL_TEST_MANAGED_DATABASE_URL });
     try {
-      const w = await new WorkspaceRecords(p, "repair-go", "production").get("w");
+      const w = await workspaceRecords(p, "repair-go", "production").get("w");
       expect(
         (
-          await new CandidateRecords(p, "repair-go", "production").scan(
+          await candidateRecords(p, "repair-go", "production").scan(
             v.observations[1]!.identity,
             "0",
             100,
@@ -263,7 +261,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_REPAIR_LOSS)(
       await expect(
         store(proxy, scope).repairCandidates("w", revision, v.observations, metadata("lost")),
       ).rejects.toMatchObject({ code: "outcome_unknown" });
-      const w = await new WorkspaceRecords(direct, scope, "production").get("w");
+      const w = await workspaceRecords(direct, scope, "production").get("w");
       expect(w?.revision).not.toBe(revision);
       expect(
         (

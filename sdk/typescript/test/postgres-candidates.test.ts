@@ -1,8 +1,9 @@
+import { candidateRecords } from "./managed-store.js";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { expect, test } from "vitest";
-import { CandidateRecords, decodeCandidatePage } from "../src/internal/postgres/candidates.js";
+import { decodeCandidatePage } from "../src/internal/postgres/candidates.js";
 import { encodeIdentity } from "../src/internal/identity-encoding.js";
 const f = JSON.parse(
   readFileSync(new URL("../../../contracts/fixtures/candidate-page.json", import.meta.url), "utf8"),
@@ -42,9 +43,9 @@ for (const c of f.cases.filter((c) => !c.valid))
   });
 test("candidate input validation and cancellation precede I/O", async () => {
   const p = new Pool(),
-    s = new CandidateRecords(p, "ledger", "production");
+    s = candidateRecords(p, "ledger", "production");
   try {
-    expect(() => new CandidateRecords(p, "bad/path", "production")).toThrow("invalid_argument");
+    expect(() => candidateRecords(p, "bad/path", "production")).toThrow("invalid_argument");
     for (const after of ["-1", "01", "1\n", "9223372036854775808"]) {
       await expect(s.scan(f.actor, after, 20)).rejects.toThrow("invalid_argument");
     }
@@ -81,7 +82,7 @@ test.skipIf(!enabled || peer)(
       connectionString: process.env.HEIMDALL_TEST_MANAGED_DATABASE_URL,
       options: "-c role=heimdall_managed_runtime",
     });
-    const s = new CandidateRecords(p, "scan-ts", "production");
+    const s = candidateRecords(p, "scan-ts", "production");
     try {
       await seed(admin, "scan-ts");
       const first = await s.scan(f.actor, "0", 100);
@@ -94,10 +95,10 @@ test.skipIf(!enabled || peer)(
         Array.from({ length: 100 }, (_, i) => `w-${String(i + 1).padStart(3, "0")}`),
       );
       expect(
-        (await new CandidateRecords(p, "other", "production").scan(f.actor, "0", 100)).items,
+        (await candidateRecords(p, "other", "production").scan(f.actor, "0", 100)).items,
       ).toEqual([]);
       expect(
-        (await new CandidateRecords(p, "scan-ts", "staging").scan(f.actor, "0", 100)).items,
+        (await candidateRecords(p, "scan-ts", "staging").scan(f.actor, "0", 100)).items,
       ).toEqual([]);
       expect((await s.scan({ ...f.actor, subject: "other" }, "0", 100)).items).toEqual([]);
       // Partial consumption resumes at the consumed item, not the batch tail.
@@ -127,7 +128,7 @@ test.skipIf(!enabled || peer)(
         [Buffer.from(f.identityHash, "hex")],
       );
       await expect(
-        new CandidateRecords(p, "scan-bad-ts", "production").scan(f.actor, "0", 20),
+        candidateRecords(p, "scan-bad-ts", "production").scan(f.actor, "0", 20),
       ).rejects.toThrow("unavailable");
       const readonly = new Pool({
         connectionString: process.env.HEIMDALL_TEST_MANAGED_DATABASE_URL,
@@ -135,7 +136,7 @@ test.skipIf(!enabled || peer)(
       });
       try {
         await expect(
-          new CandidateRecords(readonly, "missing", "production").scan(f.actor, "0", 20),
+          candidateRecords(readonly, "missing", "production").scan(f.actor, "0", 20),
         ).rejects.toThrow("unavailable");
       } finally {
         await readonly.end();
@@ -163,7 +164,7 @@ test.skipIf(!enabled || peer)(
 test.skipIf(!enabled || !peer)("candidate pages read Go completion and seeded order", async () => {
   const p = new Pool({ connectionString: process.env.HEIMDALL_TEST_MANAGED_DATABASE_URL });
   try {
-    const s = new CandidateRecords(p, "scan-go", "production");
+    const s = candidateRecords(p, "scan-go", "production");
     const first = await s.scan(f.actor, "0", 100);
     expect(first.items).toHaveLength(100);
     expect((await s.scan(f.actor, first.nextPosition!, 100)).items[0]!.workspace.workspaceId).toBe(
@@ -177,7 +178,7 @@ test.skipIf(!enabled || !peer)("candidate pages read Go completion and seeded or
     );
     expect(
       (
-        await new CandidateRecords(p, "transition-go", "production").scan(
+        await candidateRecords(p, "transition-go", "production").scan(
           journal.createIntent.actor,
           "0",
           100,

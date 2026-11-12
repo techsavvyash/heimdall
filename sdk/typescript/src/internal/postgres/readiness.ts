@@ -185,3 +185,22 @@ export async function lockRetentionAdmission(client: PoolClient): Promise<void> 
   const rows = (await client.query<{ ready: boolean }>(retentionSQL, retentionArgs)).rows;
   if (rows.length !== 1 || rows[0]?.ready !== true) throw new HeimdallError("unavailable");
 }
+
+export function managedReadQuery(
+  statement: string,
+  args: unknown[],
+  retained: boolean,
+): [string, unknown[]] {
+  if (!retained) return [statement, args];
+  const readiness = managedRetentionSQL.replace(
+    /\$[1-7]/g,
+    (p) => "$" + (Number(p.slice(1)) + args.length),
+  );
+  return [
+    statement.replaceAll(
+      "NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'",
+      "(" + readiness + ")",
+    ),
+    [...args, ...retentionArgs, managedChecksum],
+  ];
+}

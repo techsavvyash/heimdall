@@ -41,6 +41,12 @@ func candidateData(t *testing.T) candidateFixture {
 	}
 	return f
 }
+func testCandidateRecords(db *sql.DB, product, environment string) (*CandidateRecords, error) {
+	if os.Getenv("HEIMDALL_TEST_MANAGED_OPERATIONS_V4") == "1" {
+		return NewRetainedCandidateRecords(db, product, environment)
+	}
+	return NewCandidateRecords(db, product, environment)
+}
 func TestCandidateDecoder(t *testing.T) {
 	f := candidateData(t)
 	for _, c := range f.Cases {
@@ -69,11 +75,11 @@ func TestCandidateInput(t *testing.T) {
 	f := candidateData(t)
 	db, _ := sql.Open("postgres", "")
 	defer db.Close()
-	s, e := NewCandidateRecords(db, "ledger", "production")
+	s, e := testCandidateRecords(db, "ledger", "production")
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, e = NewCandidateRecords(db, "bad/path", "production"); !errors.Is(e, contract.ErrInvalidArgument) {
+	if _, e = testCandidateRecords(db, "bad/path", "production"); !errors.Is(e, contract.ErrInvalidArgument) {
 		t.Fatal(e)
 	}
 	for _, after := range []string{"-1", "01", "1\n", "9223372036854775808"} {
@@ -108,7 +114,7 @@ func TestCandidatePrimary(t *testing.T) {
 	defer db.Close()
 	f := candidateData(t)
 	ctx := context.Background()
-	s, _ := NewCandidateRecords(db, "scan-go", "production")
+	s, _ := testCandidateRecords(db, "scan-go", "production")
 	if _, e := admin.Exec(`INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at)
   SELECT 'scan-go','production','w-'||lpad(n::text,3,'0'),'Same name',CASE WHEN n=102 THEN 'pending' WHEN n=103 THEN 'suspended' WHEN n=104 THEN 'tombstoned' ELSE 'active' END,n=105,100,100 FROM generate_series(1,105) n`); e != nil {
 		t.Fatal(e)
@@ -135,7 +141,7 @@ func TestCandidatePrimary(t *testing.T) {
 		t.Fatal(last, e)
 	}
 	for _, scope := range [][2]string{{"other", "production"}, {"scan-go", "staging"}} {
-		other, _ := NewCandidateRecords(db, scope[0], scope[1])
+		other, _ := testCandidateRecords(db, scope[0], scope[1])
 		page, err := other.Scan(ctx, f.Actor, "0", 100)
 		if err != nil || len(page.Items) != 0 {
 			t.Fatal(page, err)
@@ -174,13 +180,13 @@ func TestCandidatePrimary(t *testing.T) {
 	if _, e = admin.Exec("INSERT INTO heimdall_managed.membership_candidates(product_id,environment,workspace_id,identity_hash,principal,observed_at) VALUES('scan-bad-go','production','bad',decode($1,'hex'),'user:wrong',100)", f.IdentityHash); e != nil {
 		t.Fatal(e)
 	}
-	bad, _ := NewCandidateRecords(db, "scan-bad-go", "production")
+	bad, _ := testCandidateRecords(db, "scan-bad-go", "production")
 	if _, e = bad.Scan(ctx, f.Actor, "0", 20); !errors.Is(e, contract.ErrUnavailable) {
 		t.Fatal(e)
 	}
 	readonly, _ := sql.Open("postgres", dsn+"&options=-c%20default_transaction_read_only%3Don")
 	defer readonly.Close()
-	ro, _ := NewCandidateRecords(readonly, "missing", "production")
+	ro, _ := testCandidateRecords(readonly, "missing", "production")
 	if _, e = ro.Scan(ctx, f.Actor, "0", 20); !errors.Is(e, contract.ErrUnavailable) {
 		t.Fatal(e)
 	}
@@ -202,7 +208,7 @@ func TestCandidatePrimary(t *testing.T) {
 	if page, e = s.Scan(ctx, f.Actor, "0", 1); e != nil || len(page.Items) != 1 {
 		t.Fatal(page, e)
 	}
-	peer, _ := NewCandidateRecords(db, "scan-ts", "production")
+	peer, _ := testCandidateRecords(db, "scan-ts", "production")
 	page, e = peer.Scan(ctx, f.Actor, "0", 100)
 	if e != nil || len(page.Items) != 100 {
 		t.Fatal(page, e)
@@ -212,7 +218,7 @@ func TestCandidatePrimary(t *testing.T) {
 		t.Fatal(final, e)
 	}
 	journal := journalData(t)
-	completed, _ := NewCandidateRecords(db, "transition-ts", "production")
+	completed, _ := testCandidateRecords(db, "transition-ts", "production")
 	page, e = completed.Scan(ctx, journal.CreateIntent.Actor, "0", 100)
 	if e != nil || len(page.Items) != 1 || page.Items[0].Workspace.WorkspaceID != "complete" {
 		t.Fatal(page, e)

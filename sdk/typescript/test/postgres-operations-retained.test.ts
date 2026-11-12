@@ -1,3 +1,5 @@
+import { WorkspaceRecords } from "../src/internal/postgres/workspaces.js";
+import { CandidateRecords } from "../src/internal/postgres/candidates.js";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { test, expect } from "vitest";
@@ -19,7 +21,19 @@ test.skipIf(
     readonly = new Pool({ connectionString, options: "-c default_transaction_read_only=on" });
   const binding = { ...f.binding, productId: "admission-ts" };
   const store = OperationRecords.forRetainedRuntime(pool, binding, []);
-  const reject = async (s: OperationRecords) => {
+  const reject = async (s: OperationRecords, source: Pool) => {
+    await expect(
+      WorkspaceRecords.forRetainedRuntime(source, binding.productId, binding.environment).get(
+        "absent",
+      ),
+    ).rejects.toThrow("unavailable");
+    await expect(
+      CandidateRecords.forRetainedRuntime(source, binding.productId, binding.environment).scan(
+        f.createIntent.actor,
+        "0",
+        10,
+      ),
+    ).rejects.toThrow("unavailable");
     await expect(s.get("absent", f.createIntent.actor)).rejects.toThrow("unavailable");
     await expect(s.scan("recovery", null, 300, 10)).rejects.toThrow("unavailable");
     await expect(
@@ -43,12 +57,12 @@ test.skipIf(
     for (const c of fixture.cases) {
       await admin.query(c.change);
       try {
-        await reject(store);
+        await reject(store, pool);
       } finally {
         await admin.query(c.restore);
       }
     }
-    await reject(OperationRecords.forRetainedRuntime(readonly, binding, []));
+    await reject(OperationRecords.forRetainedRuntime(readonly, binding, []), readonly);
     expect(await store.get("absent", f.createIntent.actor)).toBeNull();
     expect(await store.scan("recovery", null, 300, 10)).toEqual({
       items: [],

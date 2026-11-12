@@ -12,7 +12,12 @@ import {
 import { validateAuditShape } from "../audit-shape.js";
 import { validateAuditEvent } from "../audit.js";
 import { PostgresAudit } from "./audit.js";
-import { managedRetentionSQL, retentionArgs, managedChecksum } from "./readiness.js";
+import {
+  managedRetentionSQL,
+  retentionArgs,
+  managedChecksum,
+  managedReadQuery,
+} from "./readiness.js";
 import { query } from "./query.js";
 import { decodeWorkspace, type ManagedWorkspace } from "./workspaces.js";
 
@@ -184,18 +189,7 @@ export class OperationRecords {
     return store;
   }
   private readQuery(statement: string, args: unknown[]): [string, unknown[]] {
-    if (!this.retainedRuntime) return [statement, args];
-    const readiness = managedRetentionSQL.replace(
-      /\$[1-7]/g,
-      (p) => "$" + (Number(p.slice(1)) + args.length),
-    );
-    return [
-      statement.replaceAll(
-        "NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'",
-        "(" + readiness + ")",
-      ),
-      [...args, ...retentionArgs, managedChecksum],
-    ];
+    return managedReadQuery(statement, args, this.retainedRuntime);
   }
   // Legacy schema port for migration tests; runtime callers use forRetainedRuntime.
   constructor(

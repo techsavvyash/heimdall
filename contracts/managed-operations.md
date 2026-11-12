@@ -195,6 +195,6 @@ operation; they never clear uncertainty or replace its allocation. A lost COMMIT
 response preserves the existing outcome_unknown and operation-ID behavior.
 
 These factories do not authenticate actors, validate remote confirmations or
-implement a scheduler. Standalone workspace/candidate read adapters and public
-managed orchestration require their own retained runtime composition. No public
+implement a scheduler. Standalone workspace/candidate readers now have matching retained factories
+(documented in managed-candidates.md). Public managed orchestration remains open. No public
 managed endpoint or automatic quarantine recovery is introduced.

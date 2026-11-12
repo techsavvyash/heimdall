@@ -1,3 +1,4 @@
+import { managedReadQuery } from "./readiness.js";
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { HeimdallError } from "../errors.js";
@@ -70,6 +71,14 @@ export function decodeCandidatePage(
   }
 }
 export class CandidateRecords {
+  private retainedRuntime = false;
+  static forRetainedRuntime(pool: Pool, productId: string, environment: string) {
+    const store = new CandidateRecords(pool, productId, environment);
+    store.retainedRuntime = true;
+    return store;
+  }
+
+  // Legacy schema constructor; runtime callers use forRetainedRuntime.
   constructor(
     private readonly pool: Pool,
     private readonly productId: string,
@@ -102,7 +111,8 @@ export class CandidateRecords {
       identityHash = createHash("sha256").update(principal, "ascii").digest("hex");
     const rows = await query<{ primary: boolean; records: unknown }>(
       this.pool,
-      `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
+      ...managedReadQuery(
+        `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
    COALESCE(jsonb_agg(jsonb_build_object('identityHash',encode(p.identity_hash,'hex'),'principal',p.principal,'position',p.position::text,
     'revision',p.candidate_revision::text,'observedAt',p.observed_at::text,'workspace',jsonb_build_object('primary',true,
     'product_id',p.product_id,'environment',p.environment,'workspace_id',p.workspace_id,'name',p.name,'lifecycle',p.lifecycle,
@@ -111,7 +121,9 @@ export class CandidateRecords {
     FROM heimdall_managed.membership_candidates c JOIN heimdall_managed.workspaces w USING(product_id,environment,workspace_id)
     WHERE c.product_id=$1 AND c.environment=$2 AND c.identity_hash=$3 AND c.position>$4::bigint
      AND w.lifecycle='active' AND NOT w.mutation_blocked ORDER BY c.position LIMIT $5) p`,
-      [this.productId, this.environment, Buffer.from(identityHash, "hex"), after, limit + 1],
+        [this.productId, this.environment, Buffer.from(identityHash, "hex"), after, limit + 1],
+        this.retainedRuntime,
+      ),
       false,
       signal,
     );

@@ -1,4 +1,4 @@
-import { operationRecords } from "./operation-store.js";
+import { operationRecords } from "./managed-store.js";
 import { createHash } from "node:crypto";
 import { encodeIdentity } from "../src/internal/identity-encoding.js";
 import { intentDigests } from "../src/internal/operations.js";

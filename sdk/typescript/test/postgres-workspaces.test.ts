@@ -1,7 +1,8 @@
+import { workspaceRecords } from "./managed-store.js";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { expect, test } from "vitest";
-import { WorkspaceRecords, decodeWorkspace } from "../src/internal/postgres/workspaces.js";
+import { decodeWorkspace } from "../src/internal/postgres/workspaces.js";
 import { workspaceGate } from "../src/internal/workspace-contract.js";
 const scope = { productId: "ledger", environment: "test", workspaceId: "acme" };
 const cases = JSON.parse(
@@ -24,8 +25,8 @@ for (const c of cases.filter((c) => c.expected !== "unavailable"))
 test("workspace reader validates inputs and cancels before connection", async () => {
   const pool = new Pool();
   try {
-    expect(() => new WorkspaceRecords(pool, "ledger\n", "test")).toThrow("invalid_argument");
-    const store = new WorkspaceRecords(pool, "ledger", "test");
+    expect(() => workspaceRecords(pool, "ledger\n", "test")).toThrow("invalid_argument");
+    const store = workspaceRecords(pool, "ledger", "test");
     await expect(store.get("acme\n")).rejects.toThrow("invalid_argument");
     await expect(store.get("acme", AbortSignal.abort())).rejects.toThrow("cancelled");
   } finally {
@@ -42,7 +43,7 @@ test.skipIf(
     connectionString: url,
     options: "-c default_transaction_read_only=on",
   });
-  const store = new WorkspaceRecords(pool, "read-ts", "test");
+  const store = workspaceRecords(pool, "read-ts", "test");
   try {
     await admin.query("GRANT SELECT ON heimdall_managed.workspaces TO heimdall_managed_status");
     expect(await store.get("acme")).toBeNull();
@@ -54,8 +55,8 @@ test.skipIf(
     expect(
       workspaceGate(first, { productId: "read-ts", environment: "test", workspaceId: "acme" }),
     ).toBe("check_relationships");
-    expect(await new WorkspaceRecords(pool, "other", "test").get("acme")).toBeNull();
-    expect(await new WorkspaceRecords(pool, "read-ts", "other").get("acme")).toBeNull();
+    expect(await workspaceRecords(pool, "other", "test").get("acme")).toBeNull();
+    expect(await workspaceRecords(pool, "read-ts", "other").get("acme")).toBeNull();
     const tx = await admin.connect();
     try {
       await tx.query(
@@ -73,7 +74,7 @@ test.skipIf(
     expect(
       workspaceGate(blocked, { productId: "read-ts", environment: "test", workspaceId: "acme" }),
     ).toBe("deny");
-    await expect(new WorkspaceRecords(readonly, "read-ts", "test").get("absent")).rejects.toThrow(
+    await expect(workspaceRecords(readonly, "read-ts", "test").get("absent")).rejects.toThrow(
       "unavailable",
     );
     const lock = await admin.connect();
@@ -103,7 +104,7 @@ test.skipIf(
     options: "-c role=heimdall_managed_status",
   });
   try {
-    const r = await new WorkspaceRecords(pool, "read-go", "test").get("acme");
+    const r = await workspaceRecords(pool, "read-go", "test").get("acme");
     expect(r?.name).toBe("Acme 🏢");
     expect(r?.mutationBlocked).toBe(true);
     expect(r?.updatedAt).toBe(1);

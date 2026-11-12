@@ -1,12 +1,11 @@
+import { operationRecords, workspaceRecords } from "./managed-store.js";
 import type { OperationRecords } from "../src/internal/postgres/operations.js";
-import { operationRecords } from "./operation-store.js";
 import { createHash } from "node:crypto";
 import { encodeIdentity } from "../src/internal/identity-encoding.js";
 import { intentDigests, type Intent } from "../src/internal/operations.js";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { expect, test } from "vitest";
-import { WorkspaceRecords } from "../src/internal/postgres/workspaces.js";
 const read = (name: string) =>
   JSON.parse(
     readFileSync(new URL(`../../../contracts/fixtures/${name}.json`, import.meta.url), "utf8"),
@@ -60,7 +59,7 @@ test.skipIf(
   });
   const scope = "transition-ts",
     s = store(p, scope),
-    w = new WorkspaceRecords(p, scope, f.binding.environment);
+    w = workspaceRecords(p, scope, f.binding.environment);
   try {
     for (const scenario of vectors.scenarios) {
       let record = await create(s, scope, scenario.name);
@@ -224,11 +223,8 @@ test.skipIf(!process.env.HEIMDALL_TEST_TRANSITION_LOSS)(
         s.advance("lost", f.createIntent.actor, 1, "dispatch", meta("retry")),
       ).rejects.toThrow("conflict");
       expect(
-        (
-          await new WorkspaceRecords(direct, "transition-loss-ts", f.binding.environment).get(
-            "lost",
-          )
-        )?.mutationBlocked,
+        (await workspaceRecords(direct, "transition-loss-ts", f.binding.environment).get("lost"))
+          ?.mutationBlocked,
       ).toBe(true);
     } finally {
       await proxy.end();
@@ -256,7 +252,7 @@ test.skipIf(
   });
   const scope = "candidate-ts",
     s = store(p, scope),
-    w = new WorkspaceRecords(p, scope, f.binding.environment);
+    w = workspaceRecords(p, scope, f.binding.environment);
   const actor = f.createIntent.actor,
     target = { ...actor, subject: "new-owner" };
   const principal = (a: typeof actor) => encodeIdentity(a.issuer, a.subject);

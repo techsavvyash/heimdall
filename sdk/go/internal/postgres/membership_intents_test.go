@@ -112,7 +112,7 @@ func TestMembershipIntent(t *testing.T) {
 	vectors := membershipData(t)
 	scope := "membership-go"
 	s := operationStore(t, db, f, scope, []string{"primary"})
-	w, _ := NewWorkspaceRecords(db, scope, "production")
+	w, _ := testWorkspaceRecords(db, scope, "production")
 	ctx := context.Background()
 	for _, c := range vectors.Kinds {
 		revision := membershipSeed(t, admin, scope, c.Kind, "active", false)
@@ -335,7 +335,7 @@ func TestMembershipIntentLoss(t *testing.T) {
 	if e != nil || !reflect.DeepEqual(r, retry) {
 		t.Fatal(retry, e)
 	}
-	w, _ := NewWorkspaceRecords(direct, scope, "production")
+	w, _ := testWorkspaceRecords(direct, scope, "production")
 	workspace, e := w.Get(ctx, "lost")
 	if e != nil || !workspace.MutationBlocked {
 		t.Fatal(workspace, e)

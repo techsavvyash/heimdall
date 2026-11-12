@@ -11,6 +11,12 @@ import (
 	"time"
 )
 
+func testWorkspaceRecords(db *sql.DB, product, environment string) (*WorkspaceRecords, error) {
+	if os.Getenv("HEIMDALL_TEST_MANAGED_OPERATIONS_V4") == "1" {
+		return NewRetainedWorkspaceRecords(db, product, environment)
+	}
+	return NewWorkspaceRecords(db, product, environment)
+}
 func TestWorkspaceDecoder(t *testing.T) {
 	raw, e := os.ReadFile("../../../../contracts/fixtures/managed-workspace-read.json")
 	if e != nil {
@@ -56,10 +62,10 @@ func TestWorkspaceInput(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer db.Close()
-	if _, e = NewWorkspaceRecords(db, "ledger\n", "test"); !errors.Is(e, contract.ErrInvalidArgument) {
+	if _, e = testWorkspaceRecords(db, "ledger\n", "test"); !errors.Is(e, contract.ErrInvalidArgument) {
 		t.Fatal(e)
 	}
-	s, e := NewWorkspaceRecords(db, "ledger", "test")
+	s, e := testWorkspaceRecords(db, "ledger", "test")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -90,7 +96,7 @@ func TestWorkspacePrimary(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer db.Close()
-	s, e := NewWorkspaceRecords(db, "read-go", "test")
+	s, e := testWorkspaceRecords(db, "read-go", "test")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -109,7 +115,7 @@ func TestWorkspacePrimary(t *testing.T) {
 		t.Fatal(first, e)
 	}
 	for _, scope := range [][2]string{{"other", "test"}, {"read-go", "other"}} {
-		other, _ := NewWorkspaceRecords(db, scope[0], scope[1])
+		other, _ := testWorkspaceRecords(db, scope[0], scope[1])
 		if r, e := other.Get(ctx, "acme"); e != nil || r != nil {
 			t.Fatal(r, e)
 		}
@@ -137,12 +143,12 @@ func TestWorkspacePrimary(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer ro.Close()
-	rs, _ := NewWorkspaceRecords(ro, "read-go", "test")
+	rs, _ := testWorkspaceRecords(ro, "read-go", "test")
 	if _, e = rs.Get(ctx, "absent"); !errors.Is(e, contract.ErrUnavailable) {
 		t.Fatal(e)
 	}
 	// The TypeScript writer's row must decode identically through the Go adapter.
-	peer, _ := NewWorkspaceRecords(db, "read-ts", "test")
+	peer, _ := testWorkspaceRecords(db, "read-ts", "test")
 	if r, e := peer.Get(ctx, "acme"); e != nil || r == nil || r.Name != "Acme 🏢" || !r.MutationBlocked {
 		t.Fatal(r, e)
 	}

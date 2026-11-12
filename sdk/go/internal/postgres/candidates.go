@@ -27,16 +27,29 @@ type candidatePageRow struct {
 	Records []candidateRow
 }
 type CandidateRecords struct {
+	retainedRuntime      bool
 	db                   *sql.DB
 	product, environment string
 }
 
+// Legacy schema constructor; runtime callers use NewRetainedCandidateRecords.
 func NewCandidateRecords(db *sql.DB, product, environment string) (*CandidateRecords, error) {
 	if db == nil || !valid(product, 64) || !valid(environment, 64) {
 		return nil, contract.ErrInvalidArgument
 	}
-	return &CandidateRecords{db, product, environment}, nil
+	return &CandidateRecords{db: db, product: product, environment: environment}, nil
 }
+
+// NewRetainedCandidateRecords reads only compatible audit-v4 and managed-v1 snapshots.
+func NewRetainedCandidateRecords(db *sql.DB, product, environment string) (*CandidateRecords, error) {
+	store, e := NewCandidateRecords(db, product, environment)
+	if e != nil {
+		return nil, e
+	}
+	store.retainedRuntime = true
+	return store, nil
+}
+
 func decodeCandidatePage(value candidatePageRow, product, environment, principal, identityHash, after string, limit int) (*CandidatePage, error) {
 	previous, ok := workspaceDecimal(&after, 9223372036854775807, false)
 	if !ok || !value.Primary || value.Records == nil || len(value.Records) > limit+1 {
@@ -89,7 +102,7 @@ func (c *CandidateRecords) Scan(ctx context.Context, actor contract.Identity, af
 	}
 	var row candidatePageRow
 	var raw []byte
-	e = c.db.QueryRowContext(ctx, `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
+	statement := `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
   COALESCE(jsonb_agg(jsonb_build_object('identityHash',encode(p.identity_hash,'hex'),'principal',p.principal,'position',p.position::text,
    'revision',p.candidate_revision::text,'observedAt',p.observed_at::text,'workspace',jsonb_build_object('primary',true,
    'product_id',p.product_id,'environment',p.environment,'workspace_id',p.workspace_id,'name',p.name,'lifecycle',p.lifecycle,
@@ -97,7 +110,9 @@ func (c *CandidateRecords) Scan(ctx context.Context, actor contract.Identity, af
   FROM (SELECT c.identity_hash,c.principal,c.position,c.revision AS candidate_revision,c.observed_at,w.*
    FROM heimdall_managed.membership_candidates c JOIN heimdall_managed.workspaces w USING(product_id,environment,workspace_id)
    WHERE c.product_id=$1 AND c.environment=$2 AND c.identity_hash=$3 AND c.position>$4::bigint
-    AND w.lifecycle='active' AND NOT w.mutation_blocked ORDER BY c.position LIMIT $5) p`, c.product, c.environment, hash, after, limit+1).Scan(&row.Primary, &raw)
+    AND w.lifecycle='active' AND NOT w.mutation_blocked ORDER BY c.position LIMIT $5) p`
+	statement, args := managedReadQuery(statement, []any{c.product, c.environment, hash, after, limit + 1}, c.retainedRuntime)
+	e = c.db.QueryRowContext(ctx, statement, args...).Scan(&row.Primary, &raw)
 	if e != nil {
 		return nil, databaseError(ctx)
 	}

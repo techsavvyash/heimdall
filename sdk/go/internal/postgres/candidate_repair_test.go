@@ -73,7 +73,7 @@ func TestCandidateRepair(t *testing.T) {
 	f, v := journalData(t), repairData(t)
 	scope := "repair-go"
 	s := operationStore(t, db, f, scope, []string{"primary"})
-	w, _ := NewWorkspaceRecords(db, scope, "production")
+	w, _ := testWorkspaceRecords(db, scope, "production")
 	type candidate struct{ Principal, Position, Revision, Observed string }
 	candidates := func(id string) []candidate {
 		rows, e := admin.Query("SELECT principal,position::text,revision::text,observed_at::text FROM heimdall_managed.membership_candidates WHERE product_id=$1 AND workspace_id=$2 ORDER BY position", scope, id)
@@ -205,7 +205,7 @@ func TestCandidateRepair(t *testing.T) {
 	if len(candidates("changed")) != 0 {
 		t.Fatal("stale repair published")
 	}
-	source, _ := NewCandidateRecords(db, "repair-ts", "production")
+	source, _ := testCandidateRecords(db, "repair-ts", "production")
 	page, err := source.Scan(ctx, v.Observations[1].Identity, "0", 100)
 	if err != nil {
 		t.Fatal(err)
@@ -219,7 +219,7 @@ func TestCandidateRepair(t *testing.T) {
 	if matching != 1 {
 		t.Fatal(page)
 	}
-	peer, _ := NewWorkspaceRecords(db, "repair-ts", "production")
+	peer, _ := testWorkspaceRecords(db, "repair-ts", "production")
 	wr, e := peer.Get(ctx, "w")
 	if e != nil || wr == nil || wr.MutationBlocked {
 		t.Fatal(wr, e)
@@ -247,7 +247,7 @@ func TestCandidateRepairLoss(t *testing.T) {
 	if _, e := operationStore(t, db, f, scope, []string{"primary"}).RepairCandidates(ctx, "w", revision, v.Observations, repairMeta("lost", 200)); !errors.Is(e, contract.ErrOutcomeUnknown) {
 		t.Fatal(e)
 	}
-	w, _ := NewWorkspaceRecords(direct, scope, "production")
+	w, _ := testWorkspaceRecords(direct, scope, "production")
 	workspace, e := w.Get(ctx, "w")
 	if e != nil || workspace.Revision == revision {
 		t.Fatal(workspace, e)

@@ -1,4 +1,4 @@
-import { operationRecords } from "./operation-store.js";
+import { operationRecords } from "./managed-store.js";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { expect, test } from "vitest";

@@ -339,12 +339,13 @@ try:
   sql('CREATE DATABASE managed_operations_v4 TEMPLATE retention_activation')
   sql(runtime_grants.replace('retained_runtime_profile','heimdall_managed_runtime')+"; GRANT USAGE ON SCHEMA heimdall_managed TO heimdall_managed_runtime; GRANT SELECT ON heimdall_managed.schema_metadata,heimdall_managed.migrations TO heimdall_managed_runtime; GRANT SELECT,INSERT,UPDATE ON heimdall_managed.workspaces,heimdall_managed.operations,heimdall_managed.membership_candidates TO heimdall_managed_runtime; GRANT DELETE ON heimdall_managed.membership_candidates TO heimdall_managed_runtime; GRANT USAGE ON ALL SEQUENCES IN SCHEMA heimdall_managed TO heimdall_managed_runtime", 'managed_operations_v4')
   sql("UPDATE heimdall_capacity.policy SET event_limit=100000,byte_limit=1000000000,delivery_limit=100000; UPDATE heimdall_capacity.upgrade SET event_limit=100000,byte_limit=1000000000,delivery_limit=100000; UPDATE heimdall_retention.capacity SET row_limit=100000,byte_limit=819200000; UPDATE heimdall_retention.upgrade SET row_limit=100000,byte_limit=819200000", 'managed_operations_v4')
+  sql("CREATE ROLE heimdall_managed_status; GRANT USAGE ON SCHEMA heimdall,heimdall_capacity,heimdall_retention,heimdall_managed TO heimdall_managed_status; GRANT SELECT ON heimdall.schema_metadata,heimdall.migrations,heimdall_managed.schema_metadata,heimdall_managed.migrations,heimdall_managed.workspaces TO heimdall_managed_status; GRANT SELECT ON ALL TABLES IN SCHEMA heimdall_capacity,heimdall_retention TO heimdall_managed_status", 'managed_operations_v4')
   operation_env=dict(env,HEIMDALL_TEST_MANAGED_DATABASE_URL=dsn('managed_operations_v4'),HEIMDALL_TEST_MANAGED_OPERATIONS_V4='1')
   go('^TestRetainedOperationsAdmission$',operation_env)
   run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-operations-retained.test.ts'],env=operation_env)
-  operation_files=['test/postgres-'+n+'.test.ts' for n in ['operations','operation-transitions','membership-intents','candidate-repair','operation-scan']]
+  operation_files=['test/postgres-'+n+'.test.ts' for n in ['workspaces','operations','operation-transitions','membership-intents','candidate-repair','operation-scan','candidates']]
   for file in operation_files:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run',file],env=operation_env)
-  go('^(TestOperation(Journal|Input|Create|Transition|TransitionInput|MembershipCompletion|Scan|ScanInput)|TestMembership(Input|Intent)|TestCandidate(Repair|RepairInput))$',dict(operation_env,HEIMDALL_TEST_MANAGED_READ_PEER='1'))
+  go('^(TestOperation(Journal|Input|Create|Transition|TransitionInput|MembershipCompletion|Scan|ScanInput)|TestMembership(Input|Intent)|TestCandidate(Decoder|Input|Primary|Repair|RepairInput)|TestWorkspace(Decoder|Input|Primary))$',dict(operation_env,HEIMDALL_TEST_MANAGED_READ_PEER='1'))
   for file in operation_files:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run',file],env=dict(operation_env,HEIMDALL_TEST_MANAGED_READ_PEER='1'))
   for language in ['go','ts']:
    for variable,file,ts_name,go_name in [
