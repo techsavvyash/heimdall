@@ -599,3 +599,38 @@ exact live or retired event identity already exists. Audit receipt reuse is not
 authority to replay a managed operation. This is an internal composition primitive;
 managed operation factories still require v4 admission/read integration, and no
 public callback extension or retention deletion API is introduced.
+
+## Hold administration binding
+
+The internal TS `validateAuditHold` and Go `ValidateAuditHold` validate a hold
+request and its complete administrative event before persistence. This is a pure
+binding check, not authentication, scope authorization, an active policy lookup,
+or evidence that a retry obligation has ended.
+
+The request fixes product/environment, exact nullable tenant, hold ID, protected
+event ID, purpose (`administrative` or `retry`), operation (`acquire` or `release`),
+safe-integer timestamp and policy version. A null tenant selects only product-level
+history. The caller must obtain time, policy and actor from trusted orchestration.
+
+The audit is a reserved version-1 `heimdall.policy.completed` event with SDK
+source, succeeded outcome, a known system/user actor, empty attributes and no
+decision ID. Its target is `audit_event` with the protected event ID, its operation
+ID is the hold ID, and its action is `audit.hold.<purpose>.<operation>`. Scope,
+policy version, occurredAt and recordedAt must exactly match the request. It may
+not target itself. Full event shape and existing security-event semantics also
+apply; unrelated events cannot serve as the administration reference.
+
+The administration event ID is `hold-` followed by lowercase SHA-256 hex of UTF-8
+`heimdall.audit-hold.v1` + NUL + product + NUL + environment + NUL + hold ID + NUL +
+operation. Acquisition and release therefore have separate fixed identities.
+Changing tenant, target, purpose, policy, actor or timestamp cannot generate a new
+receipt for the same scoped hold operation: the eventual transactional writer
+must reject changed payloads under that fixed ID. Retries must reuse their
+original administrative event, not rebuild one with a new clock value.
+
+Shared `audit-hold-binding.json` tests both purposes/operations, nullable scope,
+user/system actors and mismatched or malformed administration. The persistence
+implementation must still lock/validate complete target history, preserve hold
+immutability, commit audit/identity/hold/accounting together, and handle lost
+COMMIT without publishing false success. These validators do not enable holds or
+retirement by themselves.
