@@ -68,7 +68,27 @@ func (port *RetainedRuntimeAudit) ApplyHold(ctx context.Context, request contrac
 		if !change {
 			return nil
 		}
-		return a.validateHoldTarget(ctx, tx, r)
+		if err = a.validateHoldTarget(ctx, tx, r); err != nil {
+			return err
+		}
+		if r.Operation != "release" {
+			return nil
+		}
+		var version int
+		if err = tx.QueryRowContext(ctx, "SELECT database_version FROM heimdall.schema_metadata WHERE singleton").Scan(&version); err != nil {
+			return databaseError(ctx)
+		}
+		if version == 4 {
+			return nil
+		}
+		result, err := tx.ExecContext(ctx, "UPDATE heimdall_retention.hold_release_reservations SET release_event_id=$4 WHERE product_id=$1 AND environment=$2 AND hold_id=$3 AND release_event_id IS NULL", a.product, a.environment, r.HoldID, p.receipt.EventID)
+		if err != nil {
+			return auditCapacityError(ctx, err)
+		}
+		if rows, err := result.RowsAffected(); err != nil || rows != 1 {
+			return contract.ErrAuditUnavailable
+		}
+		return nil
 	}
 	after := func(ctx context.Context, tx *sql.Tx) error {
 		if !change {

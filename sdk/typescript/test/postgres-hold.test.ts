@@ -90,6 +90,12 @@ test.skipIf(!process.env.HEIMDALL_TEST_HOLD_URL)("atomic retained hold operation
     if (operation) {
       const c = p.loss[operation]!;
       const before = (await admin.query(f.snapshot)).rows;
+      const expected = process.env.HEIMDALL_TEST_HOLD_EXPECT;
+      if (expected) {
+        await assert.rejects(port.applyHold(c.request, c.administration), { code: expected });
+        assert.deepEqual((await admin.query(f.snapshot)).rows, before);
+        return;
+      }
       if (process.env.HEIMDALL_TEST_HOLD_FAULT === "1") {
         await assert.rejects(port.applyHold(c.request, c.administration), {
           code: "outcome_unknown",

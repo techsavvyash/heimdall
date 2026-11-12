@@ -48,11 +48,15 @@ func TestPublicCapacity(t *testing.T) {
 		t.Fatal(e)
 	}
 	var original int64
+	var version int
+	if e = admin.QueryRow("SELECT database_version FROM heimdall.schema_metadata WHERE singleton").Scan(&version); e != nil {
+		t.Fatal(e)
+	}
 	if e = admin.QueryRow("SELECT event_limit FROM heimdall_capacity.policy").Scan(&original); e != nil {
 		t.Fatal(e)
 	}
 	defer func() {
-		if _, e := admin.Exec("UPDATE heimdall.schema_metadata SET state='ready',database_version=4; UPDATE heimdall_capacity.policy SET event_limit=" + strconv.FormatInt(original, 10) + "; UPDATE heimdall_capacity.upgrade SET event_limit=" + strconv.FormatInt(original, 10)); e != nil {
+		if _, e := admin.Exec("UPDATE heimdall.schema_metadata SET state='ready',database_version=" + strconv.Itoa(version) + "; UPDATE heimdall_capacity.policy SET event_limit=" + strconv.FormatInt(original, 10) + "; UPDATE heimdall_capacity.upgrade SET event_limit=" + strconv.FormatInt(original, 10)); e != nil {
 			t.Fatal(e)
 		}
 	}()

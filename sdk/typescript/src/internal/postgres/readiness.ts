@@ -135,8 +135,13 @@ export const retentionChecksums = [
 ];
 export const retentionSQL = `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'
  AND (SELECT count(*) FROM heimdall.schema_metadata)=1
- AND EXISTS(SELECT 1 FROM heimdall.schema_metadata WHERE singleton AND database_version=4 AND state='ready' AND reader_min=4 AND reader_max=4 AND writer_min=4 AND writer_max=4)
- AND (SELECT count(*) FROM heimdall.migrations)=4
+ AND ((EXISTS(SELECT 1 FROM heimdall.schema_metadata WHERE singleton AND database_version=4 AND state='ready' AND reader_min=4 AND reader_max=4 AND writer_min=4 AND writer_max=4)
+ AND (SELECT count(*) FROM heimdall.migrations)=4)
+ OR (EXISTS(SELECT 1 FROM heimdall.schema_metadata WHERE singleton AND database_version=5 AND state='ready' AND reader_min=5 AND reader_max=5 AND writer_min=5 AND writer_max=5)
+ AND (SELECT count(*) FROM heimdall.migrations)=5
+ AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=5 AND checksum='b6f5f89911249318a85da849686db43d99db10e8c80d87c60ca67cd1091bb072')
+ AND to_regclass('heimdall_retention.hold_release_capacity') IS NOT NULL
+ AND to_regclass('heimdall_retention.hold_release_reservations') IS NOT NULL))
  AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=1 AND checksum=$1)
  AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=2 AND checksum=$2)
  AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=3 AND checksum=$3)

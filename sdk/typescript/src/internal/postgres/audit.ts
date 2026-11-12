@@ -1184,6 +1184,19 @@ WITH selected AS MATERIALIZED (
           resolution,
           sources,
         );
+        if (r.operation === "release") {
+          const protocol = await client.query<{ database_version: number }>(
+            "SELECT database_version FROM heimdall.schema_metadata WHERE singleton",
+          );
+          if (protocol.rows[0]?.database_version === 5) {
+            const consumed = await capacityWrite(
+              client,
+              "UPDATE heimdall_retention.hold_release_reservations SET release_event_id=$4 WHERE product_id=$1 AND environment=$2 AND hold_id=$3 AND release_event_id IS NULL RETURNING hold_id",
+              [this.productId, this.environment, r.holdId, p.eventId],
+            );
+            if (consumed.rowCount !== 1) throw new HeimdallError("audit_unavailable");
+          }
+        }
       },
       async (client) => {
         if (!change) return;

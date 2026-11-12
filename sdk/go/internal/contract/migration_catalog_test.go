@@ -40,6 +40,8 @@ func TestMigrationCatalog(t *testing.T) {
 				}
 				if family == "session" && m.Version == 4 {
 					expectedPath = "session/0004-retention-identities.sql"
+				} else if family == "session" && m.Version == 5 {
+					expectedPath = "session/0005-hold-release-reservations.sql"
 				}
 				if m.Version != index+1 || m.Path != expectedPath {
 					t.Fatal("invalid migration entry")

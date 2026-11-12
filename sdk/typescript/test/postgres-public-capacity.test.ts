@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { expect, test } from "vitest";
 import { createPostgresStorage } from "../src/postgres.js";
 test.skipIf(!process.env.HEIMDALL_TEST_CAPACITY_READY_URL)(
-  "public TS writes enforce v4 and reserved capacity",
+  "public TS writes enforce retained readiness and reserved capacity",
   async () => {
     const url = process.env.HEIMDALL_TEST_CAPACITY_READY_URL;
     const admin = new Pool({ connectionString: url });
@@ -26,6 +26,9 @@ test.skipIf(!process.env.HEIMDALL_TEST_CAPACITY_READY_URL)(
     const signal = new AbortController().signal;
     const original = (await admin.query("SELECT event_limit::text FROM heimdall_capacity.policy"))
       .rows[0].event_limit;
+    const version = (
+      await admin.query("SELECT database_version FROM heimdall.schema_metadata WHERE singleton")
+    ).rows[0].database_version;
     try {
       await storage.ready(signal);
       await admin.query(
@@ -58,7 +61,9 @@ test.skipIf(!process.env.HEIMDALL_TEST_CAPACITY_READY_URL)(
         await expect(storage.appendAudit(f.normal, signal)).rejects.toThrow("unavailable");
       }
     } finally {
-      await admin.query("UPDATE heimdall.schema_metadata SET state='ready',database_version=4");
+      await admin.query("UPDATE heimdall.schema_metadata SET state='ready',database_version=$1", [
+        version,
+      ]);
       await admin.query("UPDATE heimdall_capacity.policy SET event_limit=$1", [original]);
       await admin.query("UPDATE heimdall_capacity.upgrade SET event_limit=$1", [original]);
       await pool.end();

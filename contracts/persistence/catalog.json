@@ -20,6 +20,11 @@
       "version": 4,
       "path": "session/0004-retention-identities.sql",
       "checksum": "28a4d5070ee8b1ba0c68639838201a13082207ce144fd0f921d48320660675f9"
+    },
+    {
+      "version": 5,
+      "path": "session/0005-hold-release-reservations.sql",
+      "checksum": "b6f5f89911249318a85da849686db43d99db10e8c80d87c60ca67cd1091bb072"
     }
   ],
   "managed": [

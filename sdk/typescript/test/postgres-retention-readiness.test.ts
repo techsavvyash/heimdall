@@ -20,7 +20,29 @@ test("retention protocol binds catalog, Go query and cancellation", async () => 
     new URL("../../go/internal/postgres/audit_retention_activate.go", import.meta.url),
     "utf8",
   );
-  expect(go).toContain("const retentionReadinessSQL = `" + retentionSQL + "`");
+  const upgrade = readFileSync(
+    new URL("../../go/internal/postgres/audit_hold_release_upgrade.go", import.meta.url),
+    "utf8",
+  );
+  expect(upgrade).toContain(
+    `const holdReleaseMigrationChecksum = "${catalog.session[4].checksum}"`,
+  );
+  const goString = (name: string) => {
+    const marker = "const " + name + " = `";
+    const start = go.indexOf(marker);
+    if (start === -1) throw new Error("missing Go readiness definition");
+    return go.slice(start + marker.length).split(/`\n(?=\n|const )/)[0]!;
+  };
+  const v5 = goString("retentionV5ProtocolSQL").replace(
+    "` + holdReleaseMigrationChecksum + `",
+    catalog.session[4].checksum,
+  );
+  const composed = goString("retentionV4ReadinessSQL").replace(
+    "` + retentionV4ProtocolSQL + `",
+    `(${goString("retentionV4ProtocolSQL")} OR ${v5})`,
+  );
+  const normalize = (value: string) => value.replace(/\s+/g, " ").trim();
+  expect(normalize(composed)).toBe(normalize(retentionSQL));
   const pool = new Pool();
   try {
     for (const check of [checkRetentionReadiness, checkManagedRetentionReadiness])

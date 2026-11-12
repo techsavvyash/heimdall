@@ -43,7 +43,7 @@ func PrepareHoldReleaseUpgrade(ctx context.Context, db *sql.DB, source []byte, w
 	if e = tx.QueryRowContext(ctx, "SELECT to_regclass('heimdall_retention.hold_release_reservations') IS NOT NULL").Scan(&prepared); e != nil {
 		return databaseError(ctx)
 	}
-	gate := retentionReadinessSQL
+	gate := retentionV4ReadinessSQL
 	if prepared {
 		gate = strings.Replace(gate, "state='ready' AND reader_min", "state='migrating' AND reader_min", 1)
 	}
@@ -112,6 +112,78 @@ func checkPreparedHoldRelease(ctx context.Context, tx *sql.Tx) error {
    (SELECT p FROM heimdall_capacity.policy p WHERE singleton),
    (SELECT c FROM heimdall_retention.capacity c WHERE singleton))`); e != nil {
 		return auditCapacityError(ctx, e)
+	}
+	return nil
+}
+
+// ActivateHoldReleaseUpgrade publishes the verified reservation protocol.
+func ActivateHoldReleaseUpgrade(ctx context.Context, db *sql.DB, writersDrained bool) error {
+	if ctx == nil || db == nil || !writersDrained {
+		return contract.ErrInvalidArgument
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	conn, e := retainedConnection(ctx, db, true)
+	if e != nil {
+		return databaseError(ctx)
+	}
+	defer conn.Close()
+	tx, e := conn.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if e != nil {
+		return databaseError(ctx)
+	}
+	defer tx.Rollback()
+	if _, e = tx.ExecContext(ctx, "SET LOCAL synchronous_commit='on'; SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='20s'; SELECT pg_advisory_xact_lock(74162401)"); e != nil {
+		return databaseError(ctx)
+	}
+	var active bool
+	if e = tx.QueryRowContext(ctx, retentionV5ReadinessSQL, retentionReadinessArgs()...).Scan(&active); e != nil {
+		return databaseError(ctx)
+	}
+	if !active {
+		gate := strings.Replace(retentionV4ReadinessSQL, "state='ready' AND reader_min", "state='migrating' AND reader_min", 1)
+		var ready bool
+		if e = tx.QueryRowContext(ctx, gate, retentionReadinessArgs()...).Scan(&ready); e != nil || !ready {
+			return databaseError(ctx)
+		}
+	}
+	if e = checkPreparedHoldRelease(ctx, tx); e != nil {
+		return e
+	}
+	if !active {
+		var bound bool
+		if e = tx.QueryRowContext(ctx, `SELECT NOT EXISTS(
+   SELECT 1 FROM heimdall_retention.event_holds h
+   LEFT JOIN heimdall_retention.event_identities t ON (t.product_id,t.environment,t.event_id)=(h.product_id,h.environment,h.event_id)
+   LEFT JOIN heimdall_retention.event_identities p ON (p.product_id,p.environment,p.event_id)=(h.product_id,h.environment,h.placement_event_id)
+   LEFT JOIN heimdall_retention.event_identities r ON (r.product_id,r.environment,r.event_id)=(h.product_id,h.environment,h.release_event_id)
+   WHERE t.event_id IS NULL OR t.tenant_id IS DISTINCT FROM h.tenant_id OR t.recorded_at>h.placed_at
+     OR p.event_id IS NULL OR p.tenant_id IS DISTINCT FROM h.tenant_id OR p.recorded_at<>h.placed_at
+     OR (h.release_event_id IS NOT NULL AND (r.event_id IS NULL OR r.tenant_id IS DISTINCT FROM h.tenant_id OR r.recorded_at<>h.released_at))
+     OR (h.release_event_id IS NULL AND NOT EXISTS (
+       SELECT 1 FROM heimdall.audit_events e JOIN heimdall_capacity.event_charges c USING(product_id,environment,event_id)
+       WHERE (e.product_id,e.environment,e.event_id)=(t.product_id,t.environment,t.event_id)
+         AND e.recorded_at=t.recorded_at AND e.payload_digest=t.payload_digest
+         AND c.envelope_bytes=octet_length(e.event::text)
+     ))
+  )`).Scan(&bound); e != nil {
+			return databaseError(ctx)
+		}
+		if !bound {
+			return contract.ErrAuditUnavailable
+		}
+		if _, e = tx.ExecContext(ctx, "INSERT INTO heimdall.migrations(version,checksum) VALUES(5,$1)", holdReleaseMigrationChecksum); e != nil {
+			return databaseError(ctx)
+		}
+		if _, e = tx.ExecContext(ctx, "UPDATE heimdall.schema_metadata SET database_version=5,state='ready',reader_min=5,reader_max=5,writer_min=5,writer_max=5 WHERE singleton"); e != nil {
+			return databaseError(ctx)
+		}
+	}
+	if e = contract.CheckCancellation(ctx); e != nil {
+		return e
+	}
+	if e = tx.Commit(); e != nil {
+		return contract.ErrOutcomeUnknown
 	}
 	return nil
 }

@@ -14,14 +14,16 @@ it.each(["session", "managed", "keys"] as const)(
     };
     expect(catalog.formatVersion).toBe(1);
     expect(catalog[family].length).toBeGreaterThan(0);
+    const sessionPaths: Record<number, string> = {
+      3: "session/0003-capacity.sql",
+      4: "session/0004-retention-identities.sql",
+      5: "session/0005-hold-release-reservations.sql",
+    };
     for (const [index, migration] of catalog[family].entries()) {
       expect(migration.version).toBe(index + 1);
+      const regularPath = `${family}/${String(index + 1).padStart(4, "0")}.sql`;
       expect(migration.path).toBe(
-        family === "session" && migration.version === 3
-          ? "session/0003-capacity.sql"
-          : family === "session" && migration.version === 4
-            ? "session/0004-retention-identities.sql"
-            : `${family}/${String(index + 1).padStart(4, "0")}.sql`,
+        family === "session" ? (sessionPaths[migration.version] ?? regularPath) : regularPath,
       );
       const sql = readFileSync(new URL(migration.path, root));
       expect(sql.includes(13)).toBe(false);

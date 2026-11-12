@@ -123,3 +123,27 @@ argument validation, read-only refusal, rollback when quota is insufficient,
 and retry after an injected lost commit response. A retry preserved existing
 reservations and refused aggregate count or schema drift. Activation and runtime
 reservation consumption remain pending.
+
+## v5 activation and release at quota
+
+The deployment command `heimdall-migrate --activate-hold-release-upgrade
+--writers-drained` validates the prepared catalog, reserve ledger and indexed
+hold bindings before atomically publishing the v5 checksum and compatibility
+ranges. Exact status checks are available as `audit-v5` and `managed-v5`.
+Current SDKs accept v4 and v5. On v5, the release transaction consumes the
+matching scoped reservation before it charges the audit event.
+
+Pinned PostgreSQL run `heimdall-capacity-backfill-3669566233894202a116e46068073cfb`
+verified activation and its lost commit retry, exact-fit hold acquisition in
+both SDKs, and one-unit overflow refusal in each of the five quota dimensions.
+Ordinary new writes were refused at quota while either SDK could release a hold.
+A late constraint failure rolled back reservation consumption and the audit.
+After each injected lost release commit response, the other SDK obtained the
+original receipt without another write. The existing decision recovery reserves
+were preserved throughout. The public storage factories also passed their
+decision reservation tests on v5.
+
+A separate concurrency probe on the exact-fit clone ran the same release in
+both languages simultaneously and observed a single audit charge. That probe is
+included in the reproducible harness. Authorization and scheduling of maintenance
+operations and audited payload retirement remain open.

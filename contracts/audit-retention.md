@@ -729,3 +729,17 @@ The command requires a compatible v4 primary, verifies the pinned source and
 catalogs, and marks the database migrating only after successful adoption.
 Exact preparation retries verify the prepared catalog, hold bindings, aggregate
 count and headroom. Runtime readiness resumes only after separate activation.
+
+After preparation, use `heimdall-migrate --activate-hold-release-upgrade
+--writers-drained` to publish v5. Activation checks the prepared catalog,
+reservation coverage and headroom, and the indexed scope and time bindings of
+existing holds. An active hold must still point to its charged target payload.
+Publication commits the v5 migration checksum with the v5 reader and writer
+ranges. Retrying activation validates the published protocol and current ledger.
+
+Use `--status audit-v5` or `--status managed-v5` for exact deployment status.
+Current TS and Go runtimes accept compatible v4 and v5 databases. On v5,
+acquisition automatically reserves release capacity and release consumes the
+matching reservation before charging its audit event. Grant the hold maintenance
+role SELECT on `heimdall_retention.hold_release_reservations` and UPDATE on its
+`release_event_id` column, alongside its existing hold and audit privileges. Ordinary audit writers need no reservation write access.

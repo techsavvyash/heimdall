@@ -41,7 +41,7 @@ func ActivateAuditRetentionUpgrade(ctx context.Context, db *sql.DB, writersDrain
 		return e
 	}
 	var ready bool
-	if e = tx.QueryRowContext(ctx, retentionReadinessSQL, retentionReadinessArgs()...).Scan(&ready); e != nil {
+	if e = tx.QueryRowContext(ctx, retentionV4ReadinessSQL, retentionReadinessArgs()...).Scan(&ready); e != nil {
 		return databaseError(ctx)
 	}
 	if ready {
@@ -101,10 +101,9 @@ func CheckRetentionReadiness(ctx context.Context, db *sql.DB) error {
 	return checkReadiness(ctx, db, retentionReadinessSQL, retentionReadinessArgs()...)
 }
 
-const retentionReadinessSQL = `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'
+const retentionV4ReadinessSQL = `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'
  AND (SELECT count(*) FROM heimdall.schema_metadata)=1
- AND EXISTS(SELECT 1 FROM heimdall.schema_metadata WHERE singleton AND database_version=4 AND state='ready' AND reader_min=4 AND reader_max=4 AND writer_min=4 AND writer_max=4)
- AND (SELECT count(*) FROM heimdall.migrations)=4
+ AND ` + retentionV4ProtocolSQL + `
  AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=1 AND checksum=$1)
  AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=2 AND checksum=$2)
  AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=3 AND checksum=$3)
@@ -120,6 +119,32 @@ const retentionReadinessSQL = `SELECT NOT pg_is_in_recovery() AND current_settin
  WHERE c.singleton AND c.row_limit=u.row_limit AND c.byte_limit=u.byte_limit AND u.checksums=$5::text[])
  AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=4 AND checksum=$6)
  AND EXISTS(SELECT 1 FROM heimdall_retention.backfill WHERE singleton AND phase='complete' AND after_product IS NULL AND after_environment IS NULL AND after_id IS NULL) AS ready`
+
+const retentionV4ProtocolSQL = `(EXISTS(SELECT 1 FROM heimdall.schema_metadata WHERE singleton AND database_version=4 AND state='ready' AND reader_min=4 AND reader_max=4 AND writer_min=4 AND writer_max=4)
+ AND (SELECT count(*) FROM heimdall.migrations)=4)`
+const retentionV5ProtocolSQL = `(EXISTS(SELECT 1 FROM heimdall.schema_metadata WHERE singleton AND database_version=5 AND state='ready' AND reader_min=5 AND reader_max=5 AND writer_min=5 AND writer_max=5)
+ AND (SELECT count(*) FROM heimdall.migrations)=5
+ AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=5 AND checksum='` + holdReleaseMigrationChecksum + `')
+ AND to_regclass('heimdall_retention.hold_release_capacity') IS NOT NULL
+ AND to_regclass('heimdall_retention.hold_release_reservations') IS NOT NULL)`
+
+var retentionV5ReadinessSQL = strings.Replace(retentionV4ReadinessSQL, retentionV4ProtocolSQL, retentionV5ProtocolSQL, 1)
+var retentionReadinessSQL = strings.Replace(retentionV4ReadinessSQL, retentionV4ProtocolSQL, "("+retentionV4ProtocolSQL+" OR "+retentionV5ProtocolSQL+")", 1)
+
+func CheckRetentionVersion(ctx context.Context, db *sql.DB, version int, managed bool) error {
+	sql := retentionV4ReadinessSQL
+	if version == 5 {
+		sql = retentionV5ReadinessSQL
+	} else if version != 4 {
+		return contract.ErrInvalidArgument
+	}
+	args := retentionReadinessArgs()
+	if managed {
+		sql = "SELECT base.ready AND managed.ready AS ready FROM (" + sql + ") base CROSS JOIN (" + strings.ReplaceAll(managedOnlyReadinessSQL, "$1", "$7") + ") managed"
+		args = append(args, managedChecksum)
+	}
+	return checkReadiness(ctx, db, sql, args...)
+}
 
 var managedRetentionReadinessSQL = "SELECT base.ready AND managed.ready AS ready FROM (" + retentionReadinessSQL + ") base CROSS JOIN (" + strings.ReplaceAll(managedOnlyReadinessSQL, "$1", "$7") + ") managed"
 

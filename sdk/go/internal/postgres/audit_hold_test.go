@@ -125,6 +125,13 @@ func TestRetainedHolds(t *testing.T) {
 		c := p.Loss[operation]
 		before := snapshot()
 		receipt, err := port.ApplyHold(ctx, c.Request, c.Administration)
+		if code := os.Getenv("HEIMDALL_TEST_HOLD_EXPECT"); code != "" {
+			if err == nil || err.Error() != code || snapshot() != before {
+				t.Fatalf("expected %s without changes, got %v", code, err)
+			}
+			return
+		}
+
 		if os.Getenv("HEIMDALL_TEST_HOLD_FAULT") == "1" {
 			if !errors.Is(err, contract.ErrOutcomeUnknown) {
 				t.Fatal(err)

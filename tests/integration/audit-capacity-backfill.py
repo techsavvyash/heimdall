@@ -421,14 +421,109 @@ try:
   assert 'audit_unavailable' in cli(command,database,1).stderr
   print('Hold release CLI preparation passed: atomic v4 drain, insufficient quota, lost COMMIT retry, readonly and drift refusal',flush=True)
   # END hold release CLI proof
+  # BEGIN v5 hold release proof
+  def hold_test(which,settings):
+   if which=='go':go('^TestRetainedHolds$',settings)
+   else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-hold.test.ts'],env=settings)
+  activate_release=['--activate-hold-release-upgrade','--writers-drained']
+  for language,peer in [('ts','go'),('go','ts')]:
+   database='hold_release_v5_'+language
+   sql('CREATE DATABASE '+database+' TEMPLATE retained_holds_v4')
+   sql('ALTER TABLE heimdall_retention.event_holds DROP CONSTRAINT test_late_hold_failure',database)
+   cli(activate_release,database,1)
+   cli(command,database)
+   cli(['--status','audit-v5'],database,1)
+   if language=='ts':
+    with CommitLossProxy(int(port)) as proxy:
+     assert 'outcome_unknown' in cli(activate_release,database,1,url=dsn(database,proxy.port)).stderr
+     assert proxy.dropped.is_set() and not proxy.errors
+   cli(activate_release,database)
+   cli(['--status','audit-v4'],database,1)
+   cli(['--status','audit-v5'],database)
+   cli(['--status','managed-v5'],database)
+   sql('GRANT SELECT,UPDATE(release_event_id) ON heimdall_retention.hold_release_reservations TO retained_hold_runtime',database)
+   role='&options=-c%20role%3Dretained_hold_runtime'
+   selected=dict(env,HEIMDALL_TEST_HOLD_URL=dsn(database)+role,HEIMDALL_TEST_HOLD_ADMIN=dsn(database),HEIMDALL_TEST_HOLD_PROFILE=language)
+   hold_test(language,dict(selected,HEIMDALL_TEST_HOLD_OPERATION='acquire'))
+   assert sql('SELECT active_count FROM heimdall_retention.hold_release_capacity',database)=='3'
+   sql("""UPDATE heimdall_capacity.policy SET event_limit=used_events+reserved_events+3,
+    byte_limit=used_bytes+reserved_bytes+4500000,delivery_limit=used_deliveries+reserved_deliveries+96;
+    UPDATE heimdall_capacity.upgrade u SET event_limit=p.event_limit,byte_limit=p.byte_limit,delivery_limit=p.delivery_limit FROM heimdall_capacity.policy p;
+    UPDATE heimdall_retention.capacity SET row_limit=used_rows+reserved_rows+3,byte_limit=(used_rows+reserved_rows+3)*8192;
+    UPDATE heimdall_retention.upgrade u SET row_limit=p.row_limit,byte_limit=p.byte_limit FROM heimdall_retention.capacity p""",database)
+   decision_reserves="SELECT concat_ws(':',reserved_events,reserved_bytes,reserved_deliveries,(SELECT reserved_rows FROM heimdall_retention.capacity)) FROM heimdall_capacity.policy"
+   reserved_before=sql(decision_reserves,database)
+   hold_test(language,dict(selected,HEIMDALL_TEST_HOLD_OPERATION='concurrent',HEIMDALL_TEST_HOLD_EXPECT='audit_unavailable'))
+   sql("ALTER TABLE heimdall_retention.event_holds ADD CONSTRAINT test_release_failure CHECK(hold_id<>'commit-loss' OR release_event_id IS NULL)",database)
+   hold_test(language,dict(selected,HEIMDALL_TEST_HOLD_OPERATION='release',HEIMDALL_TEST_HOLD_EXPECT='audit_unavailable'))
+   assert sql('SELECT active_count FROM heimdall_retention.hold_release_capacity',database)=='3'
+   sql("ALTER TABLE heimdall_retention.event_holds DROP CONSTRAINT test_release_failure",database)
+   with CommitLossProxy(int(port)) as proxy:
+    hold_test(language,dict(selected,HEIMDALL_TEST_HOLD_OPERATION='release',HEIMDALL_TEST_HOLD_FAULT='1',HEIMDALL_TEST_HOLD_URL=dsn(database,proxy.port)+role))
+    assert proxy.dropped.is_set() and not proxy.errors
+   hold_test(peer,dict(selected,HEIMDALL_TEST_HOLD_OPERATION='release',HEIMDALL_TEST_HOLD_RETRY='1'))
+   assert sql('SELECT active_count FROM heimdall_retention.hold_release_capacity',database)=='2'
+   assert sql(decision_reserves,database)==reserved_before
+   assert sql("SELECT count(*) FROM heimdall_retention.hold_release_reservations r JOIN heimdall_retention.event_holds h USING(product_id,environment,hold_id) WHERE r.release_event_id=h.release_event_id AND r.hold_id='commit-loss'",database)=='1'
+   cli(activate_release,database)
+  print('v5 hold release passed: activation, full quota, rollback, independent decision reserves and reciprocal lost COMMIT',flush=True)
+  # END v5 hold release proof
+  # BEGIN v5 exact-fit acquisition proof
+  for language in ['ts','go']:
+   charged=sql("SELECT c.envelope_bytes FROM heimdall_capacity.event_charges c JOIN heimdall_retention.event_holds h ON (c.product_id,c.environment,c.event_id)=(h.product_id,h.environment,h.placement_event_id) WHERE h.hold_id='commit-loss'",'hold_release_v5_'+language)
+   assert charged.isdecimal()
+   database='hold_release_exact_'+language
+   sql('CREATE DATABASE '+database+' TEMPLATE retained_holds_v4')
+   sql('ALTER TABLE heimdall_retention.event_holds DROP CONSTRAINT test_late_hold_failure',database)
+   cli(command,database)
+   cli(activate_release,database)
+   sql('GRANT SELECT,UPDATE(release_event_id) ON heimdall_retention.hold_release_reservations TO retained_hold_runtime',database)
+   selected=dict(env,HEIMDALL_TEST_HOLD_URL=dsn(database)+'&options=-c%20role%3Dretained_hold_runtime',HEIMDALL_TEST_HOLD_ADMIN=dsn(database),HEIMDALL_TEST_HOLD_PROFILE=language,HEIMDALL_TEST_HOLD_OPERATION='acquire')
+   exact=f"""UPDATE heimdall_capacity.policy SET event_limit=used_events+reserved_events+4,
+    byte_limit=used_bytes+reserved_bytes+4500000+{charged},delivery_limit=used_deliveries+reserved_deliveries+97;
+    UPDATE heimdall_retention.capacity SET row_limit=used_rows+reserved_rows+5,byte_limit=(used_rows+reserved_rows+5)*8192;"""
+   receipts="""UPDATE heimdall_capacity.upgrade u SET event_limit=p.event_limit,byte_limit=p.byte_limit,delivery_limit=p.delivery_limit FROM heimdall_capacity.policy p;
+    UPDATE heimdall_retention.upgrade u SET row_limit=p.row_limit,byte_limit=p.byte_limit FROM heimdall_retention.capacity p"""
+   for relation,column in [('heimdall_capacity.policy','event_limit'),('heimdall_capacity.policy','byte_limit'),
+       ('heimdall_capacity.policy','delivery_limit'),('heimdall_retention.capacity','row_limit'),
+       ('heimdall_retention.capacity','byte_limit')]:
+    sql(exact+f'UPDATE {relation} SET {column}={column}-1;'+receipts,database)
+    hold_test(language,dict(selected,HEIMDALL_TEST_HOLD_EXPECT='audit_unavailable'))
+    assert sql('SELECT active_count FROM heimdall_retention.hold_release_capacity',database)=='2'
+   sql(exact+receipts,database)
+   hold_test(language,selected)
+   assert sql('SELECT active_count FROM heimdall_retention.hold_release_capacity',database)=='3'
+  print('v5 exact-fit acquisition passed in both SDKs, with one-unit overflow refusal in all five limits',flush=True)
+  # END v5 exact-fit acquisition proof
+  # BEGIN v5 concurrent release proof
+  database='hold_release_exact_ts'
+  simultaneous=dict(env,HEIMDALL_TEST_HOLD_URL=dsn(database)+'&options=-c%20role%3Dretained_hold_runtime',
+   HEIMDALL_TEST_HOLD_ADMIN=dsn(database),HEIMDALL_TEST_HOLD_PROFILE='ts',HEIMDALL_TEST_HOLD_OPERATION='release')
+  with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+   list(pool.map(lambda language:hold_test(language,simultaneous),['ts','go']))
+  assert sql('SELECT active_count FROM heimdall_retention.hold_release_capacity',database)=='2'
+  assert sql("""SELECT count(*) FROM heimdall_retention.event_holds h
+    JOIN heimdall_capacity.event_charges c ON (c.product_id,c.environment,c.event_id)=(h.product_id,h.environment,h.release_event_id)
+    WHERE h.hold_id='commit-loss'""",database)=='1'
+  print('v5 concurrent TS/Go release passed with one audit charge',flush=True)
+  # END v5 concurrent release proof
+  # BEGIN v5 public factory proof
+  database='hold_release_public_v5'
+  sql('CREATE DATABASE '+database+' TEMPLATE retention_activation')
+  cli(command,database)
+  cli(activate_release,database)
+  sql(runtime_grants.replace('retained_runtime_profile','public_capacity_runtime'),database)
+  public_v5=dict(env,HEIMDALL_TEST_CAPACITY_READY_URL=dsn(database))
+  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-public-capacity.test.ts'],env=public_v5)
+  subprocess.run(['go','test','-race','-count=1','.', '-run','^TestPublicCapacity$'],cwd=ROOT/'sdk/go',env=public_v5,check=True)
+  assert sql("SELECT database_version FROM heimdall.schema_metadata",database)=='5'
+  print('v5 public factory proof passed in TS and Go',flush=True)
+  # END v5 public factory proof
   # BEGIN retained hold fault proof
   for language in ['ts','go']:
    database='retained_holds_loss_'+language
    sql('CREATE DATABASE '+database+' TEMPLATE retained_holds_v4')
    selected=dict(env,HEIMDALL_TEST_HOLD_URL=dsn(database)+'&options=-c%20role%3Dretained_hold_runtime',HEIMDALL_TEST_HOLD_ADMIN=dsn(database),HEIMDALL_TEST_HOLD_PROFILE=language)
-   def hold_test(which,settings):
-    if which=='go':go('^TestRetainedHolds$',settings)
-    else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-hold.test.ts'],env=settings)
    for operation in ['acquire','release']:
     with CommitLossProxy(int(port)) as proxy:
      hold_test(language,dict(selected,HEIMDALL_TEST_HOLD_OPERATION=operation,HEIMDALL_TEST_HOLD_FAULT='1',HEIMDALL_TEST_HOLD_URL=dsn(database,proxy.port)+'&options=-c%20role%3Dretained_hold_runtime'))
