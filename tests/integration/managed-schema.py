@@ -189,5 +189,5 @@ finally:
     if created:sql("DROP DATABASE "+database,"postgres")
     if role_created:sql("DROP ROLE "+role,"postgres")
     if binary_dir:binary_dir.cleanup()
-    if container_created:subprocess.run(["docker","rm","--force",name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True)
+    if container_created:subprocess.run(["docker","rm","--force","--volumes",name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True)
 print(json.dumps(result))

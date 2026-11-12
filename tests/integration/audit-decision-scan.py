@@ -49,4 +49,4 @@ try:
     print(json.dumps({"run": name, "postgres": IMAGE, "result": "passed", "checks": ["shared time and ID ordering", "scope cutoff and cursor validation", "reciprocal TS/Go reads", "terminal and future exclusion", "concurrent completion produces empty continuation", "digest and binding corruption refusal", "byte limited pages and storage oversized row refusal", "read-only empty page refusal", "cancelled lock wait and pool reuse"]}))
 finally:
     if created:
-        subprocess.run(["docker", "rm", "--force", name], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(["docker", "rm", "--force", "--volumes", name], check=True, stdout=subprocess.DEVNULL)

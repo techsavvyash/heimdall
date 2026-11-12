@@ -84,4 +84,4 @@ try:
   assert sql("SELECT state||':'||used FROM heimdall_keys.record_key_usage WHERE fingerprint=decode('"+fp('old')+"','hex')",'key_ledger')=='retired:4'
  print(json.dumps({'run':name,'postgres':IMAGE,'result':'passed','checks':['two product databases and shared key ledger','concurrent TS Go rotation phases','old-key laggards refused after retirement','retained keys read prior envelopes','real dump restore demonstrates logout and counter rollback','runtime CONNECT denied during restore preparation','restored sessions and login states discarded offline','restored keys retired and fresh material registered before runtime access','both SDKs reject retired and unknown restored keys','fresh shared recovery key consumed exactly twice','original databases unaffected by isolated restore']}))
 finally:
- if created:subprocess.run(['docker','rm','--force',name],check=True,stdout=subprocess.DEVNULL)
+ if created:subprocess.run(['docker','rm','--force','--volumes',name],check=True,stdout=subprocess.DEVNULL)

@@ -74,3 +74,24 @@ reconciled; never replay an exported or restored backlog automatically.
 
 Shared tests: `fixtures/managed-export.json`; live column-privilege, pagination,
 scope, cancellation and reciprocal TS/Go proofs: `tests/integration/managed-schema.py`.
+
+## Retained runtime admission
+
+TypeScript `ManagedExport.forRetainedRuntime` and Go `NewRetainedManagedExport`
+select audit-v4/managed-v1 runtime admission without constructor I/O. They evaluate
+both schema families in the same primary SQL snapshot as the allowlisted export
+rows. Legacy/migrating audit state, incompatible managed metadata or ledger, and
+read-only connections fail unavailable even for empty pages. The original internal
+constructors remain explicit legacy-schema diagnostic/migration ports.
+
+The retained export role additionally needs SELECT on the schema metadata and
+migration ledgers plus audit capacity/retention policy, upgrade and backfill
+receipts used by readiness. It does not need SELECT on audit payloads, compact
+event identities, sessions, names or intent payloads. The explicit managed-column
+projection and portable page format remain unchanged. Required authorization and
+export-administration audit still belong to the caller before artifact release;
+readiness is not an export permission or a consistent whole-inventory snapshot.
+
+The activated profile in `tests/integration/audit-capacity-backfill.py` now runs the
+shared export fixtures, restricted-column reads, reciprocal language reads,
+readiness refusal, cancellation and post-timeout reuse through retained factories.

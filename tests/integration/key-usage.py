@@ -91,4 +91,4 @@ try:
   assert result.returncode!=0
  print(json.dumps({'run':name,'result':'passed','checks':['actual key CLI initialization status registration policy conflict read-only refusal and registration/retirement COMMIT loss','TS and Go concurrent cap','idempotent registration preserves usage','irreversible retirement','runtime policy privilege refusal','both COMMIT losses consume usage without success','all record write paths meter encryption including failed CAS and denied identity','retained decryption and rotation','uncertain reservation prevents encryption and persistence','database guards reject reset deletion and policy change']}))
 finally:
- if created:subprocess.run(["docker","rm","--force",name],check=True,stdout=subprocess.DEVNULL)
+ if created:subprocess.run(["docker","rm","--force","--volumes",name],check=True,stdout=subprocess.DEVNULL)

@@ -1,3 +1,4 @@
+import { managedReadQuery } from "./readiness.js";
 import type { Pool } from "pg";
 import { HeimdallError } from "../errors.js";
 import { query } from "./query.js";
@@ -110,6 +111,14 @@ export function decodeExportRow(
 }
 // Privileged diagnostic export primitive; caller supplies authorization and durable export audit.
 export class ManagedExport {
+  private retainedRuntime = false;
+  static forRetainedRuntime(pool: Pool, productId: string, environment: string) {
+    const store = new ManagedExport(pool, productId, environment);
+    store.retainedRuntime = true;
+    return store;
+  }
+
+  // Legacy schema port; runtime exports use forRetainedRuntime.
   constructor(
     private readonly pool: Pool,
     private readonly productId: string,
@@ -142,12 +151,15 @@ export class ManagedExport {
         : "'operationId',operation_id,'kind',kind,'state',state,'dispatchCount',dispatch_count::text,'generation',generation::text,'nextAttemptAt',next_attempt_at::text,'storeId',store_id,'modelId',model_id,'modelHash',encode(model_hash,'hex'),'manifestVersion',manifest_version::text";
     const rows = await query<{ primary: boolean; records: unknown[] }>(
       this.pool,
-      `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
+      ...managedReadQuery(
+        `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
  COALESCE(jsonb_agg(record ORDER BY id COLLATE "C"),'[]'::jsonb) AS records FROM (
  SELECT ${id} AS id,jsonb_build_object('productId',product_id,'environment',environment,'workspaceId',workspace_id,'createdAt',created_at::text,'updatedAt',updated_at::text,${fields}) AS record
  FROM heimdall_managed.${kind} WHERE product_id=$1 AND environment=$2 AND ($3::text IS NULL OR workspace_id=$3)
  AND ($4::text IS NULL OR ${id} COLLATE "C">$4 COLLATE "C") ORDER BY ${id} COLLATE "C" LIMIT $5) page`,
-      [this.productId, this.environment, workspaceId, after, limit + 1],
+        [this.productId, this.environment, workspaceId, after, limit + 1],
+        this.retainedRuntime,
+      ),
       false,
       signal,
     );

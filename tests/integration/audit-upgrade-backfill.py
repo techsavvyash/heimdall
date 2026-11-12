@@ -71,4 +71,4 @@ try:
  assert sql("SELECT state FROM heimdall.schema_metadata","coordinate_cli")=="migrating"
  print(json.dumps({"run":name,"postgres":IMAGE,"result":"passed","checks":["empty coverage and automatic scope discovery","bounded registration and event steps","one-connection pool and eight concurrent coordinators","two products and two environments each","receipt gate read-only and cancellation refusal","completed-scope count drift refusal","corrupt history returns failed scope without partial bindings","registration COMMIT loss and durable restart","real CLI progresses all scopes without manual enumeration","custom history refused without matching registry", "no readiness activation"]}))
 finally:
- if created:subprocess.run(["docker","rm","--force",name],check=True,stdout=subprocess.DEVNULL)
+ if created:subprocess.run(["docker","rm","--force","--volumes",name],check=True,stdout=subprocess.DEVNULL)

@@ -14,3 +14,9 @@ export const candidateRecords = (...args: ConstructorParameters<typeof Candidate
   process.env.HEIMDALL_TEST_MANAGED_OPERATIONS_V4 === "1"
     ? CandidateRecords.forRetainedRuntime(...args)
     : new CandidateRecords(...args);
+
+import { ManagedExport } from "../src/internal/postgres/export.js";
+export const managedExport = (...args: ConstructorParameters<typeof ManagedExport>) =>
+  process.env.HEIMDALL_TEST_MANAGED_OPERATIONS_V4 === "1"
+    ? ManagedExport.forRetainedRuntime(...args)
+    : new ManagedExport(...args);

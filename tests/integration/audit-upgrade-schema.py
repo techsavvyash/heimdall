@@ -35,4 +35,4 @@ try:
  assert sql("SELECT state FROM heimdall.schema_metadata")=="migrating"
  print(json.dumps({"run":name,"postgres":IMAGE,"result":"passed","checks":["pinned pristine catalog profile", "25 independent schema drift cases", "stable search path", "table DDL blocked during verification", "preparation and coordinator refuse persisted drift", "schema failure rolls back initial preparation", "table lock cancellation and connection reuse", "no readiness activation"]}))
 finally:
- if created:subprocess.run(["docker","rm","--force",name],check=True,stdout=subprocess.DEVNULL)
+ if created:subprocess.run(["docker","rm","--force","--volumes",name],check=True,stdout=subprocess.DEVNULL)

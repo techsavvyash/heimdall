@@ -1,3 +1,4 @@
+import { ManagedExport } from "../src/internal/postgres/export.js";
 import { WorkspaceRecords } from "../src/internal/postgres/workspaces.js";
 import { CandidateRecords } from "../src/internal/postgres/candidates.js";
 import { readFileSync } from "node:fs";
@@ -22,6 +23,14 @@ test.skipIf(
   const binding = { ...f.binding, productId: "admission-ts" };
   const store = OperationRecords.forRetainedRuntime(pool, binding, []);
   const reject = async (s: OperationRecords, source: Pool) => {
+    const exporter = ManagedExport.forRetainedRuntime(
+      source,
+      binding.productId,
+      binding.environment,
+    );
+    for (const kind of ["workspaces", "operations"] as const)
+      await expect(exporter.scan(kind, "absent", null, 10)).rejects.toThrow("unavailable");
+
     await expect(
       WorkspaceRecords.forRetainedRuntime(source, binding.productId, binding.environment).get(
         "absent",

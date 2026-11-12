@@ -52,4 +52,4 @@ try:
  assert sql("SELECT count(*) FROM heimdall.audit_decisions","activation_main")=="8"
  print(json.dumps({"run":name,"postgres":IMAGE,"result":"passed","checks":["count and byte-bounded scan covers 136 historical events", "full binding validation rejects five corruption cases", "incomplete coverage and missing slots never publish readiness", "four concurrent activators and stable retries", "cancellation and connection reuse", "matching TS and Go readiness matrix", "v1 readers refuse activated v2", "COMMIT-loss inspected retry preserves receipt", "real CLI activation and explicit v2 status"]}))
 finally:
- if created:subprocess.run(["docker","rm","--force",name],check=True,stdout=subprocess.DEVNULL)
+ if created:subprocess.run(["docker","rm","--force","--volumes",name],check=True,stdout=subprocess.DEVNULL)

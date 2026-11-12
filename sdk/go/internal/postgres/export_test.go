@@ -34,6 +34,12 @@ func readExportFixture(t *testing.T) exportFixture {
 	}
 	return f
 }
+func testManagedExport(db *sql.DB, product, environment string) (*ManagedExport, error) {
+	if os.Getenv("HEIMDALL_TEST_MANAGED_OPERATIONS_V4") == "1" {
+		return NewRetainedManagedExport(db, product, environment)
+	}
+	return NewManagedExport(db, product, environment)
+}
 func TestExportDecoder(t *testing.T) {
 	f := readExportFixture(t)
 	workspace := "workspace"
@@ -56,7 +62,7 @@ func TestExportInput(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer db.Close()
-	s, _ := NewManagedExport(db, "export", "test")
+	s, _ := testManagedExport(db, "export", "test")
 	ctx := context.Background()
 	for _, limit := range []int{0, 101} {
 		if _, e = s.Scan(ctx, "workspaces", nil, nil, limit); !errors.Is(e, contract.ErrInvalidArgument) {
@@ -124,7 +130,7 @@ func TestExportPrimary(t *testing.T) {
 		return p
 	}
 	for _, scope := range []string{"export-go", "export-ts"} {
-		s, _ := NewManagedExport(restricted, scope, "test")
+		s, _ := testManagedExport(restricted, scope, "test")
 		for _, kind := range []string{"workspaces", "operations"} {
 			var w *string
 			total := f.WorkspaceCount
@@ -156,7 +162,7 @@ func TestExportPrimary(t *testing.T) {
 			t.Fatal("operation filter")
 		}
 	}
-	absent, _ := NewManagedExport(restricted, "absent-export", "test")
+	absent, _ := testManagedExport(restricted, "absent-export", "test")
 	if len(read(absent, "workspaces", nil, nil, 100).Items) != 0 {
 		t.Fatal("scope")
 	}
@@ -165,12 +171,19 @@ func TestExportPrimary(t *testing.T) {
 			t.Fatal("sensitive column privilege")
 		}
 	}
+	if os.Getenv("HEIMDALL_TEST_MANAGED_OPERATIONS_V4") == "1" {
+		for _, q := range []string{"SELECT event FROM heimdall.audit_events LIMIT 1", "SELECT event_id FROM heimdall_retention.event_identities LIMIT 1", "SELECT actor_hash FROM heimdall_managed.operations LIMIT 1"} {
+			if _, err := restricted.Exec(q); err == nil {
+				t.Fatal("retained export gained sensitive access")
+			}
+		}
+	}
 	ro, e := sql.Open("postgres", url+"&options=-c%20default_transaction_read_only%3Don")
 	if e != nil {
 		t.Fatal(e)
 	}
 	defer ro.Close()
-	s, _ := NewManagedExport(ro, "export-go", "test")
+	s, _ := testManagedExport(ro, "export-go", "test")
 	if _, e = s.Scan(ctx, "workspaces", nil, nil, 1); !errors.Is(e, contract.ErrUnavailable) {
 		t.Fatal(e)
 	}
@@ -182,7 +195,7 @@ func TestExportPrimary(t *testing.T) {
 	if _, e = lock.Exec("LOCK TABLE heimdall_managed.workspaces IN ACCESS EXCLUSIVE MODE"); e != nil {
 		t.Fatal(e)
 	}
-	s, _ = NewManagedExport(restricted, "export-go", "test")
+	s, _ = testManagedExport(restricted, "export-go", "test")
 	deadline, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 	_, e = s.Scan(deadline, "workspaces", nil, nil, 1)
 	cancel()

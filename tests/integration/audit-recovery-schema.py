@@ -107,4 +107,4 @@ try:
     print(json.dumps({"run": name, "result": "passed", "postgres": IMAGE, "checksum": fixture["checksum"], "constraintCases": len(fixture["cases"]), "raceWinner": winner, "checks": ["current migration CLI refuses prepared v2", "transactional DDL rollback", "scoped event foreign keys", "immutable request and terminal state", "runtime cannot delete or run DDL", "normal finalizer versus recovery single winner", "both deterministic resolution orders preserve first terminal", "losing terminal event and outbox roll back", "outbox failure preserves pending request", "terminal retention restriction", "scoped pending scan"], "limitations": ["prepared migration not registered or runtime enabled", "SQL routing fixtures are not SDK audit payloads", "no backfill, SDK recovery or protection-release proof yet"]}))
 finally:
     if created:
-        subprocess.run(["docker", "rm", "--force", name], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(["docker", "rm", "--force", "--volumes", name], check=True, stdout=subprocess.DEVNULL)

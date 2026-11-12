@@ -125,4 +125,4 @@ try:
  assert sql('SELECT used_deliveries FROM heimdall_capacity.policy','delivery_race')=='1'
  print(json.dumps({'run':name,'result':'passed','checks':['DDL rollback','server-derived bytes and sink charges','idempotent charge does not double-count','pending reservations bind scoped decisions','counter reset policy delete and late sink refusal','runtime privilege limits','full admission blocks ordinary append atomically','missing terminal or administration charge rolls back at commit','normal completion releases reserve','maximum-byte recovery fits reserved capacity','eight concurrent requests across two products admit exactly one','normal versus recovery one winner with no loser charges','late sink versus charge serialized in both orders']}))
 finally:
- if created:subprocess.run(['docker','rm','--force',name],check=True,stdout=subprocess.DEVNULL)
+ if created:subprocess.run(['docker','rm','--force','--volumes',name],check=True,stdout=subprocess.DEVNULL)

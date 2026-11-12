@@ -77,15 +77,27 @@ func decodeExportRow(row map[string]any, kind, product, environment string, work
 
 // ManagedExport is a privileged diagnostic port. Authorization and export audit belong to its caller.
 type ManagedExport struct {
+	retainedRuntime      bool
 	db                   *sql.DB
 	product, environment string
 }
 
+// Legacy schema port; runtime exports use NewRetainedManagedExport.
 func NewManagedExport(db *sql.DB, product, environment string) (*ManagedExport, error) {
 	if db == nil || !valid(product, 64) || !valid(environment, 64) {
 		return nil, contract.ErrInvalidArgument
 	}
-	return &ManagedExport{db, product, environment}, nil
+	return &ManagedExport{db: db, product: product, environment: environment}, nil
+}
+
+// NewRetainedManagedExport requires compatible audit-v4 and managed-v1 snapshots.
+func NewRetainedManagedExport(db *sql.DB, product, environment string) (*ManagedExport, error) {
+	store, e := NewManagedExport(db, product, environment)
+	if e != nil {
+		return nil, e
+	}
+	store.retainedRuntime = true
+	return store, nil
 }
 
 // Scan returns a bounded portable JSON page, never a restorable journal or permission to replay.
@@ -115,11 +127,13 @@ func (e *ManagedExport) Scan(ctx context.Context, kind string, workspace, after 
 	}
 	var primary bool
 	var raw []byte
-	err := e.db.QueryRowContext(ctx, `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
+	statement := `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
  COALESCE(jsonb_agg(record ORDER BY id COLLATE "C"),'[]'::jsonb) AS records FROM (
- SELECT `+id+` AS id,jsonb_build_object('productId',product_id,'environment',environment,'workspaceId',workspace_id,'createdAt',created_at::text,'updatedAt',updated_at::text,`+fields+`) AS record
- FROM heimdall_managed.`+kind+` WHERE product_id=$1 AND environment=$2 AND ($3::text IS NULL OR workspace_id=$3)
- AND ($4::text IS NULL OR `+id+` COLLATE "C">$4 COLLATE "C") ORDER BY `+id+` COLLATE "C" LIMIT $5) page`, e.product, e.environment, workspace, after, limit+1).Scan(&primary, &raw)
+ SELECT ` + id + ` AS id,jsonb_build_object('productId',product_id,'environment',environment,'workspaceId',workspace_id,'createdAt',created_at::text,'updatedAt',updated_at::text,` + fields + `) AS record
+ FROM heimdall_managed.` + kind + ` WHERE product_id=$1 AND environment=$2 AND ($3::text IS NULL OR workspace_id=$3)
+ AND ($4::text IS NULL OR ` + id + ` COLLATE "C">$4 COLLATE "C") ORDER BY ` + id + ` COLLATE "C" LIMIT $5) page`
+	statement, args := managedReadQuery(statement, []any{e.product, e.environment, workspace, after, limit + 1}, e.retainedRuntime)
+	err := e.db.QueryRowContext(ctx, statement, args...).Scan(&primary, &raw)
 	if err != nil {
 		return nil, databaseError(ctx)
 	}

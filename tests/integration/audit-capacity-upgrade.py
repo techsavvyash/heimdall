@@ -74,4 +74,4 @@ try:
   assert 'unavailable' in cli(['--status','audit-v2'],'loss',1).stderr
  print(json.dumps({'run':name,'result':'passed','checks':['supported v2 upgrade baseline','immutable pending completed and recovered history preserved','explicit immutable quotas and pinned SQL','exact concurrent preparation retries preserve progress and charges','18 catalog and metadata drift refusals','resolved import only while preparing with zero future reserve','pending imports retain full recovery reserve','no v2 or capacity runtime admission in TS and Go after preparation','held deployment lock deadline and reuse','actual CLI argument and read-only refusals','mid-DDL rollback restores v2 readiness','old schema drift and partial manual schema refused','confirmed COMMIT response loss and receipt retry']}))
 finally:
- if created:run(['docker','rm','--force',name],stdout=subprocess.DEVNULL)
+ if created:run(['docker','rm','--force','--volumes',name],stdout=subprocess.DEVNULL)

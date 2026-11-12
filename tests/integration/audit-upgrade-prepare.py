@@ -50,4 +50,4 @@ try:
  assert sql("SELECT state FROM heimdall.schema_metadata","upgrade_cli")=="migrating"
  print(json.dumps({"run":name,"postgres":IMAGE,"result":"passed","checks":["checksum and drain assertion before IO","read-only refusal","mid-DDL rollback restores ready v1","cancelled deployment lock wait preserves readiness", "concurrent preparation and stable receipt retry","mismatched receipt and partial manual schema refusal","confirmed COMMIT loss and inspected retry","CLI requires explicit assertion and reports not ready","no backfill or activation claim"]}))
 finally:
- if created:subprocess.run(["docker","rm","--force",name],check=True,stdout=subprocess.DEVNULL)
+ if created:subprocess.run(["docker","rm","--force","--volumes",name],check=True,stdout=subprocess.DEVNULL)

@@ -58,4 +58,4 @@ try:
     print(json.dumps({"run": name, "postgres": IMAGE, "result": "passed", "checks": ["scoped deterministic administration ID", "pair validation and cutoff eligibility", "atomic unknown outcome administration and slot", "both deterministic race orders and concurrent normal completion", "eight exact recovery retries", "eight distinct recovery contenders leave one pair", "administration outbox failure rolls back all recovery writes", "missing administration is not fabricated", "reciprocal TS/Go recovery", "audited runners suppress recovery-losing allow", "both SDKs committed response loss and pair retry"]}))
 finally:
     if created:
-        subprocess.run(["docker", "rm", "--force", name], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(["docker", "rm", "--force", "--volumes", name], check=True, stdout=subprocess.DEVNULL)

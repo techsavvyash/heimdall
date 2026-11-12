@@ -1,7 +1,8 @@
+import { managedExport } from "./managed-store.js";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { expect, test } from "vitest";
-import { ManagedExport, decodeExportRow } from "../src/internal/postgres/export.js";
+import { decodeExportRow } from "../src/internal/postgres/export.js";
 const f = JSON.parse(
   readFileSync(new URL("../../../contracts/fixtures/managed-export.json", import.meta.url), "utf8"),
 );
@@ -21,7 +22,7 @@ for (const c of f.cases.filter((c: { valid: boolean }) => !c.valid))
   });
 test("export validates bounds and cancellation without I/O", async () => {
   const p = new Pool();
-  const s = new ManagedExport(p, "export", "test");
+  const s = managedExport(p, "export", "test");
   try {
     for (const limit of [0, 101, 1.5])
       await expect(s.scan("workspaces", null, null, limit)).rejects.toThrow("invalid_argument");
@@ -48,7 +49,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_MANAGED_DATABASE_URL)(
     const scope = peer ? "export-go" : "export-ts";
     try {
       if (!peer) for (const sql of f.seed) await p.query(sql.replaceAll("$scope", scope));
-      const s = new ManagedExport(restricted, scope, "test");
+      const s = managedExport(restricted, scope, "test");
       for (const kind of ["workspaces", "operations"] as const) {
         const workspace = kind === "operations" ? "w-000" : null;
         const first = JSON.parse(await s.scan(kind, workspace, null, 100));
@@ -80,7 +81,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_MANAGED_DATABASE_URL)(
       expect(JSON.parse(await s.scan("operations", "w-001", null, 100)).items).toEqual([]);
       expect(
         JSON.parse(
-          await new ManagedExport(restricted, "absent-export", "test").scan(
+          await managedExport(restricted, "absent-export", "test").scan(
             "workspaces",
             null,
             null,
@@ -94,13 +95,23 @@ test.skipIf(!process.env.HEIMDALL_TEST_MANAGED_DATABASE_URL)(
       await expect(
         restricted.query("SELECT intent_payload FROM heimdall_managed.operations LIMIT 1"),
       ).rejects.toThrow("permission denied");
+      const retainedPrivateQueries =
+        process.env.HEIMDALL_TEST_MANAGED_OPERATIONS_V4 === "1"
+          ? [
+              "SELECT event FROM heimdall.audit_events LIMIT 1",
+              "SELECT event_id FROM heimdall_retention.event_identities LIMIT 1",
+              "SELECT actor_hash FROM heimdall_managed.operations LIMIT 1",
+            ]
+          : [];
+      for (const sql of retainedPrivateQueries)
+        await expect(restricted.query(sql)).rejects.toThrow("permission denied");
       const ro = new Pool({
         connectionString: url,
         options: "-c default_transaction_read_only=on",
       });
       try {
         await expect(
-          new ManagedExport(ro, scope, "test").scan("workspaces", null, null, 1),
+          managedExport(ro, scope, "test").scan("workspaces", null, null, 1),
         ).rejects.toThrow("unavailable");
       } finally {
         await ro.end();

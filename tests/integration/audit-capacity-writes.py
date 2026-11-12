@@ -58,4 +58,4 @@ try:
    suite(language,dict(env,HEIMDALL_TEST_CAPACITY_URL=dsn(database),HEIMDALL_TEST_CAPACITY_MODE=mode))
  print(json.dumps({'run':name,'result':'passed','checks':['TS and Go real validated ha1 events','restricted runtime credentials','atomic admission and full-capacity refusal','normal completion releases recovery reserve','recovery consumes reserve at full admission','original retry receipts and sinks preserved','changed payload and late terminal conflict','missing charge and reservation fail closed','preparing policy refuses writes','normal versus recovery race','request ordinary completion and recovery COMMIT loss','TS to Go and Go to TS recovery','eight cross-product SDK admissions allow one','independent byte and delivery limits','recovery administration sink failure rolls back pair and slot']}))
 finally:
- if created:run(['docker','rm','--force',name],stdout=subprocess.DEVNULL)
+ if created:run(['docker','rm','--force','--volumes',name],stdout=subprocess.DEVNULL)
