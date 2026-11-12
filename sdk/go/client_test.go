@@ -56,6 +56,8 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 		t.Fatal(e)
 	}
 	h := &runtimeHarness{}
+	// Introspection reports this token's expiry, not a sliding response-time expiry.
+	expiresAt := time.Now().Add(time.Hour).Unix()
 	var issuer string
 	var model map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +74,7 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 		case "/oauth/v2/keys":
 			body = map[string]any{"keys": []any{map[string]any{"kty": "RSA", "kid": "runtime", "alg": "RS256", "n": base64.RawURLEncoding.EncodeToString(key.N.Bytes()), "e": "AQAB"}}}
 		case "/oauth/v2/introspect":
-			body = map[string]any{"active": true, "iss": issuer, "sub": "runtime-user", "aud": "ledger-api", "exp": time.Now().Add(time.Hour).Unix()}
+			body = map[string]any{"active": true, "iss": issuer, "sub": "runtime-user", "aud": "ledger-api", "exp": expiresAt}
 		case "/v2/users/runtime-user":
 			body = map[string]any{"user": map[string]any{"userId": "runtime-user", "state": "USER_STATE_ACTIVE", "human": map[string]any{}}}
 		default:
@@ -110,7 +112,7 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 	if failure == "introspection" {
 		discovery.Metadata["introspection_endpoint"] = issuer + "/unexpected"
 	}
-	signed := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{"iss": issuer, "aud": "ledger-api", "sub": "runtime-user", "iat": time.Now().Unix(), "exp": time.Now().Add(time.Hour).Unix()})
+	signed := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{"iss": issuer, "aud": "ledger-api", "sub": "runtime-user", "iat": time.Now().Unix(), "exp": expiresAt})
 	signed.Header["kid"] = "runtime"
 	h.token, e = signed.SignedString(key)
 	if e != nil {

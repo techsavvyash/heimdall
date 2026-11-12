@@ -49,3 +49,13 @@ PostgreSQL hold-operation proof. Actor authorization, trusted clock/policy
 selection, full target-history validation, atomic persistence, immutable retries
 and COMMIT-loss recovery remain required. No public hold endpoint or retirement
 worker is enabled. Phase 3 remains incomplete.
+
+## CI fixture correction
+
+The first PR check exposed a timing-dependent failure in the existing public
+bearer test. Its mock introspection endpoint recalculated token expiry for every
+response, which could exceed the signed token's fixed expiry after a second
+boundary. The verifier correctly returned unavailable. The mock now reuses the
+same expiry in the signed token and introspection response. Runtime verification
+rules are unchanged; 30 consecutive runs of `go test -race -count=30 -run '^TestPublicTokens$' .`
+passed with the corrected fixture.
