@@ -336,6 +336,37 @@ try:
   assert sql("SELECT (SELECT count(*) FROM heimdall_retention.event_identities)=(SELECT count(*) FROM heimdall.audit_events)", 'managed_retained_v4')=='t'
   assert sql("SELECT used_events=(SELECT count(*) FROM heimdall_capacity.event_charges) FROM heimdall_capacity.policy", 'managed_retained_v4')=='t'
   print('Managed retained v4 atomic rollback and confirmed COMMIT-loss tests passed in TS and Go',flush=True)
+  sql('CREATE DATABASE managed_operations_v4 TEMPLATE retention_activation')
+  sql(runtime_grants.replace('retained_runtime_profile','heimdall_managed_runtime')+"; GRANT USAGE ON SCHEMA heimdall_managed TO heimdall_managed_runtime; GRANT SELECT ON heimdall_managed.schema_metadata,heimdall_managed.migrations TO heimdall_managed_runtime; GRANT SELECT,INSERT,UPDATE ON heimdall_managed.workspaces,heimdall_managed.operations,heimdall_managed.membership_candidates TO heimdall_managed_runtime; GRANT DELETE ON heimdall_managed.membership_candidates TO heimdall_managed_runtime; GRANT USAGE ON ALL SEQUENCES IN SCHEMA heimdall_managed TO heimdall_managed_runtime", 'managed_operations_v4')
+  sql("UPDATE heimdall_capacity.policy SET event_limit=100000,byte_limit=1000000000,delivery_limit=100000; UPDATE heimdall_capacity.upgrade SET event_limit=100000,byte_limit=1000000000,delivery_limit=100000; UPDATE heimdall_retention.capacity SET row_limit=100000,byte_limit=819200000; UPDATE heimdall_retention.upgrade SET row_limit=100000,byte_limit=819200000", 'managed_operations_v4')
+  operation_env=dict(env,HEIMDALL_TEST_MANAGED_DATABASE_URL=dsn('managed_operations_v4'),HEIMDALL_TEST_MANAGED_OPERATIONS_V4='1')
+  go('^TestRetainedOperationsAdmission$',operation_env)
+  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-operations-retained.test.ts'],env=operation_env)
+  operation_files=['test/postgres-'+n+'.test.ts' for n in ['operations','operation-transitions','membership-intents','candidate-repair','operation-scan']]
+  for file in operation_files:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run',file],env=operation_env)
+  go('^(TestOperation(Journal|Input|Create|Transition|TransitionInput|MembershipCompletion|Scan|ScanInput)|TestMembership(Input|Intent)|TestCandidate(Repair|RepairInput))$',dict(operation_env,HEIMDALL_TEST_MANAGED_READ_PEER='1'))
+  for file in operation_files:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run',file],env=dict(operation_env,HEIMDALL_TEST_MANAGED_READ_PEER='1'))
+  for language in ['go','ts']:
+   for variable,file,ts_name,go_name in [
+    ('CREATE','operations','operation create committed response loss and retry','TestOperationCreateLoss'),
+    ('TRANSITION','operation-transitions','transition committed response loss','TestOperationTransitionLoss'),
+    ('MEMBERSHIP','membership-intents','membership intent committed response loss','TestMembershipIntentLoss'),
+    ('REPAIR','candidate-repair','candidate repair committed response loss','TestCandidateRepairLoss')]:
+    with CommitLossProxy(int(port)) as proxy:
+     selected=dict(operation_env,**{'HEIMDALL_TEST_'+variable+'_LOSS':dsn('managed_operations_v4',proxy.port)})
+     if language=='go':go('^'+go_name+'$',selected)
+     else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-'+file+'.test.ts','-t',ts_name],env=selected)
+     assert proxy.dropped.is_set() and not proxy.errors
+  race_env=dict(operation_env,HEIMDALL_TEST_CREATE_RACE='1')
+  with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+   attempts=[pool.submit(go,'^TestOperationCreateRaceCross$',race_env),pool.submit(run,['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-operations.test.ts','-t','cross-language create race'],env=race_env)]
+   for attempt in attempts:attempt.result()
+  for table in ['workspaces','operations']:
+   assert sql("SELECT count(*) FROM heimdall_managed."+table+" WHERE product_id='creation-cross'", 'managed_operations_v4')=='1'
+  assert sql("SELECT count(*) FROM heimdall.audit_events WHERE product_id='creation-cross'", 'managed_operations_v4')=='1'
+  assert sql("SELECT count(*) FROM heimdall.audit_deliveries WHERE product_id='creation-cross'", 'managed_operations_v4')=='2'
+  assert sql("SELECT count(*) FROM heimdall.audit_events e LEFT JOIN heimdall_retention.event_identities i USING(product_id,environment,event_id) LEFT JOIN heimdall_capacity.event_charges c USING(product_id,environment,event_id) WHERE i.event_id IS NULL OR c.event_id IS NULL", 'managed_operations_v4')=='0'
+  print('Managed operation v4 runtime writes, bidirectional reads, state transitions and COMMIT-loss recovery passed',flush=True)
   def runtime_profile(language,selected):
    if language=='go':go('^TestRetainedRuntime$',selected)
    else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-runtime.test.ts'],env=selected)

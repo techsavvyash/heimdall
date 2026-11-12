@@ -1,7 +1,7 @@
+import { operationRecords } from "./operation-store.js";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { expect, test } from "vitest";
-import { OperationRecords } from "../src/internal/postgres/operations.js";
 import { CandidateRecords } from "../src/internal/postgres/candidates.js";
 import { WorkspaceRecords } from "../src/internal/postgres/workspaces.js";
 const read = (name: string) =>
@@ -18,7 +18,7 @@ const f = read("operation-journal"),
     gates: { lifecycle: string; blocked: boolean }[];
   };
 const store = (p: Pool, scope: string) =>
-  new OperationRecords(p, { ...f.binding, productId: scope }, ["primary"]);
+  operationRecords(p, { ...f.binding, productId: scope }, ["primary"]);
 const metadata = (id: string, now = 200) => ({
   eventId: id,
   requestId: "request",

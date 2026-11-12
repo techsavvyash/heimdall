@@ -169,3 +169,32 @@ records require inspection; they are not silently filtered or replayed. Recovery
 queue membership never authorizes retry, cancellation or unblocking: verified
 quiescence and reconciliation remain mandatory. Automatic recovery orchestration,
 operator authorization and deployment controls are not implemented by this scan.
+
+## Activated retained runtime composition
+
+TS `OperationRecords.forRetainedRuntime` and Go `NewRetainedOperationRecords`
+select the internal audit-v4/managed-v1 composition without constructor I/O or
+implicit migrations. The original internal constructors remain legacy schema
+ports for historical migration tests; runtime orchestration must select the
+retained factory.
+
+Actor-scoped reads, idempotency lookups and maintenance scans evaluate both schema
+families' readiness in the same primary SQL snapshot as their result. An absent
+record or empty queue does not bypass readiness. Legacy audit versions, migrating
+state, incompatible managed metadata/ledger and read-only connections return
+unavailable, not a successful absence. Input and cancellation validation still
+precede database work.
+
+Creation, membership reservation, transitions and candidate repair all use retained
+atomic audit. Shared deployment admission and payload/metadata quota locks precede
+managed SQL; managed schema readiness is checked under that admission lock. Managed
+writers then retain workspace-before-operation/candidate lock ordering. The event,
+outbox, payload charge, compact event identity and metadata charge commit with the
+managed mutation or roll back together. Same-key retries may read the original
+operation; they never clear uncertainty or replace its allocation. A lost COMMIT
+response preserves the existing outcome_unknown and operation-ID behavior.
+
+These factories do not authenticate actors, validate remote confirmations or
+implement a scheduler. Standalone workspace/candidate read adapters and public
+managed orchestration require their own retained runtime composition. No public
+managed endpoint or automatic quarantine recovery is introduced.

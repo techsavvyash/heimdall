@@ -1,7 +1,8 @@
+import { operationRecords } from "./operation-store.js";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { expect, test } from "vitest";
-import { OperationRecords, decodeOperation } from "../src/internal/postgres/operations.js";
+import { type OperationRecords, decodeOperation } from "../src/internal/postgres/operations.js";
 import type { Intent } from "../src/internal/operations.js";
 const f = JSON.parse(
   readFileSync(
@@ -32,7 +33,7 @@ const allocation = (id: string) => ({
   eventId: "event-" + id,
 });
 const store = (pool: Pool, scope: string, sinks = ["primary", "secondary"]) =>
-  new OperationRecords(pool, { ...f.binding, productId: scope }, sinks);
+  operationRecords(pool, { ...f.binding, productId: scope }, sinks);
 async function counts(pool: Pool, scope: string) {
   const result = [];
   for (const table of [
@@ -53,7 +54,7 @@ test("operation store validates before I/O and preserves cancellation", async ()
   const pool = new Pool();
   const s = store(pool, "creation-ts");
   try {
-    expect(() => new OperationRecords(pool, { ...f.binding, modelHash: "invalid" }, [])).toThrow(
+    expect(() => operationRecords(pool, { ...f.binding, modelHash: "invalid" }, [])).toThrow(
       "invalid_argument",
     );
     await expect(s.get("bad\n", f.createIntent.actor)).rejects.toThrow("invalid_argument");
@@ -117,7 +118,7 @@ test.skipIf(
     ).toBeNull();
     expect(await store(pool, "other").get(first.operationId, f.createIntent.actor)).toBeNull();
     await expect(
-      new OperationRecords(pool, { ...f.binding, productId: scope, modelId: "different" }, []).get(
+      operationRecords(pool, { ...f.binding, productId: scope, modelId: "different" }, []).get(
         first.operationId,
         f.createIntent.actor,
       ),

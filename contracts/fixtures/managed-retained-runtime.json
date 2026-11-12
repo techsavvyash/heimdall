@@ -1,0 +1,24 @@
+{
+  "cases": [
+    {
+      "name": "audit_migrating",
+      "change": "UPDATE heimdall.schema_metadata SET state='migrating'",
+      "restore": "UPDATE heimdall.schema_metadata SET state='ready'"
+    },
+    {
+      "name": "audit_legacy",
+      "change": "UPDATE heimdall.schema_metadata SET database_version=3,reader_min=3,reader_max=3,writer_min=3,writer_max=3",
+      "restore": "UPDATE heimdall.schema_metadata SET database_version=4,reader_min=4,reader_max=4,writer_min=4,writer_max=4"
+    },
+    {
+      "name": "managed_migrating",
+      "change": "UPDATE heimdall_managed.schema_metadata SET state='migrating'",
+      "restore": "UPDATE heimdall_managed.schema_metadata SET state='ready'"
+    },
+    {
+      "name": "managed_ledger",
+      "change": "UPDATE heimdall_managed.migrations SET checksum=repeat('0',64) WHERE version=1",
+      "restore": "UPDATE heimdall_managed.migrations SET checksum='3df4dc62f6271691c56ac605c51012a97301b98c70454af62984cf253c066c55' WHERE version=1"
+    }
+  ]
+}

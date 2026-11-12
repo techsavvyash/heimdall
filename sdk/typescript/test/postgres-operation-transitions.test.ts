@@ -1,10 +1,11 @@
+import type { OperationRecords } from "../src/internal/postgres/operations.js";
+import { operationRecords } from "./operation-store.js";
 import { createHash } from "node:crypto";
 import { encodeIdentity } from "../src/internal/identity-encoding.js";
 import { intentDigests, type Intent } from "../src/internal/operations.js";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { expect, test } from "vitest";
-import { OperationRecords } from "../src/internal/postgres/operations.js";
 import { WorkspaceRecords } from "../src/internal/postgres/workspaces.js";
 const read = (name: string) =>
   JSON.parse(
@@ -29,7 +30,7 @@ const allocation = (id: string) => ({
   eventId: `create-${id}`,
 });
 const store = (pool: Pool, scope: string) =>
-  new OperationRecords(pool, { ...f.binding, productId: scope }, ["primary"]);
+  operationRecords(pool, { ...f.binding, productId: scope }, ["primary"]);
 const create = (s: OperationRecords, scope: string, id: string) =>
   s.create(JSON.stringify({ ...f.createIntent, productId: scope }), id, allocation(id));
 test("transition invalid inputs and pre-cancellation do not access storage", async () => {

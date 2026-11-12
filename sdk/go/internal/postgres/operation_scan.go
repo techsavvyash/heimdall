@@ -34,17 +34,19 @@ func (o *OperationRecords) Scan(ctx context.Context, queue string, after *string
 	var primary bool
 	var raw []byte
 	var count int
-	e := o.db.QueryRowContext(ctx, `WITH selected AS MATERIALIZED (
+	statement := `WITH selected AS MATERIALIZED (
    SELECT * FROM heimdall_managed.operations WHERE product_id=$1 AND environment=$2 AND state=ANY($3::text[])
     AND ($4::text IS NULL OR operation_id COLLATE "C">$4 COLLATE "C") AND (NOT $5::boolean OR next_attempt_at<=$6)
     ORDER BY operation_id COLLATE "C" LIMIT $7
   ), encoded AS MATERIALIZED (
-   SELECT o.operation_id, `+operationColumns+` AS record FROM selected o
+   SELECT o.operation_id, ` + operationColumns + ` AS record FROM selected o
   ), sized AS (
    SELECT *,sum(octet_length(record::text)) OVER(ORDER BY operation_id COLLATE "C") AS size FROM encoded
   ) SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
    COALESCE(jsonb_agg(o.record ORDER BY o.operation_id COLLATE "C"),'[]'::jsonb),
-   (SELECT count(*)::int FROM selected) FROM sized o WHERE size<=4194304`, o.binding.ProductID, o.binding.Environment, pq.Array(selectedStates), position, queue == "runnable", now, limit+1).Scan(&primary, &raw, &count)
+   (SELECT count(*)::int FROM selected) FROM sized o WHERE size<=4194304`
+	statement, args := o.readQuery(statement, []any{o.binding.ProductID, o.binding.Environment, pq.Array(selectedStates), position, queue == "runnable", now, limit + 1})
+	e := o.db.QueryRowContext(ctx, statement, args...).Scan(&primary, &raw, &count)
 	if e != nil {
 		return nil, databaseError(ctx)
 	}

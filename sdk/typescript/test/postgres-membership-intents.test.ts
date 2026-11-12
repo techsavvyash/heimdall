@@ -1,7 +1,7 @@
+import { operationRecords } from "./operation-store.js";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { expect, test } from "vitest";
-import { OperationRecords } from "../src/internal/postgres/operations.js";
 import { WorkspaceRecords } from "../src/internal/postgres/workspaces.js";
 const read = (name: string) =>
   JSON.parse(
@@ -36,7 +36,7 @@ const meta = (id: string, now: number) => ({
   nextAttemptAt: now,
 });
 const store = (p: Pool, scope: string) =>
-  new OperationRecords(p, { ...f.binding, productId: scope }, ["primary"]);
+  operationRecords(p, { ...f.binding, productId: scope }, ["primary"]);
 async function seed(p: Pool, scope: string, id: string, lifecycle = "active", blocked = false) {
   return (
     await p.query(

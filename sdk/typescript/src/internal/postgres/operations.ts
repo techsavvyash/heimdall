@@ -12,6 +12,7 @@ import {
 import { validateAuditShape } from "../audit-shape.js";
 import { validateAuditEvent } from "../audit.js";
 import { PostgresAudit } from "./audit.js";
+import { managedRetentionSQL, retentionArgs, managedChecksum } from "./readiness.js";
 import { query } from "./query.js";
 import { decodeWorkspace, type ManagedWorkspace } from "./workspaces.js";
 
@@ -150,7 +151,53 @@ const validateAudit = (e: Record<string, unknown>) => {
 // Internal persistence: trusted SDK orchestration must authenticate and authorize first.
 export class OperationRecords {
   private readonly binding: Readonly<Binding>;
-  private readonly audit: PostgresAudit;
+  private audit: Pick<PostgresAudit, "appendWith">;
+  private retainedRuntime = false;
+  static forRetainedRuntime(pool: Pool, binding: Binding, sinks: readonly string[]) {
+    const store = new OperationRecords(pool, binding, sinks);
+    const audit = PostgresAudit.forRetainedRuntime(
+      pool,
+      binding.productId,
+      binding.environment,
+      sinks,
+      validateAudit,
+    );
+    store.retainedRuntime = true;
+    store.audit = {
+      appendWith: (event, mutate, signal) =>
+        audit.appendWith(
+          event,
+          async (client) => {
+            const rows = (
+              await client.query<{ ready: boolean }>(managedRetentionSQL, [
+                ...retentionArgs,
+                managedChecksum,
+              ])
+            ).rows;
+            if (rows.length !== 1 || rows[0]?.ready !== true)
+              throw new HeimdallError("unavailable");
+            await mutate(client);
+          },
+          signal,
+        ),
+    };
+    return store;
+  }
+  private readQuery(statement: string, args: unknown[]): [string, unknown[]] {
+    if (!this.retainedRuntime) return [statement, args];
+    const readiness = managedRetentionSQL.replace(
+      /\$[1-7]/g,
+      (p) => "$" + (Number(p.slice(1)) + args.length),
+    );
+    return [
+      statement.replaceAll(
+        "NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'",
+        "(" + readiness + ")",
+      ),
+      [...args, ...retentionArgs, managedChecksum],
+    ];
+  }
+  // Legacy schema port for migration tests; runtime callers use forRetainedRuntime.
   constructor(
     private readonly pool: Pool,
     binding: Binding,
@@ -197,13 +244,12 @@ export class OperationRecords {
     return this.decode(
       await query<{ primary: boolean; record: Record<string, unknown> | null }>(
         this.pool,
-        select(byKey),
-        [
+        ...this.readQuery(select(byKey), [
           b.productId,
           b.environment,
           Buffer.from(actorHash, "hex"),
           byKey ? Buffer.from(selector, "hex") : selector,
-        ],
+        ]),
         false,
         signal,
       ),
@@ -242,7 +288,8 @@ export class OperationRecords {
       selected_count: number;
     }>(
       this.pool,
-      `
+      ...this.readQuery(
+        `
       WITH selected AS MATERIALIZED (
         SELECT * FROM heimdall_managed.operations WHERE product_id=$1 AND environment=$2 AND state=ANY($3::text[])
          AND ($4::text IS NULL OR operation_id COLLATE "C">$4 COLLATE "C") AND (NOT $5::boolean OR next_attempt_at<=$6)
@@ -254,7 +301,8 @@ export class OperationRecords {
       ) SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
         COALESCE(jsonb_agg(o.record ORDER BY o.operation_id COLLATE "C"),'[]'::jsonb) AS records,
         (SELECT count(*)::int FROM selected) AS selected_count FROM sized o WHERE size<=4194304`,
-      [b.productId, b.environment, states[queue], after, queue === "runnable", now, limit + 1],
+        [b.productId, b.environment, states[queue], after, queue === "runnable", now, limit + 1],
+      ),
       false,
       signal,
     );

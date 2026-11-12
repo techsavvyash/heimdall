@@ -111,11 +111,13 @@ func validateOperationAudit(event map[string]any) error {
 }
 
 type OperationRecords struct {
-	db      *sql.DB
-	binding OperationBinding
-	audit   *Audit
+	db              *sql.DB
+	binding         OperationBinding
+	audit           operationAudit
+	retainedRuntime bool
 }
 
+// Legacy schema port for migration tests. Runtime callers use NewRetainedOperationRecords.
 // Internal storage only: callers must authenticate and authorize before creating intent.
 func NewOperationRecords(db *sql.DB, b OperationBinding, sinks []string) (*OperationRecords, error) {
 	if db == nil || !valid(b.ProductID, 64) || !valid(b.Environment, 64) || !valid(b.StoreID, 128) || !valid(b.ModelID, 128) || !operationHex.MatchString(b.ModelHash) || b.ManifestVersion < 1 || b.ManifestVersion > 2147483647 {
@@ -125,7 +127,7 @@ func NewOperationRecords(db *sql.DB, b OperationBinding, sinks []string) (*Opera
 	if e != nil {
 		return nil, e
 	}
-	return &OperationRecords{db, b, audit}, nil
+	return &OperationRecords{db: db, binding: b, audit: audit}, nil
 }
 
 type operationReader interface {
@@ -147,7 +149,8 @@ func (o *OperationRecords) read(ctx context.Context, db operationReader, selecto
 	}
 	var primary bool
 	var raw []byte
-	e := db.QueryRowContext(ctx, operationSelect(byKey), o.binding.ProductID, o.binding.Environment, actorHash, argument).Scan(&primary, &raw)
+	statement, args := o.readQuery(operationSelect(byKey), []any{o.binding.ProductID, o.binding.Environment, actorHash, argument})
+	e := db.QueryRowContext(ctx, statement, args...).Scan(&primary, &raw)
 	if e != nil {
 		return nil, databaseError(ctx)
 	}

@@ -68,11 +68,17 @@ func createAllocation(f journalFixture, id string) OperationAllocation {
 	a.EventID = "event-" + id
 	return a
 }
+func testOperationRecords(db *sql.DB, b OperationBinding, sinks []string) (*OperationRecords, error) {
+	if os.Getenv("HEIMDALL_TEST_MANAGED_OPERATIONS_V4") == "1" {
+		return NewRetainedOperationRecords(db, b, sinks)
+	}
+	return NewOperationRecords(db, b, sinks)
+}
 func operationStore(t *testing.T, db *sql.DB, f journalFixture, scope string, sinks []string) *OperationRecords {
 	t.Helper()
 	b := f.Binding
 	b.ProductID = scope
-	s, e := NewOperationRecords(db, b, sinks)
+	s, e := testOperationRecords(db, b, sinks)
 	if e != nil {
 		t.Fatal(e)
 	}

@@ -1,10 +1,10 @@
+import { operationRecords } from "./operation-store.js";
 import { createHash } from "node:crypto";
 import { encodeIdentity } from "../src/internal/identity-encoding.js";
 import { intentDigests } from "../src/internal/operations.js";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { expect, test } from "vitest";
-import { OperationRecords } from "../src/internal/postgres/operations.js";
 const f = JSON.parse(
   readFileSync(
     new URL("../../../contracts/fixtures/operation-journal.json", import.meta.url),
@@ -15,7 +15,7 @@ const vectors = JSON.parse(
   readFileSync(new URL("../../../contracts/fixtures/operation-scan.json", import.meta.url), "utf8"),
 ) as { cases: { queue: "runnable" | "recovery" | "completion"; now: number; ids: string[] }[] };
 const store = (p: Pool, scope: string) =>
-  new OperationRecords(p, { ...f.binding, productId: scope }, []);
+  operationRecords(p, { ...f.binding, productId: scope }, []);
 test("operation scan validates bounds and preserves cancellation", async () => {
   const p = new Pool(),
     s = store(p, "scan");
@@ -55,7 +55,7 @@ test.skipIf(
     expect((await store(p, "other").scan("recovery", null, 300, 100)).items).toEqual([]);
     expect(
       (
-        await new OperationRecords(
+        await operationRecords(
           p,
           { ...f.binding, productId: "transition-go", environment: "staging" },
           [],
@@ -63,11 +63,12 @@ test.skipIf(
       ).items,
     ).toEqual([]);
     await expect(
-      new OperationRecords(
-        p,
-        { ...f.binding, productId: "transition-go", modelId: "wrong" },
-        [],
-      ).scan("recovery", null, 300, 100),
+      operationRecords(p, { ...f.binding, productId: "transition-go", modelId: "wrong" }, []).scan(
+        "recovery",
+        null,
+        300,
+        100,
+      ),
     ).rejects.toThrow("unavailable");
     expect((await snapshot()).rows).toEqual(before);
     const ro = new Pool({

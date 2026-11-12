@@ -112,14 +112,14 @@ func TestOperationScan(t *testing.T) {
 	binding := f.Binding
 	binding.ProductID = "transition-ts"
 	binding.Environment = "staging"
-	env, _ := NewOperationRecords(db, binding, nil)
+	env, _ := testOperationRecords(db, binding, nil)
 	page, e = env.Scan(ctx, "recovery", nil, 300, 100)
 	if e != nil || len(page.Items) != 0 {
 		t.Fatal(page, e)
 	}
 	binding.Environment = f.Binding.Environment
 	binding.ModelID = "wrong"
-	wrong, _ := NewOperationRecords(db, binding, nil)
+	wrong, _ := testOperationRecords(db, binding, nil)
 	if _, e = wrong.Scan(ctx, "recovery", nil, 300, 100); !errors.Is(e, contract.ErrUnavailable) {
 		t.Fatal(e)
 	}
