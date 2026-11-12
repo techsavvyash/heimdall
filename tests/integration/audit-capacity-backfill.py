@@ -393,6 +393,34 @@ try:
   refusal('BEGIN;'+legacy_release+'; COMMIT;', 'hold release reservation does not match hold')
   assert sql("SELECT released_at IS NULL FROM heimdall_retention.event_holds WHERE product_id='holds-ts' AND hold_id='retry-1'",database)=='t'
   print('Hold release preparation passed: adoption, five exact-fit limits, rollback, deferred binding and quota privileges',flush=True)
+  # BEGIN hold release CLI proof
+  database='hold_release_prepare_cli'
+  sql('CREATE DATABASE '+database+' TEMPLATE retained_holds_v4')
+  sql('ALTER TABLE heimdall_retention.event_holds DROP CONSTRAINT test_late_hold_failure',database)
+  command=['--prepare-hold-release-upgrade','--writers-drained','--sql-directory',source]
+  for invalid in [command[:1]+command[2:],command+['--batch-size','1'],command+['--activate-retention-upgrade']]:
+   cli(invalid,database,2)
+  cli(command,database,1,url=dsn(database)+'&options=-c%20default_transaction_read_only%3Don')
+  sql('UPDATE heimdall_capacity.policy SET event_limit=used_events+reserved_events; UPDATE heimdall_capacity.upgrade SET event_limit=(SELECT event_limit FROM heimdall_capacity.policy)',database)
+  assert 'audit_unavailable' in cli(command,database,1).stderr
+  assert sql("SELECT state||':'||(to_regclass('heimdall_retention.hold_release_reservations') IS NULL)::text FROM heimdall.schema_metadata",database)=='ready:true'
+  sql('UPDATE heimdall_capacity.policy SET event_limit=100000; UPDATE heimdall_capacity.upgrade SET event_limit=100000',database)
+  with CommitLossProxy(int(port)) as proxy:
+   assert 'outcome_unknown' in cli(command,database,1,url=dsn(database,proxy.port)).stderr
+   assert proxy.dropped.is_set() and not proxy.errors
+  assert sql("SELECT database_version||':'||state FROM heimdall.schema_metadata",database)=='4:migrating'
+  cli(['--status','audit-v4'],database,1)
+  cli(['--status','managed-v4'],database,1)
+  before=sql("SELECT jsonb_agg(to_jsonb(r) ORDER BY product_id,environment,hold_id) FROM heimdall_retention.hold_release_reservations r",database)
+  cli(command,database)
+  assert sql("SELECT jsonb_agg(to_jsonb(r) ORDER BY product_id,environment,hold_id) FROM heimdall_retention.hold_release_reservations r",database)==before
+  assert sql('SELECT active_count FROM heimdall_retention.hold_release_capacity',database)=='2'
+  sql('UPDATE heimdall_retention.hold_release_capacity SET active_count=1',database)
+  assert 'audit_unavailable' in cli(command,database,1).stderr
+  sql('UPDATE heimdall_retention.hold_release_capacity SET active_count=2; ALTER TABLE heimdall_retention.hold_release_reservations ADD COLUMN drift text',database)
+  assert 'audit_unavailable' in cli(command,database,1).stderr
+  print('Hold release CLI preparation passed: atomic v4 drain, insufficient quota, lost COMMIT retry, readonly and drift refusal',flush=True)
+  # END hold release CLI proof
   # BEGIN retained hold fault proof
   for language in ['ts','go']:
    database='retained_holds_loss_'+language

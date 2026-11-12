@@ -119,8 +119,8 @@ func PrepareAuditRetentionUpgrade(ctx context.Context, db *sql.DB, sources [6][]
 func checkAuditRetentionSchema(ctx context.Context, tx *sql.Tx) error {
 	// The expanded catalog includes all v3 objects and the complete pinned retention
 	// schema. Reject manually prepared or altered namespaces rather than adopting them.
-	if _, e := tx.ExecContext(ctx, "SET LOCAL search_path=pg_catalog; LOCK TABLE heimdall.schema_metadata,heimdall.migrations,heimdall.records,heimdall.identity_denials,heimdall.audit_events,heimdall.audit_deliveries,heimdall.audit_decisions,heimdall.audit_decision_backfill,heimdall.audit_upgrade,heimdall_capacity.policy,heimdall_capacity.event_charges,heimdall_capacity.reservations,heimdall_capacity.upgrade,heimdall_capacity.backfill,heimdall_retention.event_identities,heimdall_retention.decision_identities,heimdall_retention.event_holds,heimdall_retention.capacity,heimdall_retention.retirements,heimdall_retention.upgrade,heimdall_retention.backfill IN SHARE MODE"); e != nil {
-		return databaseError(ctx)
+	if e := lockAuditRetentionCatalog(ctx, tx); e != nil {
+		return e
 	}
 	var matches bool
 	if e := tx.QueryRowContext(ctx, "SELECT current_setting('server_version_num')::integer BETWEEN 170000 AND 179999 AND current_setting('session_replication_role')='origin' AND actual.value=$1::jsonb FROM ("+auditRetentionSchemaSQL+") actual", auditRetentionSchemaJSON).Scan(&matches); e != nil {
@@ -128,6 +128,12 @@ func checkAuditRetentionSchema(ctx context.Context, tx *sql.Tx) error {
 	}
 	if !matches {
 		return contract.ErrAuditUnavailable
+	}
+	return nil
+}
+func lockAuditRetentionCatalog(ctx context.Context, tx *sql.Tx) error {
+	if _, e := tx.ExecContext(ctx, "SET LOCAL search_path=pg_catalog; LOCK TABLE heimdall.schema_metadata,heimdall.migrations,heimdall.records,heimdall.identity_denials,heimdall.audit_events,heimdall.audit_deliveries,heimdall.audit_decisions,heimdall.audit_decision_backfill,heimdall.audit_upgrade,heimdall_capacity.policy,heimdall_capacity.event_charges,heimdall_capacity.reservations,heimdall_capacity.upgrade,heimdall_capacity.backfill,heimdall_retention.event_identities,heimdall_retention.decision_identities,heimdall_retention.event_holds,heimdall_retention.capacity,heimdall_retention.retirements,heimdall_retention.upgrade,heimdall_retention.backfill IN SHARE MODE"); e != nil {
+		return databaseError(ctx)
 	}
 	return nil
 }

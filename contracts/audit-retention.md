@@ -722,3 +722,10 @@ lost COMMIT responses. Test adoption with active and released historical holds,
 insufficient headroom, and a restart between preparation and publication. These
 reservations cover logical database quotas. Physical disk exhaustion remains a
 storage failure.
+
+Use `heimdall-migrate --prepare-hold-release-upgrade --writers-drained
+--sql-directory contracts/persistence/session` for the preparation transaction.
+The command requires a compatible v4 primary, verifies the pinned source and
+catalogs, and marks the database migrating only after successful adoption.
+Exact preparation retries verify the prepared catalog, hold bindings, aggregate
+count and headroom. Runtime readiness resumes only after separate activation.

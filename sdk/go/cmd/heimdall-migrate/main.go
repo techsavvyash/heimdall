@@ -25,6 +25,7 @@ func run() int {
 	prepare := flag.Bool("prepare-audit-upgrade", false, "prepare audit v2 tables without activating runtime readiness")
 	capacity := flag.Bool("prepare-capacity-upgrade", false, "prepare offline audit-capacity ledger without activating runtime readiness")
 	retention := flag.Bool("prepare-retention-upgrade", false, "prepare offline retained identities and metadata quota; never activate runtime readiness")
+	holdRelease := flag.Bool("prepare-hold-release-upgrade", false, "prepare hold release reservations and leave runtime unavailable until activation")
 	retentionRows := flag.Int64("retention-rows", 0, "explicit database-wide retained metadata row limit")
 	retentionBytes := flag.Int64("retention-bytes", 0, "explicit database-wide retained metadata logical byte limit")
 	capacityEvents := flag.Int64("capacity-events", 0, "explicit database-wide audit event limit for capacity preparation")
@@ -40,6 +41,7 @@ func run() int {
 	retentionActivate := flag.Bool("activate-retention-upgrade", false, "validate complete retained history and atomically publish audit v4 compatibility")
 	batch := flag.Int("batch-size", 100, "scope, event or complete decision-group page bound, 1 to 100")
 	flag.Parse()
+	prepareMode := *prepare || *capacity || *retention || *holdRelease
 	activateMode := *activate || *capacityActivate || *retentionActivate
 	backfillMode := *backfill || *capacityBackfill || *retentionBackfill
 	batchSet := false
@@ -58,6 +60,9 @@ func run() int {
 	})
 	dsn := os.Getenv("HEIMDALL_MIGRATION_DATABASE_URL")
 	modes := 0
+	if *holdRelease {
+		modes++
+	}
 	if *retentionActivate {
 		modes++
 	}
@@ -94,13 +99,13 @@ func run() int {
 	if *status != "" {
 		modes++
 	}
-	if (*retention && (*directory == "" || !*drained || *sqlPath != "" || *retentionRows < 1 || *retentionRows > 1099511627775 || *retentionBytes < 8192 || *retentionBytes > 9007199254740991)) || (!*retention && retentionSet) || (*capacity && (*directory == "" || !*drained || *sqlPath != "" || *capacityEvents < 1 || *capacityEvents > 9007199254740991 || *capacityBytes < 1 || *capacityBytes > 9007199254740991 || *capacityDeliveries < 1 || *capacityDeliveries > 9007199254740991)) || (!*capacity && capacitySet) || (activateMode && (!*drained || *directory != "" || *sqlPath != "")) || (backfillMode && (!*drained || *directory != "" || *sqlPath != "" || *batch < 1 || *batch > 100)) || (!backfillMode && batchSet) || modes != 1 || dsn == "" || flag.NArg() != 0 || (*prepare && (*directory == "" || !*drained || *sqlPath != "")) || (!*retention && !*capacity && !*prepare && !backfillMode && !activateMode && (*directory != "" || *drained)) || (*status != "" && (*status != "session" && *status != "managed" && *status != "audit-v2" && *status != "managed-v2" && *status != "audit-v3" && *status != "managed-v3" && *status != "audit-v4" && *status != "managed-v4" || *sqlPath != "")) || (!*retention && !*capacity && !*prepare && !backfillMode && !activateMode && *status == "" && *sqlPath == "") {
+	if (*retention && (*directory == "" || !*drained || *sqlPath != "" || *retentionRows < 1 || *retentionRows > 1099511627775 || *retentionBytes < 8192 || *retentionBytes > 9007199254740991)) || (!*retention && retentionSet) || (*capacity && (*directory == "" || !*drained || *sqlPath != "" || *capacityEvents < 1 || *capacityEvents > 9007199254740991 || *capacityBytes < 1 || *capacityBytes > 9007199254740991 || *capacityDeliveries < 1 || *capacityDeliveries > 9007199254740991)) || (!*capacity && capacitySet) || (activateMode && (!*drained || *directory != "" || *sqlPath != "")) || (backfillMode && (!*drained || *directory != "" || *sqlPath != "" || *batch < 1 || *batch > 100)) || (!backfillMode && batchSet) || modes != 1 || dsn == "" || flag.NArg() != 0 || (prepareMode && (*directory == "" || !*drained || *sqlPath != "")) || (!prepareMode && !backfillMode && !activateMode && (*directory != "" || *drained)) || (*status != "" && (*status != "session" && *status != "managed" && *status != "audit-v2" && *status != "managed-v2" && *status != "audit-v3" && *status != "managed-v3" && *status != "audit-v4" && *status != "managed-v4" || *sqlPath != "")) || (!prepareMode && !backfillMode && !activateMode && *status == "" && *sqlPath == "") {
 		fmt.Fprintln(os.Stderr, "select one initialization, status, drained upgrade preparation, backfill or activation mode with its required inputs")
 		return 2
 	}
 	var migration []byte
 	var err error
-	if *status == "" && !*retention && !*capacity && !*prepare && !backfillMode && !activateMode {
+	if *status == "" && !prepareMode && !backfillMode && !activateMode {
 		migration, err = os.ReadFile(*sqlPath)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "cannot read shared migration")
@@ -137,6 +142,14 @@ func run() int {
 			}
 		}
 	}
+	var holdReleaseSource []byte
+	if *holdRelease {
+		holdReleaseSource, err = os.ReadFile(filepath.Join(*directory, "0005-hold-release-reservations.sql"))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "cannot read shared hold release SQL")
+			return 1
+		}
+	}
 	connector, err := postgres.NewConnector(dsn)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "invalid database configuration")
@@ -151,6 +164,8 @@ func run() int {
 	var step *postgres.AuditUpgradeStep
 	var capacityStep *postgres.CapacityBackfillProgress
 	switch {
+	case *holdRelease:
+		err = postgres.PrepareHoldReleaseUpgrade(ctx, db, holdReleaseSource, *drained)
 	case *retentionActivate:
 		err = postgres.ActivateAuditRetentionUpgrade(ctx, db, *drained, validateBuiltinAudit)
 	case *status == "audit-v4":
@@ -219,6 +234,8 @@ func run() int {
 		fmt.Println("audit schema v2 and managed schema v1 ready")
 	} else if *activate || *status == "audit-v2" {
 		fmt.Println("audit schema v2 ready; v1 runtime is incompatible")
+	} else if *holdRelease {
+		fmt.Println("hold release reservations prepared; runtime unavailable pending activation")
 	} else if *retention {
 		fmt.Println("retention upgrade prepared; runtime unavailable; identity backfill and activation still required")
 	} else if *capacity {

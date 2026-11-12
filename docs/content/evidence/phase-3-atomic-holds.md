@@ -107,3 +107,19 @@ consumption both roll back.
 
 This checkpoint prepares the physical schema. Explicit migration publication and
 TS/Go consumption of the reservation during an authorized release remain open.
+
+## Explicit reservation preparation
+
+Run `heimdall-migrate --prepare-hold-release-upgrade --writers-drained
+--sql-directory contracts/persistence/session` with the migration database
+connection configured. The command pins the SQL and both PostgreSQL catalogs,
+takes the deployment writer lock, and installs the reserve and marks v4
+`migrating` in one transaction. Keep writers drained through activation.
+Ordinary and managed v4 readiness reject the prepared database.
+
+The focused CLI profile ran on an isolated clone inside the pinned PostgreSQL
+run `heimdall-capacity-backfill-704a47fa7efb4d83ba387f3be999d91a`. It checked
+argument validation, read-only refusal, rollback when quota is insufficient,
+and retry after an injected lost commit response. A retry preserved existing
+reservations and refused aggregate count or schema drift. Activation and runtime
+reservation consumption remain pending.
