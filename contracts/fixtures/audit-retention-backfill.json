@@ -1,0 +1,7 @@
+{
+  "batchSize": 2,
+  "invalidBatchSizes": [0, 101],
+  "phases": ["ordinary", "decisions", "complete"],
+  "mixedHistory": { "events": 15, "decisions": 6, "reservedRows": 4 },
+  "budgetHistory": { "extraEvents": 100, "maxBatchSize": 100 }
+}

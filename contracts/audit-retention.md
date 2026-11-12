@@ -515,3 +515,27 @@ then prove full coverage before activation. Preparation is not semantic validati
 of every historical payload, automatic rollback to v3, or a usable serving state.
 Writers and maintenance jobs must remain externally drained until a compatible
 activation is implemented and verified. This step does not enable retention.
+
+## Bounded offline retention backfill
+
+The shared deployment command now accepts --backfill-retention-upgrade with drained
+writers and a 1–100 group page limit. It requires the exact prepared catalog and
+migrating v3 state. Ordinary events are copied first, then complete pending,
+completed or recovered decisions. Tenant scope is derived from a fully validated
+representative payload; every member is decoded and semantically correlated by
+the existing identity builder. Missing/corrupt history refuses the current page.
+
+Pages cap encoded payload reads at 8 MiB, counting the representative's extra read,
+and never split a decision. Individual envelopes remain at most 1500000 bytes and
+routing at most 32 original sinks. Metadata candidates are count-bounded before
+payload loading. A ten-second operation context and five-second lock/statement
+bounds limit database work; this is not a claim about physical scan or heap cost.
+
+Compact identities, metadata charges/reservations and the scoped durable cursor
+commit together under exclusive deployment admission. Checkpoint counts must agree
+with retained rows and accounting before resume. A lost COMMIT returns unknown;
+retry resumes persisted progress without duplicate charging. Quota or late member
+failure rolls back the entire page. Completion validates source/retained coverage
+and accounting, retains state=migrating and publishes no new runtime protocol.
+Activation still requires independent full-history validation and compatible TS/Go
+public admission/writes. No deletion or retention maintenance is enabled here.

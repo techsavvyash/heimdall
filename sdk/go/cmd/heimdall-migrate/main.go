@@ -36,10 +36,11 @@ func run() int {
 	capacityActivate := flag.Bool("activate-capacity-upgrade", false, "validate accounted history and atomically publish audit v3 compatibility")
 	backfill := flag.Bool("backfill-audit-upgrade", false, "discover missing scopes or advance one bounded audit backfill page; never activate readiness")
 	capacityBackfill := flag.Bool("backfill-capacity-upgrade", false, "validate and account one bounded historical page; never activate readiness")
-	batch := flag.Int("batch-size", 100, "scope registration or event page bound for audit backfill, 1 to 100")
+	retentionBackfill := flag.Bool("backfill-retention-upgrade", false, "validate and retain one bounded historical group page; never activate readiness")
+	batch := flag.Int("batch-size", 100, "scope, event or complete decision-group page bound, 1 to 100")
 	flag.Parse()
 	activateMode := *activate || *capacityActivate
-	backfillMode := *backfill || *capacityBackfill
+	backfillMode := *backfill || *capacityBackfill || *retentionBackfill
 	batchSet := false
 	capacitySet := false
 	retentionSet := false
@@ -56,6 +57,9 @@ func run() int {
 	})
 	dsn := os.Getenv("HEIMDALL_MIGRATION_DATABASE_URL")
 	modes := 0
+	if *retentionBackfill {
+		modes++
+	}
 	if *retention {
 		modes++
 	}
@@ -143,6 +147,8 @@ func run() int {
 	var step *postgres.AuditUpgradeStep
 	var capacityStep *postgres.CapacityBackfillProgress
 	switch {
+	case *retentionBackfill:
+		capacityStep, err = postgres.AdvanceAuditRetentionUpgrade(ctx, db, *batch, *drained, validateBuiltinAudit)
 	case *retention:
 		err = postgres.PrepareAuditRetentionUpgrade(ctx, db, retentionUpgrade, *retentionRows, *retentionBytes, *drained)
 	case *capacityActivate:
@@ -183,7 +189,7 @@ func run() int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	if *capacityBackfill {
+	if *capacityBackfill || *retentionBackfill {
 		if json.NewEncoder(os.Stdout).Encode(capacityStep) != nil {
 			return 1
 		}

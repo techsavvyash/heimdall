@@ -208,6 +208,70 @@ try:
    assert proxy.dropped.is_set() and not proxy.errors
   stable=retention_snapshot('retention_prepare_loss');cli(retention_prepare,'retention_prepare_loss');assert retention_snapshot('retention_prepare_loss')==stable
   print('Retention preparation passed: exact quotas, rollback, catalog, concurrent retries, old-runtime refusal and lost COMMIT',flush=True)
+  retention_fixture=json.loads((ROOT/'contracts/fixtures/audit-retention-backfill.json').read_text())
+  retention_backfill=['--backfill-retention-upgrade','--writers-drained','--batch-size',str(retention_fixture['batchSize'])]
+  for database in ['retention_backfill','retention_backfill_loss','retention_backfill_decision_loss','retention_backfill_concurrent','retention_backfill_bad','retention_backfill_quota','retention_backfill_skip','retention_backfill_rewind']:
+   sql('CREATE DATABASE '+database+' TEMPLATE retention_prepare_loss')
+  def retention_advance(database,batch=2,url=None):return json.loads(cli(retention_backfill[:-1]+[str(batch)],database,url=url).stdout)
+  def retention_finish(database,batch=2):
+   steps=[]
+   for _ in range(200):
+    p=retention_advance(database,batch);steps.append(p)
+    if p['phase']=='complete':return steps
+   raise RuntimeError('retention backfill did not finish')
+  for bad in [retention_backfill[:1]+retention_backfill[2:],retention_backfill[:-1]+['0'],retention_backfill[:-1]+['101'],retention_backfill+['--retention-rows','1'],retention_backfill+['--sql-directory',source],retention_backfill+['--prepare-retention-upgrade']]:cli(bad,'retention_backfill',2)
+  cli(retention_backfill,'cli_activation',1)
+  stable=retention_snapshot('retention_backfill')
+  cli(retention_backfill,'retention_backfill',1,url=dsn('retention_backfill')+'&options=-c%20default_transaction_read_only%3Don')
+  assert retention_snapshot('retention_backfill')==stable
+  steps=retention_finish('retention_backfill')
+  expected_events=int(sql('SELECT count(*) FROM heimdall.audit_events','retention_backfill'))
+  expected_decisions=int(sql('SELECT count(*) FROM heimdall.audit_decisions','retention_backfill'))
+  assert expected_events==retention_fixture['mixedHistory']['events'] and expected_decisions==retention_fixture['mixedHistory']['decisions']
+  assert steps[-1]['scannedEvents']==expected_events and steps[-1]['scannedDecisions']==expected_decisions
+  assert max(p['processed'] for p in steps)<=2 and {p['phase'] for p in steps}==set(retention_fixture['phases'])
+  assert retention_finish('retention_prepare_small')[-1]['scannedEvents']==expected_events
+  initialize('retention_empty');cli(prepare,'retention_empty');finish('retention_empty');cli(activate,'retention_empty');cli(retention_prepare,'retention_empty')
+  empty=retention_finish('retention_empty');assert empty[-1]['scannedEvents']==0 and empty[-1]['scannedDecisions']==0
+  stable=retention_snapshot('retention_backfill');assert retention_advance('retention_backfill')['processed']==0
+  cli(retention_prepare,'retention_backfill');assert retention_snapshot('retention_backfill')==stable
+  assert sql("SELECT used_rows||':'||reserved_rows FROM heimdall_retention.capacity",'retention_backfill')==str(expected_events+expected_decisions)+':'+str(retention_fixture['mixedHistory']['reservedRows'])
+  assert sql("SELECT state||':'||database_version FROM heimdall.schema_metadata",'retention_backfill')=='migrating:3'
+  with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:pages=list(pool.map(lambda _:retention_advance('retention_backfill_concurrent',1),range(4)))
+  assert sorted(p['scannedEvents'] for p in pages)==[1,2,3,4]
+  assert retention_finish('retention_backfill_concurrent')[-1]['scannedEvents']==expected_events
+  for database,phase in [('retention_backfill_loss','ordinary'),('retention_backfill_decision_loss','decisions')]:
+   if phase=='decisions':
+    for _ in range(200):
+     if retention_advance(database,100)['phase']=='decisions':break
+    else:raise RuntimeError('retention ordinary phase did not finish')
+   before=json.loads(sql('SELECT to_jsonb(b) FROM heimdall_retention.backfill b',database))
+   with CommitLossProxy(int(port)) as proxy:
+    assert 'outcome_unknown' in cli(retention_backfill,database,1,url=dsn(database,proxy.port)).stderr
+    assert proxy.dropped.is_set() and not proxy.errors
+   after=json.loads(sql('SELECT to_jsonb(b) FROM heimdall_retention.backfill b',database))
+   assert after['scanned_events']>before['scanned_events']
+   assert retention_finish(database)[-1]['scannedEvents']==expected_events
+  # Corruption in the second ordinary source rolls back the first copied identity too.
+  sql("WITH victim AS (SELECT product_id,environment,event_id FROM heimdall.audit_events WHERE event_id='ordinary' ORDER BY product_id COLLATE \"C\",environment COLLATE \"C\" OFFSET 1 LIMIT 1) UPDATE heimdall.audit_events e SET payload_digest=decode(repeat('00',32),'hex') FROM victim v WHERE (e.product_id,e.environment,e.event_id)=(v.product_id,v.environment,v.event_id)",'retention_backfill_bad')
+  stable=retention_snapshot('retention_backfill_bad');cli(retention_backfill,'retention_backfill_bad',1);assert retention_snapshot('retention_backfill_bad')==stable
+  sql('UPDATE heimdall_retention.capacity SET row_limit=1; UPDATE heimdall_retention.upgrade SET row_limit=1','retention_backfill_quota')
+  stable=retention_snapshot('retention_backfill_quota');cli(retention_backfill,'retention_backfill_quota',1);assert retention_snapshot('retention_backfill_quota')==stable
+  retention_advance('retention_backfill_rewind',2)
+  sql("UPDATE heimdall_retention.backfill SET after_product='aaa',after_environment='aaa',after_id='aaa'",'retention_backfill_rewind')
+  stable=retention_snapshot('retention_backfill_rewind');cli(retention_backfill,'retention_backfill_rewind',1);assert retention_snapshot('retention_backfill_rewind')==stable
+  retention_advance('retention_backfill_skip',1)
+  sql("UPDATE heimdall_retention.backfill SET after_product='zz',after_environment='zz',after_id='zz'",'retention_backfill_skip')
+  stable=retention_snapshot('retention_backfill_skip');cli(retention_backfill,'retention_backfill_skip',1);assert retention_snapshot('retention_backfill_skip')==stable
+  sql("SET session_replication_role=replica; DELETE FROM heimdall_retention.event_identities WHERE event_id='ordinary'; SET session_replication_role=origin",'retention_backfill')
+  cli(retention_backfill,'retention_backfill',1)
+  sql('CREATE DATABASE retention_backfill_budget TEMPLATE cli_activation')
+  go('^TestRetentionBackfillBudgetSeed$',dict(env,HEIMDALL_TEST_RETENTION_BUDGET_SEED_URL=dsn('retention_backfill_budget')))
+  cli(retention_prepare,'retention_backfill_budget')
+  budget=retention_fixture['budgetHistory']
+  first=retention_advance('retention_backfill_budget',budget['maxBatchSize']);assert 1<first['processed']<budget['maxBatchSize']
+  assert retention_finish('retention_backfill_budget',budget['maxBatchSize'])[-1]['scannedEvents']==expected_events+budget['extraEvents']
+  print('Retention backfill passed: bounded groups and bytes, complete history, atomic quota and checkpoint, concurrent processes, lost COMMIT and corruption refusal',flush=True)
   for language in ['go','ts']:
    for lost in [False,True]:
     database='runtime_recovery_'+language+('_loss' if lost else '')
@@ -614,6 +678,6 @@ try:
   sql("UPDATE heimdall_capacity.policy SET state='ready'",'normal')
   go('^TestCapacityBackfillPendingRecovery$',dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
   ts(dict(env,HEIMDALL_TEST_CAPACITY_RECOVER_HISTORY_URL=dsn('normal')))
- print(json.dumps({'run':name,'result':'passed','checks':['atomic retention preparation with quota preflight catalog refusal rollback concurrent retry and lost COMMIT proof','mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work','SIGKILL after the first committed candidate resumes in the other language with original initiators and exact event outbox and capacity counts','reciprocal retention COMMIT loss returns unknown and the other SDK retries without changing compact metadata','both SDKs resolve identical retired retries and reject changed payloads without recreating events or deliveries','ordinary request and completion retained writes survive reciprocal COMMIT loss with exact accounting and unchanged routing','retained recovery consumes full-capacity reservations atomically and reciprocal lost COMMIT retries preserve all payload and metadata state','both SDKs atomically append retained ordinary request and normal completion records with full-capacity admission and rollback proof','both SDKs classify complete primary snapshots with durable holds and retry obligations and no storage mutations','explicit retry holds preserve immutable purpose and independent audited release without expiry or quota refunds','holds on every completed and recovered decision member exclude whole-group retirement in both observed lock orders','whole completed and recovered decisions retire atomically with preserved compact links and reciprocal SDK inspection','both SDKs distinguish live retired absent and corrupt missing history with primary readiness and cancellation','observed PostgreSQL lock waits serialize hold-first and retirement-first transactions without losing holds or creating late holds','retirement markers require atomic removal and reject held undelivered young or incomplete history','retained metadata quota blocks overflow and reserves recovery slots while independent hold release remains possible','prepared hold ledger preserves independent holds and immutable releases with scoped reference checks','prepared immutable identities bind source routing and decision members and survive privileged test payload removal']}))
+ print(json.dumps({'run':name,'result':'passed','checks':['bounded retention group backfill with byte budgets atomic checkpoints concurrent and lost-COMMIT resume corruption and skipped cursor refusal','atomic retention preparation with quota preflight catalog refusal rollback concurrent retry and lost COMMIT proof','mixed TS and Go history across two products and two environments','bounded count and encoded-envelope page budgets','full digest and decision/recovery binding validation','pending recovery reservations only','matching imported charges and reservations do not double-count','eight concurrent deployment processes serialize checkpoints','lost event and decision page COMMIT resumes durable progress','invalid history and skipped cursor rollback current page','insufficient capacity refuses without partial reservations','late legacy history blocks completed coverage','completion remains migrating and preparing','atomic internal activation with stale history and schema refusal','activation COMMIT loss and retry after new writes','publication permission failure rolls back ledger and policy','activation CLI argument and protocol checks','TS and Go shared standalone and managed v3 readiness matrix','accounted requests recover in both cross-language directions','held deployment lock deadline and reuse','both v3 maintenance recovery ports use reserved capacity at a full ledger','reciprocal recovery COMMIT loss and protocol-gated exact retries','both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work','SIGKILL after the first committed candidate resumes in the other language with original initiators and exact event outbox and capacity counts','reciprocal retention COMMIT loss returns unknown and the other SDK retries without changing compact metadata','both SDKs resolve identical retired retries and reject changed payloads without recreating events or deliveries','ordinary request and completion retained writes survive reciprocal COMMIT loss with exact accounting and unchanged routing','retained recovery consumes full-capacity reservations atomically and reciprocal lost COMMIT retries preserve all payload and metadata state','both SDKs atomically append retained ordinary request and normal completion records with full-capacity admission and rollback proof','both SDKs classify complete primary snapshots with durable holds and retry obligations and no storage mutations','explicit retry holds preserve immutable purpose and independent audited release without expiry or quota refunds','holds on every completed and recovered decision member exclude whole-group retirement in both observed lock orders','whole completed and recovered decisions retire atomically with preserved compact links and reciprocal SDK inspection','both SDKs distinguish live retired absent and corrupt missing history with primary readiness and cancellation','observed PostgreSQL lock waits serialize hold-first and retirement-first transactions without losing holds or creating late holds','retirement markers require atomic removal and reject held undelivered young or incomplete history','retained metadata quota blocks overflow and reserves recovery slots while independent hold release remains possible','prepared hold ledger preserves independent holds and immutable releases with scoped reference checks','prepared immutable identities bind source routing and decision members and survive privileged test payload removal']}))
 finally:
  if created:run(['docker','rm','--force',name],stdout=subprocess.DEVNULL)
