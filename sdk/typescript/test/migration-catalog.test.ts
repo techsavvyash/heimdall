@@ -19,7 +19,9 @@ it.each(["session", "managed", "keys"] as const)(
       expect(migration.path).toBe(
         family === "session" && migration.version === 3
           ? "session/0003-capacity.sql"
-          : `${family}/${String(index + 1).padStart(4, "0")}.sql`,
+          : family === "session" && migration.version === 4
+            ? "session/0004-retention-identities.sql"
+            : `${family}/${String(index + 1).padStart(4, "0")}.sql`,
       );
       const sql = readFileSync(new URL(migration.path, root));
       expect(sql.includes(13)).toBe(false);

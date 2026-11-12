@@ -61,6 +61,11 @@ func (a *Audit) RetainIdentityGroup(ctx context.Context, tenant *string, resolut
 }
 
 func (a *Audit) retainIdentityGroupTx(ctx context.Context, tx *sql.Tx, tenantCopy *string, resolution string, ids []string) ([]contract.RetainedIdentity, error) {
+	return a.retentionIdentityGroupTx(ctx, tx, tenantCopy, resolution, ids, true)
+}
+
+// read-only validation never repairs missing or altered retained history.
+func (a *Audit) retentionIdentityGroupTx(ctx context.Context, tx *sql.Tx, tenantCopy *string, resolution string, ids []string, write bool) ([]contract.RetainedIdentity, error) {
 	var e error
 	sources := []contract.RetentionSource{}
 	events := []map[string]any{}
@@ -93,10 +98,19 @@ func (a *Audit) retainIdentityGroupTx(ctx context.Context, tx *sql.Tx, tenantCop
 	var recovery *string
 	for _, i := range identities {
 		routing, _ := json.Marshal(i.Routing)
-		_, e = tx.ExecContext(ctx, "INSERT INTO heimdall_retention.event_identities(product_id,environment,event_id,tenant_id,recorded_at,payload_digest,kind,decision_id,routing) VALUES($1,$2,$3,$4,$5,decode($6,'hex'),$7,$8,$9::jsonb) ON CONFLICT(product_id,environment,event_id) DO UPDATE SET tenant_id=EXCLUDED.tenant_id,recorded_at=EXCLUDED.recorded_at,payload_digest=EXCLUDED.payload_digest,kind=EXCLUDED.kind,decision_id=EXCLUDED.decision_id,routing=EXCLUDED.routing", i.ProductID, i.Environment, i.EventID, i.TenantID, i.RecordedAt, i.Digest, i.Kind, i.DecisionID, string(routing))
-		if e != nil {
-			return nil, auditCapacityError(ctx, e)
+		if write {
+			_, e = tx.ExecContext(ctx, "INSERT INTO heimdall_retention.event_identities(product_id,environment,event_id,tenant_id,recorded_at,payload_digest,kind,decision_id,routing) VALUES($1,$2,$3,$4,$5,decode($6,'hex'),$7,$8,$9::jsonb) ON CONFLICT(product_id,environment,event_id) DO UPDATE SET tenant_id=EXCLUDED.tenant_id,recorded_at=EXCLUDED.recorded_at,payload_digest=EXCLUDED.payload_digest,kind=EXCLUDED.kind,decision_id=EXCLUDED.decision_id,routing=EXCLUDED.routing", i.ProductID, i.Environment, i.EventID, i.TenantID, i.RecordedAt, i.Digest, i.Kind, i.DecisionID, string(routing))
+			if e != nil {
+				return nil, auditCapacityError(ctx, e)
+			}
+		} else {
+			var same bool
+			e = tx.QueryRowContext(ctx, `SELECT tenant_id IS NOT DISTINCT FROM $4::text AND recorded_at=$5 AND payload_digest=decode($6,'hex') AND kind=$7 AND decision_id IS NOT DISTINCT FROM $8::text AND routing=$9::jsonb FROM heimdall_retention.event_identities WHERE product_id=$1 AND environment=$2 AND event_id=$3`, i.ProductID, i.Environment, i.EventID, i.TenantID, i.RecordedAt, i.Digest, i.Kind, i.DecisionID, string(routing)).Scan(&same)
+			if e != nil || !same {
+				return nil, databaseError(ctx)
+			}
 		}
+
 		if i.Kind == "recovery" {
 			id := i.EventID
 			recovery = &id
@@ -107,10 +121,19 @@ func (a *Audit) retainIdentityGroupTx(ctx context.Context, tx *sql.Tx, tenantCop
 		if err != nil {
 			return nil, err
 		}
-		_, e = tx.ExecContext(ctx, "INSERT INTO heimdall_retention.decision_identities(product_id,environment,decision_id,tenant_id,request_event_id,requested_at,resolution,terminal_event_id,recovery_event_id,resolved_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(product_id,environment,decision_id) DO UPDATE SET tenant_id=EXCLUDED.tenant_id,request_event_id=EXCLUDED.request_event_id,requested_at=EXCLUDED.requested_at,resolution=EXCLUDED.resolution,terminal_event_id=EXCLUDED.terminal_event_id,recovery_event_id=EXCLUDED.recovery_event_id,resolved_at=EXCLUDED.resolved_at", a.product, a.environment, b.DecisionID, tenantCopy, b.RequestEventID, b.RequestedAt, b.Resolution, b.TerminalEventID, recovery, b.ResolvedAt)
-		if e != nil {
-			return nil, auditCapacityError(ctx, e)
+		if write {
+			_, e = tx.ExecContext(ctx, "INSERT INTO heimdall_retention.decision_identities(product_id,environment,decision_id,tenant_id,request_event_id,requested_at,resolution,terminal_event_id,recovery_event_id,resolved_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(product_id,environment,decision_id) DO UPDATE SET tenant_id=EXCLUDED.tenant_id,request_event_id=EXCLUDED.request_event_id,requested_at=EXCLUDED.requested_at,resolution=EXCLUDED.resolution,terminal_event_id=EXCLUDED.terminal_event_id,recovery_event_id=EXCLUDED.recovery_event_id,resolved_at=EXCLUDED.resolved_at", a.product, a.environment, b.DecisionID, tenantCopy, b.RequestEventID, b.RequestedAt, b.Resolution, b.TerminalEventID, recovery, b.ResolvedAt)
+			if e != nil {
+				return nil, auditCapacityError(ctx, e)
+			}
+		} else {
+			var same bool
+			e = tx.QueryRowContext(ctx, `SELECT tenant_id IS NOT DISTINCT FROM $4::text AND request_event_id=$5 AND requested_at=$6 AND resolution=$7 AND terminal_event_id IS NOT DISTINCT FROM $8::text AND recovery_event_id IS NOT DISTINCT FROM $9::text AND resolved_at IS NOT DISTINCT FROM $10::bigint FROM heimdall_retention.decision_identities WHERE product_id=$1 AND environment=$2 AND decision_id=$3`, a.product, a.environment, b.DecisionID, tenantCopy, b.RequestEventID, b.RequestedAt, b.Resolution, b.TerminalEventID, recovery, b.ResolvedAt).Scan(&same)
+			if e != nil || !same {
+				return nil, databaseError(ctx)
+			}
 		}
+
 	}
 	return identities, nil
 }

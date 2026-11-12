@@ -15,6 +15,11 @@
       "version": 3,
       "path": "session/0003-capacity.sql",
       "checksum": "15da3b2fa8a64b285516dc554a9c1cb7268fec5427046722ab9854cc0710e492"
+    },
+    {
+      "version": 4,
+      "path": "session/0004-retention-identities.sql",
+      "checksum": "28a4d5070ee8b1ba0c68639838201a13082207ce144fd0f921d48320660675f9"
     }
   ],
   "managed": [

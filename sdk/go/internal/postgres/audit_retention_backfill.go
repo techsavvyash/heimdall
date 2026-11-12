@@ -66,12 +66,12 @@ func AdvanceAuditRetentionUpgrade(ctx context.Context, db *sql.DB, limit int, wr
 		if p.ScannedDecisions != 0 || ((id == nil) != (p.ScannedEvents == 0)) {
 			return nil, contract.ErrAuditUnavailable
 		}
-		e = retentionGroupPage(ctx, db, tx, &p, limit, validate)
+		e = retentionGroupPage(ctx, db, tx, &p, limit, validate, true)
 	case "decisions":
 		if (id == nil) != (p.ScannedDecisions == 0) {
 			return nil, contract.ErrAuditUnavailable
 		}
-		e = retentionGroupPage(ctx, db, tx, &p, limit, validate)
+		e = retentionGroupPage(ctx, db, tx, &p, limit, validate, true)
 	case "complete":
 		if id != nil {
 			return nil, contract.ErrAuditUnavailable
@@ -136,7 +136,7 @@ type retentionGroupRow struct {
 	IDs         []string `json:"ids"`
 }
 
-func retentionGroupPage(ctx context.Context, db *sql.DB, tx *sql.Tx, p *CapacityBackfillProgress, limit int, validate func(map[string]any) error) error {
+func retentionGroupPage(ctx context.Context, db *sql.DB, tx *sql.Tx, p *CapacityBackfillProgress, limit int, validate func(map[string]any) error, write bool) error {
 	source := retentionOrdinarySQL
 	if p.Phase == "decisions" {
 		source = retentionDecisionSQL
@@ -200,7 +200,7 @@ func retentionGroupPage(ctx context.Context, db *sql.DB, tx *sql.Tx, p *Capacity
 		if v, ok := event["tenantId"].(string); ok {
 			tenant = &v
 		}
-		identities, err := a.retainIdentityGroupTx(ctx, tx, tenant, g.Resolution, g.IDs)
+		identities, err := a.retentionIdentityGroupTx(ctx, tx, tenant, g.Resolution, g.IDs, write)
 		if err != nil {
 			return err
 		}

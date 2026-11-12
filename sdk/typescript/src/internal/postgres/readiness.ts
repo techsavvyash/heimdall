@@ -124,3 +124,58 @@ export async function checkManagedCapacityReadiness(
   );
   if (rows.length !== 1 || rows[0]?.ready !== true) throw new HeimdallError("unavailable");
 }
+
+export const retentionChecksums = [
+  "28a4d5070ee8b1ba0c68639838201a13082207ce144fd0f921d48320660675f9",
+  "ff4c2d36f1c120f601de7addf5df4877c38fe1a5e4eae6ea93e0a9b0caeb4c33",
+  "f9286fb217de9c86ecc5e525174d48698499c93498a6c9a8696247384e8280cd",
+  "0b9ae1f226e71a0d8661b2deea928c39959871e545f4dd3164d53bb9939b61c0",
+  "bd1388b8758ffbba64b8bc823383737f920ea1cc187aae6fd4c806f1947a62ef",
+  "ef8d91118660fe24e0f0ad10bca5cdd4c9d8f02796eecf5263c9603bd8f22ad2",
+];
+export const retentionSQL = `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'
+ AND (SELECT count(*) FROM heimdall.schema_metadata)=1
+ AND EXISTS(SELECT 1 FROM heimdall.schema_metadata WHERE singleton AND database_version=4 AND state='ready' AND reader_min=4 AND reader_max=4 AND writer_min=4 AND writer_max=4)
+ AND (SELECT count(*) FROM heimdall.migrations)=4
+ AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=1 AND checksum=$1)
+ AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=2 AND checksum=$2)
+ AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=3 AND checksum=$3)
+ AND (SELECT count(*) FROM heimdall_capacity.policy)=1
+ AND (SELECT count(*) FROM heimdall_capacity.upgrade)=1
+ AND (SELECT count(*) FROM heimdall_capacity.backfill)=1
+ AND EXISTS(SELECT 1 FROM heimdall_capacity.backfill WHERE singleton AND phase='complete' AND after_product IS NULL AND after_environment IS NULL AND after_id IS NULL)
+ AND EXISTS(SELECT 1 FROM heimdall_capacity.policy p JOIN heimdall_capacity.upgrade u USING(singleton) WHERE p.singleton AND p.state='ready' AND u.capacity_checksum=$3 AND u.preparation_checksum=$4 AND p.event_limit=u.event_limit AND p.byte_limit=u.byte_limit AND p.delivery_limit=u.delivery_limit)
+ AND (SELECT count(*) FROM heimdall_retention.capacity)=1
+ AND (SELECT count(*) FROM heimdall_retention.upgrade)=1
+ AND (SELECT count(*) FROM heimdall_retention.backfill)=1
+ AND EXISTS(SELECT 1 FROM heimdall_retention.capacity c JOIN heimdall_retention.upgrade u USING(singleton)
+ WHERE c.singleton AND c.row_limit=u.row_limit AND c.byte_limit=u.byte_limit AND u.checksums=$5::text[])
+ AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=4 AND checksum=$6)
+ AND EXISTS(SELECT 1 FROM heimdall_retention.backfill WHERE singleton AND phase='complete' AND after_product IS NULL AND after_environment IS NULL AND after_id IS NULL) AS ready`;
+
+const retentionArgs = [
+  sessionChecksum,
+  decisionChecksum,
+  capacityChecksum,
+  capacityPreparationChecksum,
+  retentionChecksums,
+  retentionChecksums[0],
+];
+export async function checkRetentionReadiness(pool: Pool, signal?: AbortSignal): Promise<void> {
+  const rows = await query<{ ready: boolean }>(pool, retentionSQL, retentionArgs, false, signal);
+  if (rows.length !== 1 || rows[0]?.ready !== true) throw new HeimdallError("unavailable");
+}
+const managedRetentionSQL = `SELECT base.ready AND managed.ready AS ready FROM (${retentionSQL}) base CROSS JOIN (${sql.replaceAll("heimdall.", "heimdall_managed.").replaceAll("$1", "$7")}) managed`;
+export async function checkManagedRetentionReadiness(
+  pool: Pool,
+  signal?: AbortSignal,
+): Promise<void> {
+  const rows = await query<{ ready: boolean }>(
+    pool,
+    managedRetentionSQL,
+    [...retentionArgs, managedChecksum],
+    false,
+    signal,
+  );
+  if (rows.length !== 1 || rows[0]?.ready !== true) throw new HeimdallError("unavailable");
+}

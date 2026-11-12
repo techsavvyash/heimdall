@@ -116,7 +116,7 @@ func PrepareAuditRetentionUpgrade(ctx context.Context, db *sql.DB, sources [6][]
 	return nil
 }
 
-func checkPreparedAuditRetention(ctx context.Context, tx *sql.Tx) error {
+func checkAuditRetentionSchema(ctx context.Context, tx *sql.Tx) error {
 	// The expanded catalog includes all v3 objects and the complete pinned retention
 	// schema. Reject manually prepared or altered namespaces rather than adopting them.
 	if _, e := tx.ExecContext(ctx, "SET LOCAL search_path=pg_catalog; LOCK TABLE heimdall.schema_metadata,heimdall.migrations,heimdall.records,heimdall.identity_denials,heimdall.audit_events,heimdall.audit_deliveries,heimdall.audit_decisions,heimdall.audit_decision_backfill,heimdall.audit_upgrade,heimdall_capacity.policy,heimdall_capacity.event_charges,heimdall_capacity.reservations,heimdall_capacity.upgrade,heimdall_capacity.backfill,heimdall_retention.event_identities,heimdall_retention.decision_identities,heimdall_retention.event_holds,heimdall_retention.capacity,heimdall_retention.retirements,heimdall_retention.upgrade,heimdall_retention.backfill IN SHARE MODE"); e != nil {
@@ -129,6 +129,13 @@ func checkPreparedAuditRetention(ctx context.Context, tx *sql.Tx) error {
 	if !matches {
 		return contract.ErrAuditUnavailable
 	}
+	return nil
+}
+func checkPreparedAuditRetention(ctx context.Context, tx *sql.Tx) error {
+	if e := checkAuditRetentionSchema(ctx, tx); e != nil {
+		return e
+	}
+	var matches bool
 	// Reuse all old readiness receipts while requiring the migration outage state.
 	if e := tx.QueryRowContext(ctx, retentionPreparationReadinessSQL, sessionChecksum, decisionChecksum, capacityUpgradeChecksums[0], capacityUpgradeChecksums[1], pq.Array(retentionUpgradeChecksums[:])).Scan(&matches); e != nil {
 		return databaseError(ctx)

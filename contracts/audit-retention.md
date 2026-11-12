@@ -539,3 +539,25 @@ failure rolls back the entire page. Completion validates source/retained coverag
 and accounting, retains state=migrating and publishes no new runtime protocol.
 Activation still requires independent full-history validation and compatible TS/Go
 public admission/writes. No deletion or retention maintenance is enabled here.
+
+## Atomic retention v4 activation
+
+The shared activation command requires drained writers, an exact prepared catalog,
+completed backfill and source/retained quota coverage. Within one locked primary
+transaction it independently decodes all current history in bounded group pages
+and compares existing compact event and decision identities. This validation mode
+is read-only: missing/changed identities or corrupt payloads fail without repair,
+quota consumption or checkpoint changes. Thirty-second operation, five-second lock
+and 20-second statement bounds apply. The primary/read-write check precedes BEGIN.
+
+A successful transaction adds migration version 4 using the pinned identity-schema
+checksum and publishes exactly version-4 readers/writers. The preparation receipt
+binds the other pinned SQL files and explicit quota limits. Lost COMMIT reports
+unknown; a retry verifies the v4 protocol receipt without reusing historical scan
+counts as live counters. Old v3 admission refuses the activated database.
+
+TS and Go now have internal single-snapshot standalone and managed v4 readiness
+checks with shared mutation fixtures. These are compatibility checks, not complete
+catalog/history validation. Public v4 writer/read/recovery wiring and grants remain
+unimplemented. Keep applications drained until that integration is qualified;
+activation alone does not enable retention or satisfy Phase 3 acceptance.
