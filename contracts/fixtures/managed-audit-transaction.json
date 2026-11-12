@@ -70,6 +70,13 @@
       "error": "cancelled",
       "managedRows": 0,
       "auditRows": 0
+    },
+    {
+      "name": "metadata_failure",
+      "error": "audit_unavailable",
+      "managedRows": 0,
+      "auditRows": 0,
+      "retainedOnly": true
     }
   ]
 }

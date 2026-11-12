@@ -316,6 +316,26 @@ try:
   subprocess.run(['go','test','-race','-count=1','.', '-run','^TestPublicCapacity$'],cwd=ROOT/'sdk/go',env=public_env,check=True)
   sql('CREATE ROLE retained_runtime_profile','retention_activation')
   runtime_grants="GRANT USAGE ON SCHEMA heimdall,heimdall_capacity,heimdall_retention TO retained_runtime_profile; GRANT SELECT ON heimdall.schema_metadata,heimdall.migrations,heimdall.audit_events,heimdall.audit_deliveries,heimdall.audit_decisions TO retained_runtime_profile; GRANT SELECT ON ALL TABLES IN SCHEMA heimdall_capacity,heimdall_retention TO retained_runtime_profile; GRANT INSERT ON heimdall.audit_events,heimdall.audit_deliveries,heimdall_capacity.event_charges TO retained_runtime_profile; GRANT INSERT,UPDATE ON heimdall.audit_decisions,heimdall_capacity.reservations,heimdall_retention.event_identities,heimdall_retention.decision_identities TO retained_runtime_profile; GRANT UPDATE(used_events,used_bytes,used_deliveries,reserved_events,reserved_bytes,reserved_deliveries) ON heimdall_capacity.policy TO retained_runtime_profile; GRANT UPDATE(used_rows,reserved_rows) ON heimdall_retention.capacity TO retained_runtime_profile"
+  # Retained audit and local managed writes share one v4 transaction.
+  sql('CREATE DATABASE managed_retained_v4 TEMPLATE retention_activation')
+  sql('CREATE ROLE heimdall_managed_runtime', 'managed_retained_v4')
+  sql(runtime_grants.replace('retained_runtime_profile','heimdall_managed_runtime')+"; GRANT USAGE ON SCHEMA heimdall_managed TO heimdall_managed_runtime; GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA heimdall_managed TO heimdall_managed_runtime; GRANT USAGE ON ALL SEQUENCES IN SCHEMA heimdall_managed TO heimdall_managed_runtime", 'managed_retained_v4')
+  sql("UPDATE heimdall_capacity.policy SET event_limit=event_limit+100; UPDATE heimdall_capacity.upgrade SET event_limit=(SELECT event_limit FROM heimdall_capacity.policy); UPDATE heimdall_retention.capacity SET row_limit=row_limit+100,byte_limit=byte_limit+819200; UPDATE heimdall_retention.upgrade SET row_limit=(SELECT row_limit FROM heimdall_retention.capacity),byte_limit=(SELECT byte_limit FROM heimdall_retention.capacity)", 'managed_retained_v4')
+  sql("ALTER TABLE heimdall_retention.event_identities ADD CONSTRAINT managed_late_failure CHECK(product_id NOT IN ('atomic-go-metadata_failure','atomic-ts-metadata_failure'))", 'managed_retained_v4')
+  managed_env=dict(env,HEIMDALL_TEST_MANAGED_DATABASE_URL=dsn('managed_retained_v4'),HEIMDALL_TEST_MANAGED_AUDIT_V4='1')
+  go('^TestManagedAudit(Invalid|Atomic)$',managed_env)
+  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-managed-audit.test.ts'],env=managed_env)
+  for language in ['go','ts']:
+   with CommitLossProxy(int(port)) as proxy:
+    selected=dict(managed_env,HEIMDALL_TEST_MANAGED_AUDIT_LOSS=dsn('managed_retained_v4',proxy.port))
+    if language=='go':go('^TestManagedAuditCommitLoss$',selected)
+    else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-managed-audit.test.ts','-t','committed response loss'],env=selected)
+    assert proxy.dropped.is_set() and not proxy.errors
+  assert sql("SELECT count(*) FROM heimdall.audit_events e LEFT JOIN heimdall_retention.event_identities i USING(product_id,environment,event_id) LEFT JOIN heimdall_capacity.event_charges c USING(product_id,environment,event_id) WHERE e.product_id LIKE 'atomic-%' AND (i.event_id IS NULL OR c.event_id IS NULL)", 'managed_retained_v4')=='0'
+  assert sql("SELECT used_rows=(SELECT count(*) FROM heimdall_retention.event_identities)+(SELECT count(*) FROM heimdall_retention.decision_identities) FROM heimdall_retention.capacity", 'managed_retained_v4')=='t'
+  assert sql("SELECT (SELECT count(*) FROM heimdall_retention.event_identities)=(SELECT count(*) FROM heimdall.audit_events)", 'managed_retained_v4')=='t'
+  assert sql("SELECT used_events=(SELECT count(*) FROM heimdall_capacity.event_charges) FROM heimdall_capacity.policy", 'managed_retained_v4')=='t'
+  print('Managed retained v4 atomic rollback and confirmed COMMIT-loss tests passed in TS and Go',flush=True)
   def runtime_profile(language,selected):
    if language=='go':go('^TestRetainedRuntime$',selected)
    else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-runtime.test.ts'],env=selected)

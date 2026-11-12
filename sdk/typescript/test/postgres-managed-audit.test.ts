@@ -14,12 +14,22 @@ const fixture = JSON.parse(
 ) as {
   event: Record<string, unknown>;
   writes: string[];
-  cases: { name: string; error: string | null; managedRows: number; auditRows: number }[];
+  cases: {
+    retainedOnly?: boolean;
+    name: string;
+    error: string | null;
+    managedRows: number;
+    auditRows: number;
+  }[];
 };
 const validate = (e: Record<string, unknown>) => {
   validateAuditShape(e);
   validateAuditEvent(e as Parameters<typeof validateAuditEvent>[0], "sdk", () => false);
 };
+const auditStore = (...args: ConstructorParameters<typeof PostgresAudit>) =>
+  process.env.HEIMDALL_TEST_MANAGED_AUDIT_V4 === "1"
+    ? PostgresAudit.forRetainedRuntime(...args)
+    : new PostgresAudit(...args);
 const writes = async (tx: PoolClient, scope: string) => {
   for (const sql of fixture.writes) await tx.query(sql.replaceAll("$scope", scope));
 };
@@ -39,30 +49,35 @@ async function counts(pool: Pool, scope: string) {
   }
   return result;
 }
-test("atomic audit validates before mutation callback", async () => {
-  const pool = new Pool();
-  let invoked = false;
-  try {
-    const store = new PostgresAudit(pool, "ledger", "production", [], validate);
-    await expect(
-      store.appendWith({}, async () => {
-        invoked = true;
-      }),
-    ).rejects.toThrow("invalid_argument");
-    await expect(
-      store.appendWith(
-        fixture.event,
-        async () => {
+test.each([false, true])(
+  "atomic audit validates before mutation callback (retained=%s)",
+  async (retained) => {
+    const pool = new Pool();
+    let invoked = false;
+    try {
+      const store = retained
+        ? PostgresAudit.forRetainedRuntime(pool, "ledger", "production", [], validate)
+        : new PostgresAudit(pool, "ledger", "production", [], validate);
+      await expect(
+        store.appendWith({}, async () => {
           invoked = true;
-        },
-        AbortSignal.abort(),
-      ),
-    ).rejects.toThrow("cancelled");
-    expect(invoked).toBe(false);
-  } finally {
-    await pool.end();
-  }
-});
+        }),
+      ).rejects.toThrow("invalid_argument");
+      await expect(
+        store.appendWith(
+          fixture.event,
+          async () => {
+            invoked = true;
+          },
+          AbortSignal.abort(),
+        ),
+      ).rejects.toThrow("cancelled");
+      expect(invoked).toBe(false);
+    } finally {
+      await pool.end();
+    }
+  },
+);
 test.skipIf(
   !process.env.HEIMDALL_TEST_MANAGED_DATABASE_URL || !!process.env.HEIMDALL_TEST_MANAGED_READ_PEER,
 )("atomic managed writes and audit outbox commit or roll back together", async () => {
@@ -76,13 +91,14 @@ test.skipIf(
       "ALTER TABLE heimdall.audit_deliveries ADD CONSTRAINT atomic_ts_failure CHECK(sink_id<>'atomic-denied-ts')",
     );
     for (const c of fixture.cases) {
+      if (c.retainedOnly && process.env.HEIMDALL_TEST_MANAGED_AUDIT_V4 !== "1") continue;
       const scope = "atomic-ts-" + c.name;
       const event: Record<string, unknown> = {
         ...fixture.event,
         productId: scope,
         eventId: "atomic-event",
       };
-      const store = new PostgresAudit(
+      const store = auditStore(
         pool,
         scope,
         "production",
@@ -142,18 +158,12 @@ test.skipIf(!process.env.HEIMDALL_TEST_MANAGED_AUDIT_LOSS)(
       eventId: "atomic-event",
     };
     try {
-      const store = new PostgresAudit(
-        pool,
-        scope,
-        "production",
-        ["primary", "secondary"],
-        validate,
-      );
+      const store = auditStore(pool, scope, "production", ["primary", "secondary"], validate);
       await expect(store.appendWith(event, (tx) => writes(tx, scope))).rejects.toThrow(
         "outcome_unknown",
       );
       expect(await counts(direct, scope)).toEqual([1, 1, 1, 1, 2]);
-      const recovery = new PostgresAudit(direct, scope, "production", ["new-sink"], validate);
+      const recovery = auditStore(direct, scope, "production", ["new-sink"], validate);
       expect((await recovery.append(event)).payloadDigest).toBe(auditDigest(event));
       expect(await counts(direct, scope)).toEqual([1, 1, 1, 1, 2]);
     } finally {

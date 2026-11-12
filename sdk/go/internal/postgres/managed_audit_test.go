@@ -12,11 +12,24 @@ import (
 	"testing"
 )
 
+type managedAuditPort interface {
+	Append(context.Context, map[string]any) (contract.AuditReceipt, error)
+	appendWith(context.Context, map[string]any, func(context.Context, *sql.Tx) error) (contract.AuditReceipt, error)
+}
+
+func managedAuditStore(db *sql.DB, product, environment string, sinks []string, validate func(map[string]any) error) (managedAuditPort, error) {
+	if os.Getenv("HEIMDALL_TEST_MANAGED_AUDIT_V4") == "1" {
+		return NewRetainedRuntimeAudit(db, product, environment, sinks, validate)
+	}
+	return NewAudit(db, product, environment, sinks, validate)
+}
+
 type managedAuditFixture struct {
 	Event  map[string]any
 	Writes []string
 	Cases  []struct {
 		Name                   string
+		RetainedOnly           bool
 		Error                  *string
 		ManagedRows, AuditRows int
 	}
@@ -68,13 +81,15 @@ func managedAuditCounts(t *testing.T, db *sql.DB, scope string) []int {
 	}
 	return counts
 }
-func TestManagedAuditInvalid(t *testing.T) {
+func TestManagedAuditInvalid(t *testing.T) { testManagedAuditInvalid(t) }
+func testManagedAuditInvalid(t *testing.T) {
+	t.Helper()
 	db, e := sql.Open("postgres", "")
 	if e != nil {
 		t.Fatal(e)
 	}
 	defer db.Close()
-	a, _ := NewAudit(db, "ledger", "production", nil, managedAuditValidate)
+	a, _ := managedAuditStore(db, "ledger", "production", nil, managedAuditValidate)
 	called := false
 	fn := func(context.Context, *sql.Tx) error { called = true; return nil }
 	if _, e = a.appendWith(context.Background(), map[string]any{}, fn); !errors.Is(e, contract.ErrInvalidArgument) {
@@ -91,6 +106,10 @@ func TestManagedAuditInvalid(t *testing.T) {
 	if called {
 		t.Fatal("invoked before validation")
 	}
+}
+func TestRetainedManagedAuditInvalid(t *testing.T) {
+	t.Setenv("HEIMDALL_TEST_MANAGED_AUDIT_V4", "1")
+	testManagedAuditInvalid(t)
 }
 func TestManagedAuditAtomic(t *testing.T) {
 	url := os.Getenv("HEIMDALL_TEST_MANAGED_DATABASE_URL")
@@ -114,6 +133,9 @@ func TestManagedAuditAtomic(t *testing.T) {
 	f := managedAuditData(t)
 	ctx := context.Background()
 	for _, c := range f.Cases {
+		if c.RetainedOnly && os.Getenv("HEIMDALL_TEST_MANAGED_AUDIT_V4") != "1" {
+			continue
+		}
 		scope := "atomic-go-" + c.Name
 		event := managedAuditData(t).Event
 		event["productId"] = scope
@@ -122,7 +144,7 @@ func TestManagedAuditAtomic(t *testing.T) {
 		if c.Name == "outbox_failure" {
 			sinks = []string{"a-good", "atomic-denied-go"}
 		}
-		a, e := NewAudit(db, scope, "production", sinks, managedAuditValidate)
+		a, e := managedAuditStore(db, scope, "production", sinks, managedAuditValidate)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -191,7 +213,7 @@ func TestManagedAuditCommitLoss(t *testing.T) {
 	event["productId"] = scope
 	event["eventId"] = "atomic-event"
 	ctx := context.Background()
-	a, e := NewAudit(db, scope, "production", []string{"primary", "secondary"}, managedAuditValidate)
+	a, e := managedAuditStore(db, scope, "production", []string{"primary", "secondary"}, managedAuditValidate)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -202,7 +224,7 @@ func TestManagedAuditCommitLoss(t *testing.T) {
 	if got := managedAuditCounts(t, direct, scope); !reflect.DeepEqual(got, []int{1, 1, 1, 1, 2}) {
 		t.Fatal(got)
 	}
-	recovery, _ := NewAudit(direct, scope, "production", []string{"new-sink"}, managedAuditValidate)
+	recovery, _ := managedAuditStore(direct, scope, "production", []string{"new-sink"}, managedAuditValidate)
 	if _, e = recovery.Append(ctx, event); e != nil {
 		t.Fatal(e)
 	}

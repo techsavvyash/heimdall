@@ -53,6 +53,7 @@ export class PostgresAudit {
     audit.retainedRuntime = true;
     return Object.freeze({
       append: audit.appendRetained.bind(audit),
+      appendWith: audit.appendRetainedWith.bind(audit),
       recover: audit.recoverRetained.bind(audit),
       recoverRuntime: audit.recoverRetained.bind(audit),
       scanPendingDecisions: audit.scanPendingDecisions.bind(audit),
@@ -1018,6 +1019,15 @@ WITH selected AS MATERIALIZED (
   }
   // Prepared compatible writer only. Public v4 activation remains gated.
   async appendRetained(event: Record<string, unknown>, signal?: AbortSignal) {
+    return this.appendRetainedWith(event, async () => {}, signal);
+  }
+  // Trusted SDK-local mutations must enforce their own idempotency and generation.
+  private async appendRetainedWith(
+    event: Record<string, unknown>,
+    mutate: (client: PoolClient) => Promise<void>,
+    signal?: AbortSignal,
+  ) {
+    if (typeof mutate !== "function") throw new HeimdallError("invalid_argument");
     const p = this.prepare(event);
     const receipt = {
       productId: this.productId,
@@ -1031,6 +1041,7 @@ WITH selected AS MATERIALIZED (
       this.pool,
       async (client) => {
         await this.lockRetainedCapacity(client);
+        await mutate(client);
         const read = (id: string) => this.readRetainedTx(client, id);
         const existing = await read(p.eventId);
         if (existing) {

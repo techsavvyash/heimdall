@@ -23,6 +23,11 @@ func NewRetainedRuntimeAudit(db *sql.DB, product, environment string, sinks []st
 func (a *RetainedRuntimeAudit) Append(ctx context.Context, event map[string]any) (contract.AuditReceipt, error) {
 	return a.audit.AppendRetained(ctx, event)
 }
+
+// appendWith is restricted to SDK-local transactional mutations.
+func (a *RetainedRuntimeAudit) appendWith(ctx context.Context, event map[string]any, mutate func(context.Context, *sql.Tx) error) (contract.AuditReceipt, error) {
+	return a.audit.appendRetainedWith(ctx, event, mutate)
+}
 func (a *RetainedRuntimeAudit) Recover(ctx context.Context, terminal, administration map[string]any, cutoff int64) (*AuditRecoveryReceipt, error) {
 	return a.audit.RecoverRetained(ctx, terminal, administration, cutoff)
 }

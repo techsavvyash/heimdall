@@ -582,3 +582,20 @@ retained writes with v4 identity admission. Internal bounded recovery maintenanc
 also uses these ports and checks readiness even for empty scans. Managed composition
 remains unfinished. No deletion is exposed and operational qualification remains
 required before production use.
+
+## Local managed transaction composition
+
+The restricted retained runtime port now provides an SDK-internal `appendWith`
+boundary in both languages. It snapshots and validates the event before database
+I/O, takes v4 deployment admission and both capacity locks, then runs trusted
+local SQL and retained append in one transaction. Callback failure, cancellation,
+audit conflict, outbox failure or retained metadata failure aborts all local
+writes and accounting. A lost COMMIT response returns `outcome_unknown` without
+a receipt; observation/retry uses the original retained event identity.
+
+The callback cannot perform remote I/O, commit independently or publish results.
+It must enforce its own operation-key/generation idempotency, including when an
+exact live or retired event identity already exists. Audit receipt reuse is not
+authority to replay a managed operation. This is an internal composition primitive;
+managed operation factories still require v4 admission/read integration, and no
+public callback extension or retention deletion API is introduced.

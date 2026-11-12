@@ -3,6 +3,8 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"github.com/lib/pq"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"time"
 )
@@ -10,8 +12,13 @@ import (
 // AppendRetained is a prepared compatible writer, not public v4 activation.
 // New recovery pairs use RecoverRetained to preserve atomic administration.
 func (a *Audit) AppendRetained(ctx context.Context, event map[string]any) (contract.AuditReceipt, error) {
+	return a.appendRetainedWith(ctx, event, func(context.Context, *sql.Tx) error { return nil })
+}
+
+// Local SDK mutations retain their own operation-key and generation checks.
+func (a *Audit) appendRetainedWith(ctx context.Context, event map[string]any, mutate func(context.Context, *sql.Tx) error) (contract.AuditReceipt, error) {
 	empty := contract.AuditReceipt{}
-	if ctx == nil {
+	if ctx == nil || mutate == nil {
 		return empty, contract.ErrInvalidArgument
 	}
 	p, e := a.prepare(event)
@@ -42,6 +49,17 @@ func (a *Audit) AppendRetained(ctx context.Context, event map[string]any) (contr
 	}
 	if e = a.lockRetainedCapacity(ctx, tx); e != nil {
 		return empty, e
+	}
+	if e = mutate(ctx, tx); e != nil {
+		var known *contract.Error
+		if errors.As(e, &known) {
+			return empty, known
+		}
+		var pgerr *pq.Error
+		if errors.As(e, &pgerr) && pgerr.Code == "23505" {
+			return empty, contract.ErrConflict
+		}
+		return empty, databaseError(ctx)
 	}
 	read := func(id string) (*RetainedEventInspection, error) { return a.readRetainedTx(ctx, tx, id) }
 	existing, e := read(p.receipt.EventID)
