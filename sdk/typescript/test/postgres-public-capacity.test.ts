@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { expect, test } from "vitest";
 import { createPostgresStorage } from "../src/postgres.js";
 test.skipIf(!process.env.HEIMDALL_TEST_CAPACITY_READY_URL)(
-  "public TS writes enforce v3 and reserved capacity",
+  "public TS writes enforce v4 and reserved capacity",
   async () => {
     const url = process.env.HEIMDALL_TEST_CAPACITY_READY_URL;
     const admin = new Pool({ connectionString: url });
@@ -15,11 +15,11 @@ test.skipIf(!process.env.HEIMDALL_TEST_CAPACITY_READY_URL)(
       ),
     );
     for (const event of [f.request, f.normal, f.ordinary]) {
-      event.productId = "public-ts";
+      event.productId = "retained-public-ts";
       event.environment = "production";
     }
     const storage = createPostgresStorage(pool, {
-      productId: "public-ts",
+      productId: "retained-public-ts",
       environment: "production",
       auditSinks: ["siem"],
     });
@@ -39,14 +39,14 @@ test.skipIf(!process.env.HEIMDALL_TEST_CAPACITY_READY_URL)(
       expect(
         (
           await admin.query(
-            "SELECT count(*)::int AS n FROM heimdall.audit_events WHERE product_id='public-ts'",
+            "SELECT count(*)::int AS n FROM heimdall.audit_events WHERE product_id='retained-public-ts'",
           )
         ).rows[0].n,
       ).toBe(2);
       expect(
         (
           await admin.query(
-            "SELECT count(*)::int AS n FROM heimdall_capacity.event_charges WHERE product_id='public-ts'",
+            "SELECT count(*)::int AS n FROM heimdall_capacity.event_charges WHERE product_id='retained-public-ts'",
           )
         ).rows[0].n,
       ).toBe(2);
@@ -58,7 +58,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_CAPACITY_READY_URL)(
         await expect(storage.appendAudit(f.normal, signal)).rejects.toThrow("unavailable");
       }
     } finally {
-      await admin.query("UPDATE heimdall.schema_metadata SET state='ready',database_version=3");
+      await admin.query("UPDATE heimdall.schema_metadata SET state='ready',database_version=4");
       await admin.query("UPDATE heimdall_capacity.policy SET event_limit=$1", [original]);
       await admin.query("UPDATE heimdall_capacity.upgrade SET event_limit=$1", [original]);
       await pool.end();

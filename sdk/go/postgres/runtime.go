@@ -20,11 +20,11 @@ type StorageOptions struct {
 // NewStorage performs no I/O and never closes the caller's pool.
 func NewStorage(db *sql.DB, options StorageOptions) (heimdall.RuntimeStorage, error) {
 	empty := heimdall.RuntimeStorage{}
-	identities, err := internal.NewIdentityRecords(db, options.ProductID, options.Environment, nil)
+	identities, err := internal.NewRetainedRuntimeIdentityRecords(db, options.ProductID, options.Environment)
 	if err != nil {
 		return empty, err
 	}
-	audit, err := internal.NewAudit(db, options.ProductID, options.Environment, options.AuditSinks, func(event map[string]any) error {
+	audit, err := internal.NewRetainedRuntimeAudit(db, options.ProductID, options.Environment, options.AuditSinks, func(event map[string]any) error {
 		if e := contract.ValidateAuditShape(event); e != nil {
 			return e
 		}
@@ -51,7 +51,7 @@ func NewStorage(db *sql.DB, options StorageOptions) (heimdall.RuntimeStorage, er
 			if ctx == nil {
 				return heimdall.ErrInvalidArgument
 			}
-			return internal.CheckCapacityReadiness(ctx, db)
+			return internal.CheckRetentionReadiness(ctx, db)
 		},
 		Identity: heimdall.IdentityGate{
 			Check: func(ctx context.Context, value heimdall.Identity) (bool, error) {
@@ -71,7 +71,7 @@ func NewStorage(db *sql.DB, options StorageOptions) (heimdall.RuntimeStorage, er
 			if ctx == nil {
 				return heimdall.AuditReceipt{}, heimdall.ErrInvalidArgument
 			}
-			return audit.AppendRuntime(ctx, event)
+			return audit.Append(ctx, event)
 		},
 	}, nil
 }

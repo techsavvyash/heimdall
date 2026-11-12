@@ -17,6 +17,7 @@ import (
 
 // IdentityRecords persists denial and exact-session invalidation without encryption keys.
 type IdentityRecords struct {
+	retainedRuntime      bool
 	db                   *sql.DB
 	product, environment string
 	now                  func() int64
@@ -29,7 +30,17 @@ func NewIdentityRecords(db *sql.DB, product, environment string, now func() int6
 	if now == nil {
 		now = func() int64 { return time.Now().UnixMilli() }
 	}
-	return &IdentityRecords{db, product, environment, now}, nil
+	return &IdentityRecords{db: db, product: product, environment: environment, now: now}, nil
+}
+
+// NewRetainedRuntimeIdentityRecords applies v4 admission to public identity storage.
+func NewRetainedRuntimeIdentityRecords(db *sql.DB, product, environment string) (*IdentityRecords, error) {
+	r, e := NewIdentityRecords(db, product, environment, nil)
+	if e != nil {
+		return nil, e
+	}
+	r.retainedRuntime = true
+	return r, nil
 }
 func sessionKeyHash(key string) ([]byte, error) {
 	if !valid(key, 128) {
@@ -50,20 +61,30 @@ func identityLock(product, environment string, identity []byte) int64 {
 	hash := sha256.Sum256([]byte("heimdall.identity.v1|" + product + "|" + environment + "|" + hex.EncodeToString(identity)))
 	return int64(binary.BigEndian.Uint64(hash[:8]))
 }
-func identityTransaction[T any](ctx context.Context, db *sql.DB, lock int64, action func(context.Context, *sql.Tx) (T, error)) (T, error) {
+func identityTransaction[T any](ctx context.Context, db *sql.DB, lock int64, retained bool, action func(context.Context, *sql.Tx) (T, error)) (T, error) {
 	var zero T
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := contract.CheckCancellation(ctx); err != nil {
 		return zero, err
 	}
-	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	conn, err := retainedConnection(ctx, db, retained)
+	if err != nil {
+		return zero, err
+	}
+	defer conn.Close()
+	tx, err := conn.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return zero, databaseError(ctx)
 	}
 	defer tx.Rollback()
 	if _, err = tx.ExecContext(ctx, "SET LOCAL synchronous_commit='on'"); err != nil {
 		return zero, databaseError(ctx)
+	}
+	if retained {
+		if err = lockRetentionAdmission(ctx, tx); err != nil {
+			return zero, err
+		}
 	}
 	if _, err = tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1::bigint)", lock); err != nil {
 		return zero, databaseError(ctx)
@@ -97,7 +118,7 @@ func (s *IdentityRecords) InvalidateIdentity(ctx context.Context, issuer, subjec
 		return 0, err
 	}
 	r := s
-	return identityTransaction(ctx, r.db, identityLock(r.product, r.environment, identity), func(ctx context.Context, tx *sql.Tx) (int64, error) {
+	return identityTransaction(ctx, r.db, identityLock(r.product, r.environment, identity), r.retainedRuntime, func(ctx context.Context, tx *sql.Tx) (int64, error) {
 		if _, err := tx.ExecContext(ctx, "INSERT INTO heimdall.identity_denials(product_id,environment,identity_hash,observed_at,reason) VALUES($1,$2,$3,$4,$5) ON CONFLICT(product_id,environment,identity_hash) DO UPDATE SET observed_at=GREATEST(identity_denials.observed_at,EXCLUDED.observed_at),reason=CASE WHEN identity_denials.reason='deleted' OR EXCLUDED.reason='deleted' THEN 'deleted' ELSE 'inactive' END", r.product, r.environment, identity, observedAt, reason); err != nil {
 			return 0, err
 		}
@@ -120,7 +141,16 @@ func (s *IdentityRecords) IsIdentityDenied(ctx context.Context, issuer, subject 
 		return false, err
 	}
 	var denied bool
-	err = s.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM heimdall.identity_denials WHERE product_id=$1 AND environment=$2 AND identity_hash=$3)", s.product, s.environment, identity).Scan(&denied)
+	if s.retainedRuntime {
+		var ready bool
+		args := append(retentionReadinessArgs(), s.product, s.environment, identity)
+		err = s.db.QueryRowContext(ctx, "SELECT readiness.ready, EXISTS(SELECT 1 FROM heimdall.identity_denials WHERE product_id=$7 AND environment=$8 AND identity_hash=$9) FROM ("+retentionReadinessSQL+") readiness", args...).Scan(&ready, &denied)
+		if err == nil && !ready {
+			return false, contract.ErrUnavailable
+		}
+	} else {
+		err = s.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM heimdall.identity_denials WHERE product_id=$1 AND environment=$2 AND identity_hash=$3)", s.product, s.environment, identity).Scan(&denied)
+	}
 	if err != nil {
 		return false, databaseError(ctx)
 	}
@@ -145,7 +175,7 @@ func (s *IdentityRecords) InvalidateSessionVersion(ctx context.Context, key, rev
 		return false, err
 	}
 	r := s
-	return identityTransaction(ctx, r.db, identityLock(r.product, r.environment, identity), func(ctx context.Context, tx *sql.Tx) (bool, error) {
+	return identityTransaction(ctx, r.db, identityLock(r.product, r.environment, identity), r.retainedRuntime, func(ctx context.Context, tx *sql.Tx) (bool, error) {
 		result, err := tx.ExecContext(ctx, "DELETE FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind='session' AND key_hash=$3 AND identity_hash=$4 AND revision=$5", r.product, r.environment, hash, identity, revision)
 		if err != nil {
 			return false, err

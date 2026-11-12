@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { HeimdallError } from "../errors.js";
 import { query } from "./query.js";
 // Legacy v1 policy; activated v2 uses the separate checker below.
@@ -153,7 +153,7 @@ export const retentionSQL = `SELECT NOT pg_is_in_recovery() AND current_setting(
  AND EXISTS(SELECT 1 FROM heimdall.migrations WHERE version=4 AND checksum=$6)
  AND EXISTS(SELECT 1 FROM heimdall_retention.backfill WHERE singleton AND phase='complete' AND after_product IS NULL AND after_environment IS NULL AND after_id IS NULL) AS ready`;
 
-const retentionArgs = [
+export const retentionArgs = [
   sessionChecksum,
   decisionChecksum,
   capacityChecksum,
@@ -177,5 +177,11 @@ export async function checkManagedRetentionReadiness(
     false,
     signal,
   );
+  if (rows.length !== 1 || rows[0]?.ready !== true) throw new HeimdallError("unavailable");
+}
+
+export async function lockRetentionAdmission(client: PoolClient): Promise<void> {
+  await client.query("SELECT pg_advisory_xact_lock_shared(74162401)");
+  const rows = (await client.query<{ ready: boolean }>(retentionSQL, retentionArgs)).rows;
   if (rows.length !== 1 || rows[0]?.ready !== true) throw new HeimdallError("unavailable");
 }

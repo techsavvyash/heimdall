@@ -81,9 +81,11 @@ obligations use immutable `retry`-purpose holds in that same ledger; see
 no lease or time-based expiry. Its explicit audited release must commit before
 retirement; releasing one obligation leaves other obligations active.
 
-Authorized atomic retirement/audit, runtime integration, compatible
-migration/backfill, bounded scheduling and complete lifecycle fault tests remain
-required. Current v3 storage is not sufficient to enable purge.
+Public bearer storage now requires activated v4 and retained audit writes; see
+[[evidence/phase-3-public-retention]]. Explicit preparation, bounded backfill and
+activation are implemented. Authorized atomic retirement/audit, managed/recovery
+runtime integration, bounded scheduling and complete lifecycle fault tests remain
+required. Schema readiness alone is not sufficient to enable purge.
 The detailed implementation protocol is `contracts/audit-retention.md` in the
 repository. [[audit-contract]] remains the product audit contract, and
 [[evidence/phase-3-readiness-audit]] tracks the incomplete Phase 3 gate.

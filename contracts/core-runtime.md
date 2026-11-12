@@ -107,9 +107,9 @@ readiness check. Readiness is not an exhaustive privilege audit and does not fen
 later schema or permission changes. Storage operations fail closed if privileges
 or availability subsequently fail. The caller supplies one existing Pool/*sql.DB,
 initializes the immutable session-v1 schema and explicitly prepares/backfills/
-activates audit v2 and then prepares/accounts/activates capacity v3 with deployment commands beforehand. It retains ownership of
-connection limits, TLS configuration and pool shutdown. Unactivated v1, v2 or migrating
-storage is refused by the public factory's readiness and audit append ports.
+activates audit v2, prepares/accounts/activates capacity v3, and prepares/backfills/activates retained audit v4 with deployment commands beforehand. It retains ownership of
+connection limits, TLS configuration and pool shutdown. Unactivated v1, v2, v3 or migrating
+storage is refused by the public factory's readiness, audit append and identity storage ports.
 No DDL or background delivery runs on construction or verification.
 
 Go `postgres.NewConnector(dsn)` is the recommended connection entry point. It
@@ -134,7 +134,12 @@ on heimdall_capacity; SELECT on policy, upgrade and backfill; SELECT/INSERT on
 event_charges; SELECT/INSERT/UPDATE on reservations; and UPDATE only on the six
 used/reserved counter columns of policy. Triggers derive counters; direct counter
 changes are refused. Do not grant accounting DELETE, receipt writes or limit/state
-updates to runtime. It does not need decision DELETE,
+updates to runtime. Retention requires USAGE on heimdall_retention; SELECT on
+its capacity, upgrade, backfill, event_identities, decision_identities, event_holds
+and retirements tables; INSERT/UPDATE on event_identities and decision_identities;
+and UPDATE only on used_rows/reserved_rows of capacity. Do not grant retained
+identity DELETE, hold/marker writes or metadata quota-limit updates.
+It does not need decision DELETE,
 metadata writes, schema-changing privileges, audit UPDATE/DELETE or session
 INSERT/UPDATE for this bearer-only composition. This is a shared trusted backend
 scope, not database row-level isolation against a hostile product process.
@@ -191,30 +196,41 @@ SIEM delivery, backpressure policy, retention, session orchestration, authorizat
 and managed lifecycle composition remain release work, not implicit guarantees of
 this development factory.
 
-## Activated v3 audit admission
+## Activated v4 audit and identity admission
 
 Public audit append uses a shared deployment advisory transaction lock and checks
-v3 metadata/ledger and capacity policy inside the same transaction before writing. The coordinated
+v4 metadata/ledger, retention preparation receipts and capacity policy inside the same transaction before writing. The coordinated
 deployment commands take that lock exclusively. A factory that previously passed
 startup does not cache audit-write admission: migrating or incompatible state
 rejects even an exact receipt retry, with no new event/slot/outbox writes. Five-second
 append cancellation and explicit ambiguous-COMMIT errors remain unchanged. This
-coordinates SDK audit writes with deployment; it does not fence identity/session
-writes, direct SQL, old processes or remote requests, so external drain is required.
+coordinates public SDK audit and identity invalidation writes with deployment. Identity
+reads include v4 readiness in the same statement snapshot. Internal session ports,
+direct SQL, old processes and remote requests still require external drain.
 
 Authorization requested/completed events use atomic decision-slot persistence.
 Every new event gets one server-derived capacity charge. Requests also reserve
-the full recovery allowance; completion releases it atomically. Ordinary
+the full payload and retained-metadata recovery allowance; completion releases unused reservations atomically. Compact event and decision identities preserve exact retries after payload retirement. Ordinary
 authentication and other supported SDK events also consume capacity. Exhaustion
 returns audit_unavailable and rolls back event/slot/outbox/accounting together.
 The public append port rejects authorization outcome_unknown, which requires the
 separate recovery administration pair. Actor verification and event origin remain
 trusted SDK/product-layer responsibilities; this is not a public permission API.
 
-Managed installations can be initialized against recognized ready audit v1, v2 or v3.
-`--status managed-v3` (internal CheckManagedCapacityReadiness/checkManagedCapacityReadiness)
-checks audit v3 and managed v1 metadata/ledgers in one primary SQL snapshot.
+Managed installations can be initialized against recognized ready audit v1, v2, v3 or v4.
+`--status managed-v4` (internal CheckManagedRetentionReadiness/checkManagedRetentionReadiness)
+checks audit v4 and managed v1 metadata/ledgers in one primary SQL snapshot.
 Legacy `--status session` and `--status managed` deliberately retain v1 semantics
 for deployment compatibility; they are not the current public factory's readiness.
-Use `--status audit-v3` for the public bearer storage composition. A read-only
+Use `--status audit-v4` for the public bearer storage composition. A read-only
 connection is rejected before migration starts a read/write transaction.
+
+Public factories use retained audit writes and strict identity admission. Identity
+invalidation locks deployment admission before its identity lock; both identity-wide
+denial and exact-session deletion refuse incompatible storage. Go verifies writable
+primary connection state before BEGIN to prevent transaction options from bypassing
+read-only configuration. No automatic migrations, recovery scheduler or retention
+administration API is exposed. Managed audit composition and historical recovery
+inspection remain separate internal integration work; v4 readiness does not certify
+them. `tests/integration/public-runtime-v4.py` verifies the actual public factories
+with restricted credentials, cross-language retries and confirmed COMMIT loss.

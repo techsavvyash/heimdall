@@ -14,8 +14,8 @@ import (
 
 func TestConnectorStalledStartup(t *testing.T) {
 	for _, mode := range []string{"disable", "require"} {
-		for _, policy := range []string{"deadline", "cancel", "cap"} {
-			if policy == "cap" && mode == "require" {
+		for _, policy := range []string{"deadline", "cancel", "cap", "short-cap"} {
+			if (policy == "cap" || policy == "short-cap") && mode == "require" {
 				continue
 			}
 			t.Run(mode+"-"+policy, func(t *testing.T) {
@@ -54,7 +54,11 @@ func TestConnectorStalledStartup(t *testing.T) {
 					_ = conn.Close()
 					close(closed)
 				}()
-				connector, e := NewConnector("postgres://test:secret@" + listener.Addr().String() + "/test?sslmode=" + mode)
+				dsn := "postgres://test:secret@" + listener.Addr().String() + "/test?sslmode=" + mode
+				if policy == "short-cap" {
+					dsn += "&connect_timeout=1"
+				}
+				connector, e := NewConnector(dsn)
 				if e != nil {
 					t.Fatal(e)
 				}

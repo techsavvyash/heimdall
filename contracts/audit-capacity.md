@@ -304,15 +304,15 @@ usage counters and are not compared with current history by startup readiness.
 Missing tables or incompatible state return unavailable; cancellation is retained.
 These startup checks do not replace structural validation at deployment.
 
-Explicit managed-schema initialization accepts the ready v3 base. If a capacity
-namespace exists it must satisfy v3 readiness, rather than falling back to an older
-base protocol. The shared catalog now records migration 3 as
+Explicit managed-schema initialization accepts the ready v3 base. If a retention namespace exists it must satisfy v4 readiness; otherwise a capacity
+namespace must satisfy v3 readiness, rather than falling back to an older base
+protocol. The shared catalog now records migration 3 as
 `session/0003-capacity.sql`; its preparation extension remains checksum-bound by
 the upgrade receipt. SQL files are immutable.
 
-Public factories now require v3 at startup and for each audit append, including
+Public factories now require retained audit v4 at startup and for each audit append, including
 exact receipt retries. They hold shared deployment admission through COMMIT and
-use the capacity-accounted request/completion path. New ordinary events are also
+use the retained capacity-accounted request/completion path. New ordinary events are also
 charged. Recovery-pair ports remain internal pending maintenance orchestration.
-See core-runtime.md for the runtime grants and public-runtime-v3.py for live proof.
+See core-runtime.md for the runtime grants and public-runtime-v4.py for live proof.
 Storage readiness is not complete product release qualification.

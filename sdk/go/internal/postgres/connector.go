@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql/driver"
+	"errors"
 	"net"
 	"time"
 
@@ -57,6 +58,11 @@ func (c *boundedConnector) Connect(ctx context.Context) (driver.Conn, error) {
 	if e != nil {
 		for _, socket := range dialer.sockets {
 			_ = socket.conn.Close()
+		}
+		// The socket deadline can fire before the context timer is scheduled.
+		var timeout net.Error
+		if errors.As(e, &timeout) && timeout.Timeout() {
+			return nil, contract.ErrDeadlineExceeded
 		}
 		return nil, contract.ErrUnavailable
 	}

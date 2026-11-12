@@ -1,0 +1,35 @@
+{
+  "identity": {
+    "issuer": "https://identity.example.test",
+    "subject": "factory-subject"
+  },
+  "negatives": [
+    {
+      "issuer": "https://identity.example.test",
+      "subject": "factory-subject",
+      "context": "session:factory-session:1",
+      "reason": "token_inactive",
+      "tokenDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "issuer": "https://identity.example.test",
+      "subject": "factory-subject",
+      "context": "bearer",
+      "reason": "identity_inactive",
+      "tokenDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "issuer": "https://identity.example.test",
+      "subject": "factory-subject",
+      "context": "bearer",
+      "reason": "identity_deleted",
+      "tokenDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "legacy": [
+    "HEIMDALL_TEST_FACTORY_V1",
+    "HEIMDALL_TEST_FACTORY_V2",
+    "HEIMDALL_TEST_FACTORY_V3",
+    "HEIMDALL_TEST_FACTORY_MIGRATING"
+  ]
+}

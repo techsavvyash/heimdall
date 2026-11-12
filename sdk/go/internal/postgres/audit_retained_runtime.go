@@ -37,6 +37,12 @@ func (a *RetainedRuntimeAudit) Eligibility(ctx context.Context, tenant *string, 
 }
 
 func lockRetainedRuntime(ctx context.Context, tx *sql.Tx) error {
+	if e := lockRetentionAdmission(ctx, tx); e != nil {
+		return e
+	}
+	return lockAuditCapacity(ctx, tx)
+}
+func lockRetentionAdmission(ctx context.Context, tx *sql.Tx) error {
 	if _, e := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock_shared(74162401)"); e != nil {
 		return databaseError(ctx)
 	}
@@ -44,7 +50,7 @@ func lockRetainedRuntime(ctx context.Context, tx *sql.Tx) error {
 	if e := tx.QueryRowContext(ctx, retentionReadinessSQL, retentionReadinessArgs()...).Scan(&ready); e != nil || !ready {
 		return databaseError(ctx)
 	}
-	return lockAuditCapacity(ctx, tx)
+	return nil
 }
 
 // Keep the shared history selectors' scope at $5..$7; v4 adds receipts at $8..$9.
@@ -63,12 +69,12 @@ func (a *Audit) retainedHistoryArgs(id string) []any {
 	return args
 }
 
-func (a *Audit) retainedConnection(ctx context.Context) (*sql.Conn, error) {
-	conn, e := a.db.Conn(ctx)
+func retainedConnection(ctx context.Context, db *sql.DB, runtime bool) (*sql.Conn, error) {
+	conn, e := db.Conn(ctx)
 	if e != nil {
 		return nil, databaseError(ctx)
 	}
-	if a.retainedRuntime {
+	if runtime {
 		var primary bool
 		if e = conn.QueryRowContext(ctx, "SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off'").Scan(&primary); e != nil || !primary {
 			conn.Close()

@@ -197,3 +197,26 @@ func TestCapacityBackfillLock(t *testing.T) {
 		t.Fatal(p, e)
 	}
 }
+
+// Seed historical v3 application rows explicitly; public factories now require v4.
+func TestLegacyPublicCapacityHistory(t *testing.T) {
+	url := os.Getenv("HEIMDALL_TEST_CAPACITY_READY_URL")
+	if url == "" {
+		t.Skip("legacy database required")
+	}
+	db, e := sql.Open("postgres", url)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer db.Close()
+	for _, product := range []string{"public-go", "public-ts"} {
+		f := capacityWritesData(t)
+		a := backfillPort(t, db, product)
+		for _, event := range []map[string]any{f.Request, f.Normal} {
+			event["productId"] = product
+			if _, e = a.AppendRuntime(context.Background(), event); e != nil {
+				t.Fatal(e)
+			}
+		}
+	}
+}

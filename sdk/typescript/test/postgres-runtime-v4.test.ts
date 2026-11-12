@@ -24,7 +24,7 @@ test("managed v2 readiness preserves pre-aborted cancellation", async () => {
   }
 });
 test.skipIf(!process.env.HEIMDALL_TEST_FACTORY_URL)(
-  "public v3 factory gates writes and persists decision slots",
+  "public v4 factory gates writes and persists decision slots",
   async () => {
     const pool = new Pool({ connectionString: process.env.HEIMDALL_TEST_FACTORY_URL });
     const port = storage(pool, "factory-ts");
@@ -64,6 +64,9 @@ test.skipIf(!process.env.HEIMDALL_TEST_FACTORY_URL)(
       for (const statement of [
         "UPDATE heimdall.schema_metadata SET state='migrating'",
         "DELETE FROM heimdall.audit_decisions",
+        "DELETE FROM heimdall_retention.event_identities",
+        "DELETE FROM heimdall_retention.decision_identities",
+        "UPDATE heimdall_retention.capacity SET row_limit=row_limit+1",
         "DELETE FROM heimdall_capacity.event_charges",
         "DELETE FROM heimdall_capacity.reservations",
         "UPDATE heimdall_capacity.policy SET event_limit=event_limit+1",
@@ -75,6 +78,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_FACTORY_URL)(
       for (const key of [
         "HEIMDALL_TEST_FACTORY_V1",
         "HEIMDALL_TEST_FACTORY_V2",
+        "HEIMDALL_TEST_FACTORY_V3",
         "HEIMDALL_TEST_FACTORY_MIGRATING",
       ]) {
         const other = new Pool({ connectionString: process.env[key] });
@@ -149,7 +153,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_MANAGED_V2_ADMIN)(
   },
 );
 test.skipIf(!process.env.HEIMDALL_TEST_FACTORY_LOSS)(
-  "public v3 request COMMIT loss recovers event and slot",
+  "public v4 request COMMIT loss recovers event and slot",
   async () => {
     const faulty = new Pool({ connectionString: process.env.HEIMDALL_TEST_FACTORY_LOSS });
     const direct = new Pool({ connectionString: process.env.HEIMDALL_TEST_FACTORY_URL });

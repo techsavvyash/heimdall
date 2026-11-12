@@ -8,6 +8,7 @@ import {
   capacitySQL,
   retentionSQL,
   retentionChecksums,
+  lockRetentionAdmission,
 } from "./readiness.js";
 import {
   capacityWrite,
@@ -976,17 +977,7 @@ WITH selected AS MATERIALIZED (
   }
   private async lockRetainedCapacity(client: PoolClient) {
     if (this.retainedRuntime) {
-      await client.query("SELECT pg_advisory_xact_lock_shared(74162401)");
-      const ready = await client.query<{ ready: boolean }>(retentionSQL, [
-        sessionChecksum,
-        decisionChecksum,
-        capacityChecksum,
-        capacityPreparationChecksum,
-        retentionChecksums,
-        retentionChecksums[0],
-      ]);
-      if (ready.rows.length !== 1 || ready.rows[0]?.ready !== true)
-        throw new HeimdallError("unavailable");
+      await lockRetentionAdmission(client);
       await lockAuditCapacity(client);
     } else await lockRuntimeCapacity(client);
     const result = await client.query(

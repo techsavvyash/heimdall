@@ -32,7 +32,7 @@ func (a *Audit) RecoverRetained(ctx context.Context, terminal, administration ma
 	if e = contract.CheckCancellation(ctx); e != nil {
 		return nil, e
 	}
-	conn, e := a.retainedConnection(ctx)
+	conn, e := retainedConnection(ctx, a.db, a.retainedRuntime)
 	if e != nil {
 		return nil, databaseError(ctx)
 	}

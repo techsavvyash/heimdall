@@ -160,8 +160,7 @@ try:
   go('^Test(CapacityReadiness|ConnectorPostgresReuse)$',ready_env)
   run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-capacity-readiness.test.ts'],env=ready_env)
   sql("CREATE ROLE public_capacity_runtime; GRANT USAGE ON SCHEMA heimdall,heimdall_capacity TO public_capacity_runtime; GRANT SELECT ON heimdall.schema_metadata,heimdall.migrations,heimdall_capacity.policy,heimdall_capacity.upgrade,heimdall_capacity.backfill TO public_capacity_runtime; GRANT SELECT,INSERT ON heimdall.audit_events,heimdall.audit_deliveries,heimdall_capacity.event_charges TO public_capacity_runtime; GRANT SELECT,INSERT,UPDATE ON heimdall.audit_decisions,heimdall_capacity.reservations TO public_capacity_runtime; GRANT UPDATE(used_events,used_bytes,used_deliveries,reserved_events,reserved_bytes,reserved_deliveries) ON heimdall_capacity.policy TO public_capacity_runtime",'cli_activation')
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-public-capacity.test.ts'],env=ready_env)
-  subprocess.run(['go','test','-race','-count=1','.', '-run','^TestPublicCapacity$'],cwd=ROOT/'sdk/go',env=ready_env,check=True)
+  go('^TestLegacyPublicCapacityHistory$',ready_env)
   # Retention preparation is an offline transaction over the activated v3 history.
   retention_prepare=['--prepare-retention-upgrade','--writers-drained','--sql-directory',source,'--retention-rows','1000','--retention-bytes','8192000']
   for database in ['retention_prepare','retention_prepare_loss','retention_prepare_late','retention_prepare_small','retention_prepare_partial','retention_prepare_catalog']:
@@ -306,6 +305,12 @@ try:
   stable=retention_snapshot('retention_activation_loss');cli(retention_activate,'retention_activation_loss');assert retention_snapshot('retention_activation_loss')==stable
   cli(retention_activate,'retention_empty')
   print('Retention activation passed: read-only semantic revalidation, atomic publication, old-writer exclusion, TS/Go readiness and lost COMMIT retry',flush=True)
+  # Public factories run on an independent activated clone; v3 migration history stays fixed.
+  sql('CREATE DATABASE public_v4_capacity TEMPLATE retention_activation')
+  sql("GRANT USAGE ON SCHEMA heimdall,heimdall_capacity,heimdall_retention TO public_capacity_runtime; GRANT SELECT ON ALL TABLES IN SCHEMA heimdall,heimdall_capacity,heimdall_retention TO public_capacity_runtime; GRANT INSERT ON heimdall.audit_events,heimdall.audit_deliveries,heimdall_capacity.event_charges TO public_capacity_runtime; GRANT INSERT,UPDATE ON heimdall.audit_decisions,heimdall_capacity.reservations,heimdall_retention.event_identities,heimdall_retention.decision_identities TO public_capacity_runtime; GRANT UPDATE(used_events,used_bytes,used_deliveries,reserved_events,reserved_bytes,reserved_deliveries) ON heimdall_capacity.policy TO public_capacity_runtime; GRANT UPDATE(used_rows,reserved_rows) ON heimdall_retention.capacity TO public_capacity_runtime", 'public_v4_capacity')
+  public_env=dict(env,HEIMDALL_TEST_CAPACITY_READY_URL=dsn('public_v4_capacity'))
+  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-public-capacity.test.ts'],env=public_env)
+  subprocess.run(['go','test','-race','-count=1','.', '-run','^TestPublicCapacity$'],cwd=ROOT/'sdk/go',env=public_env,check=True)
   sql('CREATE ROLE retained_runtime_profile','retention_activation')
   runtime_grants="GRANT USAGE ON SCHEMA heimdall,heimdall_capacity,heimdall_retention TO retained_runtime_profile; GRANT SELECT ON heimdall.schema_metadata,heimdall.migrations,heimdall.audit_events,heimdall.audit_deliveries,heimdall.audit_decisions TO retained_runtime_profile; GRANT SELECT ON ALL TABLES IN SCHEMA heimdall_capacity,heimdall_retention TO retained_runtime_profile; GRANT INSERT ON heimdall.audit_events,heimdall.audit_deliveries,heimdall_capacity.event_charges TO retained_runtime_profile; GRANT INSERT,UPDATE ON heimdall.audit_decisions,heimdall_capacity.reservations,heimdall_retention.event_identities,heimdall_retention.decision_identities TO retained_runtime_profile; GRANT UPDATE(used_events,used_bytes,used_deliveries,reserved_events,reserved_bytes,reserved_deliveries) ON heimdall_capacity.policy TO retained_runtime_profile; GRANT UPDATE(used_rows,reserved_rows) ON heimdall_retention.capacity TO retained_runtime_profile"
   def runtime_profile(language,selected):

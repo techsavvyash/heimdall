@@ -95,7 +95,7 @@ func (s *SessionRecords) writeSession(ctx context.Context, key, revision string,
 	if err != nil {
 		return nil, err
 	}
-	return identityTransaction(ctx, r.db, identityLock(r.product, r.environment, identity), func(ctx context.Context, tx *sql.Tx) (*Record, error) {
+	return identityTransaction(ctx, r.db, identityLock(r.product, r.environment, identity), false, func(ctx context.Context, tx *sql.Tx) (*Record, error) {
 		var denied bool
 		if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM heimdall.identity_denials WHERE product_id=$1 AND environment=$2 AND identity_hash=$3)", r.product, r.environment, identity).Scan(&denied); err != nil {
 			return nil, err

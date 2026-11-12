@@ -66,11 +66,13 @@ func migrate(ctx context.Context, db *sql.DB, migration []byte, family string) e
 		return databaseError(ctx)
 	}
 	if family == "managed" {
-		var baseReady, capacityExists bool
-		if err = tx.QueryRowContext(ctx, "SELECT to_regnamespace('heimdall_capacity') IS NOT NULL").Scan(&capacityExists); err != nil {
+		var baseReady, capacityExists, retentionExists bool
+		if err = tx.QueryRowContext(ctx, "SELECT to_regnamespace('heimdall_capacity') IS NOT NULL, to_regnamespace('heimdall_retention') IS NOT NULL").Scan(&capacityExists, &retentionExists); err != nil {
 			return databaseError(ctx)
 		}
-		if capacityExists {
+		if retentionExists {
+			err = tx.QueryRowContext(ctx, retentionReadinessSQL, retentionReadinessArgs()...).Scan(&baseReady)
+		} else if capacityExists {
 			err = tx.QueryRowContext(ctx, capacityReadinessSQL, sessionChecksum, decisionChecksum, capacityUpgradeChecksums[0], capacityUpgradeChecksums[1]).Scan(&baseReady)
 		} else {
 			err = tx.QueryRowContext(ctx, "SELECT old.ready OR upgraded.ready FROM ("+readinessSQL+") old CROSS JOIN ("+auditReadinessSQL+") upgraded", sessionChecksum, decisionChecksum).Scan(&baseReady)

@@ -523,15 +523,14 @@ Deployment commands take the exclusive advisory lock. An audit append already
 holding shared admission completes before a cooperating transition; an append
 waiting behind a transition reads the resulting metadata before writing. The
 ordinary runtime role receives no metadata writes, DDL, event UPDATE/DELETE or
-decision DELETE. Startup/readiness does not attest all privileges, and this audit
-admission protocol does not fence unrelated record/identity writes or uncooperative
-processes. External stop/drain requirements remain unchanged.
+decision DELETE. Startup/readiness does not attest all privileges, and current public v4 admission also fences identity invalidations. Internal record/session
+primitives and uncooperative processes still require external draining. External stop/drain requirements remain unchanged.
 
-See core-runtime.md for current grants and mixed audit-v3/managed-v1 readiness.
+See core-runtime.md for current grants and mixed audit-v4/managed-v1 readiness.
 The underlying v1 primitives and deployment compatibility checks remain tested;
-they are not an option to bypass v3 in public factories. Live public-factory proof
-is tests/integration/public-runtime-v3.py; legacy and bearer-runtime regressions
-use separate v1 and activated-v3 databases in postgres-records.py.
+they are not an option to bypass v4 in public factories. Live public-factory proof
+is tests/integration/public-runtime-v4.py; legacy and bearer-runtime regressions
+use separate v1 and activated-v4 databases in postgres-records.py.
 
 ## V3 recovery admission
 

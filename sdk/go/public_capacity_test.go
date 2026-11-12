@@ -36,10 +36,10 @@ func TestPublicCapacity(t *testing.T) {
 		t.Fatal(e)
 	}
 	for _, event := range []map[string]any{f.Request, f.Normal, f.Ordinary} {
-		event["productId"] = "public-go"
+		event["productId"] = "retained-public-go"
 		event["environment"] = "production"
 	}
-	storage, e := postgres.NewStorage(db, postgres.StorageOptions{ProductID: "public-go", Environment: "production", AuditSinks: []string{"siem"}})
+	storage, e := postgres.NewStorage(db, postgres.StorageOptions{ProductID: "retained-public-go", Environment: "production", AuditSinks: []string{"siem"}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -52,7 +52,7 @@ func TestPublicCapacity(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer func() {
-		if _, e := admin.Exec("UPDATE heimdall.schema_metadata SET state='ready',database_version=3; UPDATE heimdall_capacity.policy SET event_limit=" + strconv.FormatInt(original, 10) + "; UPDATE heimdall_capacity.upgrade SET event_limit=" + strconv.FormatInt(original, 10)); e != nil {
+		if _, e := admin.Exec("UPDATE heimdall.schema_metadata SET state='ready',database_version=4; UPDATE heimdall_capacity.policy SET event_limit=" + strconv.FormatInt(original, 10) + "; UPDATE heimdall_capacity.upgrade SET event_limit=" + strconv.FormatInt(original, 10)); e != nil {
 			t.Fatal(e)
 		}
 	}()
@@ -80,7 +80,7 @@ func TestPublicCapacity(t *testing.T) {
 	}
 	for _, table := range []string{"heimdall.audit_events", "heimdall_capacity.event_charges"} {
 		var n int
-		if e = admin.QueryRow("SELECT count(*) FROM " + table + " WHERE product_id='public-go'").Scan(&n); e != nil || n != 2 {
+		if e = admin.QueryRow("SELECT count(*) FROM " + table + " WHERE product_id='retained-public-go'").Scan(&n); e != nil || n != 2 {
 			t.Fatal(n, e)
 		}
 	}

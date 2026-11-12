@@ -27,7 +27,7 @@ func (a *Audit) AppendRetained(ctx context.Context, event map[string]any) (contr
 	if e = contract.CheckCancellation(ctx); e != nil {
 		return empty, e
 	}
-	conn, e := a.retainedConnection(ctx)
+	conn, e := retainedConnection(ctx, a.db, a.retainedRuntime)
 	if e != nil {
 		return empty, databaseError(ctx)
 	}
