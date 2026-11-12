@@ -21,7 +21,7 @@ sequenceDiagram
     SDK->>DB: Write the administrative audit and retained identity
     SDK->>DB: Insert retirement marker and recheck locked group
     SDK->>DB: Remove group payloads and release their charges
-    SDK->>DB: Commit marker removal and audit together
+    SDK->>DB: Commit marker and audit with payload deletion
     SDK-->>Caller: Durable audit receipt
   else Target is protected or invalid
     SDK->>DB: Roll back
@@ -49,12 +49,13 @@ recovered groups, quota accounting, protected and wrong-scope refusal, late
 rollback and cross-language retries.
 
 Pinned PostgreSQL run `heimdall-capacity-backfill-9d66d781b16447a8aea61e788f758493`
-passed the retirement profile. It retired groups of one, two and three members.
+passed the full capacity and retention regression suite, including retirement
+of groups with one, two and three members.
 The tests checked held, pending, undelivered, young and wrong-tenant refusal,
 ordinary credential refusal, and late payload-delete rollback. Lost commit
-responses were injected for an ordinary group in Go and a recovered group in Go.
-TypeScript resolved the original receipts. A completed group retired in
-TypeScript and Go confirmed its exact retry. Each success added one compact
+responses were injected for ordinary and recovered groups in Go. TypeScript
+resolved the original receipts. A separate probe lost a TypeScript commit response
+for a completed group and Go recovered its original receipt without another write. Each success added one compact
 audit identity and one marker, preserved the group's compact identities, and
 reclaimed its payload charges. A separate read of the same database verified
 the payload, byte and delivery totals against the remaining charge rows.

@@ -520,14 +520,15 @@ try:
   print('v5 public factory proof passed in TS and Go',flush=True)
   # END v5 public factory proof
   # BEGIN audited retirement proof
+  retirement_grants=(runtime_grants.replace('retained_runtime_profile','retained_retirement_runtime')+
+    '; GRANT INSERT ON heimdall_retention.retirements TO retained_retirement_runtime; GRANT UPDATE(state) ON heimdall.audit_deliveries TO retained_retirement_runtime; GRANT DELETE ON heimdall.audit_events,heimdall.audit_deliveries,heimdall.audit_decisions,heimdall_capacity.event_charges,heimdall_capacity.reservations TO retained_retirement_runtime')
   database='retirement_runtime_v5'
   sql('CREATE DATABASE '+database+' TEMPLATE retained_holds_v4')
   sql('ALTER TABLE heimdall_retention.event_holds DROP CONSTRAINT test_late_hold_failure',database)
   cli(command,database)
   cli(activate_release,database)
   sql('CREATE ROLE retained_retirement_runtime',database)
-  sql(runtime_grants.replace('retained_runtime_profile','retained_retirement_runtime')+
-    '; GRANT INSERT ON heimdall_retention.retirements TO retained_retirement_runtime; GRANT UPDATE(state) ON heimdall.audit_deliveries TO retained_retirement_runtime; GRANT DELETE ON heimdall.audit_events,heimdall.audit_deliveries,heimdall.audit_decisions,heimdall_capacity.event_charges,heimdall_capacity.reservations TO retained_retirement_runtime',database)
+  sql(retirement_grants,database)
   role='&options=-c%20role%3Dretained_retirement_runtime'
   retirement_env=dict(env,HEIMDALL_TEST_RETIRE_URL=dsn(database)+role,HEIMDALL_TEST_RETIRE_ADMIN=dsn(database))
   def retire_test(language,settings):
@@ -571,6 +572,19 @@ try:
     ) c""",database)=='t'
   print('Audited retirement passed: all group shapes, refusal, restricted role, rollback and cross-language receipts',flush=True)
   # END audited retirement proof
+  # BEGIN TS retirement loss proof
+  database='retirement_runtime_ts_loss'
+  sql('CREATE DATABASE '+database+' TEMPLATE hold_release_public_v5')
+  sql(retirement_grants,database)
+  sql("UPDATE heimdall.audit_deliveries SET state='delivered',delivered_at=6001",database)
+  role='&options=-c%20role%3Dretained_retirement_runtime'
+  selected=dict(env,HEIMDALL_TEST_RETIRE_URL=dsn(database)+role,HEIMDALL_TEST_RETIRE_ADMIN=dsn(database),HEIMDALL_TEST_RETIRE_CASE='completed')
+  with CommitLossProxy(int(port)) as proxy:
+   retire_test('ts',dict(selected,HEIMDALL_TEST_RETIRE_EXPECT='outcome_unknown',HEIMDALL_TEST_RETIRE_URL=dsn(database,proxy.port)+role))
+   assert proxy.dropped.is_set() and not proxy.errors
+  retire_test('go',dict(selected,HEIMDALL_TEST_RETIRE_RETRY='1'))
+  print('TS retirement lost COMMIT recovered by Go without another write',flush=True)
+  # END TS retirement loss proof
   # BEGIN retained hold fault proof
   for language in ['ts','go']:
    database='retained_holds_loss_'+language
