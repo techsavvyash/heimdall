@@ -659,13 +659,11 @@ retry observes the immutable hold and administrative receipt; changed payloads
 conflict. An acquire retry after release returns its original receipt and never
 reactivates the hold. Missing/inconsistent hold-versus-audit state is not repaired.
 
-The existing hold row consumes one metadata slot. Release adds no hold-row charge
-and refunds no history, but its mandatory new administrative event still needs
-payload/outbox and retained-identity capacity. This implementation refuses if that
-capacity is unavailable. Safe administrative release at total capacity exhaustion
-still needs reserved audit capacity or another proven mechanism; the earlier SQL
-row-update proof with pre-existing audit references does not establish that runtime
-guarantee. This gap remains a Phase 3 acceptance obligation, not a waived requirement.
+The hold row consumes one metadata slot. Release keeps that slot and records an
+administrative event. On v4, the administrative event uses the ordinary
+payload, outbox and retained-identity budgets and the transaction refuses when
+they are exhausted. On v5, the transaction uses the hold's release reservation
+described below.
 
 Shared `audit-hold-storage.json` and the activated profile in
 `tests/integration/audit-capacity-backfill.py` cover atomic transitions, immutable

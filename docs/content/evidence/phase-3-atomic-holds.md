@@ -18,6 +18,9 @@ sequenceDiagram
   SDK->>DB: Begin and lock deployment and capacity
   SDK->>DB: Lock hold state and sorted group identities
   SDK->>SDK: Validate complete live target history
+  opt v5 release
+    SDK->>DB: Consume the scoped release reservation
+  end
   SDK->>DB: Write audit outbox retained identity and charges
   SDK->>DB: Insert hold or record immutable release
   alt Any validation or write fails
@@ -35,7 +38,7 @@ sequenceDiagram
 
 New transitions read at most three bounded group members and refuse malformed or
 inconsistent history. A terminal-member hold protects the complete decision. Missing
-or retired targets cannot acquire a new hold. The port validates primary v4
+or retired targets cannot acquire a new hold. The port validates primary v4 or v5
 readiness before returning even an exact retry. No migration runs implicitly.
 
 The hold row, administrative event, outbox, retained identity and both capacity
@@ -75,12 +78,9 @@ The port is internal. Actor authentication/authorization, configured policy look
 release-obligation evidence, bounded maintenance scheduling and retirement remain
 open. This does not enable a public purge or hold API.
 
-A release does not allocate another hold row, but its mandatory new audit event
-still consumes payload/outbox and retained-identity capacity. The port fails closed
-when that capacity is exhausted. Safe release at a completely full store needs a
-reserved audit budget or another tested solution before Phase 3 acceptance. The
-older SQL proof with a pre-existing administration reference does not prove this
-runtime property. See [[phase-3-readiness-audit]].
+On v4, a release draws its new audit event from the ordinary quota. On v5,
+the hold's reservation covers that event. The live v5 proof appears below.
+See [[phase-3-readiness-audit]] for the remaining Phase 3 requirements.
 
 ## Prepared release reservations
 
@@ -105,8 +105,8 @@ reservation consumption without a corresponding release. Separate probes on
 the same clone showed that a legacy audit charge and a hold release without
 consumption both roll back.
 
-This checkpoint prepares the physical schema. Explicit migration publication and
-TS/Go consumption of the reservation during an authorized release remain open.
+This profile covers the physical schema. The activation and SDK profiles below
+cover deployment and consumption.
 
 ## Explicit reservation preparation
 
@@ -121,8 +121,8 @@ The focused CLI profile ran on an isolated clone inside the pinned PostgreSQL
 run `heimdall-capacity-backfill-704a47fa7efb4d83ba387f3be999d91a`. It checked
 argument validation, read-only refusal, rollback when quota is insufficient,
 and retry after an injected lost commit response. A retry preserved existing
-reservations and refused aggregate count or schema drift. Activation and runtime
-reservation consumption remain pending.
+reservations and refused aggregate count or schema drift. The next section
+covers activation and runtime consumption.
 
 ## v5 activation and release at quota
 
@@ -143,7 +143,8 @@ original receipt without another write. The existing decision recovery reserves
 were preserved throughout. The public storage factories also passed their
 decision reservation tests on v5.
 
-A separate concurrency probe on the exact-fit clone ran the same release in
+The complete capacity and retention regression run also passed. A separate
+concurrency probe on the exact-fit clone ran the same release in
 both languages simultaneously and observed a single audit charge. That probe is
 included in the reproducible harness. Authorization and scheduling of maintenance
 operations and audited payload retirement remain open.
