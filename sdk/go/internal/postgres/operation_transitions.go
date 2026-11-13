@@ -44,9 +44,6 @@ func (o *OperationRecords) Advance(ctx context.Context, id string, actor contrac
 	if before == nil {
 		return nil, contract.ErrConflict
 	}
-	if m.RecoveryOperator != "" && before.Intent.Kind == "transfer_owner" {
-		return nil, contract.ErrConflict
-	}
 	dispatch := transition == "dispatch" || transition == "recover"
 	state, e := contract.NextOperationState(before.State, transition, before.DispatchCount, before.Generation, expected)
 	if e != nil {

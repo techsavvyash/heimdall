@@ -389,8 +389,6 @@ export class OperationRecords {
       b = this.binding;
     const before = await this.read(operationId, actorHash, false, signal);
     if (!before) throw new HeimdallError("conflict");
-    if (m.recoveryOperator !== undefined && before.intent.kind === "transfer_owner")
-      throw new HeimdallError("conflict");
     const dispatch = transition === "dispatch" || transition === "recover";
     const state = nextOperationState(
       before.state,

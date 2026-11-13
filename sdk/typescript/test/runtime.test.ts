@@ -1,4 +1,8 @@
-import { recoverMembership, recoverWorkspaceCreation } from "../src/provisioning/index.js";
+import {
+  recoverMembership,
+  recoverOwnershipTransfer,
+  recoverWorkspaceCreation,
+} from "../src/provisioning/index.js";
 import { Pool } from "pg";
 import { createManagedPostgresStorage, createPostgresStorage } from "../src/postgres.js";
 import { readFileSync } from "node:fs";
@@ -31,7 +35,7 @@ function setup(failure = "", environment = "production") {
   if (failure === "issuer") metadata.issuer += "/";
   if (failure === "introspection") metadata.introspection_endpoint = token.issuer + "/unexpected";
   const events: Record<string, unknown>[] = [];
-  const fga = { writes: 0, fault: "none" };
+  const fga = { writes: 0, fault: "none", ownerCount: 0 };
   const tuples: { user: string; object: string; relation: string }[] = [];
   const order: string[] = [];
   const options: RuntimeOptions = {
@@ -111,7 +115,19 @@ function setup(failure = "", environment = "production") {
           tuples.splice(index, 1);
         }
         tuples.push(...(mutation.writes?.tuple_keys ?? []));
-        if (fga.fault === "lost_response") throw new Error("simulated lost response");
+        const owner = artifact.roles[base.manifest.ownerRole]!.assignment;
+        const object = (mutation.writes?.tuple_keys ?? mutation.deletes?.tuple_keys)?.[0]?.object;
+        fga.ownerCount = tuples.filter(
+          (tuple) => tuple.object === object && tuple.relation === owner,
+        ).length;
+        if (
+          fga.fault === "lost_response" ||
+          (fga.fault === "lost_owner_delete" &&
+            mutation.deletes?.tuple_keys.some(
+              (tuple: { relation: string }) => tuple.relation === owner,
+            ))
+        )
+          throw new Error("simulated lost response");
         return Response.json({});
       }
       if (url.endsWith("/check")) {
@@ -827,6 +843,75 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         );
         expect(indexed.rows[0]?.count).toBe(item.candidates);
       }
+      const ownership = read("ownership-transfer.json");
+      for (const scenario of ownership.cases) {
+        const created = await api.create(
+          actor,
+          { name: scenario.fault, idempotencyKey: "workspace-" + scenario.fault },
+          call,
+        );
+        const operations = runtime.tenant(created.workspaceId).memberships!;
+        const input = { target, idempotencyKey: "transfer-" + scenario.fault };
+        await expect(operations.transferOwnership(actor, input, call)).rejects.toThrow("conflict");
+        await operations.add(
+          actor,
+          {
+            target,
+            roles: fixtureMembership.initialRoles,
+            idempotencyKey: "prepare-" + scenario.fault,
+          },
+          call,
+        );
+        await expect(
+          operations.transferOwnership(
+            actor,
+            {
+              target: { issuer: actor.issuer, subject: actor.subject },
+              idempotencyKey: "self",
+            },
+            call,
+          ),
+        ).rejects.toThrow("invalid_argument");
+        const before = s.fga.writes;
+        s.fga.fault = scenario.fault;
+        const pending = await operations.transferOwnership(actor, input, call);
+        expect(pending).toMatchObject({ status: "pending", reason: "recovery_required" });
+        expect(s.fga.ownerCount).toBe(scenario.ownersAfterFault);
+        expect(await operations.transferOwnership(actor, input, call)).toEqual(pending);
+        expect(await s.options.storage.managed!.allows(created.workspaceId, call.signal)).toBe(
+          false,
+        );
+        const state = await admin.query(
+          "SELECT generation FROM heimdall_managed.operations WHERE environment='onboarding-ts' AND operation_id=$1",
+          [pending.operationId],
+        );
+        s.fga.fault = "none";
+        const result = await recoverOwnershipTransfer(
+          pool,
+          JSON.stringify(s.config),
+          JSON.stringify(base.manifest),
+          {
+            operationId: pending.operationId,
+            expectedGeneration: Number(state.rows[0]?.generation),
+            policyVersion: "p1",
+            initiatingActor: { issuer: actor.issuer, subject: actor.subject },
+            recoveryToken: "new-key",
+            auditSinks: ["siem"],
+            verifyQuiescence: async (scope) => {
+              expect(scope.kind).toBe("transfer_owner");
+              return { operatorId: "operator", evidenceId: "ownership-drain" };
+            },
+          },
+          call.signal,
+        );
+        expect(await operations.transferOwnership(actor, input, call)).toEqual(result);
+        expect(await s.options.storage.managed!.allows(created.workspaceId, call.signal)).toBe(
+          true,
+        );
+        expect(s.fga.ownerCount).toBe(1);
+        expect(s.fga.writes - before).toBe(scenario.totalWrites);
+        expect(await runtime.tenant(created.workspaceId).roles(actor, call)).toEqual([]);
+      }
       const counts = await admin.query(
         "SELECT count(*)::int AS count FROM heimdall.audit_deliveries WHERE environment='onboarding-ts' AND sink_id='siem'",
       );
@@ -836,8 +921,10 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       );
       const recoveryEvents = audit.rows
         .map(({ payload }) => JSON.parse(Buffer.from(payload, "base64url").toString()))
-        .filter((event) => ["drain-record", "membership-drain"].includes(event.requestId));
-      expect(recoveryEvents).toHaveLength(15);
+        .filter((event) =>
+          ["drain-record", "membership-drain", "ownership-drain"].includes(event.requestId),
+        );
+      expect(recoveryEvents).toHaveLength(21);
       expect(
         recoveryEvents.every(
           (event) => event.actor.kind === "system" && event.actor.id === "operator",

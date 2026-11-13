@@ -3,6 +3,7 @@ import type { Principal } from "../runtime.js";
 import type { AuditedAuthentication } from "./audited-authentication.js";
 import type { PinnedModel } from "./model-binding.js";
 import { HeimdallError, checkCancellation } from "./errors.js";
+import { planOwnershipTransfer } from "./ownership-transfer.js";
 import { planMembership } from "./membership-mutation.js";
 import { intentDigests, type Intent } from "./operations.js";
 import type { ManagedOperation, OperationRecords } from "./postgres/operations.js";
@@ -23,6 +24,11 @@ export type MembershipStatus = Readonly<{
 export type Memberships = Readonly<{
   add(actor: Principal, input: RolesInput, call: Call): Promise<MembershipStatus>;
   assignRoles(actor: Principal, input: RolesInput, call: Call): Promise<MembershipStatus>;
+  transferOwnership(
+    actor: Principal,
+    input: MembershipInput,
+    call: Call,
+  ): Promise<MembershipStatus>;
   remove(actor: Principal, input: MembershipInput, call: Call): Promise<MembershipStatus>;
 }>;
 
@@ -54,7 +60,7 @@ export function managedMemberships(
   model: PinnedModel,
 ): Memberships {
   async function mutate(
-    kind: "add_member" | "assign_roles" | "remove_member",
+    kind: "add_member" | "assign_roles" | "remove_member" | "transfer_owner",
     principal: Principal,
     input: MembershipInput | RolesInput,
     call: Call,
@@ -66,7 +72,8 @@ export function managedMemberships(
     if (!auth.owns(principal)) throw new HeimdallError("unauthenticated");
     const roles = "roles" in input && Array.isArray(input.roles) ? [...input.roles] : [];
     if (
-      (kind !== "remove_member" && !Array.isArray((input as RolesInput).roles)) ||
+      ((kind === "add_member" || kind === "assign_roles") &&
+        !Array.isArray((input as RolesInput).roles)) ||
       input.target.issuer !== config.issuer
     )
       throw new HeimdallError("invalid_argument");
@@ -91,7 +98,7 @@ export function managedMemberships(
     const allowed = await auth.checkPermission(
       principal,
       workspaceId,
-      "membership." + kind,
+      kind === "transfer_owner" ? "ownership.transfer" : "membership." + kind,
       config.openfga.modelId,
       config.manifestVersion,
       async (operation) => {
@@ -105,7 +112,10 @@ export function managedMemberships(
         )
           return false;
         revision = workspace.revision;
-        apply = await planMembership(model, ownerRole, intent, operation);
+        apply =
+          kind === "transfer_owner"
+            ? await planOwnershipTransfer(model, ownerRole, intent, operation)
+            : await planMembership(model, ownerRole, intent, operation);
         return true;
       },
       signal,
@@ -173,6 +183,7 @@ export function managedMemberships(
   return Object.freeze({
     add: (actor, input, call) => mutate("add_member", actor, input, call),
     assignRoles: (actor, input, call) => mutate("assign_roles", actor, input, call),
+    transferOwnership: (actor, input, call) => mutate("transfer_owner", actor, input, call),
     remove: (actor, input, call) => mutate("remove_member", actor, input, call),
   });
 }

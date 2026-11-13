@@ -29,6 +29,7 @@ import (
 type runtimeHarness struct {
 	checks           atomic.Int64
 	writes           atomic.Int64
+	owners           atomic.Int64
 	providerFault    atomic.Value
 	config, manifest []byte
 	options          heimdall.Options
@@ -70,7 +71,7 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 	expiresAt := time.Now().Add(time.Hour).Unix()
 	var issuer string
 	var model map[string]any
-	var ownerRelation string
+	var ownerRelation, ownerEffective string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		var body any
@@ -129,8 +130,22 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 				})
 			}
 			tuples = append(tuples, write.Writes.Tuples...)
+			object := ""
+			for _, changes := range [][]map[string]string{write.Writes.Tuples, write.Deletes.Tuples} {
+				if len(changes) > 0 {
+					object = changes[0]["object"]
+				}
+			}
+			var owners int64
+			for _, tuple := range tuples {
+				if tuple["object"] == object && tuple["relation"] == ownerRelation {
+					owners++
+				}
+			}
+			h.owners.Store(owners)
 			tupleMu.Unlock()
-			if h.providerFault.Load() == "lost_response" {
+			if h.providerFault.Load() == "lost_response" || (h.providerFault.Load() == "lost_owner_delete" &&
+				slices.ContainsFunc(write.Deletes.Tuples, func(tuple map[string]string) bool { return tuple["relation"] == ownerRelation })) {
 				panic(http.ErrAbortHandler)
 			}
 			body = map[string]any{}
@@ -158,7 +173,7 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 					check.Tuple["relation"] == "member" && tuple["relation"] == "member"
 			}
 			tupleMu.Unlock()
-			if strings.HasPrefix(check.Tuple["relation"], "d_") {
+			if strings.HasPrefix(check.Tuple["relation"], "d_") || check.Tuple["relation"] == ownerEffective {
 				tupleMu.Lock()
 				owner, member := false, false
 				for _, tuple := range tuples {
@@ -199,7 +214,8 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 		t.Fatal(e)
 	}
 	model = deployment.Artifact().Model
-	ownerRelation = deployment.Artifact().Roles[deployment.Manifest().OwnerRole].Assignment
+	ownerRole := deployment.Artifact().Roles[deployment.Manifest().OwnerRole]
+	ownerRelation, ownerEffective = ownerRole.Assignment, ownerRole.Effective
 	model["id"] = "model-1"
 	if failure == "model" {
 		model["id"] = "wrong"
@@ -1010,11 +1026,80 @@ func TestPublicManagedOnboarding(t *testing.T) {
 			t.Fatal("candidate recovery", candidateCount, err)
 		}
 	}
+	var ownership struct {
+		Cases []struct {
+			Fault                         string
+			OwnersAfterFault, TotalWrites int64
+		}
+	}
+	raw, err = os.ReadFile("../../contracts/fixtures/ownership-transfer.json")
+	if err != nil || json.Unmarshal(raw, &ownership) != nil {
+		t.Fatal("ownership fixture")
+	}
+	for _, scenario := range ownership.Cases {
+		created, err := api.Create(ctx, actor, heimdall.WorkspaceCreateInput{Name: scenario.Fault, IdempotencyKey: "workspace-" + scenario.Fault})
+		if err != nil || created.Status != "active" {
+			t.Fatal("create workspace", created, err)
+		}
+		tenant := client.Tenant(created.WorkspaceID)
+		operations := tenant.Memberships()
+		input := heimdall.MembershipInput{Target: target, IdempotencyKey: "transfer-" + scenario.Fault}
+		if _, err := operations.TransferOwnership(ctx, actor, input); !errors.Is(err, heimdall.ErrConflict) {
+			t.Fatal("nonmember target", err)
+		}
+		if _, err := operations.Add(ctx, actor, heimdall.MembershipRolesInput{
+			MembershipInput: heimdall.MembershipInput{Target: target, IdempotencyKey: "prepare-" + scenario.Fault}, Roles: mutation.InitialRoles,
+		}); err != nil {
+			t.Fatal("prepare recipient", err)
+		}
+		if _, err := operations.TransferOwnership(ctx, actor, heimdall.MembershipInput{Target: actor.Identity(), IdempotencyKey: "self-" + scenario.Fault}); !errors.Is(err, heimdall.ErrInvalidArgument) {
+			t.Fatal("self transfer", err)
+		}
+		before := h.writes.Load()
+		h.providerFault.Store(scenario.Fault)
+		pending, err := operations.TransferOwnership(ctx, actor, input)
+		if err != nil || pending.Reason != "recovery_required" || h.owners.Load() != scenario.OwnersAfterFault {
+			t.Fatal("transfer quarantine", pending, err, h.owners.Load())
+		}
+		if again, err := operations.TransferOwnership(ctx, actor, input); err != nil || again != pending {
+			t.Fatal("quarantine replay", again, err)
+		}
+		if allowed, err := h.options.Storage.Managed.Allows(ctx, created.WorkspaceID); err != nil || allowed {
+			t.Fatal("gate", err)
+		}
+		var generation int64
+		if err := admin.QueryRow("SELECT generation FROM heimdall_managed.operations WHERE environment='onboarding-go' AND operation_id=$1", pending.OperationID).Scan(&generation); err != nil {
+			t.Fatal(err)
+		}
+		h.providerFault.Store("none")
+		result, err := provisioning.RecoverOwnershipTransfer(ctx, db, h.config, h.manifest, provisioning.WorkspaceRecoveryOptions{
+			OperationID: pending.OperationID, ExpectedGeneration: generation, PolicyVersion: "p1",
+			InitiatingIssuer: actor.Identity().Issuer, InitiatingSubject: actor.Identity().Subject, RecoveryToken: "new-key", AuditSinks: []string{"siem"},
+			VerifyQuiescence: func(_ context.Context, scope provisioning.WorkspaceRecoveryScope) (provisioning.WorkspaceRecoveryEvidence, error) {
+				if scope.Kind != "transfer_owner" {
+					return provisioning.WorkspaceRecoveryEvidence{}, heimdall.ErrForbidden
+				}
+				return provisioning.WorkspaceRecoveryEvidence{OperatorID: "operator", EvidenceID: "ownership-drain"}, nil
+			},
+		})
+		if err != nil || result.Status != "confirmed" || h.owners.Load() != 1 || h.writes.Load()-before != scenario.TotalWrites {
+			t.Fatal("recovered transfer", result, err, h.owners.Load())
+		}
+		if again, err := operations.TransferOwnership(ctx, actor, input); err != nil || again.Status != "confirmed" || again.OperationID != pending.OperationID {
+			t.Fatal("completed replay", again, err)
+		}
+		if allowed, err := h.options.Storage.Managed.Allows(ctx, created.WorkspaceID); err != nil || !allowed {
+			t.Fatal("completed gate", err)
+		}
+		if roles, err := tenant.Roles(ctx, actor); err != nil || len(roles) != 0 {
+			t.Fatal("former owner roles", roles, err)
+		}
+	}
 	var recoveryCount int
 	if err := admin.QueryRow(`SELECT count(*) FROM heimdall.audit_events WHERE environment='onboarding-go'
 		AND convert_from(decode(translate(event->>'payload','-_','+/') ||
 		repeat('=', (4-length(event->>'payload')%4)%4), 'base64'),'UTF8')::jsonb
-		->>'requestId' IN ('drain-record','membership-drain')`).Scan(&recoveryCount); err != nil || recoveryCount != 15 {
+		->>'requestId' IN ('drain-record','membership-drain','ownership-drain')`).Scan(&recoveryCount); err != nil || recoveryCount != 21 {
 		t.Fatal("recovery audit", recoveryCount, err)
 	}
 	var count int

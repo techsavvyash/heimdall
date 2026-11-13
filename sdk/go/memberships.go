@@ -56,6 +56,11 @@ func (m *Memberships) Remove(ctx context.Context, actor *Principal, input Member
 	return m.mutate(ctx, actor, "remove_member", MembershipRolesInput{MembershipInput: input, Roles: []string{}})
 }
 
+// TransferOwnership promotes an eligible existing member before removing the actor's owner grant.
+func (m *Memberships) TransferOwnership(ctx context.Context, actor *Principal, input MembershipInput) (MembershipStatus, error) {
+	return m.mutate(ctx, actor, "transfer_owner", MembershipRolesInput{MembershipInput: input, Roles: []string{}})
+}
+
 func memberStatus(op *postgres.ManagedOperation) MembershipStatus {
 	result := MembershipStatus{OperationID: op.OperationID, WorkspaceID: op.WorkspaceID, Status: "pending"}
 	switch op.State {
@@ -94,7 +99,11 @@ func (m *Memberships) mutate(ctx context.Context, principal *Principal, kind str
 	var existing *postgres.ManagedOperation
 	var revision string
 	var apply func(context.Context, string) error
-	allowed, err := w.auth.CheckPermission(ctx, principal, workspaceID, "membership."+kind,
+	action := "membership." + kind
+	if kind == "transfer_owner" {
+		action = "ownership.transfer"
+	}
+	allowed, err := w.auth.CheckPermission(ctx, principal, workspaceID, action,
 		w.cfg.OpenFGA.ModelID, w.cfg.ManifestVersion, func(operation context.Context) (bool, error) {
 			var err error
 			existing, err = w.records.FindIntent(operation, intent, input.IdempotencyKey)
@@ -109,7 +118,11 @@ func (m *Memberships) mutate(ctx context.Context, principal *Principal, kind str
 				return false, err
 			}
 			revision = workspace.Revision
-			apply, err = port.model.PlanMembership(operation, port.ownerRole, intent)
+			if kind == "transfer_owner" {
+				apply, err = port.model.PlanOwnershipTransfer(operation, port.ownerRole, intent, false)
+			} else {
+				apply, err = port.model.PlanMembership(operation, port.ownerRole, intent)
+			}
 			return err == nil, err
 		})
 	if err != nil {

@@ -1,3 +1,4 @@
+import { planOwnershipTransfer } from "../internal/ownership-transfer.js";
 import { PinnedModel } from "../internal/model-binding.js";
 import { planMembership } from "../internal/membership-mutation.js";
 import { randomUUID } from "node:crypto";
@@ -46,7 +47,9 @@ export async function recoverWorkspaceCreation(
   options: WorkspaceRecoveryOptions,
   caller: AbortSignal,
 ) {
-  const result = await recoverOperation(pool, configJSON, manifestJSON, options, caller, true);
+  const result = await recoverOperation(pool, configJSON, manifestJSON, options, caller, [
+    "create_workspace",
+  ]);
   return { ...result, status: "active" as const };
 }
 
@@ -58,7 +61,25 @@ export async function recoverMembership(
   options: WorkspaceRecoveryOptions,
   caller: AbortSignal,
 ) {
-  const result = await recoverOperation(pool, configJSON, manifestJSON, options, caller, false);
+  const result = await recoverOperation(pool, configJSON, manifestJSON, options, caller, [
+    "add_member",
+    "assign_roles",
+    "remove_member",
+  ]);
+  return { ...result, status: "confirmed" as const };
+}
+
+/** Finish a recorded ownership transfer after verifying writer quiescence. */
+export async function recoverOwnershipTransfer(
+  pool: Pool,
+  configJSON: string,
+  manifestJSON: string,
+  options: WorkspaceRecoveryOptions,
+  caller: AbortSignal,
+) {
+  const result = await recoverOperation(pool, configJSON, manifestJSON, options, caller, [
+    "transfer_owner",
+  ]);
   return { ...result, status: "confirmed" as const };
 }
 
@@ -68,7 +89,7 @@ async function recoverOperation(
   manifestJSON: string,
   options: WorkspaceRecoveryOptions,
   caller: AbortSignal,
-  creating: boolean,
+  kinds: readonly string[],
 ) {
   const { config, artifact, manifest } = parseDeployment(configJSON, manifestJSON);
   const { operationId, expectedGeneration, policyVersion, recoveryToken, verifyQuiescence } =
@@ -95,13 +116,7 @@ async function recoverOperation(
   };
   const records = OperationRecords.forRetainedRuntime(pool, binding, options.auditSinks);
   let op = await records.get(operationId, actor, signal);
-  if (
-    !op ||
-    (creating
-      ? op.intent.kind !== "create_workspace"
-      : !["add_member", "assign_roles", "remove_member"].includes(op.intent.kind))
-  )
-    throw new HeimdallError("not_found");
+  if (!op || !kinds.includes(op.intent.kind)) throw new HeimdallError("not_found");
   if (op.generation !== expectedGeneration || !["uncertain", "dispatching"].includes(op.state))
     throw new HeimdallError("conflict", operationId);
   const scope = Object.freeze({
@@ -150,7 +165,7 @@ async function recoverOperation(
   op = await advance(op, "recover", signal);
   const quarantine = new HeimdallError("outcome_unknown", operationId);
   try {
-    if (creating) {
+    if (op.intent.kind === "create_workspace") {
       await ensureTenantOwner(
         configJSON,
         manifestJSON,
@@ -173,7 +188,10 @@ async function recoverOperation(
         artifact,
         async () => recoveryToken,
       );
-      const apply = await planMembership(model, manifest.ownerRole, op.intent, signal, true);
+      const apply =
+        op.intent.kind === "transfer_owner"
+          ? await planOwnershipTransfer(model, manifest.ownerRole, op.intent, signal, true)
+          : await planMembership(model, manifest.ownerRole, op.intent, signal, true);
       await apply(operationId, signal);
     }
   } catch (error) {

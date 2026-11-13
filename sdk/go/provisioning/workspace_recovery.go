@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/techsavvyash/heimdall/sdk/go/internal/configuration"
@@ -38,15 +39,20 @@ type WorkspaceRecoveryResult struct {
 
 // RecoverWorkspaceCreation requires a trusted maintenance caller to keep the deployment drained throughout.
 func RecoverWorkspaceCreation(ctx context.Context, db *sql.DB, configJSON, manifestJSON []byte, options WorkspaceRecoveryOptions) (WorkspaceRecoveryResult, error) {
-	return recoverOperation(ctx, db, configJSON, manifestJSON, options, true)
+	return recoverOperation(ctx, db, configJSON, manifestJSON, options, "create_workspace")
 }
 
 // RecoverMembership completes an audited add, role replacement or removal under operator quiescence.
 func RecoverMembership(ctx context.Context, db *sql.DB, configJSON, manifestJSON []byte, options WorkspaceRecoveryOptions) (WorkspaceRecoveryResult, error) {
-	return recoverOperation(ctx, db, configJSON, manifestJSON, options, false)
+	return recoverOperation(ctx, db, configJSON, manifestJSON, options, "add_member", "assign_roles", "remove_member")
 }
 
-func recoverOperation(ctx context.Context, db *sql.DB, configJSON, manifestJSON []byte, options WorkspaceRecoveryOptions, creating bool) (WorkspaceRecoveryResult, error) {
+// RecoverOwnershipTransfer finishes the recorded transfer after verifying writer quiescence.
+func RecoverOwnershipTransfer(ctx context.Context, db *sql.DB, configJSON, manifestJSON []byte, options WorkspaceRecoveryOptions) (WorkspaceRecoveryResult, error) {
+	return recoverOperation(ctx, db, configJSON, manifestJSON, options, "transfer_owner")
+}
+
+func recoverOperation(ctx context.Context, db *sql.DB, configJSON, manifestJSON []byte, options WorkspaceRecoveryOptions, kinds ...string) (WorkspaceRecoveryResult, error) {
 	empty := WorkspaceRecoveryResult{}
 	configJSON, manifestJSON = append([]byte(nil), configJSON...), append([]byte(nil), manifestJSON...)
 	d, err := configuration.Parse(configJSON, manifestJSON)
@@ -75,8 +81,7 @@ func recoverOperation(ctx context.Context, db *sql.DB, configJSON, manifestJSON 
 	if err != nil {
 		return empty, err
 	}
-	if op == nil || (creating && op.Intent.Kind != "create_workspace") ||
-		(!creating && op.Intent.Kind != "add_member" && op.Intent.Kind != "assign_roles" && op.Intent.Kind != "remove_member") {
+	if op == nil || !slices.Contains(kinds, op.Intent.Kind) {
 		return empty, contract.ErrNotFound
 	}
 	conflict := contract.NewError(contract.Conflict, id)
@@ -121,7 +126,7 @@ func recoverOperation(ctx context.Context, db *sql.DB, configJSON, manifestJSON 
 		return empty, err
 	}
 	status := "confirmed"
-	if creating {
+	if op.Intent.Kind == "create_workspace" {
 		status = "active"
 		target := op.Intent.Target
 		_, err = EnsureTenantOwner(ctx, configJSON, manifestJSON, options.RecoveryToken, TenantOwnerInput{
@@ -139,7 +144,11 @@ func recoverOperation(ctx context.Context, db *sql.DB, configJSON, manifestJSON 
 		err = modelErr
 		if err == nil {
 			var apply func(context.Context, string) error
-			apply, err = model.PlanMembershipRecovery(ctx, manifest.OwnerRole, op.Intent)
+			if op.Intent.Kind == "transfer_owner" {
+				apply, err = model.PlanOwnershipTransfer(ctx, manifest.OwnerRole, op.Intent, true)
+			} else {
+				apply, err = model.PlanMembershipRecovery(ctx, manifest.OwnerRole, op.Intent)
+			}
 			if err == nil {
 				err = apply(ctx, id)
 			}
