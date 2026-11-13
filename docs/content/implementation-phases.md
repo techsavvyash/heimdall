@@ -31,7 +31,7 @@ Audit persistence is built before authorization results can be released; enterpr
 
 **Phases 1 through 4 are complete. Phase 5 covers provisioning and administration.**
 
-[[evidence/phase-4-acceptance|Phase 4 acceptance]] records the browser, authorization, workspace discovery and deployed product results. [[evidence/phase-5-setup-journal|Phase 5 setup journal]] records the first provisioning checkpoint. [[evidence/phase-5-zitadel-project|ZITADEL project provisioning]] verifies recovery by a journal-reserved project ID. [[evidence/phase-5-zitadel-application|OIDC application provisioning]] covers verified client settings and one-time secret handoff.
+[[evidence/phase-4-acceptance|Phase 4 acceptance]] records the browser, authorization, workspace discovery and deployed product results. [[evidence/phase-5-setup-journal|Phase 5 setup journal]] records the first provisioning checkpoint. [[evidence/phase-5-zitadel-project|ZITADEL project provisioning]] verifies recovery by a journal-reserved project ID. [[evidence/phase-5-zitadel-application|OIDC application provisioning]] covers verified client settings and one-time secret handoff. [[evidence/phase-5-openfga-setup|OpenFGA setup]] covers model verification and explicit lost-response recovery.
 
 [[evidence/phase-3-acceptance|Phase 3 acceptance]] records the foundation test results and remaining cross-phase criteria. The Phase 3 record was verified on Railway before Phase 4 started.
 

@@ -37,6 +37,16 @@ export function setupJournal(pool: Pool, scope: Scope) {
       const rows = await query<{ ready: boolean }>(pool, readiness, [checksum], false, signal);
       if (!rows[0]?.ready) throw new HeimdallError("unavailable");
     },
+    async requireDispatch(ordinal: number, signal: AbortSignal) {
+      const rows = await query<{ present: boolean }>(
+        pool,
+        "SELECT EXISTS (SELECT 1 FROM heimdall_setup.steps WHERE product_id=$1 AND environment=$2 AND ordinal=$3) AS present",
+        [productId, environment, ordinal],
+        false,
+        signal,
+      );
+      if (!rows[0]?.present) throw new HeimdallError("conflict");
+    },
     async claim(ordinal: number, signal: AbortSignal): Promise<Step> {
       const id = randomUUID();
       return mutate(async (client) => {

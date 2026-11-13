@@ -23,18 +23,29 @@ func newDispatchID() (string, error) {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", random[:4], random[4:6], random[6:8], random[8:10], random[10:]), nil
 }
 func zitadelCall(ctx context.Context, client *http.Client, issuer, token, path string, payload any, result any) (bool, error) {
+	return providerCall(ctx, client, issuer, token, path, payload, result, true)
+}
+
+func providerCall(ctx context.Context, client *http.Client, base, token, path string, payload any, result any, connect bool) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return false, contract.ErrInvalidArgument
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(issuer, "/")+path, bytes.NewReader(raw))
+	method := http.MethodGet
+	var body io.Reader
+	if payload != nil {
+		method, body = http.MethodPost, bytes.NewReader(raw)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, strings.TrimSuffix(base, "/")+path, body)
 	if err != nil {
 		return false, contract.ErrInvalidArgument
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Connect-Protocol-Version", "1")
+	if connect {
+		req.Header.Set("Connect-Protocol-Version", "1")
+	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := client.Do(req)
 	if err != nil {
@@ -47,7 +58,7 @@ func zitadelCall(ctx context.Context, client *http.Client, issuer, token, path s
 	if resp.StatusCode == http.StatusNotFound {
 		return false, nil
 	}
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return false, contract.ErrUnavailable
 	}
 	const limit = 1 << 20

@@ -88,3 +88,19 @@ func setupTransaction(ctx context.Context, db *sql.DB, action func(context.Conte
 	}
 	return nil
 }
+
+// RequireSetupDispatch rejects recovery input for a step that has never been dispatched.
+func RequireSetupDispatch(ctx context.Context, db *sql.DB, scope SetupScope, ordinal int) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var present bool
+	err := db.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM heimdall_setup.steps WHERE product_id=$1 AND environment=$2 AND ordinal=$3)",
+		scope.ProductID, scope.Environment, ordinal).Scan(&present)
+	if err != nil {
+		return databaseError(ctx)
+	}
+	if !present {
+		return contract.ErrConflict
+	}
+	return nil
+}

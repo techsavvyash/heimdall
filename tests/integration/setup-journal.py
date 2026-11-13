@@ -131,7 +131,7 @@ try:
                 runtime["HEIMDALL_TEST_SETUP_ZITADEL_ORG"] = org
                 subprocess.run(["go", "test", "-race", "-count=1", "./provisioning"],
                                env=runtime, cwd=ROOT / "sdk/go", check=True, timeout=60)
-                subprocess.run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/setup-project.test.ts"],
+                subprocess.run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/setup-project.test.ts", "test/setup-openfga.test.ts"],
                                env=runtime, cwd=ROOT, check=True, timeout=60)
             finally:
                 provider("/v2/organizations/" + org, "DELETE")
