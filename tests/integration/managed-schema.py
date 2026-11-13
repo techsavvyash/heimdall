@@ -138,7 +138,9 @@ try:
         assert sorted(pool.map(contender,range(2)))==["0","1"],"unfinished operation race did not serialize"
     if not railway:
         env["HEIMDALL_TEST_MANAGED_DATABASE_URL"]=f"postgres://postgres:{env['POSTGRES_PASSWORD']}@127.0.0.1:{port}/{database}?sslmode=disable"
-        subprocess.run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-managed-schema.test.ts","test/postgres-managed-readiness.test.ts","test/postgres-workspaces.test.ts","test/postgres-managed-audit.test.ts","test/postgres-operations.test.ts","test/postgres-operation-transitions.test.ts","test/postgres-candidates.test.ts","test/postgres-membership-intents.test.ts","test/postgres-operation-scan.test.ts","test/postgres-candidate-repair.test.ts"],cwd=ROOT,env=env,check=True)
+        # Readiness cases rewrite shared schema metadata while other suites need it ready.
+        subprocess.run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-managed-readiness.test.ts"],cwd=ROOT,env=env,check=True)
+        subprocess.run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-managed-schema.test.ts","test/postgres-workspaces.test.ts","test/postgres-managed-audit.test.ts","test/postgres-operations.test.ts","test/postgres-operation-transitions.test.ts","test/postgres-candidates.test.ts","test/postgres-membership-intents.test.ts","test/postgres-operation-scan.test.ts","test/postgres-candidate-repair.test.ts"],cwd=ROOT,env=env,check=True)
         subprocess.run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-export.test.ts"],cwd=ROOT,env=env,check=True)
         env["HEIMDALL_TEST_MANAGED_READ_PEER"]="1"
         subprocess.run(["go","test","-race","-count=1","./internal/postgres","-run","^(TestExport(Decoder|Input|Primary)|TestManaged(Schema|Readiness|ReadinessCancelled|Migration|AuditAtomic|AuditInvalid)|TestWorkspace(Decoder|Input|Primary)|TestCandidate(Decoder|Input|Primary|Repair|RepairInput)|TestMembership(Input|Intent)|TestOperation(Journal|Input|Create|Transition|TransitionInput|MembershipCompletion|Scan|ScanInput))$"],cwd=ROOT/"sdk/go",env=env,check=True)

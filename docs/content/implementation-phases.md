@@ -29,7 +29,10 @@ Audit persistence is built before authorization results can be released; enterpr
 
 ## Current phase
 
-**Phases 1 and 2 are complete. Phase 3 is in progress.**
+**Phases 1 and 2 are complete. Phase 3 foundation checks passed.**
+
+[[evidence/phase-3-acceptance|Phase 3 acceptance]] records the test results and
+remaining cross-phase criteria. Phase 4 starts after Railway publication is verified.
 
 [[evidence/phase-2-acceptance|The current Phase 2 acceptance audit]] consolidates the service proofs and later-phase obligations. The user approved separate tenant-owned accounts, and the final sign-off records passing checks, CI and verified Railway publication. The completion record was published and verified before Phase 3 implementation began.
 

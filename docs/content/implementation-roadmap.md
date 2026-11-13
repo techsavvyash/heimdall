@@ -132,7 +132,7 @@ Phase 3 public-runtime checkpoint: [[evidence/phase-3-public-runtime]] exposes s
 Phase 3 PostgreSQL runtime checkpoint: [[evidence/phase-3-postgres-runtime]] exposes scoped storage factories in both SDKs and verifies the public runtime with restricted PostgreSQL credentials, committed events/outbox rows and durable denial. Sessions, public authorization and combined live-provider/durable-storage proof remain open.
 
 
-Current Phase 3 readiness review: [[evidence/phase-3-readiness-audit]] records the successful combined live-provider/PostgreSQL runtime proof and missing managed storage and operational foundations. Phase 3 remains open; no ticket or phase is closed by the checkpoint.
+Current Phase 3 acceptance: [[evidence/phase-3-acceptance]] records the foundation tests and the first-release criteria that remain open in later phases.
 
 
 Phase 3 managed schema checkpoint: [[evidence/phase-3-managed-schema]] adds independent SQL metadata, scoped workspace/operation/candidate tables and database constraints, with local TS/Go driver tests and Railway SQL evidence. Managed migration/readiness integration and SDK adapters remain open.
