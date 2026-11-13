@@ -161,6 +161,23 @@ try {
   );
   assert.equal(list.Resources.length, 1);
   assert.equal(list.Resources[0].id, users[0]);
+  const otherDirectory = await ok("GET", paths[0], undefined, pat);
+  assert(otherDirectory.Resources.some((user) => user.id === users[0]));
+  const listed = await ok("GET", paths[0] + "?startIndex=1&count=10", undefined, acmeToken);
+  const own = listed.Resources.find((user) => user.id === users[0]);
+  assert.equal(own?.externalId, `employee-${runId}`);
+  assert(!listed.Resources.some((user) => user.id === users[1]));
+  const read = await ok("GET", `/v2/users/${users[0]}`, undefined, acmeToken);
+  assert.equal(read.user.userId, users[0]);
+  assert.equal(read.user.details.resourceOwner, orgs[0]);
+  observations.push({
+    directoryList: {
+      scopedCredentialFindsOwnUser: true,
+      scopedCredentialOmitsOtherOrganization: true,
+      authoritativeUserReadConfirmsOwner: true,
+      unfilteredListIncludesUserOutsideCallerProvisioningDomain: true,
+    },
+  });
   for (const active of [false, false, true, false]) {
     const start = performance.now();
     await ok("PATCH", `${paths[0]}/${users[0]}`, {
