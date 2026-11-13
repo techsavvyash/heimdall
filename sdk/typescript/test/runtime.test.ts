@@ -4,7 +4,11 @@ import {
   recoverWorkspaceCreation,
 } from "../src/provisioning/index.js";
 import { Pool } from "pg";
-import { createManagedPostgresStorage, createPostgresStorage } from "../src/postgres.js";
+import {
+  createDirectoryCleanup,
+  createManagedPostgresStorage,
+  createPostgresStorage,
+} from "../src/postgres.js";
 import { readFileSync } from "node:fs";
 import { afterEach, expect, test, vi } from "vitest";
 import { createHeimdall, auditEventDigest as auditDigest } from "../src/index.js";
@@ -1012,6 +1016,78 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
           (event) => event.actor.kind === "system" && event.actor.id === "operator",
         ),
       ).toBe(true);
+      const directory = createDirectoryCleanup(pool, { ...s.config, organizationId: "org-a" });
+      const queued = await admin.query(
+        `INSERT INTO heimdall_directory.deactivations(product_id,environment,identity_hash,issuer,subject,organization_id,observed_at,reason)
+         VALUES('ledger',$1,sha256(convert_to($2,'UTF8')),$3,$4,'org-a',1,'inactive') RETURNING revision::text`,
+        [
+          s.config.environment,
+          "user:" +
+            Buffer.from(JSON.stringify([target.issuer, target.subject])).toString("base64url"),
+          target.issuer,
+          target.subject,
+        ],
+      );
+      const plan = {
+        subject: target.subject,
+        revision: queued.rows[0].revision,
+        workspaces: [winner.workspaceId],
+      };
+      await changes.add(
+        actor,
+        { target, roles: fixtureMembership.initialRoles, idempotencyKey: "directory-seed" },
+        call,
+      );
+      await expect(directory.reconcile(runtime, actor, plan, call.signal)).rejects.toThrow(
+        "conflict",
+      );
+      await s.options.storage.identity.invalidate(
+        {
+          ...target,
+          context: "bearer",
+          tokenDigest: "0".repeat(64),
+          reason: "identity_inactive",
+        },
+        call.signal,
+      );
+      s.fga.fault = "lost_response";
+      const beforeCleanup = s.fga.writes;
+      const pending = await directory.reconcile(runtime, actor, plan, call.signal);
+      expect(pending).toMatchObject({ status: "pending", reason: "recovery_required" });
+      expect(await directory.pending(null, 1, call.signal)).toHaveLength(1);
+      await expect(
+        directory.reconcile(runtime, actor, { ...plan, workspaces: [] }, call.signal),
+      ).rejects.toThrow("conflict");
+      expect(await directory.reconcile(runtime, actor, plan, call.signal)).toEqual(pending);
+      const operationId = (pending as { operationId: string }).operationId;
+      const op = await admin.query(
+        "SELECT generation FROM heimdall_managed.operations WHERE environment=$1 AND operation_id=$2",
+        [s.config.environment, operationId],
+      );
+      s.fga.fault = "none";
+      await recoverMembership(
+        pool,
+        JSON.stringify(s.config),
+        JSON.stringify(s.manifest),
+        {
+          operationId,
+          expectedGeneration: Number(op.rows[0].generation),
+          policyVersion: "p1",
+          initiatingActor: { issuer: actor.issuer, subject: actor.subject },
+          recoveryToken: process.env.HEIMDALL_TEST_PINNED_OPENFGA_KEY ?? "new-key",
+          auditSinks: ["siem"],
+          verifyQuiescence: async () => ({ operatorId: "operator", evidenceId: "directory-drain" }),
+        },
+        call.signal,
+      );
+      await expect(directory.reconcile(runtime, actor, plan, call.signal)).resolves.toEqual({
+        status: "confirmed",
+      });
+      await expect(directory.reconcile(runtime, actor, plan, call.signal)).resolves.toEqual({
+        status: "confirmed",
+      });
+      expect(await directory.pending(null, 1, call.signal)).toEqual([]);
+      expect(s.fga.writes - beforeCleanup).toBe(1);
     } finally {
       await Promise.all([pool.end(), admin.end()]);
     }

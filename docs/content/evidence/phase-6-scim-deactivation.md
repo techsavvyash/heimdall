@@ -22,7 +22,7 @@ sequenceDiagram
   S-->>W: Return observed state and invalidation count
 ```
 
-Install directory migrations `0001.sql` and `0002.sql` in order using the product's deployment migration tooling. The directory schema is installed independently of the runtime audit protocol. Grant the worker role schema and sequence usage and select, insert and update access to the deactivation table, alongside the runtime permissions for identity denial and session invalidation. The normal authorization runtime does not require access to the directory table. [Directory schema SQL](https://github.com/techsavvyash/heimdall/tree/feat/docs-website/contracts/persistence/directory)
+Install directory migrations `0001.sql` through `0003.sql` in order using the product's deployment migration tooling. The directory schema is installed independently of the runtime audit protocol. Grant the worker role schema and sequence usage and select, insert and update access to the deactivation table, alongside the runtime permissions for identity denial and session invalidation. The normal authorization runtime does not require access to the directory table. [Directory schema SQL](https://github.com/techsavvyash/heimdall/tree/feat/docs-website/contracts/persistence/directory)
 
 When upgrading an existing directory worker, stop its observation loop before installing `0002.sql` and restart it with the revision-aware SDK. Existing intents receive a pending revision during migration.
 
@@ -46,4 +46,29 @@ flowchart LR
 
 The scan does not claim work. Concurrent callers can see the same revision and must use the same idempotency keys for downstream operations. After those operations are confirmed, call `complete` in TypeScript or `Complete` in Go. Retrying the same acknowledgement succeeds. A later deletion supersedes an inactive revision, so a stale acknowledgement cannot close the new work. Acknowledgement leaves the identity denial in place.
 
-PostgreSQL run `heimdall-records-a015b93916eb4f339d8bb6e1a6e78e7b` passed the directory tests for pending scans, cursor advancement, organization isolation, repeated acknowledgement and stale-revision refusal in both languages. Automated membership cleanup, ingestion checkpoint advancement, activation after cleanup, lifecycle audit export and the measured end-to-end worker latency remain part of Phase 6.
+PostgreSQL run `heimdall-records-a015b93916eb4f339d8bb6e1a6e78e7b` passed the directory tests for pending scans, cursor advancement, organization isolation, repeated acknowledgement and stale-revision refusal in both languages.
+
+## Managed membership removal
+
+The TypeScript `reconcile` and Go `Reconcile` methods take the pending subject and revision, a workspace list selected by the product, and an authorized administrator principal from that product runtime. Supply only workspaces where the product policy requires complete removal of the subject. The first call checks for durable identity denial and binds the sorted workspace plan and initiating principal to the revision. Calls with a different plan or principal fail with a conflict. Each workspace removal uses the existing audited, idempotent membership path. Ownership transfer remains a separate authorized operation.
+
+```mermaid
+sequenceDiagram
+  participant P as Product administrator
+  participant S as Directory cleanup adapter
+  participant D as PostgreSQL
+  participant M as Managed membership API
+  P->>S: Submit workspace plan for pending revision
+  S->>D: Check local denial and bind plan
+  loop Each workspace in the plan
+    S->>M: Remove subject with stable idempotency key
+    M-->>S: Confirmed or recovery required
+  end
+  S->>D: Acknowledge after all removals are confirmed
+```
+
+If OpenFGA may have applied a removal and the response is lost, the SDK returns the pending membership operation and leaves directory cleanup pending. Resolve it using the existing recovery procedure and retry the same plan. Once every removal is confirmed, the SDK acknowledges the directory revision. A replay after acknowledgement returns success for the same plan.
+
+PostgreSQL run `heimdall-records-5f9ccfdd51d04f9a847405c0fe28446f` exercised both public SDKs with a fault-injected OpenFGA fixture. The tests covered denial required before removal, a lost response after apply, a conflicting plan, retry of the original operation, recovery and final acknowledgement.
+
+This path covers administrator-driven whole-membership removal. Grant provenance and selective cleanup, unattended scheduling authority, ingestion checkpoints, reactivation, lifecycle audit export and measured end-to-end worker latency remain part of Phase 6.

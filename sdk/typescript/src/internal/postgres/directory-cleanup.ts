@@ -6,6 +6,7 @@ import { HeimdallError } from "../errors.js";
 import { providerId } from "../../provisioning/provider-request.js";
 import { query, transaction } from "./query.js";
 import { lockRetentionAdmission, retentionArgs, retentionSQL } from "./readiness.js";
+import type { Heimdall, Principal } from "../../runtime.js";
 
 function validRevision(value: string): boolean {
   return (
@@ -37,7 +38,7 @@ export function createDirectoryCleanup(
   validateEndpoint(issuer, options.transportProfile ?? "production");
   if (new URL(issuer).pathname !== "/") throw new HeimdallError("invalid_argument");
   const scope = [productId, environment, issuer, organizationId];
-  return Object.freeze({
+  const cleanup = {
     async pending(after: string | null, limit: number, signal: AbortSignal) {
       if (
         !(signal instanceof AbortSignal) ||
@@ -99,6 +100,77 @@ export function createDirectoryCleanup(
         },
         signal,
       );
+    },
+  };
+  return Object.freeze({
+    ...cleanup,
+    /** Apply the product's durable workspace plan through the managed membership API. */
+    async reconcile(
+      runtime: Pick<Heimdall, "tenant">,
+      actor: Principal,
+      input: {
+        subject: string;
+        revision: string;
+        workspaces: readonly string[];
+      },
+      signal: AbortSignal,
+    ) {
+      const { subject, revision } = input;
+      if (
+        !(signal instanceof AbortSignal) ||
+        !providerId(subject) ||
+        !validRevision(revision) ||
+        !Array.isArray(input.workspaces) ||
+        input.workspaces.length > 100 ||
+        !input.workspaces.every(providerId) ||
+        new Set(input.workspaces).size !== input.workspaces.length
+      )
+        throw new HeimdallError("invalid_argument");
+      if (
+        !actor ||
+        actor.productId !== productId ||
+        actor.environment !== environment ||
+        actor.issuer !== issuer
+      )
+        throw new HeimdallError("forbidden");
+      const workspaces = [...input.workspaces].sort();
+      const identity = createHash("sha256").update(encodeIdentity(issuer, subject)).digest();
+      const plan = JSON.stringify([encodeIdentity(issuer, actor.subject), ...workspaces]);
+      const completed = await transaction(
+        pool,
+        async (client) => {
+          await lockRetentionAdmission(client);
+          const result = await client.query<{ completed: boolean }>(
+            `UPDATE heimdall_directory.deactivations SET cleanup_plan=$7::jsonb
+           WHERE product_id=$1 AND environment=$2 AND issuer=$3 AND organization_id=$4
+             AND identity_hash=$5 AND revision=$6::bigint
+             AND (cleanup_plan=$7::jsonb OR (cleanup_plan IS NULL AND NOT completed))
+             AND EXISTS(SELECT 1 FROM heimdall.identity_denials
+               WHERE product_id=$1 AND environment=$2 AND identity_hash=$5)
+           RETURNING completed`,
+            [...scope, identity, revision, plan],
+          );
+          if (result.rowCount !== 1) throw new HeimdallError("conflict");
+          return result.rows[0]!.completed;
+        },
+        signal,
+      );
+      if (completed) return { status: "confirmed" as const };
+      for (const workspace of workspaces) {
+        const memberships = runtime.tenant(workspace).memberships;
+        if (!memberships) throw new HeimdallError("unavailable");
+        const result = await memberships.remove(
+          actor,
+          {
+            target: { issuer, subject },
+            idempotencyKey: `directory-cleanup:${revision}:${workspace}`,
+          },
+          { signal },
+        );
+        if (result.status !== "confirmed") return result;
+      }
+      await cleanup.complete(subject, revision, signal);
+      return { status: "confirmed" as const };
     },
   });
 }

@@ -3,6 +3,8 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
 
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 )
@@ -10,6 +12,30 @@ import (
 type DirectoryCleanupItem struct {
 	Subject, Revision, Reason string
 	ObservedAt                int64
+}
+
+func (s *IdentityRecords) BindDirectoryCleanup(ctx context.Context, issuer, org, subject string, revision int64, plan []string) (bool, error) {
+	binding, err := identityBinding(issuer, subject)
+	if err != nil {
+		return false, err
+	}
+	payload, err := json.Marshal(plan)
+	if err != nil {
+		return false, contract.ErrInvalidArgument
+	}
+	return identityTransaction(ctx, s.db, identityLock(s.product, s.environment, binding), true, func(ctx context.Context, tx *sql.Tx) (bool, error) {
+		var completed bool
+		err := tx.QueryRowContext(ctx, `UPDATE heimdall_directory.deactivations SET cleanup_plan=$7::jsonb
+WHERE product_id=$1 AND environment=$2 AND issuer=$3 AND organization_id=$4
+ AND identity_hash=$5 AND revision=$6 AND (cleanup_plan=$7::jsonb OR (cleanup_plan IS NULL AND NOT completed))
+ AND EXISTS(SELECT 1 FROM heimdall.identity_denials
+   WHERE product_id=$1 AND environment=$2 AND identity_hash=$5)
+RETURNING completed`, s.product, s.environment, issuer, org, binding, revision, string(payload)).Scan(&completed)
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, contract.ErrConflict
+		}
+		return completed, err
+	})
 }
 
 func (s *IdentityRecords) PendingDirectoryCleanup(ctx context.Context, issuer, org string, after int64, limit int) ([]DirectoryCleanupItem, error) {

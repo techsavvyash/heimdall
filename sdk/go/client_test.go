@@ -1225,4 +1225,72 @@ func TestPublicManagedOnboarding(t *testing.T) {
 	if err := admin.QueryRow("SELECT count(*) FROM heimdall.audit_deliveries WHERE environment='" + environment + "' AND sink_id='siem'").Scan(&count); err != nil || count <= 20 {
 		t.Fatal("audit routing", count, err)
 	}
+	directory, err := postgres.NewDirectoryCleanup(db, "ledger", environment, target.Issuer, "org-a", "loopback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawIdentity, err := json.Marshal([]string{target.Issuer, target.Subject})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var revision string
+	if err := admin.QueryRow(`INSERT INTO heimdall_directory.deactivations(product_id,environment,identity_hash,issuer,subject,organization_id,observed_at,reason)
+VALUES('ledger',$1,sha256(convert_to($2,'UTF8')),$3,$4,'org-a',1,'inactive') RETURNING revision::text`,
+		environment, "user:"+base64.RawURLEncoding.EncodeToString(rawIdentity), target.Issuer, target.Subject).Scan(&revision); err != nil {
+		t.Fatal(err)
+	}
+	add.IdempotencyKey = "directory-seed"
+	if added, err := members.Add(ctx, actor, add); err != nil || added.Status != "confirmed" {
+		t.Fatal("directory seed", added, err)
+	}
+	if _, err := directory.Reconcile(ctx, client, actor, target.Subject, revision, []string{workspaceID}); !errors.Is(err, heimdall.ErrConflict) {
+		t.Fatal("directory removal without local denial", err)
+	}
+	if err := h.options.Storage.Identity.Invalidate(ctx, heimdall.IdentityNegative{
+		Identity: target, Context: "bearer", TokenDigest: strings.Repeat("0", 64), Reason: "identity_inactive",
+	}); err != nil {
+		t.Fatal("directory deny", err)
+	}
+	h.providerFault.Store("lost_response")
+	beforeCleanup := h.writes.Load()
+	pending, err := directory.Reconcile(ctx, client, actor, target.Subject, revision, []string{workspaceID})
+	if err != nil || pending == nil || pending.Status != "pending" || pending.Reason != "recovery_required" {
+		t.Fatal("directory removal", pending, err)
+	}
+	if items, err := directory.Pending(ctx, "", 1); err != nil || len(items) != 1 {
+		t.Fatal("directory item was acknowledged", items, err)
+	}
+	if _, err := directory.Reconcile(ctx, client, actor, target.Subject, revision, nil); !errors.Is(err, heimdall.ErrConflict) {
+		t.Fatal("directory plan changed", err)
+	}
+	if again, err := directory.Reconcile(ctx, client, actor, target.Subject, revision, []string{workspaceID}); err != nil || again == nil || *again != *pending {
+		t.Fatal("directory retry", again, err)
+	}
+	var generation int64
+	if err := admin.QueryRow("SELECT generation FROM heimdall_managed.operations WHERE environment=$1 AND operation_id=$2", environment, pending.OperationID).Scan(&generation); err != nil {
+		t.Fatal(err)
+	}
+	h.providerFault.Store("none")
+	_, err = provisioning.RecoverMembership(ctx, db, h.config, h.manifest, provisioning.WorkspaceRecoveryOptions{
+		OperationID: pending.OperationID, ExpectedGeneration: generation, PolicyVersion: "p1",
+		InitiatingIssuer: actor.Identity().Issuer, InitiatingSubject: actor.Identity().Subject,
+		RecoveryToken: recoveryKey, AuditSinks: []string{"siem"},
+		VerifyQuiescence: func(context.Context, provisioning.WorkspaceRecoveryScope) (provisioning.WorkspaceRecoveryEvidence, error) {
+			return provisioning.WorkspaceRecoveryEvidence{OperatorID: "operator", EvidenceID: "directory-drain"}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal("directory recovery", err)
+	}
+	for range 2 {
+		if result, err := directory.Reconcile(ctx, client, actor, target.Subject, revision, []string{workspaceID}); err != nil || result != nil {
+			t.Fatal("directory acknowledgement", result, err)
+		}
+	}
+	if items, err := directory.Pending(ctx, "", 1); err != nil || len(items) != 0 {
+		t.Fatal("confirmed item still pending", items, err)
+	}
+	if h.writes.Load()-beforeCleanup != 1 {
+		t.Fatal("directory replay duplicated the remote removal")
+	}
 }
