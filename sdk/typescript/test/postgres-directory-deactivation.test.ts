@@ -1,6 +1,10 @@
 import { Pool } from "pg";
 import { expect, test, vi } from "vitest";
-import { createDirectoryDeactivation, createPostgresStorage } from "../src/postgres.js";
+import {
+  createDirectoryCleanup,
+  createDirectoryDeactivation,
+  createPostgresStorage,
+} from "../src/postgres.js";
 import { encodeIdentity } from "../src/internal/identity-encoding.js";
 import { createHash } from "node:crypto";
 
@@ -103,6 +107,32 @@ test.skipIf(!process.env.HEIMDALL_TEST_DIRECTORY_DB)(
           )
         ).rows,
       ).toEqual([{ environment: "directory-other-ts" }]);
+      const cleanup = createDirectoryCleanup(pool, options);
+      const [pending] = await cleanup.pending(null, 1, signal);
+      expect(pending).toMatchObject({ subject: identity.subject, reason: "inactive" });
+      await expect(cleanup.pending(pending!.revision, 1, signal)).resolves.toEqual([]);
+      await expect(
+        createDirectoryCleanup(pool, { ...options, organizationId: "org-b" }).pending(
+          null,
+          1,
+          signal,
+        ),
+      ).resolves.toEqual([]);
+      await cleanup.complete(identity.subject, pending!.revision, signal);
+      await cleanup.complete(identity.subject, pending!.revision, signal);
+      await expect(cleanup.pending(null, 1, signal)).resolves.toEqual([]);
+      owner = "org-a";
+      await observe(identity.subject, signal);
+      await expect(cleanup.pending(null, 1, signal)).resolves.toEqual([]);
+      state = "USER_STATE_DELETED";
+      await observe(identity.subject, signal);
+      await expect(
+        cleanup.complete(identity.subject, pending!.revision, signal),
+      ).rejects.toMatchObject({ code: "conflict" });
+      const [deleted] = await cleanup.pending(null, 1, signal);
+      expect(deleted).toMatchObject({ subject: identity.subject, reason: "deleted" });
+      expect(deleted!.revision).not.toBe(pending!.revision);
+      await expect(port.identity.check(identity, signal)).resolves.toBe(true);
     } finally {
       vi.unstubAllGlobals();
       await pool.end();

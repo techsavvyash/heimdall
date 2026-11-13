@@ -101,7 +101,9 @@ try:
     run(["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime",
          "-v", "ON_ERROR_STOP=1", "--single-transaction", "-f", "-"],
         input=(ROOT / "contracts/persistence/directory/0001.sql").read_text() +
+        (ROOT / "contracts/persistence/directory/0002.sql").read_text() +
         "GRANT USAGE ON SCHEMA heimdall_directory TO heimdall_public_runtime; "
+        "GRANT USAGE ON SEQUENCE heimdall_directory.cleanup_revision TO heimdall_public_runtime; "
         "GRANT SELECT,INSERT,UPDATE ON heimdall_directory.deactivations TO heimdall_public_runtime; "
         "CREATE FUNCTION public.reject_directory_delete() RETURNS trigger LANGUAGE plpgsql AS $$ "
         "BEGIN IF OLD.environment LIKE 'directory-rollback-%' THEN RAISE EXCEPTION 'injected session deletion failure'; END IF; RETURN OLD; END; $$; "

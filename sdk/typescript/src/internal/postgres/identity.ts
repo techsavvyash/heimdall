@@ -198,6 +198,8 @@ export class IdentityRecords {
          VALUES($1,$2,$3,$4,$5,$6,$7,$8)
          ON CONFLICT(product_id,environment,identity_hash) DO UPDATE
          SET observed_at=GREATEST(deactivations.observed_at,EXCLUDED.observed_at),
+             revision=CASE WHEN deactivations.reason='inactive' AND EXCLUDED.reason='deleted' THEN EXCLUDED.revision ELSE deactivations.revision END,
+             completed=deactivations.completed AND NOT (deactivations.reason='inactive' AND EXCLUDED.reason='deleted'),
              reason=CASE WHEN deactivations.reason='deleted' OR EXCLUDED.reason='deleted' THEN 'deleted' ELSE 'inactive' END
          WHERE deactivations.issuer=EXCLUDED.issuer AND deactivations.subject=EXCLUDED.subject
            AND deactivations.organization_id=EXCLUDED.organization_id`,

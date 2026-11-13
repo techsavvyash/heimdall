@@ -30,6 +30,7 @@ func TestDirectoryDeactivationPostgres(t *testing.T) {
 	defer db.Close()
 	var wrongOwner atomic.Bool
 	var initial atomic.Bool
+	var deleted atomic.Bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner := "org-a"
 		if wrongOwner.Load() {
@@ -38,6 +39,9 @@ func TestDirectoryDeactivationPostgres(t *testing.T) {
 		state := "USER_STATE_INACTIVE"
 		if initial.Load() {
 			state = "USER_STATE_INITIAL"
+		}
+		if deleted.Load() {
+			state = "USER_STATE_DELETED"
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"user": map[string]any{
 			"userId": "employee", "state": state, "human": map[string]any{},
@@ -118,5 +122,50 @@ func TestDirectoryDeactivationPostgres(t *testing.T) {
 	}
 	if err := db.QueryRowContext(ctx, "SELECT count(*) FROM heimdall.records WHERE product_id=$1 AND identity_hash=$2 AND environment=$3", product, hash[:], other).Scan(&count); err != nil || count != 1 {
 		t.Fatal("other product environment changed", err)
+	}
+	cleanup, err := NewDirectoryCleanup(db, product, environment, server.URL, "org-a", "loopback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, err := cleanup.Pending(ctx, "", 1)
+	if err != nil || len(items) != 1 || items[0].Subject != identity.Subject || items[0].Reason != "inactive" {
+		t.Fatal("pending cleanup missing", items, err)
+	}
+	revision := items[0].Revision
+	if items, err := cleanup.Pending(ctx, revision, 1); err != nil || len(items) != 0 {
+		t.Fatal("cursor repeated item", items, err)
+	}
+	isolated, err := NewDirectoryCleanup(db, product, environment, server.URL, "org-b", "loopback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if items, err := isolated.Pending(ctx, "", 1); err != nil || len(items) != 0 {
+		t.Fatal("cross-organization read", items, err)
+	}
+	for range 2 {
+		if err := cleanup.Complete(ctx, identity.Subject, revision); err != nil {
+			t.Fatal("acknowledgement failed", err)
+		}
+	}
+	wrongOwner.Store(false)
+	if _, err := observe(ctx, identity.Subject); err != nil {
+		t.Fatal(err)
+	}
+	if items, err := cleanup.Pending(ctx, "", 1); err != nil || len(items) != 0 {
+		t.Fatal("replay reopened item", items, err)
+	}
+	deleted.Store(true)
+	if _, err := observe(ctx, identity.Subject); err != nil {
+		t.Fatal(err)
+	}
+	if err := cleanup.Complete(ctx, identity.Subject, revision); !errors.Is(err, heimdall.ErrConflict) {
+		t.Fatal("stale acknowledgement accepted", err)
+	}
+	items, err = cleanup.Pending(ctx, "", 1)
+	if err != nil || len(items) != 1 || items[0].Reason != "deleted" || items[0].Revision == revision {
+		t.Fatal("deletion did not supersede inactive item", items, err)
+	}
+	if denied, err := port.Identity.Check(ctx, identity); err != nil || !denied {
+		t.Fatal("deny missing after acknowledgement", denied, err)
 	}
 }
