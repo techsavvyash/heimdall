@@ -38,4 +38,4 @@ Run `fa468e22-ddbb-4f9a-a1d1-f81e4dc7d182` passed against the Railway verificati
 | Ledger | `e8fe2c64-17a2-49d6-b42e-1b87df219032` | 43 |
 | Support | `db312683-25b1-4b9a-9074-16e8f8ac2f2c` | 41 |
 
-The local reference run `heimdall-records-3775038c78d4403f87d4819d1e4ca58b` also passed against live ZITADEL and OpenFGA with disposable PostgreSQL. Invitation issuance and acceptance remain open.
+The local reference run `heimdall-records-3775038c78d4403f87d4819d1e4ca58b` also passed against live ZITADEL and OpenFGA with disposable PostgreSQL. See [[phase-5-reference-invitations]] for subsequent invitation coverage.

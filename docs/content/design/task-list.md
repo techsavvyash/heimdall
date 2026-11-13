@@ -71,7 +71,7 @@ The [[shared-sdk-contract]] now contains a v0.1 API proposal for review. Its sto
 - [ ] Implement retryable initial-owner setup and the pending-to-active recipe.
 - [ ] Implement member addition, role changes and removal with delegation checks.
 - [ ] Implement workspace discovery joined with product-owned display data.
-- [ ] Demonstrate invitation acceptance and serialized ownership transfer.
+- [x] Demonstrate invitation acceptance and serialized ownership transfer. See [[evidence/phase-5-reference-invitations]] and [[evidence/phase-5-ownership-transfer]].
 - [ ] Connect both examples to the shared deployment with separate manifests, audiences, stores and permissions.
 - [ ] Run all two-product scenarios and lost-response or partial-failure cases.
 
