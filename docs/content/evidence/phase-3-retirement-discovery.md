@@ -26,7 +26,7 @@ to its maintenance job and uses the same proposal ID and timestamp when
 retrying an unknown outcome. A candidate can become protected before dispatch.
 The retirement transaction checks the current group under lock. The page caps
 source keys and sequential group reads. [[phase-3-retirement-marker-scale]] measures
-the marker lookup cost and records a candidate index for a future migration.
+the marker lookup cost and documents the index deployment command.
 
 Pinned PostgreSQL run `heimdall-capacity-backfill-755389ad280f489e9fc27043bc62deef`
 verified both SDKs under a SELECT-only role before and after retirement.

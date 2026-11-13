@@ -77,21 +77,32 @@ func PrepareHoldReleaseUpgrade(ctx context.Context, db *sql.DB, source []byte, w
 }
 
 func checkPreparedHoldRelease(ctx context.Context, tx *sql.Tx) error {
-	if e := lockAuditRetentionCatalog(ctx, tx); e != nil {
+	if _, e := checkHoldReleaseCatalog(ctx, tx, false); e != nil {
 		return e
 	}
+	return checkHoldReleaseReservations(ctx, tx)
+}
+
+func checkHoldReleaseCatalog(ctx context.Context, tx *sql.Tx, allowIndex bool) (bool, error) {
+	if e := lockAuditRetentionCatalog(ctx, tx); e != nil {
+		return false, e
+	}
 	if _, e := tx.ExecContext(ctx, "LOCK TABLE heimdall_retention.hold_release_reservations,heimdall_retention.hold_release_capacity IN SHARE MODE"); e != nil {
-		return databaseError(ctx)
+		return false, databaseError(ctx)
 	}
 	var actual string
-	var supported bool
-	if e := tx.QueryRowContext(ctx, "SELECT actual.value::text, current_setting('server_version_num')::integer BETWEEN 170000 AND 179999 AND current_setting('session_replication_role')='origin' FROM ("+auditRetentionSchemaSQL+") actual").Scan(&actual, &supported); e != nil {
-		return databaseError(ctx)
+	var supported, indexed bool
+	if e := tx.QueryRowContext(ctx, retirementIndexCatalogSQL, allowIndex).Scan(&actual, &supported, &indexed); e != nil {
+		return false, databaseError(ctx)
 	}
 	digest := sha256.Sum256([]byte(actual))
 	if !supported || hex.EncodeToString(digest[:]) != holdReleaseCatalogChecksum {
-		return contract.ErrAuditUnavailable
+		return false, contract.ErrAuditUnavailable
 	}
+	return indexed, nil
+}
+
+func checkHoldReleaseReservations(ctx context.Context, tx *sql.Tx) error {
 	var valid bool
 	if e := tx.QueryRowContext(ctx, `SELECT
   (SELECT count(*) FROM heimdall_retention.hold_release_capacity)=1
@@ -147,7 +158,10 @@ func ActivateHoldReleaseUpgrade(ctx context.Context, db *sql.DB, writersDrained 
 			return databaseError(ctx)
 		}
 	}
-	if e = checkPreparedHoldRelease(ctx, tx); e != nil {
+	if _, e = checkHoldReleaseCatalog(ctx, tx, active); e != nil {
+		return e
+	}
+	if e = checkHoldReleaseReservations(ctx, tx); e != nil {
 		return e
 	}
 	if !active {

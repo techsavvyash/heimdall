@@ -150,11 +150,19 @@ try:
     expect_refused(remote(restricted + " -activate-hold-release-upgrade -writers-drained", success=False))
     expect_refused(migrate("-status managed-v4", success=False))
     migrate("-activate-hold-release-upgrade -writers-drained")
+    index_flags = "-install-retirement-index" + prepare
+    expect_refused(remote(restricted + " " + index_flags, success=False))
+    migrate(index_flags)
+    migrate(index_flags)
+    migrate("-activate-hold-release-upgrade -writers-drained")
+    remote(restricted + " -status managed-v5")
+    if sql("SELECT indisvalid FROM pg_index WHERE indexrelid='heimdall_retention.retirement_member_lookup'::regclass") != "t":
+        raise RuntimeError("retirement index was not published")
     proof = {"runId": RUN, "projectId": PROJECT, "environmentId": ENVIRONMENT,
         "serviceId": SERVICE, "postgresVersion": postgres_version, "binarySha256": binary_digest, "migrationSha256": checksum, "managedMigrationSha256":managed_checksum,
         "checks": ["uploaded compiled Linux binary checksum", "two independent runner invocations", "exact ledger and ready metadata", "six shared schema tables", "incompatible state rejected without repair", "idempotent rerun", "managed initialization refuses missing prerequisite without implicit installation", "two managed installers serialize", "exact managed ledger and metadata", "session and managed read-only status", "managed status with SELECT-only role", "either incompatible family blocks managed initialization/status without repair"],
         "result": "passed"}
-    proof["checks"].extend(["ordered audit v1 through v5 migration and managed readiness", "old and new managed status refuse prepared schemas", "v5 SELECT-only status and denied activation", "v4 refusal and idempotent v5 activation"])
+    proof["checks"].extend(["ordered audit v1 through v5 migration and managed readiness", "old and new managed status refuse prepared schemas", "v5 SELECT-only status and denied activation", "v4 refusal and idempotent v5 activation", "v5 retirement index install and retry, restricted role refusal and v5 activation compatibility"])
 finally:
     try:
         if created:

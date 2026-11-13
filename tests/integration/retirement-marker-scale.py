@@ -73,7 +73,8 @@ try:
     baseline_small = analyze(query)
     seed(1001, 100000)
     baseline_large = analyze(query)
-    sql('CREATE INDEX retirement_member_lookup ON heimdall_retention.retirements USING gin(member_event_ids); ANALYZE heimdall_retention.retirements;')
+    sql(migration.with_name('v5-retirement-member-index.sql').read_text() +
+        'ANALYZE heimdall_retention.retirements;')
     indexed_miss = analyze(query)
     hit_query = query.replace('event-missing', 'terminal-100000')
     indexed_hit = analyze(hit_query)

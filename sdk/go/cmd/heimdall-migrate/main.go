@@ -26,6 +26,7 @@ func run() int {
 	capacity := flag.Bool("prepare-capacity-upgrade", false, "prepare offline audit-capacity ledger without activating runtime readiness")
 	retention := flag.Bool("prepare-retention-upgrade", false, "prepare offline retained identities and metadata quota; never activate runtime readiness")
 	holdRelease := flag.Bool("prepare-hold-release-upgrade", false, "prepare hold release reservations and leave runtime unavailable until activation")
+	retirementIndex := flag.Bool("install-retirement-index", false, "install the checksum-pinned retirement index on ready audit v5")
 	retentionRows := flag.Int64("retention-rows", 0, "explicit database-wide retained metadata row limit")
 	retentionBytes := flag.Int64("retention-bytes", 0, "explicit database-wide retained metadata logical byte limit")
 	capacityEvents := flag.Int64("capacity-events", 0, "explicit database-wide audit event limit for capacity preparation")
@@ -42,7 +43,7 @@ func run() int {
 	holdReleaseActivate := flag.Bool("activate-hold-release-upgrade", false, "validate prepared reservations and publish audit v5 compatibility")
 	batch := flag.Int("batch-size", 100, "scope, event or complete decision-group page bound, 1 to 100")
 	flag.Parse()
-	prepareMode := *prepare || *capacity || *retention || *holdRelease
+	prepareMode := *prepare || *capacity || *retention || *holdRelease || *retirementIndex
 	activateMode := *activate || *capacityActivate || *retentionActivate || *holdReleaseActivate
 	backfillMode := *backfill || *capacityBackfill || *retentionBackfill
 	batchSet := false
@@ -61,6 +62,9 @@ func run() int {
 	})
 	dsn := os.Getenv("HEIMDALL_MIGRATION_DATABASE_URL")
 	modes := 0
+	if *retirementIndex {
+		modes++
+	}
 	if *holdRelease {
 		modes++
 	}
@@ -154,6 +158,14 @@ func run() int {
 			return 1
 		}
 	}
+	var retirementIndexSource []byte
+	if *retirementIndex {
+		retirementIndexSource, err = os.ReadFile(filepath.Join(*directory, "v5-retirement-member-index.sql"))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "cannot read shared retirement index SQL")
+			return 1
+		}
+	}
 	connector, err := postgres.NewConnector(dsn)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "invalid database configuration")
@@ -168,6 +180,8 @@ func run() int {
 	var step *postgres.AuditUpgradeStep
 	var capacityStep *postgres.CapacityBackfillProgress
 	switch {
+	case *retirementIndex:
+		err = postgres.InstallRetirementIndex(ctx, db, retirementIndexSource, *drained)
 	case *holdRelease:
 		err = postgres.PrepareHoldReleaseUpgrade(ctx, db, holdReleaseSource, *drained)
 	case *holdReleaseActivate:
@@ -246,6 +260,8 @@ func run() int {
 		fmt.Println("audit schema v2 and managed schema v1 ready")
 	} else if *activate || *status == "audit-v2" {
 		fmt.Println("audit schema v2 ready; v1 runtime is incompatible")
+	} else if *retirementIndex {
+		fmt.Println("audit v5 retirement index ready")
 	} else if *holdRelease {
 		fmt.Println("hold release reservations prepared; runtime unavailable pending activation")
 	} else if *retention {

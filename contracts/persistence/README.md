@@ -5,6 +5,13 @@ bytes are SHA-256 pinned in catalog.json and checked by both language suites. Ne
 edit it after this checkpoint; changes require a new numbered migration. The catalog
 is deployment input, not a public SDK API. No runtime constructor executes DDL.
 
+The optional v5 retirement member index is a physical migration with its own
+SQL checksum. Run `heimdall-migrate --install-retirement-index --writers-drained
+--sql-directory <session SQL directory>` after audit v5 activation. It verifies
+the active v5 catalog and accepts only the exact supported index definition.
+The audit protocol version and migration ledger entries stay at v5. Use the
+updated CLI for any later v5 activation verification.
+
 Run in a dedicated deployment-owned application database. The fixed heimdall schema
 contains scoped product/environment records; it does not contain product business
 data. Do not install it in ZITADEL or OpenFGA internal databases. The verified test

@@ -744,6 +744,18 @@ try:
   hold_test('go',hold_env)
   sql('ALTER TABLE heimdall_retention.event_holds DROP CONSTRAINT test_late_hold_failure',backup_source)
   sql("UPDATE heimdall.audit_deliveries SET state='delivered',delivered_at=6001 WHERE product_id='holds-go' AND environment='production' AND event_id='ordinary'",backup_source)
+  index_install=['--install-retirement-index','--writers-drained','--sql-directory',source]
+  cli(index_install,'retention_activation',1)
+  cli(index_install[:1]+index_install[2:],backup_source,2)
+  sql("CREATE INDEX retirement_member_lookup ON heimdall_retention.retirements(target_event_id)",backup_source)
+  assert 'audit_unavailable' in cli(index_install,backup_source,1).stderr
+  sql("DROP INDEX heimdall_retention.retirement_member_lookup",backup_source)
+  with CommitLossProxy(int(port)) as proxy:
+   assert 'outcome_unknown' in cli(index_install,backup_source,1,url=dsn(backup_source,proxy.port)).stderr
+   assert proxy.dropped.is_set() and not proxy.errors
+  assert sql("SELECT indisvalid FROM pg_index WHERE indexrelid='heimdall_retention.retirement_member_lookup'::regclass",backup_source)=='t'
+  cli(index_install,backup_source)
+  cli(activate_release,backup_source)
   sql('CREATE ROLE restore_runtime_probe LOGIN')
   sql('CREATE DATABASE '+restored+' WITH ALLOW_CONNECTIONS false')
   sql('REVOKE CONNECT ON DATABASE '+restored+' FROM PUBLIC')
@@ -757,6 +769,7 @@ try:
   assert denied.returncode and 'permission denied for database' in denied.stderr
   cli(['--status','managed-v5'],restored)
   cli(['--status','managed-v4'],restored,1)
+  assert sql("SELECT indisvalid FROM pg_index WHERE indexrelid='heimdall_retention.retirement_member_lookup'::regclass",restored)=='t'
   assert sql("SELECT count(*) FROM heimdall_managed.operations WHERE product_id='transition-go' AND operation_id='safe-retry' AND state='uncertain'",restored)=='1'
   assert sql("SELECT mutation_blocked FROM heimdall_managed.workspaces WHERE product_id='transition-go' AND workspace_id='safe-retry'",restored)=='t'
   for table in ['heimdall_capacity.policy','heimdall_retention.capacity','heimdall_retention.hold_release_capacity']:
