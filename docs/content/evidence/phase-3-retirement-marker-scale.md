@@ -34,11 +34,6 @@ the same product yielded two. These are single-query measurements on a local
 fixture. They establish the scan cost and index access path. Application
 latency and behavior under concurrent write load need separate measurements.
 
-Reproduce with `python3 tests/integration/retirement-marker-scale.py` on a
-Docker host with space for 200,000 markers and 400,000 identity keys. Set
-`HEIMDALL_TEST_POSTGRES_BIND_ROOT` to an existing disk-backed directory if the
-Docker data volume is constrained. The probe removes its database container.
-
 ## Deployment
 
 After audit v5 activation, run the deployment CLI with
@@ -65,9 +60,6 @@ receipts, so the index requires no SDK upgrade. The updated migration command
 recognizes both forms when retrying v5 activation. Use the updated command for
 deployment operations once the index is installed.
 
-Scope-heavy member ID collisions, large live index builds and index maintenance
-under sustained write load still need qualification.
-
 Railway PostgreSQL 17.11 run `c47c982752234b5db499af8bf62f3d96` installed
 the index in a disposable application database, verified a repeat invocation,
 and repeated v5 activation and restricted readiness. The SELECT-only role
@@ -80,3 +72,32 @@ refused a v4 database and an index with the expected name on the wrong column.
 A proxy discarded the successful index commit response. The next invocation
 verified the committed index. Backup and restore preserved the index, and both
 SDKs passed their restored-state checks.
+
+## Index build and writes at one million markers
+
+Local pinned PostgreSQL 17.11 run
+`heimdall-marker-scale-9351765ec5894e288032d5f975273bc7` applied the exact
+deployment SQL to one million synthetic markers. The build completed in
+16.605 seconds of elapsed time with the same 20-second SQL statement deadline
+as the CLI. On this dataset, an indexed miss used four shared blocks and a
+scoped hit used five.
+
+A writer then committed 20,000 markers across Ledger and Support in batches
+of 1,000. Thirty reads ran while the writer was active. All returned the
+expected scoped match despite the same member ID appearing in 128 additional
+products. The largest concurrent lookup touched 167 shared blocks. The newest
+committed marker was visible before and after flushing 159 GIN pending pages.
+That lookup touched 164 shared blocks before cleanup and five afterward.
+
+The probe uses the deployed marker table definition and synthetic identity
+keys. It disables autovacuum on the marker table during the write test to
+observe pending-list behavior. It measures the SQL build and lookup, so the
+16.605-second result applies to this machine and fixture. End-to-end audit
+throughput and build time on a target deployment still require qualification.
+
+Reproduce with `python3 tests/integration/retirement-marker-scale.py` on a
+Docker host with space for roughly 1.02 million markers and 2.04 million
+identity keys. Set `HEIMDALL_TEST_POSTGRES_BIND_ROOT` to an existing disk-backed
+directory if the Docker data volume is constrained. The probe removes its
+database container. The recorded plans and counts are in
+`tests/integration/evidence/retirement-marker-load-2026-11-13.json`.
