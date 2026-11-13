@@ -131,3 +131,32 @@ func retainedConnection(ctx context.Context, db *sql.DB, runtime bool) (*sql.Con
 	}
 	return conn, nil
 }
+
+// AppendIdentityWindow atomically retains a trusted collector page and its checkpoint.
+func (a *RetainedRuntimeAudit) AppendIdentityWindow(ctx context.Context, events []map[string]any, advance func(context.Context, *sql.Tx) error) error {
+	if ctx == nil || advance == nil || len(events) > 256 {
+		return contract.ErrInvalidArgument
+	}
+	prepared := make([]*preparedAudit, 0, len(events))
+	for _, event := range events {
+		if event["source"] != "zitadel" || event["eventType"] != "heimdall.identity.observed" {
+			return contract.ErrInvalidArgument
+		}
+		p, err := a.audit.prepare(event)
+		if err != nil {
+			return err
+		}
+		prepared = append(prepared, p)
+	}
+	return a.audit.retainedWriteTransaction(ctx, func(ctx context.Context, tx *sql.Tx) error {
+		if err := advance(ctx, tx); err != nil {
+			return err
+		}
+		for _, event := range prepared {
+			if err := a.audit.appendPreparedRetained(ctx, tx, event); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}

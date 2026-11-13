@@ -106,6 +106,8 @@ try:
         (ROOT / "contracts/persistence/directory/0005.sql").read_text() +
         (ROOT / "contracts/persistence/directory/0006.sql").read_text() +
         (ROOT / "contracts/persistence/directory/0007.sql").read_text() +
+        (ROOT / "contracts/persistence/directory/0008.sql").read_text() +
+        "GRANT SELECT,INSERT,UPDATE ON heimdall_directory.event_checkpoints TO heimdall_public_runtime; "
         "GRANT DELETE ON heimdall.identity_denials TO heimdall_public_runtime; "
         "GRANT SELECT,INSERT,UPDATE ON heimdall_directory.enrollments TO heimdall_public_runtime; "
         "GRANT SELECT,INSERT,UPDATE ON heimdall_directory.polling TO heimdall_public_runtime; "
@@ -120,11 +122,16 @@ try:
     run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/runtime.test.ts"], env=runtime_env)
     run(["docker", "exec", name, "psql", "-U", "postgres", "-d", "public_runtime",
          "-v", "ON_ERROR_STOP=1", "-c",
-         "GRANT UPDATE(state,attempts,next_attempt_at,delivered_at) ON heimdall.audit_deliveries TO heimdall_public_runtime;"],
+         """GRANT UPDATE(state,attempts,next_attempt_at,delivered_at) ON heimdall.audit_deliveries TO heimdall_public_runtime;
+         CREATE FUNCTION public.reject_collector_delivery() RETURNS trigger LANGUAGE plpgsql AS $$
+         BEGIN IF NEW.environment IN ('collector-ts','collector-go') AND NEW.sink_id='inject-failure'
+         THEN RAISE EXCEPTION 'injected collector delivery failure'; END IF; RETURN NEW; END; $$;
+         CREATE TRIGGER reject_collector_delivery BEFORE INSERT ON heimdall.audit_deliveries
+           FOR EACH ROW EXECUTE FUNCTION public.reject_collector_delivery();"""],
         capture_output=True, text=True)
     delivery_env = dict(runtime_env, HEIMDALL_TEST_AUDIT_DELIVERY_DB=runtime_dsn + "&options=-c%20role%3Dheimdall_public_runtime")
-    run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-audit-delivery.test.ts"], env=delivery_env)
-    subprocess.run(["go", "test", "-race", "-count=1", "./postgres", "-run", "^TestAuditDeliveryPostgres$"],
+    run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-audit-delivery.test.ts", "test/postgres-identity-collector.test.ts"], env=delivery_env)
+    subprocess.run(["go", "test", "-race", "-count=1", "./postgres", "-run", "^Test(AuditDelivery|IdentityCollector)Postgres$"],
                    cwd=ROOT / "sdk/go", env=delivery_env, check=True)
     print(json.dumps({"run": name, "auditDelivery": ["typescript", "go"], "result": "passed"}), flush=True)
     directory_env = dict(runtime_env, HEIMDALL_TEST_DIRECTORY_DB=runtime_dsn + "&options=-c%20role%3Dheimdall_public_runtime")

@@ -84,6 +84,7 @@ export class PostgresAudit {
       retire: audit.retire.bind(audit),
       applyHold: audit.applyHold.bind(audit),
       appendWith: audit.appendRetainedWith.bind(audit),
+      appendIdentityWindow: audit.appendIdentityWindow.bind(audit),
       recover: audit.recoverRetained.bind(audit),
       recoverRuntime: audit.recoverRetained.bind(audit),
       scanPendingDecisions: audit.scanPendingDecisions.bind(audit),
@@ -1170,6 +1171,48 @@ WITH selected AS MATERIALIZED (
     if (typeof mutate !== "function" || typeof finalize !== "function")
       throw new HeimdallError("invalid_argument");
     const p = this.prepare(event);
+    return transaction(
+      this.pool,
+      async (client) => {
+        await this.lockRetainedCapacity(client);
+        await mutate(client);
+        const receipt = await this.appendPreparedRetained(client, p);
+        await finalize(client);
+        return receipt;
+      },
+      signal,
+    );
+  }
+
+  // Trusted collector calls this after validating a complete source window.
+  private async appendIdentityWindow(
+    events: readonly Record<string, unknown>[],
+    advance: (client: PoolClient) => Promise<void>,
+    signal: AbortSignal,
+  ) {
+    if (
+      events.length > 256 ||
+      events.some(
+        (event) => event.source !== "zitadel" || event.eventType !== "heimdall.identity.observed",
+      )
+    )
+      throw new HeimdallError("invalid_argument");
+    const prepared = events.map((event) => this.prepare(event));
+    await transaction(
+      this.pool,
+      async (client) => {
+        await this.lockRetainedCapacity(client);
+        await advance(client);
+        for (const event of prepared) await this.appendPreparedRetained(client, event);
+      },
+      signal,
+    );
+  }
+
+  private async appendPreparedRetained(
+    client: PoolClient,
+    p: ReturnType<PostgresAudit["prepare"]>,
+  ) {
     const receipt = {
       productId: this.productId,
       environment: this.environment,
@@ -1178,60 +1221,50 @@ WITH selected AS MATERIALIZED (
       payloadDigest: p.originalDigest,
     };
     const tenant = (p.snapshot.tenantId ?? null) as string | null;
-    return transaction(
-      this.pool,
-      async (client) => {
-        await this.lockRetainedCapacity(client);
-        await mutate(client);
-        const read = (id: string) => this.readRetainedTx(client, id);
-        const existing = await read(p.eventId);
-        if (existing) {
-          if (
-            existing.identity.digest !== p.originalDigest ||
-            existing.identity.recordedAt !== p.recordedAt
-          )
-            throw new HeimdallError("conflict");
-          await finalize(client);
-          return receipt;
-        }
-        const request = p.snapshot.eventType === "heimdall.authorization.requested";
-        const completion = p.snapshot.eventType === "heimdall.authorization.completed";
-        if (
-          (completion && p.snapshot.outcome === "outcome_unknown") ||
-          (p.snapshot.eventType === "heimdall.recovery.completed" &&
-            p.snapshot.action === "authorization.recover")
-        )
-          throw new HeimdallError("invalid_argument");
-        let resolution = "ordinary";
-        let ids = [p.eventId];
-        if (request || completion) {
-          const result = await client.query(
-            "SELECT request_event_id,resolution FROM heimdall_retention.decision_identities WHERE product_id=$1 AND environment=$2 AND decision_id=$3",
-            [this.productId, this.environment, p.snapshot.decisionId],
-          );
-          const d = result.rows[0];
-          if (request) {
-            if (d) throw new HeimdallError("conflict");
-            resolution = "pending";
-          } else {
-            if (!d) throw new HeimdallError("audit_unavailable");
-            if (d.resolution !== "pending") throw new HeimdallError("conflict");
-            const original = await read(d.request_event_id);
-            if (!original || original.state !== "live" || original.identity.tenantId !== tenant)
-              throw new HeimdallError("audit_unavailable");
-            resolution = "completed";
-            ids = [d.request_event_id, p.eventId];
-          }
-        }
-        const inserted = await this.writePrepared(client, p);
-        if (!inserted) throw new HeimdallError("audit_unavailable");
-        await this.finalizeCapacityEvent(client, p.snapshot, inserted);
-        await this.retainIdentityGroupTx(client, tenant, resolution, ids);
-        await finalize(client);
-        return receipt;
-      },
-      signal,
-    );
+    const read = (id: string) => this.readRetainedTx(client, id);
+    const existing = await read(p.eventId);
+    if (existing) {
+      if (
+        existing.identity.digest !== p.originalDigest ||
+        existing.identity.recordedAt !== p.recordedAt
+      )
+        throw new HeimdallError("conflict");
+      return receipt;
+    }
+    const request = p.snapshot.eventType === "heimdall.authorization.requested";
+    const completion = p.snapshot.eventType === "heimdall.authorization.completed";
+    if (
+      (completion && p.snapshot.outcome === "outcome_unknown") ||
+      (p.snapshot.eventType === "heimdall.recovery.completed" &&
+        p.snapshot.action === "authorization.recover")
+    )
+      throw new HeimdallError("invalid_argument");
+    let resolution = "ordinary";
+    let ids = [p.eventId];
+    if (request || completion) {
+      const result = await client.query(
+        "SELECT request_event_id,resolution FROM heimdall_retention.decision_identities WHERE product_id=$1 AND environment=$2 AND decision_id=$3",
+        [this.productId, this.environment, p.snapshot.decisionId],
+      );
+      const d = result.rows[0];
+      if (request) {
+        if (d) throw new HeimdallError("conflict");
+        resolution = "pending";
+      } else {
+        if (!d) throw new HeimdallError("audit_unavailable");
+        if (d.resolution !== "pending") throw new HeimdallError("conflict");
+        const original = await read(d.request_event_id);
+        if (!original || original.state !== "live" || original.identity.tenantId !== tenant)
+          throw new HeimdallError("audit_unavailable");
+        resolution = "completed";
+        ids = [d.request_event_id, p.eventId];
+      }
+    }
+    const inserted = await this.writePrepared(client, p);
+    if (!inserted) throw new HeimdallError("audit_unavailable");
+    await this.finalizeCapacityEvent(client, p.snapshot, inserted);
+    await this.retainIdentityGroupTx(client, tenant, resolution, ids);
+    return receipt;
   }
   // Privileged persistence. Trusted orchestration supplies authorization and the policy clock.
   private async retire(

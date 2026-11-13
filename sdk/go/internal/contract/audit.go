@@ -3,6 +3,7 @@ package contract
 import (
 	"math"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -115,6 +116,20 @@ func ValidateAuditEvent(e AuditEvent, origin string, custom func(string, int, ma
 	}
 	if origin != "sdk" {
 		return ErrInvalidArgument
+	}
+	if e.Source == "zitadel" && e.EventType == "heimdall.identity.observed" {
+		for _, key := range []string{"issuer", "organizationId", "aggregateType", "sequence", "creationDate"} {
+			if _, ok := e.Attributes[key].(string); !ok {
+				return ErrInvalidArgument
+			}
+		}
+		created, err := time.Parse(time.RFC3339Nano, e.Attributes["creationDate"].(string))
+		if len(e.Attributes) != 5 || err != nil || created.UnixMilli() != e.OccurredAt ||
+			e.EventVersion != 1 || e.Outcome != "succeeded" || e.Actor.Kind != "unknown" ||
+			e.Target.Type != "zitadel_aggregate" || e.TenantID == nil {
+			return ErrInvalidArgument
+		}
+		return nil
 	}
 	outcomes, ok := AuditTypes[e.EventType]
 	if !ok || e.EventVersion != 1 || e.Source == "product" || len(e.Attributes) != 0 {

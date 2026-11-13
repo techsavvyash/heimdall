@@ -126,6 +126,25 @@ export function validateAuditEvent(
       invalid();
     return;
   }
+  if (event.source === "zitadel" && event.eventType === "heimdall.identity.observed") {
+    const { issuer, organizationId, aggregateType, sequence, creationDate } = event.attributes;
+    if (
+      event.eventVersion !== 1 ||
+      event.outcome !== "succeeded" ||
+      event.actor.kind !== "unknown" ||
+      event.target?.type !== "zitadel_aggregate" ||
+      !event.tenantId ||
+      Object.keys(event.attributes).length !== 5 ||
+      typeof issuer !== "string" ||
+      typeof organizationId !== "string" ||
+      typeof aggregateType !== "string" ||
+      typeof sequence !== "string" ||
+      typeof creationDate !== "string" ||
+      Date.parse(creationDate) !== event.occurredAt
+    )
+      invalid();
+    return;
+  }
   if (
     !Object.hasOwn(auditTypes, event.eventType) ||
     event.eventVersion !== 1 ||

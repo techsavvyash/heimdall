@@ -157,3 +157,8 @@ export function createRecordMaintenance(pool: Pool, productId: string, environme
     cleanupLag: maintenance.cleanupLag.bind(maintenance),
   });
 }
+
+export {
+  createIdentityCollector,
+  type IdentityCollectorOptions,
+} from "./internal/postgres/identity-collector.js";

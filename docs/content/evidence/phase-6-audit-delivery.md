@@ -94,4 +94,32 @@ Both bounds are exclusive UTC timestamps at microsecond precision. Results conta
 
 Railway ZITADEL run `528c1ed3-b9d6-4a5c-873f-f926914b1428` matched all 22 events across four aggregates against an unsaturated baseline in both SDKs. Both returned an empty result for the exclusive-boundary query. Shared fixtures cover saturated and malformed pages, a wrong organization and the full uint64 range.
 
-This reader supports explicit historical scans. The independent durable checkpoint, provider retention and live visibility handling, authorized routing and SIEM delivery for identity events remain open in Phase 6.
+This reader supports explicit historical scans. The collector below adds a durable checkpoint for windows with operator-supplied coverage and explicit aggregate mappings.
+
+## Durable historical collection
+
+The PostgreSQL SDK adapters expose `createIdentityCollector` in TypeScript and `NewIdentityCollector` in Go. Configure an issuer, organization, product, environment, tenant, starting timestamp, sink IDs and a trusted list of aggregate types and IDs assigned to that tenant. The worker takes an exclusive provider retention floor, exclusive visibility ceiling and expiry from trusted deployment code. The expiry must cover the provider reads. Use the bounds only when the deployment can establish them independently of an empty API page. Apply `contracts/persistence/directory/0008.sql` after 0007 in a deployment-owned transaction. The worker needs select, insert and update on the checkpoint table alongside the retained audit writer privileges.
+
+```mermaid
+sequenceDiagram
+  participant P as Product worker
+  participant S as Heimdall SDK
+  participant Z as ZITADEL
+  participant D as Product PostgreSQL
+  P->>S: Collect with verified visibility and retention bounds
+  S->>D: Read next timestamp for the mapped tenant
+  S->>Z: Read a bounded historical window
+  Z-->>S: Return organization-scoped events
+  S->>S: Keep explicitly assigned aggregates
+  S->>D: Commit checkpoint, retained audit and SIEM delivery rows together
+  D-->>S: Confirm the commit
+  S-->>P: Return committed next timestamp
+```
+
+The checkpoint stores the next inclusive microsecond, so the next scan includes records exactly at the previous upper bound. A concurrent worker must match the previous checkpoint before it can write. Restart reads the committed checkpoint after a lost commit response. Provider failures, retention gaps, a changed aggregate mapping and failed outbox writes leave the checkpoint available for recovery. The mapping digest prevents silently reusing an advanced checkpoint after editing the allowlist. Mapping changes require an explicit migration or backfill.
+
+The SDK records only sanitized event metadata for assigned aggregate IDs. An organization shared by two products needs explicit mappings for both. An unmapped aggregate is omitted. Provider payloads and editor fields are discarded. The audit request ID identifies the imported event for correlation and carries no claim that an unrelated SDK request created it.
+
+PostgreSQL run `heimdall-records-1edae3aaae274a6aac06d4052f88ab92` used the same provider fixture in both SDKs. It verified that a retention gap makes no upstream call, an upstream outage leaves the checkpoint unset, an injected delivery insert failure rolls back the checkpoint and event, and restart after commit does not re-read the completed window. Only the mapped event received a delivery row and the exact uint64 sequence survived storage.
+
+Historical collection takes trusted coverage bounds as an input. Establishing automatic live coverage, qualifying mapping changes and discovering new aggregates safely remain Phase 6 work.

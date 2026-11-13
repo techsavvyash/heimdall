@@ -108,7 +108,7 @@ Bounded time-window scans can discover multiple aggregates, as measured in the s
 
 For the fully migrated pinned database, use the installed writer behavior when validating a moving cutoff. Creation time is assigned at the write statement and position at the wall clock. The API still omits positions and may apply a stricter retention floor than the request. [[evidence/phase-2-lifecycle-events#writer-timestamps-in-the-fully-migrated-pinned-deployment]] records what the Railway verification environment establishes and where collection must fail closed.
 
-The SDK provisioning packages expose an organization-scoped historical reader with explicit time bounds. See [[evidence/phase-6-audit-delivery#zitadel-historical-event-reader]] for its API and observed behavior.
+The SDK provisioning packages expose an organization-scoped historical reader with explicit time bounds. See [[evidence/phase-6-audit-delivery#zitadel-historical-event-reader]] for its API and observed behavior. The PostgreSQL collector commits a certified historical window with its retained audit and delivery rows using an explicit tenant mapping. [[evidence/phase-6-audit-delivery#durable-historical-collection]] records the transaction and failure tests.
 
 ## Account-switch acceptance scenarios
 
