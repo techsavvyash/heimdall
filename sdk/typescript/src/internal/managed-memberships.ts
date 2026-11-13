@@ -1,5 +1,6 @@
+import { encodeIdentity } from "./identity-encoding.js";
 import { randomUUID } from "node:crypto";
-import type { Principal } from "../runtime.js";
+import type { IdentityGate, Principal } from "../runtime.js";
 import type { AuditedAuthentication } from "./audited-authentication.js";
 import type { PinnedModel } from "./model-binding.js";
 import { HeimdallError, checkCancellation } from "./errors.js";
@@ -22,6 +23,14 @@ export type MembershipStatus = Readonly<{
   reason?: "recovery_required";
 }>;
 export type Memberships = Readonly<{
+  authorizeInvitation(actor: Principal, input: RolesInput, call: Call): Promise<void>;
+  /** The product must first claim a durable, recipient-bound invitation. */
+  acceptInvitation(
+    recipient: Principal,
+    inviter: Intent["actor"],
+    input: RolesInput,
+    call: Call,
+  ): Promise<MembershipStatus>;
   add(actor: Principal, input: RolesInput, call: Call): Promise<MembershipStatus>;
   assignRoles(actor: Principal, input: RolesInput, call: Call): Promise<MembershipStatus>;
   transferOwnership(
@@ -58,13 +67,16 @@ export function managedMemberships(
   workspaces: Pick<WorkspaceRecords, "get">,
   auth: AuditedAuthentication,
   model: PinnedModel,
+  gate: IdentityGate,
 ): Memberships {
   async function mutate(
     kind: "add_member" | "assign_roles" | "remove_member" | "transfer_owner",
     principal: Principal,
     input: MembershipInput | RolesInput,
     call: Call,
-  ): Promise<MembershipStatus> {
+    inviter?: Intent["actor"],
+    authorizeOnly = false,
+  ): Promise<MembershipStatus | undefined> {
     if (!(call?.signal instanceof AbortSignal) || !input?.target)
       throw new HeimdallError("invalid_argument");
     const signal = AbortSignal.any([call.signal, AbortSignal.timeout(30000)]);
@@ -90,6 +102,15 @@ export function managedMemberships(
       roles,
       manifestVersion: config.manifestVersion,
     };
+    if (
+      inviter &&
+      (inviter.issuer !== config.issuer ||
+        actor.issuer !== intent.target.issuer ||
+        actor.subject !== intent.target.subject)
+    )
+      throw new HeimdallError("forbidden");
+    const sponsor = inviter && { ...inviter };
+    if (sponsor) encodeIdentity(sponsor.issuer, sponsor.subject);
     const key = input.idempotencyKey;
     intentDigests(intent, key);
     let existing: ManagedOperation | null = null;
@@ -98,11 +119,17 @@ export function managedMemberships(
     const allowed = await auth.checkPermission(
       principal,
       workspaceId,
-      kind === "transfer_owner" ? "ownership.transfer" : "membership." + kind,
+      authorizeOnly
+        ? "invitation.issue"
+        : sponsor
+          ? "invitation.accept"
+          : kind === "transfer_owner"
+            ? "ownership.transfer"
+            : "membership." + kind,
       config.openfga.modelId,
       config.manifestVersion,
       async (operation) => {
-        existing = await records.findIntent(intent, key, operation);
+        if (!authorizeOnly) existing = await records.findIntent(intent, key, operation);
         if (existing && existing.state !== "pending") return true;
         const workspace = await workspaces.get(workspaceId, operation);
         if (
@@ -111,16 +138,23 @@ export function managedMemberships(
           workspace.mutationBlocked !== !!existing
         )
           return false;
+        if (sponsor && (await gate.check(sponsor, operation)) !== false) return false;
         revision = workspace.revision;
         apply =
           kind === "transfer_owner"
             ? await planOwnershipTransfer(model, ownerRole, intent, operation)
-            : await planMembership(model, ownerRole, intent, operation);
+            : await planMembership(
+                model,
+                ownerRole,
+                sponsor ? { ...intent, actor: sponsor } : intent,
+                operation,
+              );
         return true;
       },
       signal,
     );
     if (!allowed) throw new HeimdallError("forbidden");
+    if (authorizeOnly) return;
     const requestId = randomUUID();
     function metadata(floor = 0) {
       const now = Math.max(Date.now(), floor);
@@ -180,10 +214,18 @@ export function managedMemberships(
       throw error;
     }
   }
+  const execute = async (...args: Parameters<typeof mutate>) => (await mutate(...args))!;
   return Object.freeze({
-    add: (actor, input, call) => mutate("add_member", actor, input, call),
-    assignRoles: (actor, input, call) => mutate("assign_roles", actor, input, call),
-    transferOwnership: (actor, input, call) => mutate("transfer_owner", actor, input, call),
-    remove: (actor, input, call) => mutate("remove_member", actor, input, call),
+    async authorizeInvitation(actor, input, call) {
+      await mutate("add_member", actor, input, call, undefined, true);
+    },
+    async acceptInvitation(recipient, inviter, input, call) {
+      if (!inviter) throw new HeimdallError("invalid_argument");
+      return execute("add_member", recipient, input, call, inviter);
+    },
+    add: (actor, input, call) => execute("add_member", actor, input, call),
+    assignRoles: (actor, input, call) => execute("assign_roles", actor, input, call),
+    transferOwnership: (actor, input, call) => execute("transfer_owner", actor, input, call),
+    remove: (actor, input, call) => execute("remove_member", actor, input, call),
   });
 }

@@ -49,11 +49,28 @@ def verify(products, payloads):
                 receipt = item["administration"][step]
                 assert receipt["status"] == "confirmed" and receipt["workspaceId"] == operation["workspaceId"]
                 events_for_step = [e for e in scoped if e.get("operationId") == receipt["operationId"]]
-                assert all(e["tenantId"] == operation["workspaceId"] and e["actor"] == actor for e in events_for_step)
+                assert events_for_step
+                initiating_actor = events_for_step[0]["actor"] if step == "regrant" else actor
+                assert (initiating_actor != actor) == (step == "regrant")
+                assert all(e["tenantId"] == operation["workspaceId"] and e["actor"] == initiating_actor
+                           for e in events_for_step)
                 assert Counter((e["action"], e["outcome"]) for e in events_for_step) == {
                     (kind, "requested"): 1, (kind + ".dispatch", "attempted"): 1,
                     (kind + ".confirm", "succeeded"): 1, (kind + ".complete", "succeeded"): 1,
                 }
+            invitation_decisions = [e for e in scoped if e["tenantId"] == operation["workspaceId"]
+                                    and e["action"] in ("invitation.issue", "invitation.accept")]
+            assert Counter((e["action"], e["outcome"]) for e in invitation_decisions) == {
+                ("invitation.issue", "requested"): 4, ("invitation.issue", "allow"): 3,
+                ("invitation.issue", "deny"): 1, ("invitation.accept", "requested"): 2,
+                ("invitation.accept", "allow"): 1, ("invitation.accept", "deny"): 1,
+            }
+            invitation_requests = {e["decisionId"]: e for e in invitation_decisions
+                                   if e["outcome"] == "requested"}
+            for e in invitation_decisions:
+                if e["outcome"] != "requested":
+                    assert all(e[key] == invitation_requests[e["decisionId"]][key]
+                               for key in ("actor", "action", "tenantId"))
         print(f"{product}: four lifecycle events, {len(requests)} matched authorization decisions")
 
 

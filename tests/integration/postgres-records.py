@@ -112,9 +112,9 @@ try:
         run(["node", "tests/integration/openfga-recovery.mjs"], env=recovery_env)
     if os.environ.get("HEIMDALL_PROBE_REFERENCE_PRODUCTS") == "1":
         import tempfile
-        schemas = "\n".join((ROOT / "examples" / name / "schema.sql").read_text()
-                            for name in ("ledger", "support"))
-        schemas += "\nGRANT USAGE ON SCHEMA ledger,support TO heimdall_public_runtime; GRANT SELECT ON ledger.invoices,support.tickets TO heimdall_public_runtime;"
+        schemas = "\n".join((ROOT / "examples" / name / file).read_text()
+                            for name in ("ledger", "support") for file in ("schema.sql", "invitations.sql"))
+        schemas += "\nGRANT USAGE ON SCHEMA ledger,support TO heimdall_public_runtime; GRANT SELECT ON ledger.invoices,support.tickets TO heimdall_public_runtime; GRANT SELECT,INSERT,UPDATE ON ledger.invitations,support.invitations TO heimdall_public_runtime;"
         run(["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime", "-v", "ON_ERROR_STOP=1"],
             input=schemas, capture_output=True, text=True)
         run(["pnpm", "run", "build"])

@@ -273,6 +273,7 @@ export async function createHeimdall(
             { get: workspace },
             authentication,
             model,
+            gate,
           );
         return Object.freeze({
           ...(memberships ? { memberships } : {}),

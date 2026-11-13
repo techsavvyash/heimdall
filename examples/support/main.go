@@ -74,17 +74,25 @@ func respondError(w http.ResponseWriter, err error) {
 }
 
 func mutationInput(w http.ResponseWriter, r *http.Request) (map[string]json.RawMessage, string, error) {
-	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	keys := r.Header.Values("Idempotency-Key")
-	if err != nil || mediaType != "application/json" || len(keys) != 1 || strings.Contains(keys[0], ", ") {
+	if len(keys) != 1 || strings.Contains(keys[0], ", ") {
 		return nil, "", heimdall.ErrInvalidArgument
+	}
+	fields, err := jsonInput(w, r)
+	return fields, keys[0], err
+}
+
+func jsonInput(w http.ResponseWriter, r *http.Request) (map[string]json.RawMessage, error) {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		return nil, heimdall.ErrInvalidArgument
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
 	var fields map[string]json.RawMessage
 	if err != nil || !utf8.Valid(body) || json.Unmarshal(body, &fields) != nil || fields == nil {
-		return nil, "", heimdall.ErrInvalidArgument
+		return nil, heimdall.ErrInvalidArgument
 	}
-	return fields, keys[0], nil
+	return fields, nil
 }
 
 func workspaceInput(w http.ResponseWriter, r *http.Request) (heimdall.WorkspaceCreateInput, error) {
@@ -239,6 +247,9 @@ func main() {
 	mount("GET /workspace-operations/{operation}", workspaceOperation)
 	mount("POST /workspace-operations/{operation}", workspaceOperation)
 	eligibleMember := os.Getenv("HEIMDALL_REFERENCE_MEMBER_SUBJECT")
+	invites := invitationHandler(auth, sessions, business, config.Environment, origin, workspaceCreator, eligibleMember, workspaceID)
+	mount("POST /workspaces/{workspace}/invitations", invites)
+	mount("POST /invitations/accept", invites)
 	mount("POST /workspaces/{workspace}/members/{action}", func(w http.ResponseWriter, r *http.Request) error {
 		workspace, action := r.PathValue("workspace"), r.PathValue("action")
 		takesRoles := action == "add" || action == "assign-roles"

@@ -10,7 +10,7 @@ sequenceDiagram
   actor Admin
   actor Invitee
   participant API as Product backend and SDK
-  participant DB as Product database
+  participant DB as Product and SDK PostgreSQL records
   participant F as OpenFGA
   Admin->>API: Invite recipient as approver
   API->>F: Check admin delegation permission
@@ -18,17 +18,19 @@ sequenceDiagram
   API->>DB: Store expiring invitation and token hash
   API-->>Invitee: Product delivers invitation link
   Invitee->>API: Accept with authenticated identity
-  API->>DB: Lock invitation and validate recipient and expiry
+  API->>DB: Atomically claim for verified issuer and subject
   API->>F: Recheck inviter authority under current policy
   F-->>API: Allow
-  API->>DB: Record accepting state and intended principal
+  API->>DB: Reserve the workspace and journal the recipient grant
   API->>F: Ensure member and approver tuples
   F-->>API: Confirmed
-  API->>DB: Mark accepted
+  API->>DB: Complete the operation and store the receipt
   API-->>Invitee: Workspace access ready
 ```
 
-Acceptance binds the grant to the verified principal. Recipient matching may use a verified email for invitation delivery, while the resulting grant uses issuer and subject. A retry resumes the same accepting operation. Different principals cannot claim it concurrently. The policy for an inviter losing authority during an in-flight acceptance remains subject to the concurrency contract in [[operations]].
+The reference products bind the invitation to the recipient's ZITADEL issuer and subject. The product persists the token hash, expiry, workspace, inviter, recipient and approved roles. Its first claim must precede expiry. The same recipient can resume that claim with the same idempotency key and receive the original receipt after completion. Each product owns recipient lookup and delivery.
+
+The managed SDK checks the inviter's current delegation at issue and again before authorizing a new acceptance dispatch. It checks the durable identity deny gate for the inviter at acceptance and verifies the recipient's current principal. The workspace revision fences competing managed membership changes between planning and reservation. If the provider write has already become uncertain, the recorded recipient grant follows [[operations]] recovery. The acceptance journal identifies the recipient as initiator, and the product invitation record links the inviter.
 
 ## Delegation rules
 

@@ -25,56 +25,59 @@ export async function verifyReferenceProduct(input, authorize) {
   const seed = ledger
     ? "INSERT INTO ledger.invoices VALUES ('acme','acme-invoice',500),('globex','globex-invoice',800)"
     : "INSERT INTO support.tickets VALUES ('acme','acme-ticket','Acme ticket'),('globex','globex-ticket','Globex ticket')";
-  let sql;
-  if (remote) {
-    sql = spawn(
-      "railway",
-      [
-        "ssh",
-        "--environment",
-        "verification",
-        "--service",
-        "capability-postgres",
-        "--identity-file",
-        process.env.HEIMDALL_REFERENCE_SSH_KEY,
-        "--",
-        "psql -Xq -U heimdall_probe -d heimdall_phase4_reference -v ON_ERROR_STOP=1 -v VERBOSITY=verbose",
-      ],
-      { stdio: ["pipe", "ignore", "pipe"] },
-    );
-  } else {
-    const database = new URL(db);
-    sql = spawn("psql", ["-Xq", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose"], {
-      env: {
-        ...process.env,
-        PGHOST: database.hostname,
-        PGPORT: database.port,
-        PGUSER: decodeURIComponent(database.username),
-        PGPASSWORD: decodeURIComponent(database.password),
-        PGDATABASE: database.pathname.slice(1),
-        PGSSLMODE: database.searchParams.get("sslmode") ?? "require",
-        PGOPTIONS: "",
-      },
-      stdio: ["pipe", "ignore", "pipe"],
+  async function executeSQL(statement) {
+    let sql;
+    if (remote) {
+      sql = spawn(
+        "railway",
+        [
+          "ssh",
+          "--environment",
+          "verification",
+          "--service",
+          "capability-postgres",
+          "--identity-file",
+          process.env.HEIMDALL_REFERENCE_SSH_KEY,
+          "--",
+          "psql -Xq -U heimdall_probe -d heimdall_phase4_reference -v ON_ERROR_STOP=1 -v VERBOSITY=verbose",
+        ],
+        { stdio: ["pipe", "ignore", "pipe"] },
+      );
+    } else {
+      const database = new URL(db);
+      sql = spawn("psql", ["-Xq", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose"], {
+        env: {
+          ...process.env,
+          PGHOST: database.hostname,
+          PGPORT: database.port,
+          PGUSER: decodeURIComponent(database.username),
+          PGPASSWORD: decodeURIComponent(database.password),
+          PGDATABASE: database.pathname.slice(1),
+          PGSSLMODE: database.searchParams.get("sslmode") ?? "require",
+          PGOPTIONS: "",
+        },
+        stdio: ["pipe", "ignore", "pipe"],
+      });
+    }
+    let sqlDiagnostic = "";
+    sql.stderr.setEncoding("utf8");
+    sql.stderr.on("data", (chunk) => {
+      sqlDiagnostic = (sqlDiagnostic + chunk).slice(-8192);
     });
+    sql.stdin.end(statement);
+    const [sqlCode] = await once(sql, "exit");
+    const sqlState =
+      /ERROR:\s+([A-Z0-9]{5}):/.exec(sqlDiagnostic)?.[1] ?? "connection or client error";
+    assert.equal(sqlCode, 0, "Reference fixture SQL failed " + sqlState);
   }
   assert(/^[A-Za-z0-9:_-]+$/.test(principal));
-  let sqlDiagnostic = "";
-  sql.stderr.setEncoding("utf8");
-  sql.stderr.on("data", (chunk) => {
-    sqlDiagnostic = (sqlDiagnostic + chunk).slice(-8192);
-  });
-  sql.stdin.end(`
+  await executeSQL(`
     INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at)
     VALUES ('${schema}','verification','acme','Acme','active',false,1,1), ('${schema}','verification','globex','Globex','active',false,1,1) ON CONFLICT DO NOTHING;
     INSERT INTO heimdall_managed.membership_candidates(product_id,environment,workspace_id,identity_hash,principal,observed_at)
     SELECT '${schema}','verification',workspace,sha256(convert_to('${principal}','UTF8')),'${principal}',1 FROM (VALUES ('acme'),('globex')) c(workspace);
     ${seed} ON CONFLICT DO NOTHING;
   `);
-  const [sqlCode] = await once(sql, "exit");
-  const sqlState =
-    /ERROR:\s+([A-Z0-9]{5}):/.exec(sqlDiagnostic)?.[1] ?? "connection or client error";
-  assert.equal(sqlCode, 0, "Reference fixture seeding failed " + sqlState);
   const runtimeDB = remote
     ? process.env[
         ledger ? "HEIMDALL_REFERENCE_LEDGER_DATABASE" : "HEIMDALL_REFERENCE_SUPPORT_DATABASE"
@@ -381,13 +384,48 @@ export async function verifyReferenceProduct(input, authorize) {
     assert.equal(removed.status, 200);
     const removal = await removed.json();
     await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 403);
-    const readded = await memberRequest("add", recipient, runId + "-readd", [initialRole]);
+    const invite = (sessionCookie) =>
+      request(`/workspaces/${workspace.workspaceId}/invitations`, {
+        method: "POST",
+        headers: { cookie: sessionCookie, origin, "content-type": "application/json" },
+        body: JSON.stringify({ subject: recipient, roles: [initialRole] }),
+      });
+    await expectDenied(await invite(recipientCookie), 403);
+    const issued = await invite(cookie);
+    assert.equal(issued.status, 201);
+    const invitation = await issued.json();
+    assert.match(invitation.token, /^[a-f0-9]{64}$/);
+    assert(Date.parse(invitation.expiresAt) > Date.now());
+    const stale = await invite(cookie);
+    assert.equal(stale.status, 201);
+    const staleInvitation = await stale.json();
+    const expiring = await invite(cookie);
+    assert.equal(expiring.status, 201);
+    const expired = await expiring.json();
+    const expiredHash = createHash("sha256").update(expired.token).digest("hex");
+    await executeSQL(`UPDATE ${schema}.invitations SET expires_at=now()-interval '1 second'
+      WHERE environment='verification' AND token_hash='${expiredHash}';`);
+    const accept = (sessionCookie, source = origin, token = invitation.token) =>
+      request("/invitations/accept", {
+        method: "POST",
+        headers: { cookie: sessionCookie, origin: source, "content-type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+    await expectDenied(await accept(cookie), 404);
+    await expectDenied(await accept(recipientCookie, origin, expired.token), 404);
+    await expectDenied(await accept(recipientCookie, "https://unrelated.example"), 403);
+    const readded = await accept(recipientCookie);
     assert.equal(readded.status, 200);
     const regrant = await readded.json();
+    assert.equal(regrant.status, "confirmed");
+    const invitationReplay = await accept(recipientCookie);
+    assert.equal(invitationReplay.status, 200);
+    assert.deepEqual(await invitationReplay.json(), regrant);
     const transferred = await memberRequest("transfer-ownership", recipient, runId);
     assert.equal(transferred.status, 200);
     const transfer = await transferred.json();
     assert.equal(transfer.status, "confirmed");
+    await expectDenied(await accept(recipientCookie, origin, staleInvitation.token), 403);
     assert.deepEqual(await (await request(rolesPath, { headers: recipientHeaders })).json(), {
       roles: [initialRole, manifest.ownerRole].sort(),
     });
@@ -425,6 +463,15 @@ export async function verifyReferenceProduct(input, authorize) {
         emptyScopedRead: 200,
       },
       administration: { grant, assignment, removal, regrant, transfer },
+      invitation: {
+        issued: 201,
+        wrongRecipient: 404,
+        expired: 404,
+        crossOrigin: 403,
+        accepted: 200,
+        replay: 200,
+        revokedInviter: 403,
+      },
       otherTenant: 403,
     };
   } finally {

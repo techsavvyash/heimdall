@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { addAbortSignal } from "node:stream";
 import { Pool } from "pg";
@@ -108,6 +109,92 @@ const memberRoute =
   /^\/workspaces\/([A-Za-z0-9_-]{1,128})\/members\/(add|assign-roles|remove|transfer-ownership)$/;
 const eligibleSubjects = new Set([workspaceCreator, process.env.HEIMDALL_REFERENCE_MEMBER_SUBJECT]);
 
+const invitationRoute = /^\/workspaces\/([A-Za-z0-9_-]{1,128})\/invitations$/;
+
+async function invitation(request, workspace) {
+  if (request.headers.get("origin") !== origin) throw new HeimdallError("forbidden");
+  const actor = await sessions.authenticate(request);
+  const { input } = await mutationInput(request);
+  const call = { signal: request.signal };
+  if (workspace) {
+    if (
+      Object.keys(input).length !== 2 ||
+      typeof input.subject !== "string" ||
+      !Array.isArray(input.roles) ||
+      input.roles.some((role) => typeof role !== "string")
+    )
+      throw new HeimdallError("invalid_argument");
+    if (!eligibleSubjects.has(input.subject)) throw new HeimdallError("forbidden");
+    const token = randomBytes(32).toString("hex");
+    const hash = createHash("sha256").update(token).digest("hex");
+    const target = { issuer: config.issuer, subject: input.subject };
+    await auth.tenant(workspace).memberships.authorizeInvitation(
+      actor,
+      {
+        target,
+        roles: input.roles,
+        idempotencyKey: hash,
+      },
+      call,
+    );
+    const created = await business.query(
+      `INSERT INTO ledger.invitations(environment,token_hash,workspace_id,issuer,recipient,inviter,roles,expires_at)
+       VALUES($1,$2,$3,$4,$5,$6,$7,now()+interval '1 hour') RETURNING expires_at`,
+      [
+        config.environment,
+        hash,
+        workspace,
+        target.issuer,
+        target.subject,
+        actor.subject,
+        JSON.stringify(input.roles),
+      ],
+    );
+    return read({ token, expiresAt: created.rows[0].expires_at }, 201);
+  }
+  if (
+    Object.keys(input).length !== 1 ||
+    typeof input.token !== "string" ||
+    !/^[a-f0-9]{64}$/.test(input.token)
+  )
+    throw new HeimdallError("invalid_argument");
+  const hash = createHash("sha256").update(input.token).digest("hex");
+  const claim = [config.environment, hash, actor.issuer, actor.subject];
+  const {
+    rows: [record],
+  } = await business.query(
+    `UPDATE ledger.invitations SET claimed_at=COALESCE(claimed_at,now())
+     WHERE environment=$1 AND token_hash=$2 AND issuer=$3 AND recipient=$4
+     AND (claimed_at IS NOT NULL OR expires_at>now())
+     RETURNING workspace_id,inviter,roles,operation_id`,
+    claim,
+  );
+  if (!record) throw new HeimdallError("not_found");
+  if (record.operation_id)
+    return read({
+      workspaceId: record.workspace_id,
+      operationId: record.operation_id,
+      status: "confirmed",
+    });
+  const result = await auth.tenant(record.workspace_id).memberships.acceptInvitation(
+    actor,
+    { issuer: actor.issuer, subject: record.inviter },
+    {
+      target: { issuer: actor.issuer, subject: actor.subject },
+      roles: record.roles,
+      idempotencyKey: hash,
+    },
+    call,
+  );
+  if (result.status === "confirmed")
+    await business.query(
+      `UPDATE ledger.invitations SET operation_id=$5
+       WHERE environment=$1 AND token_hash=$2 AND issuer=$3 AND recipient=$4`,
+      [...claim, result.operationId],
+    );
+  return read(result, result.status === "pending" ? 202 : 200);
+}
+
 async function route(request) {
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname === "/healthz")
@@ -135,6 +222,10 @@ async function route(request) {
         ? await auth.onboarding.resume(actor, operation[1], call)
         : await auth.onboarding.get(actor, operation[1], call);
     return read(result, (create || resume) && result.status === "pending" ? 202 : 200);
+  }
+  if (request.method === "POST") {
+    const issue = invitationRoute.exec(url.pathname);
+    if (issue || url.pathname === "/invitations/accept") return invitation(request, issue?.[1]);
   }
   const administration = request.method === "POST" && memberRoute.exec(url.pathname);
   if (administration) {
@@ -216,7 +307,10 @@ createServer(async (incoming, outgoing) => {
         new Request(target, {
           method: incoming.method,
           ...(incoming.method === "POST" &&
-          (target.pathname === "/workspaces" || memberRoute.test(target.pathname))
+          (target.pathname === "/workspaces" ||
+            memberRoute.test(target.pathname) ||
+            invitationRoute.test(target.pathname) ||
+            target.pathname === "/invitations/accept")
             ? { body: addAbortSignal(signal, incoming), duplex: "half" }
             : {}),
           headers: Object.entries(incoming.headers).flatMap(([name, value]) =>

@@ -35,6 +35,7 @@ type Memberships struct {
 
 type membershipRuntime struct {
 	ownerRole string
+	gate      IdentityGate
 	model     *modelbinding.PinnedModel
 	workspace func(context.Context, string) (*postgres.ManagedWorkspace, error)
 }
@@ -61,6 +62,17 @@ func (m *Memberships) TransferOwnership(ctx context.Context, actor *Principal, i
 	return m.mutate(ctx, actor, "transfer_owner", MembershipRolesInput{MembershipInput: input, Roles: []string{}})
 }
 
+// AuthorizeInvitation checks the proposed grant without reserving a membership operation.
+func (m *Memberships) AuthorizeInvitation(ctx context.Context, actor *Principal, input MembershipRolesInput) error {
+	_, err := m.run(ctx, actor, "add_member", input, nil, true)
+	return err
+}
+
+// AcceptInvitation requires a product-owned claim bound to the verified recipient.
+func (m *Memberships) AcceptInvitation(ctx context.Context, recipient *Principal, inviter Identity, input MembershipRolesInput) (MembershipStatus, error) {
+	return m.run(ctx, recipient, "add_member", input, &inviter, false)
+}
+
 func memberStatus(op *postgres.ManagedOperation) MembershipStatus {
 	result := MembershipStatus{OperationID: op.OperationID, WorkspaceID: op.WorkspaceID, Status: "pending"}
 	switch op.State {
@@ -73,6 +85,10 @@ func memberStatus(op *postgres.ManagedOperation) MembershipStatus {
 }
 
 func (m *Memberships) mutate(ctx context.Context, principal *Principal, kind string, input MembershipRolesInput) (MembershipStatus, error) {
+	return m.run(ctx, principal, kind, input, nil, false)
+}
+
+func (m *Memberships) run(ctx context.Context, principal *Principal, kind string, input MembershipRolesInput, inviter *Identity, authorizeOnly bool) (MembershipStatus, error) {
 	empty := MembershipStatus{}
 	if ctx == nil || m == nil || m.tenant == nil || !tenantID.MatchString(m.tenant.id) {
 		return empty, ErrInvalidArgument
@@ -96,6 +112,14 @@ func (m *Memberships) mutate(ctx context.Context, principal *Principal, kind str
 	if _, err := contract.IntentDigests(intent, input.IdempotencyKey); err != nil {
 		return empty, err
 	}
+	if inviter != nil {
+		if inviter.Issuer != w.cfg.Issuer || actor != intent.Target {
+			return empty, ErrForbidden
+		}
+		if _, err := contract.EncodeIdentity(inviter.Issuer, inviter.Subject); err != nil {
+			return empty, err
+		}
+	}
 	var existing *postgres.ManagedOperation
 	var revision string
 	var apply func(context.Context, string) error
@@ -103,10 +127,18 @@ func (m *Memberships) mutate(ctx context.Context, principal *Principal, kind str
 	if kind == "transfer_owner" {
 		action = "ownership.transfer"
 	}
+	if authorizeOnly {
+		action = "invitation.issue"
+	}
+	if inviter != nil {
+		action = "invitation.accept"
+	}
 	allowed, err := w.auth.CheckPermission(ctx, principal, workspaceID, action,
 		w.cfg.OpenFGA.ModelID, w.cfg.ManifestVersion, func(operation context.Context) (bool, error) {
 			var err error
-			existing, err = w.records.FindIntent(operation, intent, input.IdempotencyKey)
+			if !authorizeOnly {
+				existing, err = w.records.FindIntent(operation, intent, input.IdempotencyKey)
+			}
 			if err != nil {
 				return false, err
 			}
@@ -117,11 +149,19 @@ func (m *Memberships) mutate(ctx context.Context, principal *Principal, kind str
 			if err != nil || workspace == nil || workspace.Lifecycle != "active" || workspace.MutationBlocked != (existing != nil) {
 				return false, err
 			}
+			plan := intent
+			if inviter != nil {
+				denied, err := port.gate.Check(operation, *inviter)
+				if err != nil || denied {
+					return false, err
+				}
+				plan.Actor = contract.Identity{Issuer: inviter.Issuer, Subject: inviter.Subject}
+			}
 			revision = workspace.Revision
 			if kind == "transfer_owner" {
 				apply, err = port.model.PlanOwnershipTransfer(operation, port.ownerRole, intent, false)
 			} else {
-				apply, err = port.model.PlanMembership(operation, port.ownerRole, intent)
+				apply, err = port.model.PlanMembership(operation, port.ownerRole, plan)
 			}
 			return err == nil, err
 		})
@@ -130,6 +170,9 @@ func (m *Memberships) mutate(ctx context.Context, principal *Principal, kind str
 	}
 	if !allowed {
 		return empty, ErrForbidden
+	}
+	if authorizeOnly {
+		return empty, nil
 	}
 	op := existing
 	requestID := onboardingID()

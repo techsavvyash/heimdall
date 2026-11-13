@@ -245,7 +245,7 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 			return nil, ErrInvalidArgument
 		}
 		if managed.Workspace != nil {
-			client.membership = &membershipRuntime{deployment.Manifest().OwnerRole, model, managed.Workspace}
+			client.membership = &membershipRuntime{deployment.Manifest().OwnerRole, gate, model, managed.Workspace}
 		}
 		client.onboarding = &WorkspaceOnboarding{
 			config: configJSON, manifest: manifestJSON,
