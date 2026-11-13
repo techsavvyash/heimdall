@@ -61,6 +61,8 @@ Workers use verified events or bounded polling according to available service AP
 
 [[evidence/phase-6-scim-reader]] records the SDK read path and its live credential, provenance and state checks.
 
+[[evidence/phase-6-scim-polling]] records the polling adapter's durable discovery checkpoint and known-subject reconciliation.
+
 Once deactivation is observed, first persist a local identity deny/session invalidation in managed mode, then reconcile mapped memberships through the uncertainty-safe mutation path. Core consumers implement the equivalent identity gate interface. This prevents a delayed remote tuple removal from permitting new access in that product. The identity freshness contract in [[release-contract]] additionally covers requests before event ingestion catches up. Worker target under healthy dependencies is observation and deny propagation within 60 seconds; measure it in integration tests and expose lag. Outages do not have an invented bounded completion promise: stale authoritative identity status fails closed after its configured freshness, and pending remote changes retain their recovery gate.
 
 [[evidence/phase-6-scim-deactivation]] records the PostgreSQL transaction that persists the cleanup intent and local denial together.

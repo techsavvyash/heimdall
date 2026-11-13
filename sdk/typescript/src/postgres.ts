@@ -24,6 +24,7 @@ import { validateAuditEvent } from "./internal/audit.js";
 
 export { createDirectoryDeactivation } from "./internal/postgres/directory-deactivations.js";
 export { createDirectoryCleanup } from "./internal/postgres/directory-cleanup.js";
+export { createDirectoryPolling } from "./internal/postgres/directory-polling.js";
 
 export type PostgresStorageOptions = {
   productId: string;

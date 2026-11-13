@@ -31,7 +31,22 @@ func TestDirectoryDeactivationPostgres(t *testing.T) {
 	var wrongOwner atomic.Bool
 	var initial atomic.Bool
 	var deleted atomic.Bool
+	var listUnavailable atomic.Bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if start := r.URL.Query().Get("startIndex"); start != "" {
+			if listUnavailable.Load() {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			resources := []map[string]any{}
+			index := 2
+			if start == "1" {
+				index = 1
+				resources = append(resources, map[string]any{"id": "employee", "externalId": "directory-key"})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"startIndex": index, "totalResults": 1, "Resources": resources})
+			return
+		}
 		owner := "org-a"
 		if wrongOwner.Load() {
 			owner = "org-b"
@@ -107,6 +122,38 @@ func TestDirectoryDeactivationPostgres(t *testing.T) {
 		t.Fatal("deny missing", denied, err)
 	}
 	initial.Store(false)
+	const pollEnv = "directory-poll-go"
+	polling, err := NewDirectoryPolling(db, product, pollEnv, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result, err := polling.Discover(ctx, 1); err != nil || result != (DirectoryDiscoveryResult{1, false}) {
+		t.Fatal(result, err)
+	}
+	polling, err = NewDirectoryPolling(db, product, pollEnv, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listUnavailable.Store(true)
+	if _, err := polling.Discover(ctx, 1); !errors.Is(err, heimdall.ErrUnavailable) {
+		t.Fatal("provider outage was not propagated", err)
+	}
+	listUnavailable.Store(false)
+	for _, expected := range []DirectoryDiscoveryResult{{0, true}, {1, false}} {
+		if result, err := polling.Discover(ctx, 1); err != nil || result != expected {
+			t.Fatal(result, err)
+		}
+	}
+	if result, err := polling.ObserveKnown(ctx, "", 2); err != nil || result != (DirectoryObservationResult{Observed: 1}) {
+		t.Fatal(result, err)
+	}
+	pollCleanup, err := NewDirectoryCleanup(db, product, pollEnv, server.URL, "org-a", "loopback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if items, err := pollCleanup.Pending(ctx, "", 1); err != nil || len(items) != 1 || items[0].Subject != identity.Subject {
+		t.Fatal(items, err)
+	}
 	wrongOwner.Store(true)
 	options.OrganizationID = "org-b"
 	otherObserver, err := NewDirectoryDeactivation(db, product, environment, options)

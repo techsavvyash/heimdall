@@ -3,6 +3,7 @@ import { expect, test, vi } from "vitest";
 import {
   createDirectoryCleanup,
   createDirectoryDeactivation,
+  createDirectoryPolling,
   createPostgresStorage,
 } from "../src/postgres.js";
 import { encodeIdentity } from "../src/internal/identity-encoding.js";
@@ -20,16 +21,25 @@ test.skipIf(!process.env.HEIMDALL_TEST_DIRECTORY_DB)(
     const signal = AbortSignal.timeout(15000);
     let owner = "org-a";
     let state = "USER_STATE_INACTIVE";
-    vi.stubGlobal("fetch", async () =>
-      Response.json({
+    let listUnavailable = false;
+    vi.stubGlobal("fetch", async (url: string) => {
+      const start = new URL(url).searchParams.get("startIndex");
+      if (start !== null && listUnavailable) return new Response(null, { status: 503 });
+      if (start !== null)
+        return Response.json({
+          startIndex: Number(start),
+          totalResults: 1,
+          Resources: start === "1" ? [{ id: identity.subject, externalId: "directory-key" }] : [],
+        });
+      return Response.json({
         user: {
           userId: identity.subject,
           details: { resourceOwner: owner },
           state,
           human: {},
         },
-      }),
-    );
+      });
+    });
     try {
       const port = createPostgresStorage(pool, { productId, environment, auditSinks: [] });
       const observe = createDirectoryDeactivation(pool, options);
@@ -73,6 +83,32 @@ test.skipIf(!process.env.HEIMDALL_TEST_DIRECTORY_DB)(
         sessionsInvalidated: 1,
       });
       await expect(port.identity.check(identity, signal)).resolves.toBe(true);
+      const pollOptions = { ...options, environment: "directory-poll-ts" };
+      const polling = createDirectoryPolling(pool, pollOptions);
+      await expect(polling.discover(1, signal)).resolves.toEqual({
+        discovered: 1,
+        cycleComplete: false,
+      });
+      const restarted = createDirectoryPolling(pool, pollOptions);
+      listUnavailable = true;
+      await expect(restarted.discover(1, signal)).rejects.toMatchObject({ code: "unavailable" });
+      listUnavailable = false;
+      await expect(restarted.discover(1, signal)).resolves.toEqual({
+        discovered: 0,
+        cycleComplete: true,
+      });
+      await expect(restarted.discover(1, signal)).resolves.toEqual({
+        discovered: 1,
+        cycleComplete: false,
+      });
+      await expect(restarted.observeKnown(null, 2, signal)).resolves.toEqual({
+        observed: 1,
+        sessionsInvalidated: 0,
+        nextSubject: null,
+      });
+      await expect(
+        createDirectoryCleanup(pool, pollOptions).pending(null, 1, signal),
+      ).resolves.toMatchObject([{ subject: identity.subject }]);
       await expect(observe(identity.subject, signal)).resolves.toEqual({
         state: "inactive",
         sessionsInvalidated: 0,
