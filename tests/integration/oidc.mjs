@@ -94,6 +94,7 @@ async function sdkRuntime(client, c) {
             clientSecret: client.clientSecret,
             apiAudience: c.reference.apiAudience,
             user: c.subject,
+            runId,
           },
           c.reference.authorize,
         ),

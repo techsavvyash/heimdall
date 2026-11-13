@@ -72,25 +72,33 @@ const read = (value, status = 200) =>
 
 async function route(request) {
   const url = new URL(request.url);
-  if (request.method === "GET" && url.pathname === "/healthz") return read({ ready: true });
+  if (request.method === "GET" && url.pathname === "/healthz")
+    return read({
+      ready: true,
+      deployment: process.env.RAILWAY_DEPLOYMENT_ID ?? null,
+      verificationRun: process.env.HEIMDALL_VERIFICATION_RUN ?? null,
+    });
   if (request.method === "GET" && url.pathname === "/")
     return read({ login: "/auth/start", workspaces: "/workspaces" });
   if (url.pathname === "/auth/start") return sessions.start(request);
   if (url.pathname === new URL(callbackUrl).pathname) return sessions.callback(request);
   if (url.pathname === "/auth/logout") return sessions.logout(request);
   if (request.method !== "GET") return read({ code: "not_found" }, 404);
-  const invoice = /^\/workspaces\/([A-Za-z0-9_-]{1,128})\/invoices$/.exec(url.pathname);
-  if (!invoice && url.pathname !== "/workspaces") return read({ code: "not_found" }, 404);
+  const scoped = /^\/workspaces\/([A-Za-z0-9_-]{1,128})\/(invoices|roles)$/.exec(url.pathname);
+  if (!scoped && url.pathname !== "/workspaces") return read({ code: "not_found" }, 404);
   const actor = await sessions.authenticate(request);
-  if (!invoice)
+  if (!scoped)
     return read(
       await discovery.list(actor, {
         signal: request.signal,
         ...(url.searchParams.has("cursor") ? { cursor: url.searchParams.get("cursor") } : {}),
       }),
     );
-  const workspace = invoice[1];
-  await auth.tenant(workspace).require(actor, "invoice.read", { signal: request.signal });
+  const [, workspace, collection] = scoped;
+  const tenant = auth.tenant(workspace);
+  if (collection === "roles")
+    return read({ roles: await tenant.roles(actor, { signal: request.signal }) });
+  await tenant.require(actor, "invoice.read", { signal: request.signal });
   const result = await business.query(
     "SELECT invoice_id, total_cents FROM ledger.invoices WHERE workspace_id=$1 ORDER BY invoice_id LIMIT 100",
     [workspace],

@@ -122,7 +122,10 @@ func main() {
 		})
 	}
 	mount("GET /healthz", func(w http.ResponseWriter, _ *http.Request) error {
-		writeJSON(w, 200, map[string]bool{"ready": true})
+		writeJSON(w, 200, map[string]any{
+			"ready": true, "deployment": os.Getenv("RAILWAY_DEPLOYMENT_ID"),
+			"verificationRun": os.Getenv("HEIMDALL_VERIFICATION_RUN"),
+		})
 		return nil
 	})
 	mount("GET /{$}", func(w http.ResponseWriter, _ *http.Request) error {
@@ -153,6 +156,22 @@ func main() {
 		return nil
 	})
 	workspaceID := regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+	mount("GET /workspaces/{workspace}/roles", func(w http.ResponseWriter, r *http.Request) error {
+		workspace := r.PathValue("workspace")
+		if !workspaceID.MatchString(workspace) {
+			return heimdall.ErrInvalidArgument
+		}
+		actor, err := sessions.Authenticate(r)
+		if err != nil {
+			return err
+		}
+		roles, err := auth.Tenant(workspace).Roles(r.Context(), actor)
+		if err != nil {
+			return err
+		}
+		writeJSON(w, 200, map[string]any{"roles": roles})
+		return nil
+	})
 	mount("GET /workspaces/{workspace}/tickets", func(w http.ResponseWriter, r *http.Request) error {
 		workspace := r.PathValue("workspace")
 		if !workspaceID.MatchString(workspace) {

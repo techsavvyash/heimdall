@@ -6,7 +6,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 
 export async function verifyReferenceProduct(input, authorize) {
-  const { config, manifest, clientSecret, apiAudience, user } = input;
+  const { config, manifest, clientSecret, apiAudience, user, runId } = input;
   const ledger = config.productId === "ledger";
   const port = ledger ? 18640 : 18641;
   const remote = process.env.HEIMDALL_REFERENCE_RAILWAY === "1";
@@ -130,6 +130,7 @@ export async function verifyReferenceProduct(input, authorize) {
     const context = ["--service", service, "--environment", "verification"];
     for (const [key, value] of Object.entries({
       ...variables,
+      HEIMDALL_VERIFICATION_RUN: runId,
       RAILWAY_DOCKERFILE_PATH: `examples/${schema}/Dockerfile`,
     })) {
       const setting = spawnSync(
@@ -188,13 +189,19 @@ export async function verifyReferenceProduct(input, authorize) {
         });
   try {
     let ready = false;
-    for (let attempt = 0; attempt < (remote ? 120 : 50); attempt++) {
+    let deployment;
+    for (let attempt = 0; attempt < (remote ? 180 : 50); attempt++) {
       if (child && child.exitCode !== null) break;
       const response = await request("/healthz").catch(() => null);
       if (response?.ok) {
-        await response.body?.cancel();
-        ready = true;
-        break;
+        const health = await response.json().catch(() => null);
+        if (health?.ready && (!remote || (health.verificationRun === runId && health.deployment))) {
+          deployment = health.deployment;
+          ready = true;
+          break;
+        }
+      } else {
+        await response?.body?.cancel();
       }
       await new Promise((resolve) => setTimeout(resolve, remote ? 2000 : 200));
     }
@@ -215,6 +222,14 @@ export async function verifyReferenceProduct(input, authorize) {
     const page = await request("/workspaces", { headers });
     assert.equal(page.status, 200);
     assert.deepEqual((await page.json()).items, [{ id: "acme", name: "Acme" }]);
+    for (const [workspace, roles] of [
+      ["acme", [manifest.ownerRole]],
+      ["globex", []],
+    ]) {
+      const response = await request(`/workspaces/${workspace}/roles`, { headers });
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), { roles });
+    }
     const collection = ledger ? "invoices" : "tickets";
     const allowed = await request(`/workspaces/acme/${collection}`, { headers });
     assert.equal(allowed.status, 200);
@@ -234,8 +249,10 @@ export async function verifyReferenceProduct(input, authorize) {
     await replay.body?.cancel();
     return {
       product: schema,
+      ...(remote ? { deployment } : {}),
       session: "issued and logged out",
       discovery: "Acme",
+      roles: { acme: [manifest.ownerRole], globex: [] },
       scopedRead: 200,
       otherTenant: 403,
     };
