@@ -91,3 +91,26 @@ func TestInvalidErrorMetadata(t *testing.T) {
 		}
 	}
 }
+
+type expiringContext struct {
+	context.Context
+	firstRead bool
+}
+
+func (c *expiringContext) Err() error {
+	if !c.firstRead {
+		c.firstRead = true
+		return nil
+	}
+	return context.DeadlineExceeded
+}
+
+func TestCancellationUsesOneSnapshot(t *testing.T) {
+	ctx := &expiringContext{Context: context.Background()}
+	if err := CheckCancellation(ctx); err != nil {
+		t.Fatalf("classified a deadline as %v", err)
+	}
+	if err := CheckCancellation(ctx); !errors.Is(err, ErrDeadlineExceeded) {
+		t.Fatal(err)
+	}
+}

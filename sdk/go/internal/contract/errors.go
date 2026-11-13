@@ -80,10 +80,11 @@ func TransportFailure(reason string, mutationMayExecute bool, operationID string
 }
 
 func CheckCancellation(ctx context.Context) error {
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+	err := ctx.Err()
+	if errors.Is(err, context.DeadlineExceeded) {
 		return ErrDeadlineExceeded
 	}
-	if ctx.Err() != nil {
+	if err != nil {
 		return ErrCancelled
 	}
 	return nil
