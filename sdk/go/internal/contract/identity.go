@@ -3,6 +3,7 @@ package contract
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"unicode/utf16"
@@ -50,4 +51,21 @@ func quoteIdentity(value string) string {
 	}
 	out.WriteByte('"')
 	return out.String()
+}
+
+// DecodeIdentity accepts only the canonical encoding and does not authenticate it.
+func DecodeIdentity(principal string) (Identity, error) {
+	if !strings.HasPrefix(principal, "user:") || len(principal) > 32768 {
+		return Identity{}, ErrUnavailable
+	}
+	raw, err := base64.RawURLEncoding.Strict().DecodeString(strings.TrimPrefix(principal, "user:"))
+	var pair []string
+	if err != nil || !utf8.Valid(raw) || json.Unmarshal(raw, &pair) != nil || len(pair) != 2 {
+		return Identity{}, ErrUnavailable
+	}
+	encoded, err := EncodeIdentity(pair[0], pair[1])
+	if err != nil || encoded != principal {
+		return Identity{}, ErrUnavailable
+	}
+	return Identity{Issuer: pair[0], Subject: pair[1]}, nil
 }

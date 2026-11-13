@@ -21,3 +21,18 @@ export function encodeIdentity(issuer: string, subject: string): string {
   );
   return "user:" + Buffer.from(canonical, "ascii").toString("base64url");
 }
+
+export function decodeIdentity(principal: string): { issuer: string; subject: string } {
+  try {
+    if (!/^user:[A-Za-z0-9_-]+$/.test(principal) || principal.length > 32768) throw new Error();
+    const raw = new TextDecoder("utf-8", { fatal: true }).decode(
+      Buffer.from(principal.slice(5), "base64url"),
+    );
+    const pair: unknown = JSON.parse(raw);
+    if (!Array.isArray(pair) || pair.length !== 2 || encodeIdentity(pair[0], pair[1]) !== principal)
+      throw new Error();
+    return { issuer: pair[0], subject: pair[1] };
+  } catch {
+    throw new HeimdallError("unavailable");
+  }
+}

@@ -82,6 +82,12 @@ def verify(products, payloads):
             }
             assert all(e["actor"] == actor and e["eventType"] == "heimdall.policy.completed"
                        for e in lifecycle_events if e["outcome"] == "succeeded")
+        if "discoveryRebuild" in item:
+            repairs = [e for e in scoped if e["tenantId"] == operation["workspaceId"]
+                       and e["action"] == "candidate.repair"]
+            assert len(repairs) == 4
+            assert all(e["actor"] == {"kind": "system", "id": "candidate-rebuild"}
+                       and e["outcome"] == "succeeded" for e in repairs)
         print(f"{product}: four lifecycle events, {len(requests)} matched authorization decisions")
 
 

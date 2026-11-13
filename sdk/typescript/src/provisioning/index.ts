@@ -189,3 +189,5 @@ export {
   recoverOwnershipTransfer,
 } from "./workspace-recovery.js";
 export type { WorkspaceRecoveryOptions, WorkspaceRecoveryScope } from "./workspace-recovery.js";
+export { rebuildDiscovery } from "./discovery-rebuild.js";
+export type { DiscoveryRebuildCheckpoint, DiscoveryRebuildOptions } from "./discovery-rebuild.js";

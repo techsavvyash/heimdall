@@ -608,6 +608,45 @@ export class OperationRecords {
     }
     return result!;
   }
+  async candidateRepairPage(workspaceId: string, after: string, signal: AbortSignal) {
+    const b = this.binding;
+    const [sql, args] = this.readQuery(
+      `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
+       COALESCE(jsonb_agg(to_jsonb(c) ORDER BY c.position::bigint),'[]'::jsonb) AS candidates
+       FROM (SELECT principal,position::text,encode(identity_hash,'hex') AS hash
+       FROM heimdall_managed.membership_candidates WHERE product_id=$1 AND environment=$2
+       AND workspace_id=$3 AND position>$4::bigint ORDER BY membership_candidates.position LIMIT 21) c`,
+      [b.productId, b.environment, workspaceId, after],
+    );
+    const rows = await query<{
+      primary: boolean;
+      candidates: { principal: string; position: string; hash: string }[];
+    }>(this.pool, sql, args, false, signal);
+    const row = rows[0];
+    if (
+      rows.length !== 1 ||
+      row?.primary !== true ||
+      !Array.isArray(row.candidates) ||
+      row.candidates.length > 21
+    )
+      throw new HeimdallError("unavailable");
+    let previous = BigInt(after);
+    for (const item of row.candidates) {
+      if (
+        !item ||
+        typeof item.principal !== "string" ||
+        createHash("sha256").update(item.principal).digest("hex") !== item.hash ||
+        typeof item.position !== "string" ||
+        !/^[1-9][0-9]{0,18}$/.test(item.position) ||
+        BigInt(item.position) <= previous ||
+        BigInt(item.position) > 9223372036854775807n
+      )
+        throw new HeimdallError("unavailable");
+      previous = BigInt(item.position);
+    }
+    return { items: row.candidates.slice(0, 20), more: row.candidates.length > 20 };
+  }
+
   // Observations must be verified after capturing expectedRevision. No remote writes occur here.
   async repairCandidates(
     workspaceId: string,

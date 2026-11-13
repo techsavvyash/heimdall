@@ -83,13 +83,20 @@ batch. A lost COMMIT acknowledgement returns outcome_unknown without a success
 result. Its old revision cannot be replayed after a committed repair. This does
 not provide operation-key deduplication or permit reusing old remote observations.
 
-A complete rebuild orchestrator still needs bounded remote enumeration, explicit
-verification of stale existing hints, durable progress, cancellation and restart
-rules. Each remote listing page may supply positive observations only; it cannot
-supply inferred removals. Progress must not advance past a failed/uncertain local
-commit. These methods coordinate local publication but do not promise an atomic
-snapshot of a remote graph changed out of band. Current authorization checks remain
-mandatory regardless of hint contents.
+The operator uses `rebuildDiscovery` / `RebuildDiscovery` to process one page of a
+known active workspace. Each call first captures the workspace revision and
+verifies the pinned model. The remote pass enumerates direct member tuples and
+publishes positive observations. The candidate pass uses stable numeric positions
+and checks each existing candidate with higher consistency before removal. A
+missing tuple in a listing does not supply a negative observation.
+
+The returned checkpoint is bound to product, environment, workspace, store,
+model and manifest. Both SDKs use the same JSON shape. Persist it in trusted
+operator storage only after a successful response. Retry from the previous
+checkpoint after a conflict, cancellation, or unknown outcome. Each retry obtains
+fresh observations and a fresh revision. A null checkpoint marks the end of the
+sweep. A fresh sweep can observe out-of-band changes that landed behind a cursor.
+Authorization remains subject to fresh relationship checks throughout the repair.
 
 Shared repair inputs: fixtures/candidate-repair.json. The managed PostgreSQL harness
 covers partial batches, stale revisions/timestamps, mutation races, audit rollback,

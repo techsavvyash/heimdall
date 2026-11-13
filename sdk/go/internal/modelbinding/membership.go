@@ -100,3 +100,41 @@ func (p *PinnedModel) writeDirectMembership(ctx context.Context, user, workspace
 	}
 	return nil
 }
+
+func (p *PinnedModel) ReadDirectMembers(ctx context.Context, workspace, cursor string) ([]string, string, error) {
+	object := "workspace:" + workspace
+	body := map[string]any{"tuple_key": map[string]string{"object": object, "relation": "member"},
+		"consistency": "HIGHER_CONSISTENCY", "page_size": 20}
+	if cursor != "" {
+		body["continuation_token"] = cursor
+	}
+	request, _ := json.Marshal(body)
+	raw, err := p.request(ctx, "POST", "/read", request, 1048576)
+	if err != nil {
+		return nil, "", err
+	}
+	var page struct {
+		Tuples *[]struct {
+			Key struct {
+				membershipTuple
+				Condition any `json:"condition"`
+			}
+		}
+		Continuation string `json:"continuation_token"`
+	}
+	if json.Unmarshal(raw, &page) != nil || page.Tuples == nil || len(*page.Tuples) > 20 ||
+		len(page.Continuation) > 8192 || (page.Continuation != "" && (page.Continuation == cursor || len(*page.Tuples) == 0)) {
+		return nil, "", contract.ErrUnavailable
+	}
+	users := make([]string, 0, len(*page.Tuples))
+	seen := make(map[string]bool)
+	for _, row := range *page.Tuples {
+		key := row.Key
+		if key.Object != object || key.Relation != "member" || key.User == "" || key.Condition != nil || seen[key.User] {
+			return nil, "", contract.ErrUnavailable
+		}
+		users = append(users, key.User)
+		seen[key.User] = true
+	}
+	return users, page.Continuation, nil
+}

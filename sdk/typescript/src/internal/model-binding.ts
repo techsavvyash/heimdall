@@ -193,6 +193,43 @@ export class PinnedModel {
     }
     throw new HeimdallError("unavailable");
   }
+  async readDirectMembers(workspace: string, cursor: string | null, signal: AbortSignal) {
+    const object = "workspace:" + workspace;
+    const page = await this.request(
+      "/read",
+      signal,
+      {
+        tuple_key: { object, relation: "member" },
+        consistency: "HIGHER_CONSISTENCY",
+        page_size: 20,
+        ...(cursor ? { continuation_token: cursor } : {}),
+      },
+      1048576,
+    );
+    const next = page.continuation_token ?? "";
+    if (
+      !Array.isArray(page.tuples) ||
+      page.tuples.length > 20 ||
+      typeof next !== "string" ||
+      next.length > 8192 ||
+      (next && (next === cursor || page.tuples.length === 0))
+    )
+      throw new HeimdallError("unavailable");
+    const users = new Set<string>();
+    for (const row of page.tuples) {
+      const key = row?.key;
+      if (
+        key?.object !== object ||
+        key.relation !== "member" ||
+        typeof key.user !== "string" ||
+        (key.condition !== null && key.condition !== undefined) ||
+        users.has(key.user)
+      )
+        throw new HeimdallError("unavailable");
+      users.add(key.user);
+    }
+    return { users: [...users], next: next || null };
+  }
   async writeDirectMembership(
     user: string,
     workspace: string,
@@ -228,7 +265,12 @@ export class PinnedModel {
     return result.allowed;
   }
 
-  private async request(path: string, signal: AbortSignal, body?: Record<string, unknown>) {
+  private async request(
+    path: string,
+    signal: AbortSignal,
+    body?: Record<string, unknown>,
+    maxBytes = body ? 65536 : 1048576,
+  ) {
     try {
       const key = await bounded(this.credential, signal);
       if (typeof key !== "string" || !/^[\x21-\x7e]{1,8192}$/.test(key)) throw new Error();
@@ -255,7 +297,7 @@ export class PinnedModel {
           const { done, value } = await reader.read();
           if (done) break;
           size += value.length;
-          if (size > (body ? 65536 : 1048576)) throw new Error();
+          if (size > maxBytes) throw new Error();
           parts.push(value);
         }
       } finally {

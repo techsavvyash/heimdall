@@ -2,8 +2,10 @@ import { request as httpRequest } from "node:http";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { createHash } from "node:crypto";
-import { spawn, spawnSync } from "node:child_process";
+import { execFile, spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
+import { createRequire } from "node:module";
+import { promisify } from "node:util";
 
 export async function verifyReferenceProduct(input, authorize) {
   const { config, manifest, clientSecret, apiAudience, user, recipient, runId, otherWorkspace } =
@@ -473,6 +475,119 @@ export async function verifyReferenceProduct(input, authorize) {
     assert.deepEqual(await (await request(rolesPath, { headers: recipientHeaders })).json(), {
       roles: [initialRole, manifest.ownerRole].sort(),
     });
+    let discoveryRebuild;
+    const rebuildPort = process.env.HEIMDALL_DISCOVERY_REBUILD_RAILWAY_PORT;
+    const rebuildDB = !remote || rebuildPort ? new URL(runtimeDB) : null;
+    if (remote && rebuildDB) {
+      rebuildDB.hostname = "127.0.0.1";
+      rebuildDB.port = rebuildPort;
+    }
+    if (rebuildDB) {
+      const { Pool } = createRequire(
+        new URL("../../examples/ledger/package.json", import.meta.url),
+      )("pg");
+      const { rebuildDiscovery } = await import("../../sdk/typescript/dist/provisioning/index.js");
+      const workspaceId = workspace.workspaceId;
+      const object = "workspace:" + workspaceId;
+      const principalFor = (subject) =>
+        "user:" + Buffer.from(JSON.stringify([config.issuer, subject])).toString("base64url");
+      const write = async (change) => {
+        const response = await fetch(
+          `${config.openfga.url}/stores/${config.openfga.storeId}/write`,
+          {
+            method: "POST",
+            headers: {
+              authorization: "Bearer " + variables.HEIMDALL_OPENFGA_KEY,
+              "content-type": "application/json",
+            },
+            signal: AbortSignal.timeout(15000),
+            body: JSON.stringify({ authorization_model_id: config.openfga.modelId, ...change }),
+          },
+        );
+        assert.equal(response.status, 200);
+        await response.body?.cancel();
+      };
+      const addedMembers = Array.from({ length: 21 }, (_, i) => ({
+        user: principalFor("repair-probe-" + i),
+        relation: "member",
+        object,
+      }));
+      await write({ writes: { tuple_keys: addedMembers } });
+      const recipientPrincipal = principalFor(recipient);
+      assert(/^[A-Za-z0-9:_-]+$/.test(recipientPrincipal));
+      await executeSQL(`DELETE FROM heimdall_managed.membership_candidates WHERE product_id='${schema}'
+        AND environment='verification' AND workspace_id='${workspaceId}' AND principal='${recipientPrincipal}';`);
+      const pool = new Pool({ connectionString: rebuildDB.href });
+      const options = { workspaceId, policyVersion: "reference-v1", auditSinks: [] };
+      const page = async (language, checkpoint) => {
+        if (language === "ts")
+          return rebuildDiscovery(
+            pool,
+            JSON.stringify(config),
+            JSON.stringify(manifest),
+            { ...options, openfgaToken: variables.HEIMDALL_OPENFGA_KEY, checkpoint },
+            AbortSignal.timeout(30000),
+          );
+        const { stdout } = await promisify(execFile)(
+          "go",
+          ["test", "./provisioning", "-run", "^TestDiscoveryRebuildProbe$", "-count=1", "-v"],
+          {
+            cwd: "sdk/go",
+            timeout: 45000,
+            env: {
+              ...process.env,
+              HEIMDALL_DISCOVERY_REBUILD_DATABASE: rebuildDB.href,
+              HEIMDALL_DISCOVERY_REBUILD_INPUT: JSON.stringify({
+                config,
+                manifest,
+                options: { ...options, checkpoint },
+              }),
+            },
+          },
+        );
+        const failed = /^REBUILD_PROBE_ERROR ([a-z_]+)$/m.exec(stdout);
+        if (failed) throw Object.assign(new Error(failed[1]), { code: failed[1] });
+        return JSON.parse(/^REBUILD_PROBE (.+)$/m.exec(stdout)[1]);
+      };
+      try {
+        await blocked(true);
+        try {
+          await assert.rejects(page(ledger ? "ts" : "go"), { code: "conflict" });
+        } finally {
+          await blocked(false);
+        }
+        const first = await page(ledger ? "ts" : "go");
+        assert.equal(first.processed, 20);
+        assert.equal(first.checkpoint.phase, "remote");
+        const other = ledger ? "go" : "ts";
+        await assert.rejects(page(other, { ...first.checkpoint, workspaceId: "globex" }), {
+          code: "invalid_argument",
+        });
+        const second = await page(other, first.checkpoint);
+        assert.equal(second.checkpoint.phase, "candidates");
+        assert.equal(first.processed + second.processed, 23);
+        const restored = await (await request("/workspaces", { headers: recipientHeaders })).json();
+        assert(restored.items.some(({ id }) => id === workspaceId));
+        // A direct deletion leaves a stale hint. Only the explicit check may remove it.
+        await write({ deletes: { tuple_keys: [addedMembers[0]] } });
+        const third = await page(ledger ? "ts" : "go", second.checkpoint);
+        assert.equal(third.processed, 20);
+        assert.equal(third.checkpoint.phase, "candidates");
+        const fourth = await page(other, third.checkpoint);
+        assert.equal(third.processed + fourth.processed, 23);
+        assert.equal(fourth.checkpoint, null);
+        const { rows } = await pool.query(
+          "SELECT principal FROM heimdall_managed.membership_candidates WHERE product_id=$1 AND environment=$2 AND workspace_id=$3",
+          [schema, "verification", workspaceId],
+        );
+        assert.equal(rows.length, 22);
+        assert(!rows.some(({ principal }) => principal === addedMembers[0].user));
+        assert(rows.some(({ principal }) => principal === recipientPrincipal));
+        discoveryRebuild = { remoteMembers: 23, verifiedCandidates: 23, retainedCandidates: 22 };
+      } finally {
+        await pool.end();
+      }
+    }
     await expectDenied(
       await request("/auth/logout", { method: "POST", headers: { ...recipientHeaders, origin } }),
       204,
@@ -512,6 +627,7 @@ export async function verifyReferenceProduct(input, authorize) {
         revokedInviter: 403,
       },
       lifecycle: { suspended: 204, unauthorized: 403, blockedResume: 409, resumed: 204 },
+      ...(discoveryRebuild ? { discoveryRebuild } : {}),
       otherTenant: 403,
     };
   } finally {
