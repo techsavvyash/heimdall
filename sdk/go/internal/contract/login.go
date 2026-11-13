@@ -3,19 +3,29 @@ package contract
 import "crypto/subtle"
 
 type LoginPolicy struct {
-	TenantID, OrganizationID, PolicyVersion string
-	ProviderID, Protocol                    string
-	StrictSSO                               bool
+	TenantID       string `json:"tenantId"`
+	OrganizationID string `json:"organizationId"`
+	PolicyVersion  string `json:"policyVersion"`
+	ProviderID     string `json:"providerId,omitempty"`
+	Protocol       string `json:"protocol,omitempty"`
+	StrictSSO      bool   `json:"strictSSO"`
 }
 type LoginScope struct {
-	ProductID, Environment, Issuer, ClientID, RedirectURI, ReturnToKey, BrowserBindingDigest string
-	TenantPolicy                                                                             *LoginPolicy
+	ProductID            string       `json:"productId"`
+	Environment          string       `json:"environment"`
+	Issuer               string       `json:"issuer"`
+	ClientID             string       `json:"clientId"`
+	RedirectURI          string       `json:"redirectUri"`
+	ReturnToKey          string       `json:"returnToKey"`
+	BrowserBindingDigest string       `json:"browserBindingDigest"`
+	TenantPolicy         *LoginPolicy `json:"tenantPolicy"`
 }
 type LoginRecord struct {
 	LoginScope
-	CreatedAt, ExpiresAt int64
-	State                string
-	ClaimedAt            *int64
+	CreatedAt int64  `json:"createdAt"`
+	ExpiresAt int64  `json:"expiresAt"`
+	State     string `json:"state"`
+	ClaimedAt *int64 `json:"claimedAt,omitempty"`
 }
 
 // ValidateLoginClaim follows decryption/schema validation; it does not claim storage.

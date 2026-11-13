@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { HeimdallError } from "./errors.js";
-type Policy = {
+type LoginPolicy = {
   tenantId: string;
   organizationId: string;
   policyVersion: string;
@@ -8,7 +8,7 @@ type Policy = {
   providerId?: string;
   protocol?: "saml" | "oidc";
 };
-type Scope = {
+export type LoginScope = {
   productId: string;
   environment: string;
   issuer: string;
@@ -16,9 +16,9 @@ type Scope = {
   redirectUri: string;
   returnToKey: string;
   browserBindingDigest: string;
-  tenantPolicy: Policy | null;
+  tenantPolicy: LoginPolicy | null;
 };
-type Login = Scope & {
+type Login = LoginScope & {
   createdAt: number;
   expiresAt: number;
   state: "pending" | "claimed";
@@ -26,7 +26,7 @@ type Login = Scope & {
 };
 
 // Decrypted/schema-validated input only. This does not atomically claim a callback.
-export function validateLoginClaim(record: Login, scope: Scope, now: number): void {
+export function validateLoginClaim(record: Login, scope: LoginScope, now: number): void {
   if (
     !Number.isSafeInteger(now) ||
     now < 0 ||

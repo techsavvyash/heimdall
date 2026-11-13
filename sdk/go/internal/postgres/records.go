@@ -157,6 +157,10 @@ func (r *Records) open(scope contract.RecordScope, revision, envelope, expiry, k
 	}
 	return &Record{revision, expires, value}, nil
 }
+func (r *Records) matchesScope(product, environment string) bool {
+	return r.product == product && r.environment == environment
+}
+
 func (r *Records) Create(ctx context.Context, kind, key string, value []byte, expires int64) (*Record, error) {
 	scope, hash, err := r.scope(kind, key)
 	if err != nil {

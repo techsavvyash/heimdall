@@ -31,6 +31,9 @@ export class PostgresRecords {
     if (!token(productId, 64) || !token(environment, 64))
       throw new HeimdallError("invalid_argument");
   }
+  matchesScope(productId: string, environment: string): boolean {
+    return this.productId === productId && this.environment === environment;
+  }
   protected key(kind: Kind, key: string) {
     if (!["session", "login"].includes(kind) || !token(key, 128))
       throw new HeimdallError("invalid_argument");
