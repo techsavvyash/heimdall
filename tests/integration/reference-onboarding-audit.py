@@ -43,6 +43,15 @@ def verify(products, payloads):
         assert counts["workspace.operation.read", "allow"] == 1
         assert counts["workspace.operation.resume", "allow"] == 1
         permission = {"ledger": "invoice.read", "support": "ticket.read"}[product]
+        if "strictSSO" in item:
+            assert item["strictSSO"] == {
+                "workspace": "globex", "membership": "allowed by OpenFGA",
+                "discovery": "omitted", "roles": [], "scopedRead": 403,
+            }
+            globex_results = [e for e in results.values() if e["tenantId"] == "globex"]
+            for action in ("workspace.member", "roles.list", permission):
+                outcomes = {e["outcome"] for e in globex_results if e["action"] == action}
+                assert outcomes == {"deny"}, (product, action, outcomes)
         for action in ("roles.list", permission):
             assert sum(e["action"] == action and e["outcome"] == "allow" and
                        e["tenantId"] == operation["workspaceId"] for e in results.values()) >= 1
