@@ -64,6 +64,9 @@ func (a *RetainedRuntimeAudit) DeferAttempt(ctx context.Context, sink, id string
 func (a *RetainedRuntimeAudit) Quarantine(ctx context.Context, sink, id string, attempts int) (bool, error) {
 	return a.audit.Quarantine(ctx, sink, id, attempts)
 }
+func (a *RetainedRuntimeAudit) RequeueQuarantined(ctx context.Context, sink, id string, attempts int, retryAt int64) (bool, error) {
+	return a.audit.RequeueQuarantined(ctx, sink, id, attempts, retryAt)
+}
 func (a *RetainedRuntimeAudit) Acknowledge(ctx context.Context, batch, receipt contract.AuditDelivery, at int64) error {
 	return a.audit.Acknowledge(ctx, batch, receipt, at)
 }

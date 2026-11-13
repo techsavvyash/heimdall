@@ -533,7 +533,7 @@ try:
    delivery_test(rejected)
    sql("UPDATE heimdall.schema_metadata SET state='ready'",delivery_db)
    delivery_test(dict(rejected,HEIMDALL_TEST_RETAINED_DELIVERY_URL=selected['HEIMDALL_TEST_RETAINED_DELIVERY_URL']+'%20-c%20default_transaction_read_only%3Don'))
-   assert sql("SELECT count(*) FROM heimdall.audit_deliveries WHERE environment IN ('delivery-ts','delivery-go') AND state='delivered' AND attempts=1 AND next_attempt_at=4000 AND delivered_at=5000",delivery_db)=='2'
+   assert sql("SELECT count(*) FROM heimdall.audit_deliveries WHERE environment IN ('delivery-ts','delivery-go') AND state='delivered' AND attempts=3 AND next_attempt_at=4800 AND delivered_at=5000",delivery_db)=='2'
   print('Retained outbox passed: v4 and v5 readiness refusal and scoped delivery transitions in TS and Go',flush=True)
   # END v5 public factory proof
   # Exercise the authorization boundary with the real v5 append port.

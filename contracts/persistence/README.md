@@ -198,11 +198,18 @@ exact observed counter. It increments the counter and sets a future retry time i
 one committed transaction, returning the new counter or null/nil when no new claim
 was obtained. Dispatch only after a confirmed returned claim. outcome_unknown is
 not ownership; retrying an ambiguous claim with its old counter must not dispatch.
-Attempts count durable claims, including a process stopping before HTTP dispatch.
+The counter advances on durable claims, including a process stopping before HTTP
+dispatch, and on explicit requeue to invalidate earlier callbacks.
 
 The counter is bounded by the existing SQL integer type. Incrementing 2147483647
 is rejected; the future worker must quarantine/alert instead of wrapping/resetting.
-Operator replay must preserve monotonicity or advance the counter, never reset it.
+The operator storage action `requeueQuarantined` / `RequeueQuarantined` matches
+the exact scope, sink, event and observed counter in quarantined state. It
+increments the counter, sets the supplied next-attempt time and makes the row
+pending. Leave room for one subsequent claim. A stale counter or non-quarantined
+row returns false. A lost commit response requires observing durable state before
+further action. Operator authorization and transport remain the caller's
+responsibility.
 
 DeferAttempt requires the current positive attempt counter and pending state. It
 uses GREATEST(existing next-attempt time, requested time), so replay/stale callbacks

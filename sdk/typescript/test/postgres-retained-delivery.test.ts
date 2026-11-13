@@ -38,6 +38,23 @@ test.skipIf(!url || rejected)("gates retained delivery reads and writes", async 
     ]);
     expect(await port.beginAttempt("siem", "ordinary", 0, 2000, 3000)).toBe(1);
     expect(await port.deferAttempt("siem", "ordinary", 1, 4000)).toBe(true);
+    expect(await port.quarantine("siem", "ordinary", 1)).toBe(true);
+    expect(await port.requeueQuarantined("other", "ordinary", 1, 4500)).toBe(false);
+    await expect(port.requeueQuarantined("siem", "ordinary", 2147483646, 4500)).rejects.toThrow(
+      "invalid_argument",
+    );
+    const requeues = await Promise.all([
+      port.requeueQuarantined("siem", "ordinary", 1, 4500),
+      port.requeueQuarantined("siem", "ordinary", 1, 4500),
+    ]);
+    expect(requeues.sort()).toEqual([false, true]);
+    expect(await port.requeueQuarantined("siem", "ordinary", 1, 4500)).toBe(false);
+    expect(await port.quarantine("siem", "ordinary", 1)).toBe(false);
+    expect(await port.deferAttempt("siem", "ordinary", 1, 6000)).toBe(false);
+    expect(await port.pending("siem", 4500, 8)).toMatchObject([
+      { eventId: "ordinary", attempts: 2, event: { eventId: "ordinary" } },
+    ]);
+    expect(await port.beginAttempt("siem", "ordinary", 2, 4500, 4800)).toBe(3);
     await port.acknowledge(batch, batch, 5000);
     expect(await port.pending("siem", 6000, 8)).toEqual([]);
   } finally {
@@ -54,6 +71,9 @@ test.skipIf(!url || !rejected)("refuses delivery during incompatible storage", a
     );
     await expect(port.deferAttempt("siem", "ordinary", 1, 4000)).rejects.toThrow("unavailable");
     await expect(port.quarantine("siem", "ordinary", 0)).rejects.toThrow("unavailable");
+    await expect(port.requeueQuarantined("siem", "ordinary", 1, 4500)).rejects.toThrow(
+      "unavailable",
+    );
     await expect(port.acknowledge(batch, batch, 5000)).rejects.toThrow("unavailable");
   } finally {
     await pool.end();

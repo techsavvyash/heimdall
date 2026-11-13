@@ -79,6 +79,7 @@ export class PostgresAudit {
       beginAttempt: audit.beginAttempt.bind(audit),
       deferAttempt: audit.deferAttempt.bind(audit),
       quarantine: audit.quarantine.bind(audit),
+      requeueQuarantined: audit.requeueQuarantined.bind(audit),
       acknowledge: audit.acknowledge.bind(audit),
       retire: audit.retire.bind(audit),
       applyHold: audit.applyHold.bind(audit),
@@ -1912,6 +1913,31 @@ WITH selected AS MATERIALIZED (
         const rows = await client.query(
           "UPDATE heimdall.audit_deliveries SET state='quarantined' WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=$4 AND attempts=$5 AND state IN ('pending','quarantined') RETURNING attempts",
           args,
+        );
+        return rows.rowCount === 1;
+      },
+      signal,
+    );
+  }
+
+  // Advancing the counter invalidates callbacks from before quarantine.
+  async requeueQuarantined(
+    sink: string,
+    eventId: string,
+    expectedAttempts: number,
+    retryAt: number,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    const args = this.deliveryArgs(sink, eventId, expectedAttempts);
+    if (expectedAttempts >= 2147483646 || !Number.isSafeInteger(retryAt) || retryAt < 0)
+      throw new HeimdallError("invalid_argument");
+    return transaction(
+      this.pool,
+      async (client) => {
+        if (this.retainedRuntime) await lockRetentionAdmission(client);
+        const rows = await client.query(
+          "UPDATE heimdall.audit_deliveries SET state='pending',attempts=attempts+1,next_attempt_at=$6 WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=$4 AND attempts=$5 AND state='quarantined' RETURNING attempts",
+          [...args, retryAt],
         );
         return rows.rowCount === 1;
       },
