@@ -1916,7 +1916,7 @@ const resolutionSQL = `SELECT readiness.ready, CASE WHEN d.decision_id IS NULL T
  LEFT JOIN heimdall.audit_events a ON a.product_id=d.product_id AND a.environment=d.environment AND a.event_id=c.recovery_event_id`;
 
 const retainedReadSQL = `SELECT readiness.ready, i.event_id IS NOT NULL AS present, e.event_id IS NOT NULL AS live,
- (SELECT count(*)::int FROM (SELECT 1 FROM heimdall_retention.retirements r WHERE r.product_id=$5 AND r.environment=$6 AND r.member_event_ids ? $7 LIMIT 2) matches) AS markers,
+ coalesce(m.marker_count,0) AS markers,
  i.tenant_id,
  CASE WHEN i.event_id IS NULL THEN NULL ELSE jsonb_build_object('productId',i.product_id,'environment',i.environment,'tenantId',i.tenant_id,'eventId',i.event_id,'recordedAt',i.recorded_at,'digest',encode(i.payload_digest,'hex'),'kind',i.kind,'decisionId',i.decision_id,'routing',i.routing) END AS identity,
  e.event AS payload,
@@ -1934,14 +1934,19 @@ const retainedReadSQL = `SELECT readiness.ready, i.event_id IS NOT NULL AS prese
     to_jsonb(ARRAY(SELECT id FROM unnest(array_remove(ARRAY[d.request_event_id,d.terminal_event_id,d.recovery_event_id],NULL)) id ORDER BY id COLLATE "C")) END
    AND m.retired_at>=i.recorded_at+m.retain_for_ms
    AND EXISTS(SELECT 1 FROM heimdall_retention.event_identities a WHERE a.product_id=$5 AND a.environment=$6 AND a.event_id=m.administration_event_id AND a.tenant_id IS NOT DISTINCT FROM i.tenant_id AND a.recorded_at=m.retired_at)
-   AND NOT EXISTS(SELECT 1 FROM heimdall.audit_events remaining WHERE remaining.product_id=$5 AND remaining.environment=$6 AND m.member_event_ids ? remaining.event_id)
+   AND NOT EXISTS(SELECT 1 FROM heimdall.audit_events remaining WHERE remaining.product_id=$5 AND remaining.environment=$6
+    AND remaining.event_id=ANY(ARRAY[i.event_id,d.request_event_id,d.terminal_event_id,d.recovery_event_id]))
   END,false) AS valid
 FROM (${capacitySQL}) readiness
 LEFT JOIN heimdall_retention.event_identities i ON i.product_id=$5 AND i.environment=$6 AND i.event_id=$7
 LEFT JOIN heimdall.audit_events e ON e.product_id=$5 AND e.environment=$6 AND e.event_id=$7
 LEFT JOIN heimdall_capacity.event_charges c ON c.product_id=$5 AND c.environment=$6 AND c.event_id=$7
 LEFT JOIN heimdall_retention.decision_identities d ON d.product_id=i.product_id AND d.environment=i.environment AND d.decision_id=i.decision_id
-LEFT JOIN LATERAL (SELECT r.* FROM heimdall_retention.retirements r WHERE r.product_id=$5 AND r.environment=$6 AND r.member_event_ids ? $7 LIMIT 1) m ON true
+LEFT JOIN LATERAL (
+ SELECT matches.*, count(*) OVER ()::int AS marker_count
+ FROM (SELECT r.* FROM heimdall_retention.retirements r WHERE r.product_id=$5 AND r.environment=$6 AND r.member_event_ids ? $7 LIMIT 2) matches
+ LIMIT 1
+) m ON true
 `;
 
 const eligibilityReadSQL = retainedReadSQL.replace(

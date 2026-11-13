@@ -42,6 +42,10 @@ test.skipIf(!process.env.HEIMDALL_TEST_RETAINED_READ_URL)(
       await expect(a.inspectRetainedEvent("tenant-1", "normal-terminal")).rejects.toThrow(
         "audit_unavailable",
       );
+      await pool.query(fixture.conflictingMarkerSql);
+      await expect(a.inspectRetainedEvent("tenant-1", "ordinary")).rejects.toThrow(
+        "audit_unavailable",
+      );
       await pool.query("UPDATE heimdall.schema_metadata SET state='migrating'");
       await expect(a.inspectRetainedEvent("tenant-1", "ordinary")).rejects.toThrow("unavailable");
     } finally {

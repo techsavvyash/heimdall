@@ -21,8 +21,8 @@ func TestRetainedInspection(t *testing.T) {
 	db := sql.OpenDB(connector)
 	defer db.Close()
 	var fixture struct {
-		ProductID, Environment string
-		Cases                  []struct{ Name, TenantID, EventID, State string }
+		ProductID, Environment, ConflictingMarkerSQL string
+		Cases                                        []struct{ Name, TenantID, EventID, State string }
 	}
 	raw, err := os.ReadFile("../../../../contracts/fixtures/retained-inspection.json")
 	if err != nil {
@@ -70,6 +70,10 @@ func TestRetainedInspection(t *testing.T) {
 	exec("UPDATE heimdall.audit_events SET payload_digest=decode(repeat('00',32),'hex') WHERE product_id='ledger' AND environment='staging' AND event_id='normal-terminal'")
 	if _, e = a.InspectRetainedEvent(ctx, &tenant, "normal-terminal"); e != contract.ErrAuditUnavailable {
 		t.Fatal(e)
+	}
+	exec(fixture.ConflictingMarkerSQL)
+	if _, e = a.InspectRetainedEvent(ctx, &tenant, "ordinary"); e != contract.ErrAuditUnavailable {
+		t.Fatal("conflicting retirement marker", e)
 	}
 	exec("UPDATE heimdall.schema_metadata SET state='migrating'")
 	if _, e = a.InspectRetainedEvent(ctx, &tenant, "ordinary"); e != contract.ErrUnavailable {

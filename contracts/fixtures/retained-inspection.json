@@ -1,6 +1,7 @@
 {
   "productId": "ledger",
   "environment": "staging",
+  "conflictingMarkerSql": "BEGIN; SET LOCAL session_replication_role=replica; INSERT INTO heimdall_retention.retirements SELECT product_id,environment,'conflicting-marker','normal-terminal',tenant_id,retired_at,retain_for_ms,administration_event_id,member_event_ids FROM heimdall_retention.retirements WHERE product_id='ledger' AND environment='staging' AND target_event_id='ordinary'; COMMIT;",
   "cases": [
     {
       "name": "intentional retirement",

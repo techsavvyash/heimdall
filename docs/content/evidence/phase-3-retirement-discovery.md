@@ -25,8 +25,8 @@ that became eligible after an earlier page. The product keeps cursors private
 to its maintenance job and uses the same proposal ID and timestamp when
 retrying an unknown outcome. A candidate can become protected before dispatch.
 The retirement transaction checks the current group under lock. The page caps
-source keys and sequential group reads. Physical cost of checking marker history
-at production volumes still needs qualification.
+source keys and sequential group reads. [[phase-3-retirement-marker-scale]] measures
+the marker lookup cost and records a candidate index for a future migration.
 
 Pinned PostgreSQL run `heimdall-capacity-backfill-755389ad280f489e9fc27043bc62deef`
 verified both SDKs under a SELECT-only role before and after retirement.
