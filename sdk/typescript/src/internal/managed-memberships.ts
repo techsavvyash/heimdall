@@ -13,6 +13,8 @@ import type { WorkspaceRecords } from "./postgres/workspaces.js";
 export type MembershipInput = Readonly<{
   target: Readonly<Intent["target"]>;
   idempotencyKey: string;
+  /** Require the current direct roles to match this snapshot before dispatch. */
+  expectedDirectRoles?: readonly string[];
 }>;
 type RolesInput = MembershipInput & { readonly roles: readonly string[] };
 type Call = { signal: AbortSignal };
@@ -84,6 +86,14 @@ export function managedMemberships(
     if (!auth.owns(principal)) throw new HeimdallError("unauthenticated");
     const roles = "roles" in input && Array.isArray(input.roles) ? [...input.roles] : [];
     if (
+      input.expectedDirectRoles !== undefined &&
+      (!Array.isArray(input.expectedDirectRoles) ||
+        (kind !== "assign_roles" && kind !== "remove_member"))
+    )
+      throw new HeimdallError("invalid_argument");
+    const expected =
+      input.expectedDirectRoles === undefined ? undefined : [...input.expectedDirectRoles];
+    if (
       ((kind === "add_member" || kind === "assign_roles") &&
         !Array.isArray((input as RolesInput).roles)) ||
       input.target.issuer !== config.issuer
@@ -148,6 +158,8 @@ export function managedMemberships(
                 ownerRole,
                 sponsor ? { ...intent, actor: sponsor } : intent,
                 operation,
+                false,
+                expected,
               );
         return true;
       },

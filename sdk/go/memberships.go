@@ -15,6 +15,8 @@ import (
 type MembershipInput struct {
 	Target         Identity
 	IdempotencyKey string
+	// ExpectedDirectRoles, when non-nil, requires this role snapshot before dispatch.
+	ExpectedDirectRoles []string
 }
 
 type MembershipRolesInput struct {
@@ -102,6 +104,10 @@ func (m *Memberships) run(ctx context.Context, principal *Principal, kind string
 	if input.Target.Issuer != w.cfg.Issuer || input.Roles == nil {
 		return empty, ErrInvalidArgument
 	}
+	expected := slices.Clone(input.ExpectedDirectRoles)
+	if expected != nil && kind != "assign_roles" && kind != "remove_member" {
+		return empty, ErrInvalidArgument
+	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	intent := contract.Intent{
@@ -161,7 +167,7 @@ func (m *Memberships) run(ctx context.Context, principal *Principal, kind string
 			if kind == "transfer_owner" {
 				apply, err = port.model.PlanOwnershipTransfer(operation, port.ownerRole, intent, false)
 			} else {
-				apply, err = port.model.PlanMembership(operation, port.ownerRole, plan)
+				apply, err = port.model.PlanMembership(operation, port.ownerRole, plan, expected)
 			}
 			return err == nil, err
 		})

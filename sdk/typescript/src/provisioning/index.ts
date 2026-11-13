@@ -196,3 +196,5 @@ export { prepareEnterpriseProvider } from "./enterprise-provider.js";
 export type { EnterpriseProviderOptions } from "./enterprise-provider.js";
 export { createDirectoryReader } from "./directory-reader.js";
 export type { DirectoryReaderOptions } from "./directory-reader.js";
+export { planDirectoryRevocation } from "./directory-revocation.js";
+export type { DirectoryGrantSource } from "./directory-revocation.js";

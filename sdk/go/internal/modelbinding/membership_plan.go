@@ -10,16 +10,16 @@ import (
 
 // PlanMembership reads current direct grants and checks manifest delegation.
 // The caller must serialize the snapshot and commit dispatch before invoking the plan.
-func (p *PinnedModel) PlanMembership(ctx context.Context, ownerRole string, i contract.Intent) (func(context.Context, string) error, error) {
-	return p.planMembership(ctx, ownerRole, i, false)
+func (p *PinnedModel) PlanMembership(ctx context.Context, ownerRole string, i contract.Intent, expected []string) (func(context.Context, string) error, error) {
+	return p.planMembership(ctx, ownerRole, i, false, expected)
 }
 
 // PlanMembershipRecovery reconciles an already authorized intent after a verified recovery claim.
 func (p *PinnedModel) PlanMembershipRecovery(ctx context.Context, ownerRole string, i contract.Intent) (func(context.Context, string) error, error) {
-	return p.planMembership(ctx, ownerRole, i, true)
+	return p.planMembership(ctx, ownerRole, i, true, nil)
 }
 
-func (p *PinnedModel) planMembership(ctx context.Context, ownerRole string, i contract.Intent, recovering bool) (func(context.Context, string) error, error) {
+func (p *PinnedModel) planMembership(ctx context.Context, ownerRole string, i contract.Intent, recovering bool, expected []string) (func(context.Context, string) error, error) {
 	switch i.Kind {
 	case "add_member", "assign_roles", "remove_member":
 	default:
@@ -82,6 +82,20 @@ func (p *PinnedModel) planMembership(ctx context.Context, ownerRole string, i co
 	}
 	if current[owner.Assignment] {
 		return nil, contract.ErrForbidden
+	}
+	if expected != nil {
+		seen := make(map[string]bool, len(expected))
+		for _, role := range expected {
+			if _, err := verified.Role(role); err != nil || seen[role] {
+				return nil, contract.ErrInvalidArgument
+			}
+			seen[role] = true
+		}
+		for _, name := range names {
+			if current[verified.compiled.Roles[name].Assignment] != seen[name] {
+				return nil, contract.ErrConflict
+			}
+		}
 	}
 	if i.Kind == "assign_roles" && !current["member"] {
 		return nil, contract.ErrNotFound

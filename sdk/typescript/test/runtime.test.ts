@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, expect, test, vi } from "vitest";
 import { createHeimdall, auditEventDigest as auditDigest } from "../src/index.js";
 import type { RuntimeOptions } from "../src/index.js";
+import { revokeDirectoryGrant } from "../src/index.js";
 import { compileTenantModel } from "../src/internal/tenant-model.js";
 const read = (name: string) =>
   JSON.parse(readFileSync(new URL("../../../contracts/fixtures/" + name, import.meta.url), "utf8"));
@@ -1092,6 +1093,34 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         call.signal,
       );
       await expect(enroll(runtime, actor, enrollment, call.signal)).rejects.toThrow("conflict");
+      const revoke = {
+        target,
+        idempotencyKey: "revoke-directory-roles",
+        ruleId: "employee-v1",
+        ownerRole: base.manifest.ownerRole,
+        currentRoles: fixtureMembership.initialRoles,
+        sources: [
+          {
+            kind: "directory" as const,
+            ruleId: "employee-v1",
+            roles: fixtureMembership.initialRoles,
+          },
+          { kind: "independent" as const, roles: [] },
+        ],
+      };
+      await expect(
+        revokeDirectoryGrant(
+          changes,
+          actor,
+          { ...revoke, currentRoles: ["approver"] },
+          call.signal,
+        ),
+      ).rejects.toThrow("conflict");
+      const revoked = await revokeDirectoryGrant(changes, actor, revoke, call.signal);
+      expect(revoked.status).toBe("confirmed");
+      await expect(revokeDirectoryGrant(changes, actor, revoke, call.signal)).resolves.toEqual(
+        revoked,
+      );
       s.fga.fault = "lost_response";
       const beforeCleanup = s.fga.writes;
       const pending = await directory.reconcile(runtime, actor, plan, call.signal);

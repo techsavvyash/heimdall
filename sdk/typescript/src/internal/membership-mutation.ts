@@ -9,6 +9,7 @@ export async function planMembership(
   intent: Intent,
   signal: AbortSignal,
   recovering = false,
+  expectedDirectRoles?: readonly string[],
 ) {
   const { kind, workspaceId, actor, target } = intent;
   if (!["add_member", "assign_roles", "remove_member"].includes(kind))
@@ -36,6 +37,20 @@ export async function planMembership(
   }
   const current = await model.directMembership(user, workspaceId, signal);
   if (current.has(verified.roles[ownerRole]!.assignment)) throw new HeimdallError("forbidden");
+  if (expectedDirectRoles !== undefined) {
+    const expected = new Set(expectedDirectRoles);
+    if (
+      expected.size !== expectedDirectRoles.length ||
+      [...expected].some((name) => !Object.hasOwn(verified.roles, name))
+    )
+      throw new HeimdallError("invalid_argument");
+    if (
+      Object.entries(verified.roles).some(
+        ([name, role]) => current.has(role.assignment) !== expected.has(name),
+      )
+    )
+      throw new HeimdallError("conflict");
+  }
   const isMember = current.has("member");
   if (kind === "assign_roles" && !isMember) throw new HeimdallError("not_found");
   if (!recovering && kind === "add_member" && isMember) throw new HeimdallError("conflict");

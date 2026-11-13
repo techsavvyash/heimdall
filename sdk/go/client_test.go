@@ -1279,6 +1279,27 @@ VALUES('ledger',$1,sha256(convert_to($2,'UTF8')),$3,$4,'org-a',1,'inactive') RET
 	if _, err := enroll(ctx, client, actor, enrollment); !errors.Is(err, heimdall.ErrConflict) {
 		t.Fatal("denied subject enrollment", err)
 	}
+	revoke := heimdall.DirectoryGrantRevocation{
+		Target: target, IdempotencyKey: "revoke-directory-roles",
+		DirectoryRevocationInput: provisioning.DirectoryRevocationInput{
+			RuleID: "employee-v1", OwnerRole: "owner", CurrentRoles: []string{"approver"},
+			Sources: []provisioning.DirectoryGrantSource{
+				{Kind: "directory", RuleID: "employee-v1", Roles: mutation.InitialRoles},
+				{Kind: "independent", Roles: []string{}},
+			},
+		},
+	}
+	if _, err := members.RevokeDirectoryGrant(ctx, actor, revoke); !errors.Is(err, heimdall.ErrConflict) {
+		t.Fatal("stale directory roles", err)
+	}
+	revoke.CurrentRoles = mutation.InitialRoles
+	revoked, err := members.RevokeDirectoryGrant(ctx, actor, revoke)
+	if err != nil || revoked.Status != "confirmed" {
+		t.Fatal("directory role revocation", revoked, err)
+	}
+	if again, err := members.RevokeDirectoryGrant(ctx, actor, revoke); err != nil || again != revoked {
+		t.Fatal("directory role revocation replay", again, err)
+	}
 	h.providerFault.Store("lost_response")
 	beforeCleanup := h.writes.Load()
 	pending, err := directory.Reconcile(ctx, client, actor, target.Subject, revision, []string{workspaceID})

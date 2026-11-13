@@ -71,4 +71,22 @@ If OpenFGA may have applied a removal and the response is lost, the SDK returns 
 
 PostgreSQL run `heimdall-records-5f9ccfdd51d04f9a847405c0fe28446f` exercised both public SDKs with a fault-injected OpenFGA fixture. The tests covered denial required before removal, a lost response after apply, a conflicting plan, retry of the original operation, recovery and final acknowledgement.
 
-This path covers administrator-driven whole-membership removal. Grant provenance and selective cleanup, unattended scheduling authority, ingestion checkpoints, reactivation, lifecycle audit export and measured end-to-end worker latency remain part of Phase 6.
+This path covers administrator-driven whole-membership removal. Unattended scheduling authority, reactivation, lifecycle audit export and measured end-to-end worker latency remain part of Phase 6.
+
+## Selective rule revocation
+
+TypeScript exposes `revokeDirectoryGrant`, and Go exposes `Memberships.RevokeDirectoryGrant`. Supply the disabled rule, the subject's current direct roles, and the product's grant sources for that subject and workspace. Include independent membership sources even when they grant zero roles. The SDK removes roles exclusive to the disabled rule and preserves shared roles, independent membership, and current roles outside that rule. It never reintroduces a role from historical source data. An owner needs the separate ownership workflow.
+
+```mermaid
+flowchart LR
+  P[Product provides serialized grant sources and direct role snapshot] --> R[Compute roles exclusive to the disabled rule]
+  R --> C[Compare direct roles before managed dispatch]
+  C -->|Snapshot changed| F[Return conflict]
+  C -->|Snapshot matches| M[Run audited membership mutation]
+  M -->|Confirmed| A[Product finalizes source removal]
+  M -->|Uncertain| U[Retain operation for recovery]
+```
+
+The product serializes edits to grant provenance for the subject and workspace until the result is confirmed. Preserve the input snapshot and idempotency key across retries. The SDK checks the current direct role snapshot before dispatch and uses the managed workspace revision to serialize supported writes. A new operation based on a stale role snapshot returns a conflict. The product finalizes its source change after confirmation. The helper accepts product-owned provenance and does not automatically build a full grant-source ledger from legacy membership writes.
+
+The shared TypeScript and Go fixtures cover overlapping rules, independent sources, ownership and missing provenance. PostgreSQL run `heimdall-records-dd5b1989d3644be3a43b27184c4a8eb2` exercises stale-snapshot rejection, removal of a directory-only role while retaining an independently sourced membership, and idempotent replay.

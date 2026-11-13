@@ -46,3 +46,5 @@ export type { ReconcileOptions, ReconcileResult } from "./internal/reconcile-ope
 
 export type { TenantSSOPolicySource } from "./internal/audited-authentication.js";
 export type { TenantSSOPolicy } from "./internal/enterprise-evidence.js";
+
+export { revokeDirectoryGrant } from "./internal/directory-revocation.js";
