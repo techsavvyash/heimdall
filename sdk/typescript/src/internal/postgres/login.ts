@@ -6,7 +6,7 @@ import type { LoginScope } from "../login-contract.js";
 import type { PostgresRecords } from "./records.js";
 
 type Target = Omit<LoginScope, "browserBindingDigest">;
-type Federation = { intentId: string; authRequestId: string };
+type Federation = { intentId: string; authRequestId: string; previousSessionKey?: string };
 type PreparedFederation = Federation & { authorizationUrl: string };
 type LoginStart = {
   state: string;
@@ -81,9 +81,11 @@ function validTarget(target: Target): boolean {
 
 function validFederation(value: unknown): value is Federation {
   return (
-    shape(value, ["intentId", "authRequestId"]) &&
+    shape(value, ["intentId", "authRequestId"], ["previousSessionKey"]) &&
     token(value.intentId, 200) &&
-    token(value.authRequestId, 200)
+    token(value.authRequestId, 200) &&
+    (!Object.hasOwn(value, "previousSessionKey") ||
+      (typeof value.previousSessionKey === "string" && browserSecret(value.previousSessionKey)))
   );
 }
 
@@ -185,6 +187,9 @@ export class BrowserLoginRecords {
     const federation = prepared && {
       intentId: prepared.intentId,
       authRequestId: prepared.authRequestId,
+      ...(prepared.previousSessionKey === undefined
+        ? {}
+        : { previousSessionKey: prepared.previousSessionKey }),
     };
     if (prepared && (!validFederation(federation) || !prepared.authorizationUrl))
       throw new HeimdallError("unavailable");
@@ -234,9 +239,17 @@ export class BrowserLoginRecords {
     browserBinding: string,
     intentId: string,
     signal?: AbortSignal,
+    previousSessionKey?: string,
   ) {
     if (!token(intentId, 200)) throw new HeimdallError("unauthenticated");
-    const claim = await this.claimRecord(target, state, browserBinding, signal, intentId);
+    const claim = await this.claimRecord(
+      target,
+      state,
+      browserBinding,
+      signal,
+      intentId,
+      previousSessionKey,
+    );
     return {
       nonce: claim.nonce,
       pkceVerifier: claim.pkceVerifier,
@@ -251,6 +264,7 @@ export class BrowserLoginRecords {
     browserBinding: string,
     signal?: AbortSignal,
     intentId?: string,
+    previousSessionKey?: string,
   ) {
     if (signal) checkCancellation(signal);
     if (!browserSecret(state) || !browserSecret(browserBinding))
@@ -267,7 +281,11 @@ export class BrowserLoginRecords {
       { ...target, browserBindingDigest: hash(browserBinding).digest("hex") },
       now,
     );
-    if (record.federation?.intentId !== intentId) throw new HeimdallError("unauthenticated");
+    if (
+      record.federation?.intentId !== intentId ||
+      record.federation?.previousSessionKey !== previousSessionKey
+    )
+      throw new HeimdallError("unauthenticated");
     const claimed: Payload = { ...record, state: "claimed", claimedAt: now };
     const updated = await this.store.compareAndSwap(
       "login",

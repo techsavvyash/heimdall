@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/techsavvyash/heimdall/sdk/go/internal/auditflow"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/identity"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/postgres"
@@ -45,8 +46,37 @@ func TestLiveFederationHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	metadata, err := identity.DiscoverOIDC(ctx, input.Config.Issuer, input.Config.Profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy := input.Policy
+	source := func(context.Context, string) (contract.LoginPolicy, int64, error) {
+		return policy, 300000, nil
+	}
+	var audits int
+	auth, err := auditflow.NewAuthentication(identity.StatusConfig{
+		Config:    identity.Config{Issuer: input.Config.Issuer, Audience: input.Config.Audience, JWKSURI: metadata.JWKSURI, Profile: input.Config.Profile},
+		ProductID: "federation", Environment: "verification", PolicyVersion: "probe-runtime", ClientID: input.Config.ClientID,
+	}, func(context.Context) (string, error) { return input.Config.ClientSecret, nil }, identity.Gate{
+		Check:      func(context.Context, identity.Identity) (bool, error) { return false, nil },
+		Invalidate: func(context.Context, identity.Negative) error { return nil },
+	}, func(_ context.Context, event map[string]any) (contract.AuditReceipt, error) {
+		audits++
+		digest, err := contract.AuditDigest(event)
+		return contract.AuditReceipt{ProductID: "federation", Environment: "verification", EventID: event["eventId"].(string),
+			RecordedAt: int64(event["recordedAt"].(float64)), PayloadDigest: digest}, err
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions, err := NewSessions(adapter, auth, store, "/", 0, 0, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions.ConfigureFederation(FederationOptions{Policy: source, Credential: func(context.Context) (string, error) { return input.Credential, nil }})
 	w := httptest.NewRecorder()
-	if err := adapter.StartFederation(w, httptest.NewRequest(http.MethodGet, input.Config.RedirectURI, nil).WithContext(ctx), input.Policy, input.Credential); err != nil {
+	if err := sessions.StartFederation(w, httptest.NewRequest(http.MethodGet, input.Config.RedirectURI, nil).WithContext(ctx), "acme"); err != nil {
 		t.Fatal("start", err)
 	}
 	start := w.Result()
@@ -68,12 +98,14 @@ func TestLiveFederationHTTP(t *testing.T) {
 	if response.StatusCode != 200 || json.NewDecoder(response.Body).Decode(&bridge) != nil {
 		t.Fatal("bridge rejected federation")
 	}
-	complete := func(callback string, cookie bool) (*CallbackResult, error) {
+	complete := func(callback string, cookie bool) (*http.Response, error) {
 		r := httptest.NewRequest(http.MethodGet, callback, nil).WithContext(ctx)
 		if cookie {
 			r.AddCookie(start.Cookies()[0])
 		}
-		return adapter.FederationCallback(r, input.Policy, 300000, input.Credential)
+		w := httptest.NewRecorder()
+		err := sessions.Callback(w, r)
+		return w.Result(), err
 	}
 	if _, err := complete(bridge.Callback, false); !errors.Is(err, contract.ErrUnauthenticated) {
 		t.Fatal("missing cookie was accepted", err)
@@ -88,22 +120,24 @@ func TestLiveFederationHTTP(t *testing.T) {
 	if _, err := complete(changed.String(), true); !errors.Is(err, contract.ErrUnauthenticated) {
 		t.Fatal("wrong intent was accepted", err)
 	}
-	rotated := input.Policy
-	rotated.PolicyVersion = "rotated"
-	rotationRequest := httptest.NewRequest(http.MethodGet, bridge.Callback, nil).WithContext(ctx)
-	rotationRequest.AddCookie(start.Cookies()[0])
-	if _, err := adapter.FederationCallback(rotationRequest, rotated, 300000, input.Credential); !errors.Is(err, contract.ErrUnauthenticated) {
+	policy.PolicyVersion = "rotated"
+	if _, err := complete(bridge.Callback, true); !errors.Is(err, contract.ErrUnauthenticated) {
 		t.Fatal("changed policy was accepted", err)
 	}
+	policy = input.Policy
 	result, err := complete(bridge.Callback, true)
-	if err != nil {
+	if err != nil || result.StatusCode != 303 || len(result.Cookies()) != 2 {
 		t.Fatal("callback failed", err)
 	}
-	evidence := result.EnterpriseEvidence
-	if evidence == nil || evidence.Subject != input.Subject || evidence.TenantID != "acme" ||
-		evidence.ProviderID != input.Policy.ProviderID || evidence.Protocol != input.Policy.Protocol ||
-		evidence.OrganizationID != input.Policy.OrganizationID {
-		t.Fatal("unexpected federation evidence")
+	r := httptest.NewRequest(http.MethodGet, input.Config.RedirectURI, nil).WithContext(ctx)
+	r.AddCookie(result.Cookies()[1])
+	principal, err := sessions.Authenticate(r)
+	if err != nil || principal.Identity().Subject != input.Subject || audits != 2 {
+		t.Fatal("audited session did not authenticate", err)
+	}
+	evidence := identity.EnterpriseEvidence(principal)
+	if evidence == nil || evidence.TenantID != "acme" || evidence.ProviderID != input.Policy.ProviderID || evidence.Protocol != input.Policy.Protocol {
+		t.Fatal("unexpected saved evidence")
 	}
 	body, _ = json.Marshal(map[string]string{"sessionId": evidence.ProviderSessionID})
 	cleanup, _ := http.NewRequestWithContext(ctx, http.MethodPost, input.Bridge+"/session", bytes.NewReader(body))

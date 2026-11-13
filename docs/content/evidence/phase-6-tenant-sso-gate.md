@@ -101,3 +101,25 @@ sequenceDiagram
 Railway runs `2caed4cb-31c2-4dac-8f5d-77c7c298ac39` for SAML and `7c4e7781-8efe-49a7-95b7-d3cc402e5fff` for OIDC passed in both SDKs. The probe drove the upstream fixture forms over HTTP and exercised the real SDK redirect and callback handlers against ZITADEL. Both handlers rejected missing cookies, wrong intents, changed policy and replay. The first OIDC trial exposed HTTP 201 on ZITADEL session creation. Both SDKs now accept that success status.
 
 These runs verify the internal HTTP adapters through verified evidence. Public session entry points, atomic local account switching and session issuance remain part of Phase 6.
+
+## Browser session issuance and replacement
+
+Product code calls `sessions.startFederation(request, workspaceId)` in TypeScript or `sessions.StartFederation(w, r, workspaceID)` in Go. The product supplies its existing tenant policy resolver and a server-only ZITADEL federation credential. The same registered callback handles ordinary and enterprise login. On federation completion, the SDK verifies current identity status, commits the authentication audit event, rechecks the tenant policy and saves the verified evidence with the encrypted session. Discovery and role enforcement continue through the existing tenant gates.
+
+The PostgreSQL adapter can replace an existing session by rotating its opaque key, identity binding and encrypted record in one guarded update. The encrypted login attempt binds the previous session key. The callback reads its current revision before the network exchange and conditions the update on that revision, so concurrent activity or logout can require a fresh attempt. Custom session storage supports an initial federation session. Existing-session replacement requires the PostgreSQL adapter's atomic operation.
+
+```mermaid
+sequenceDiagram
+  participant B as Browser
+  participant SDK as Product SDK
+  participant DB as PostgreSQL
+  B->>SDK: Return verified federation callback
+  SDK->>DB: Read prior session revision
+  SDK->>SDK: Verify provider, product identity and current policy
+  SDK->>DB: Commit authentication audit
+  SDK->>DB: Replace matching session with fresh key and new subject
+  DB-->>SDK: Confirm one atomic update
+  SDK-->>B: Issue cookie for new session
+```
+
+Live SAML and OIDC session issuance runs used Railway ZITADEL and an encrypted custom store, then authenticated the issued cookie and checked the saved evidence in both languages. SAML run `aa588074-3847-4b65-9631-b7ed9df2eb73` and OIDC run `ebd5ddd5-671e-4840-8c08-5befbf147ea3` passed. The PostgreSQL replacement tests exercise concurrent candidates, a stale revision, a denied target identity and use of the previous key after replacement. A two-directory switch through deployed public SDK routes, including membership and cursor checks, remains a Phase 6 acceptance run.

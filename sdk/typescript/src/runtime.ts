@@ -86,6 +86,7 @@ export type SessionOptions = Parameters<typeof browserSession>[3] & {
 };
 export type Sessions = Readonly<{
   start(request: Request): Promise<Response>;
+  startFederation(request: Request, tenantId: string): Promise<Response>;
   callback(request: Request): Promise<Response>;
   authenticate(request: Request): Promise<Principal>;
   logout(request: Request): Promise<Response>;
@@ -191,6 +192,12 @@ export async function createHeimdall(
         login: {
           start: storage.browser.login.start.bind(storage.browser.login),
           claim: storage.browser.login.claim.bind(storage.browser.login),
+          ...(storage.browser.login.startFederation && storage.browser.login.claimFederation
+            ? {
+                startFederation: storage.browser.login.startFederation.bind(storage.browser.login),
+                claimFederation: storage.browser.login.claimFederation.bind(storage.browser.login),
+              }
+            : {}),
         },
         sessions: {
           createSession: storage.browser.sessions.createSession.bind(storage.browser.sessions),
@@ -199,6 +206,13 @@ export async function createHeimdall(
             storage.browser.sessions,
           ),
           deleteSession: storage.browser.sessions.deleteSession.bind(storage.browser.sessions),
+          ...(storage.browser.sessions.replaceSession
+            ? {
+                replaceSession: storage.browser.sessions.replaceSession.bind(
+                  storage.browser.sessions,
+                ),
+              }
+            : {}),
         },
       };
   const secret = options.credentials.clientSecret.bind(options.credentials);
@@ -493,7 +507,14 @@ export async function createHeimdall(
           browser.login,
           operation,
         );
-        const sessions = browserSession(login, authentication, browser.sessions, sessionOptions);
+        const sessions = browserSession(
+          login,
+          authentication,
+          browser.sessions,
+          sessionOptions,
+          Date.now,
+          tenantSSOPolicy,
+        );
         return Object.freeze({
           ...sessions,
           authenticate: async (request: Request) =>

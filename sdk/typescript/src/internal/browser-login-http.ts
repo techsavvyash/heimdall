@@ -108,6 +108,7 @@ export async function createBrowserLoginHTTP(
       tenantId: string,
       policy: TenantSSOPolicy,
       credential: string,
+      previousSessionKey?: string,
     ) {
       if (
         request.method !== "GET" ||
@@ -118,15 +119,19 @@ export async function createBrowserLoginHTTP(
       const federation = zitadelFederation(issuer, credential, request.signal);
       const login = await records.startFederation(
         scoped(tenantId, policy),
-        ({ state, nonce, pkceChallenge }) => {
+        async ({ state, nonce, pkceChallenge }) => {
           const success = new URL(redirectUri);
           success.searchParams.set("state", state);
           success.searchParams.set("tenant", tenantId);
-          return federation.start(
+          const prepared = await federation.start(
             oidc.authorizationURL(state, nonce, pkceChallenge, policy.organizationId),
             success.href,
             policy,
           );
+          return {
+            ...prepared,
+            ...(previousSessionKey === undefined ? {} : { previousSessionKey }),
+          };
         },
         request.signal,
       );
@@ -138,6 +143,7 @@ export async function createBrowserLoginHTTP(
       tenantId: string,
       policy: TenantSSOPolicy,
       credential: string,
+      previousSessionKey?: string,
     ) {
       const url = new URL(request.url);
       const state = url.searchParams.getAll("state");
@@ -167,6 +173,7 @@ export async function createBrowserLoginHTTP(
         binding,
         intents[0]!,
         request.signal,
+        previousSessionKey,
       );
       const operation = AbortSignal.any([
         request.signal,

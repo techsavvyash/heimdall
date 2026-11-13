@@ -1,4 +1,6 @@
-import { readEnterpriseEvidence } from "./enterprise-evidence.js";
+import { bounded } from "./audited-decision.js";
+import type { TenantSSOPolicySource } from "./audited-authentication.js";
+import { readEnterpriseEvidence, validateEnterpriseEvidence } from "./enterprise-evidence.js";
 import { createHash, randomBytes } from "node:crypto";
 import type { AuditedAuthentication } from "./audited-authentication.js";
 import type { createBrowserLoginHTTP } from "./browser-login-http.js";
@@ -12,6 +14,9 @@ type Options = {
   returnTo: string;
   absoluteLifetimeMs?: number;
   idleLifetimeMs?: number;
+  federation?: {
+    credential(signal: AbortSignal): Promise<string>;
+  };
 };
 
 export function browserSession(
@@ -21,9 +26,11 @@ export function browserSession(
   store: Pick<
     SessionRecords,
     "createSession" | "getSession" | "compareAndSwapSession" | "deleteSession"
-  >,
+  > &
+    Partial<Pick<SessionRecords, "replaceSession">>,
   options: Options,
   now: () => number = Date.now,
+  tenantSSOPolicy?: TenantSSOPolicySource,
 ) {
   const { returnTo, absoluteLifetimeMs = 28_800_000, idleLifetimeMs = 1_800_000 } = options;
   if (
@@ -54,12 +61,81 @@ export function browserSession(
     return createHash("sha256").update(opaque, "ascii").digest("base64url");
   };
 
+  const loadPolicy = async (tenant: string, signal: AbortSignal) => {
+    if (!/^[A-Za-z0-9_-]{1,128}(?![\s\S])/.test(tenant))
+      throw new HeimdallError("invalid_argument");
+    if (!tenantSSOPolicy || !options.federation) throw new HeimdallError("unavailable");
+    const operation = AbortSignal.any([signal, AbortSignal.timeout(5000)]);
+    const policy = await bounded((signal) => tenantSSOPolicy(tenant, signal), operation).catch(
+      () => {
+        checkCancellation(operation);
+        throw new HeimdallError("unavailable");
+      },
+    );
+    if (!policy || !Number.isSafeInteger(policy.maxAgeMs) || policy.maxAgeMs <= 0)
+      throw new HeimdallError("unauthenticated");
+    return { ...policy };
+  };
+  const credential = (signal: AbortSignal) => {
+    const operation = AbortSignal.any([signal, AbortSignal.timeout(5000)]);
+    return bounded((signal) => options.federation!.credential(signal), operation).catch(() => {
+      checkCancellation(operation);
+      throw new HeimdallError("unavailable");
+    });
+  };
+
   return {
     start: login.start,
+    async startFederation(request: Request, tenant: string): Promise<Response> {
+      if (request.method !== "GET" || new URL(request.url).origin !== login.scope.origin)
+        throw new HeimdallError("invalid_argument");
+      const old = sessionKey(request);
+      if (old && (!store.replaceSession || !(await store.getSession(old, request.signal))))
+        throw new HeimdallError("unauthenticated");
+      const policy = await loadPolicy(tenant, request.signal);
+      return login.startFederation(
+        request,
+        tenant,
+        policy,
+        await credential(request.signal),
+        old ?? undefined,
+      );
+    },
     async callback(request: Request): Promise<Response> {
-      const { tokens, clearBindingCookie, returnToKey: actualKey } = await login.callback(request);
+      const params = new URL(request.url).searchParams;
+      const tenant = params.get("tenant");
+      let previous: { key: string; revision: string } | undefined;
+      let result: Awaited<ReturnType<Login["callback"]>>;
+      let enterprise: Awaited<ReturnType<Login["federationCallback"]>> | undefined;
+      if (tenant === null) {
+        result = await login.callback(request);
+      } else {
+        if (params.getAll("tenant").length !== 1) throw new HeimdallError("unauthenticated");
+        const old = sessionKey(request);
+        if (old) {
+          const stored = store.replaceSession && (await store.getSession(old, request.signal));
+          if (!stored) throw new HeimdallError("unauthenticated");
+          previous = { key: old, revision: stored.revision };
+        }
+        const policy = await loadPolicy(tenant, request.signal);
+        enterprise = await login.federationCallback(
+          request,
+          tenant,
+          policy,
+          await credential(request.signal),
+          old ?? undefined,
+        );
+        result = enterprise;
+      }
+      const { tokens, clearBindingCookie, returnToKey: actualKey } = result;
       if (actualKey !== returnToKey) throw new HeimdallError("unauthenticated");
-      const actor = await auth.verify(tokens.accessToken, "bearer", request.signal);
+      const signal = enterprise
+        ? AbortSignal.any([
+            request.signal,
+            AbortSignal.timeout(Math.max(0, enterprise.expiresAt - now())),
+          ])
+        : request.signal;
+      const actor = await auth.verify(tokens.accessToken, "bearer", signal);
       if (
         actor.issuer !== tokens.identity.issuer ||
         actor.subject !== tokens.identity.subject ||
@@ -67,8 +143,19 @@ export function browserSession(
         actor.environment !== environment
       )
         throw new HeimdallError("unauthenticated");
+      if (enterprise && tenant !== null) {
+        const policy = await loadPolicy(tenant, signal);
+        validateEnterpriseEvidence(
+          enterprise.evidence,
+          { ...enterprise.evidence, ...policy },
+          now(),
+          policy.maxAgeMs,
+        );
+      }
       checkCancellation(request.signal);
       const issuedAt = now();
+      if (enterprise && issuedAt >= enterprise.expiresAt)
+        throw new HeimdallError("unauthenticated");
       const absoluteExpiresAt = issuedAt + absoluteLifetimeMs;
       const idleExpiresAt = issuedAt + idleLifetimeMs;
       if (!Number.isSafeInteger(absoluteExpiresAt)) throw new HeimdallError("invalid_argument");
@@ -94,15 +181,21 @@ export function browserSession(
         identityValidatedAt: actor.identityValidatedAt,
         state: "active",
         accessToken: tokens.accessToken,
+        ...(enterprise ? { enterpriseEvidence: enterprise.evidence } : {}),
         ...(tokens.refreshToken === undefined ? {} : { refreshToken: tokens.refreshToken }),
       };
-      const stored = await store.createSession(
-        key,
-        Buffer.from(JSON.stringify(payload)),
-        idleExpiresAt,
-        request.signal,
-      );
-      checkCancellation(request.signal);
+      const value = Buffer.from(JSON.stringify(payload));
+      const stored = previous
+        ? await store.replaceSession!(
+            previous.key,
+            previous.revision,
+            key,
+            value,
+            idleExpiresAt,
+            signal,
+          )
+        : await store.createSession(key, value, idleExpiresAt, signal);
+      checkCancellation(signal);
       if (!stored || now() >= Math.min(idleExpiresAt, payload.accessTokenExpiresAt))
         throw new HeimdallError("unauthenticated");
       const headers = new Headers({

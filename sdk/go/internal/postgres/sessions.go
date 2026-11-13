@@ -69,16 +69,29 @@ func (s *SessionRecords) openSession(scope contract.RecordScope, row *sql.Row) (
 	return record, nil
 }
 func (s *SessionRecords) CreateSession(ctx context.Context, key string, value []byte, expires int64) (*Record, error) {
-	return s.writeSession(ctx, key, "", value, expires)
+	return s.writeSession(ctx, key, "", nil, value, expires)
 }
 func (s *SessionRecords) CompareAndSwapSession(ctx context.Context, key, revision string, value []byte, expires int64) (*Record, error) {
-	rev, err := strconv.ParseInt(revision, 10, 64)
-	if err != nil || rev <= 0 || strconv.FormatInt(rev, 10) != revision {
+	if !validSessionRevision(revision) {
 		return nil, contract.ErrInvalidArgument
 	}
-	return s.writeSession(ctx, key, revision, value, expires)
+	return s.writeSession(ctx, key, revision, nil, value, expires)
 }
-func (s *SessionRecords) writeSession(ctx context.Context, key, revision string, input []byte, expires int64) (*Record, error) {
+func (s *SessionRecords) ReplaceSession(ctx context.Context, previousKey, previousRevision, key string, value []byte, expires int64) (*Record, error) {
+	if previousKey == key || !validSessionRevision(previousRevision) {
+		return nil, contract.ErrInvalidArgument
+	}
+	_, previousHash, err := s.records.scope("session", previousKey)
+	if err != nil {
+		return nil, err
+	}
+	return s.writeSession(ctx, key, previousRevision, previousHash, value, expires)
+}
+func validSessionRevision(revision string) bool {
+	rev, err := strconv.ParseInt(revision, 10, 64)
+	return err == nil && rev > 0 && strconv.FormatInt(rev, 10) == revision
+}
+func (s *SessionRecords) writeSession(ctx context.Context, key, revision string, previousHash, input []byte, expires int64) (*Record, error) {
 	value := append([]byte{}, input...)
 	r := s.records
 	scope, hash, err := r.scope("session", key)
@@ -106,6 +119,12 @@ func (s *SessionRecords) writeSession(ctx context.Context, key, revision string,
 		args := []any{r.product, r.environment, hash, keyID, envelope, expires, identity}
 		if revision == "" {
 			return s.openSession(scope, tx.QueryRowContext(ctx, "INSERT INTO heimdall.records(product_id,environment,kind,key_hash,key_id,envelope,expires_at,identity_hash) VALUES($1,$2,'session',$3,$4,$5,$6,$7) RETURNING "+columns, args...))
+		}
+		if previousHash != nil {
+			return s.openSession(scope, tx.QueryRowContext(ctx, `UPDATE heimdall.records SET key_hash=$3,key_id=$4,envelope=$5,expires_at=$6,identity_hash=$7
+				WHERE product_id=$1 AND environment=$2 AND kind='session' AND key_hash=$10
+				  AND identity_hash IS NOT NULL AND revision=$8 AND expires_at>$9 RETURNING `+columns,
+				append(args, revision, r.now(), previousHash)...))
 		}
 		return s.openSession(scope, tx.QueryRowContext(ctx, "UPDATE heimdall.records SET key_id=$4,envelope=$5,expires_at=$6 WHERE product_id=$1 AND environment=$2 AND kind='session' AND key_hash=$3 AND identity_hash=$7 AND revision=$8 AND expires_at>$9 RETURNING "+columns, append(args, revision, r.now())...))
 	})

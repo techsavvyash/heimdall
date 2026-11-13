@@ -118,6 +118,36 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       await expect(
         login.claimFederation(target, second.state, second.browserBinding, federation.intentId),
       ).rejects.toThrow("unauthenticated");
+      const previousSessionKey = started.browserBinding;
+      const bound = await login.startFederation(target, async () => ({
+        ...federation,
+        authorizationUrl,
+        previousSessionKey,
+      }));
+      for (const wrong of [undefined, second.browserBinding]) {
+        await expect(
+          login.claimFederation(
+            target,
+            bound.state,
+            bound.browserBinding,
+            federation.intentId,
+            undefined,
+            wrong,
+          ),
+        ).rejects.toThrow("unauthenticated");
+      }
+      expect(
+        (
+          await login.claimFederation(
+            target,
+            bound.state,
+            bound.browserBinding,
+            federation.intentId,
+            undefined,
+            previousSessionKey,
+          )
+        ).nonce,
+      ).toBe(bound.nonce);
       const unknown = new BrowserLoginRecords(
         {
           matchesScope: store.matchesScope.bind(store),

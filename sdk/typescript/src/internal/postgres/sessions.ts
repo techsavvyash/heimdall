@@ -57,19 +57,41 @@ export class SessionRecords extends PostgresRecords {
     expiresAt: number,
     signal?: AbortSignal,
   ) {
+    this.validateRevision(revision);
+    return this.writeSession(key, value, expiresAt, { revision }, signal);
+  }
+  async replaceSession(
+    previousKey: string,
+    previousRevision: string,
+    key: string,
+    value: Uint8Array,
+    expiresAt: number,
+    signal?: AbortSignal,
+  ) {
+    this.validateRevision(previousRevision);
+    const previousHash = this.key("session", previousKey);
+    if (previousKey === key) throw new HeimdallError("invalid_argument");
+    return this.writeSession(
+      key,
+      value,
+      expiresAt,
+      { revision: previousRevision, previousHash },
+      signal,
+    );
+  }
+  private validateRevision(revision: string) {
     if (
       typeof revision !== "string" ||
       !/^[1-9][0-9]{0,18}(?![\s\S])/.test(revision) ||
       BigInt(revision) > 9223372036854775807n
     )
       throw new HeimdallError("invalid_argument");
-    return this.writeSession(key, value, expiresAt, revision, signal);
   }
   private async writeSession(
     key: string,
     input: Uint8Array,
     expiresAt: number,
-    revision: string | undefined,
+    existing: { revision: string; previousHash?: Buffer } | undefined,
     signal?: AbortSignal,
   ) {
     const value = Buffer.from(input);
@@ -96,16 +118,25 @@ export class SessionRecords extends PostgresRecords {
           expiresAt,
           identity,
         ];
-        const result =
-          revision === undefined
-            ? await client.query<Row>(
-                `INSERT INTO heimdall.records(product_id,environment,kind,key_hash,key_id,envelope,expires_at,identity_hash) VALUES($1,$2,'session',$3,$4,$5,$6,$7) RETURNING ${columns}`,
-                args,
-              )
-            : await client.query<Row>(
-                `UPDATE heimdall.records SET key_id=$4,envelope=$5,expires_at=$6 WHERE product_id=$1 AND environment=$2 AND kind='session' AND key_hash=$3 AND identity_hash=$7 AND revision=$8 AND expires_at>$9 RETURNING ${columns}`,
-                [...args, revision, this.now()],
-              );
+        let result;
+        if (!existing) {
+          result = await client.query<Row>(
+            `INSERT INTO heimdall.records(product_id,environment,kind,key_hash,key_id,envelope,expires_at,identity_hash) VALUES($1,$2,'session',$3,$4,$5,$6,$7) RETURNING ${columns}`,
+            args,
+          );
+        } else if (existing.previousHash) {
+          result = await client.query<Row>(
+            `UPDATE heimdall.records SET key_hash=$3,key_id=$4,envelope=$5,expires_at=$6,identity_hash=$7
+              WHERE product_id=$1 AND environment=$2 AND kind='session' AND key_hash=$10
+                AND identity_hash IS NOT NULL AND revision=$8 AND expires_at>$9 RETURNING ${columns}`,
+            [...args, existing.revision, this.now(), existing.previousHash],
+          );
+        } else {
+          result = await client.query<Row>(
+            `UPDATE heimdall.records SET key_id=$4,envelope=$5,expires_at=$6 WHERE product_id=$1 AND environment=$2 AND kind='session' AND key_hash=$3 AND identity_hash=$7 AND revision=$8 AND expires_at>$9 RETURNING ${columns}`,
+            [...args, existing.revision, this.now()],
+          );
+        }
         return result.rows[0] ? this.openSession(hash, result.rows[0]) : null;
       },
       signal,

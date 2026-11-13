@@ -40,6 +40,66 @@ test("bound session validates before database access", async () => {
   }
 });
 test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TEST_READ_PEER)(
+  "session replacement rotates the key and fences the previous revision",
+  async () => {
+    const pool = new Pool({
+      connectionString: process.env.HEIMDALL_TEST_DATABASE_URL,
+      options: "-c role=heimdall_identity_runtime",
+    });
+    const sessions = store(pool, "switch-ts");
+    const oldValue = payload("switch-ts");
+    const newValue = payload("switch-ts", "new-account");
+    const expires = fixture.expiresAt;
+    try {
+      const old = (await sessions.createSession("previous", oldValue, expires))!;
+      await sessions.invalidateIdentity(
+        fixture.record.issuer,
+        "disabled-account",
+        fixture.now,
+        "inactive",
+      );
+      await expect(
+        sessions.replaceSession(
+          "previous",
+          old.revision,
+          "disabled",
+          payload("switch-ts", "disabled-account"),
+          expires,
+        ),
+      ).rejects.toThrow("unauthenticated");
+      expect(await sessions.getSession("previous")).toEqual(old);
+      const refreshed = (await sessions.compareAndSwapSession(
+        "previous",
+        old.revision,
+        oldValue,
+        expires,
+      ))!;
+      expect(
+        await sessions.replaceSession("previous", old.revision, "stale", newValue, expires),
+      ).toBeNull();
+      expect(await sessions.getSession("stale")).toBeNull();
+      const results = await Promise.all(
+        ["next-a", "next-b"].map((key) =>
+          sessions.replaceSession("previous", refreshed.revision, key, newValue, expires),
+        ),
+      );
+      const keys = await Promise.all(
+        ["previous", "next-a", "next-b"].map((key) => sessions.getSession(key)),
+      );
+      expect(results.filter(Boolean)).toHaveLength(1);
+      expect(keys[0]).toBeNull();
+      expect(keys.slice(1).filter(Boolean)).toEqual(results.filter(Boolean));
+      expect(results.find(Boolean)?.value).toEqual(newValue);
+      expect(
+        await sessions.compareAndSwapSession("previous", refreshed.revision, oldValue, expires),
+      ).toBeNull();
+    } finally {
+      await pool.end();
+    }
+  },
+);
+
+test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TEST_READ_PEER)(
   "identity-bound sessions and atomic invalidation",
   async () => {
     const admin = new Pool({ connectionString: process.env.HEIMDALL_TEST_DATABASE_URL });

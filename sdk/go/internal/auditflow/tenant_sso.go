@@ -3,6 +3,8 @@ package auditflow
 import (
 	"context"
 	"errors"
+	"regexp"
+	"time"
 	"unicode/utf8"
 
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
@@ -52,4 +54,26 @@ func (a *Authentication) permitsTenant(ctx context.Context, actor *identity.Prin
 		return false, contract.ErrUnavailable
 	}
 	return true, nil
+}
+
+var loginTenantID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+
+func LoadLoginPolicy(ctx context.Context, tenant string, source TenantSSOPolicySource) (contract.LoginPolicy, int64, error) {
+	if !loginTenantID.MatchString(tenant) {
+		return contract.LoginPolicy{}, 0, contract.ErrInvalidArgument
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	policy, err := bounded(ctx, func(ctx context.Context) (*TenantSSOPolicy, error) { return source(ctx, tenant) })
+	if e := contract.CheckCancellation(ctx); e != nil {
+		return contract.LoginPolicy{}, 0, e
+	}
+	if err != nil {
+		return contract.LoginPolicy{}, 0, contract.ErrUnavailable
+	}
+	if policy == nil || policy.MaxAgeMS <= 0 || policy.MaxAgeMS > 9007199254740991 {
+		return contract.LoginPolicy{}, 0, contract.ErrUnauthenticated
+	}
+	return contract.LoginPolicy{TenantID: tenant, OrganizationID: policy.OrganizationID, PolicyVersion: policy.PolicyVersion,
+		ProviderID: policy.ProviderID, Protocol: policy.Protocol, StrictSSO: true}, policy.MaxAgeMS, nil
 }

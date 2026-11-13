@@ -86,6 +86,67 @@ func sessionPayload(f sessionFixture, product, subject string) []byte {
 	raw, _ := json.Marshal(v)
 	return raw
 }
+func TestSessionReplacement(t *testing.T) {
+	dsn := os.Getenv("HEIMDALL_TEST_DATABASE_URL")
+	if dsn == "" || os.Getenv("HEIMDALL_TEST_READ_PEER") != "" {
+		t.Skip("live PostgreSQL integration")
+	}
+	db, err := sql.Open("postgres", dsn+"&options=-c%20role%3Dheimdall_identity_runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	s, f := sessionSetup(t, db, "switch-go")
+	ctx := context.Background()
+	oldValue := sessionPayload(f, "switch-go", "")
+	newValue := sessionPayload(f, "switch-go", "new-account")
+	old, err := s.CreateSession(ctx, "previous", oldValue, f.ExpiresAt)
+	if err != nil || old == nil {
+		t.Fatal("create previous session", err)
+	}
+	if _, err = s.InvalidateIdentity(ctx, "https://id.example.com", "disabled-account", f.Now, "inactive"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.ReplaceSession(ctx, "previous", old.Revision, "disabled", sessionPayload(f, "switch-go", "disabled-account"), f.ExpiresAt); !errors.Is(err, contract.ErrUnauthenticated) {
+		t.Fatal("disabled account replaced previous session", err)
+	}
+	refreshed, err := s.CompareAndSwapSession(ctx, "previous", old.Revision, oldValue, f.ExpiresAt)
+	if err != nil || refreshed == nil {
+		t.Fatal("previous session lost", err)
+	}
+	if result, err := s.ReplaceSession(ctx, "previous", old.Revision, "stale", newValue, f.ExpiresAt); err != nil || result != nil {
+		t.Fatal("stale switch applied", err)
+	}
+	results := make(chan *Record, 2)
+	for _, key := range []string{"next-a", "next-b"} {
+		go func() {
+			result, err := s.ReplaceSession(ctx, "previous", refreshed.Revision, key, newValue, f.ExpiresAt)
+			if err != nil {
+				t.Error(err)
+			}
+			results <- result
+		}()
+	}
+	a, b := <-results, <-results
+	if (a == nil) == (b == nil) {
+		t.Fatal("expected one replacement")
+	}
+	if result, err := s.GetSession(ctx, "previous"); err != nil || result != nil {
+		t.Fatal("previous key still authenticates", err)
+	}
+	if result, err := s.CompareAndSwapSession(ctx, "previous", refreshed.Revision, oldValue, f.ExpiresAt); err != nil || result != nil {
+		t.Fatal("old activity restored the replaced session", err)
+	}
+	winner := "next-a"
+	if a == nil {
+		winner = "next-b"
+	}
+	result, err := s.GetSession(ctx, winner)
+	if err != nil || result == nil || !bytes.Equal(result.Value, newValue) {
+		t.Fatal("replacement payload was lost", err)
+	}
+}
+
 func TestSessionRecords(t *testing.T) {
 	url := os.Getenv("HEIMDALL_TEST_DATABASE_URL")
 	if url == "" {

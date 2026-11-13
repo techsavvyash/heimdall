@@ -27,6 +27,15 @@ type SessionStore interface {
 	CreateSession(context.Context, string, []byte, int64) (*postgres.Record, error)
 }
 
+type SessionReplacement interface {
+	ReplaceSession(context.Context, string, string, string, []byte, int64) (*postgres.Record, error)
+}
+
+type FederationOptions struct {
+	Policy     func(context.Context, string) (contract.LoginPolicy, int64, error)
+	Credential func(context.Context) (string, error)
+}
+
 type Sessions struct {
 	login              *HTTP
 	auth               sessionAuth
@@ -34,6 +43,7 @@ type Sessions struct {
 	returnTo, cookie   string
 	absoluteMs, idleMs int64
 	now                func() int64
+	federation         *FederationOptions
 }
 
 var returnPath = regexp.MustCompile(`^/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]*$`)
@@ -53,19 +63,95 @@ func NewSessions(login *HTTP, auth sessionAuth, store SessionStore, returnTo str
 	if now == nil {
 		now = func() int64 { return time.Now().UnixMilli() }
 	}
-	return &Sessions{login, auth, store, returnTo, login.prefix[:len(login.prefix)-len("login-")] + "session", absolute.Milliseconds(), idle.Milliseconds(), now}, nil
+	return &Sessions{login, auth, store, returnTo, login.prefix[:len(login.prefix)-len("login-")] + "session", absolute.Milliseconds(), idle.Milliseconds(), now, nil}, nil
 }
 
 func (s *Sessions) Start(w http.ResponseWriter, r *http.Request) error {
 	return s.login.Start(w, r)
 }
 
-func (s *Sessions) Callback(w http.ResponseWriter, r *http.Request) error {
-	result, err := s.login.Callback(r)
+func (s *Sessions) ConfigureFederation(options FederationOptions) {
+	s.federation = &options
+}
+
+func (s *Sessions) StartFederation(w http.ResponseWriter, r *http.Request, tenant string) error {
+	if s.federation == nil {
+		return contract.ErrUnavailable
+	}
+	if r.Method != http.MethodGet || !s.login.sameHost(r.Host) {
+		return contract.ErrInvalidArgument
+	}
+	old, _, err := s.previousSession(r)
 	if err != nil {
 		return err
 	}
+	policy, _, err := s.federation.Policy(r.Context(), tenant)
+	if err != nil {
+		return err
+	}
+	credential, err := s.federation.Credential(r.Context())
+	if err != nil {
+		return err
+	}
+	return s.login.StartFederation(w, r, policy, credential, old)
+}
+
+func (s *Sessions) previousSession(r *http.Request) (string, string, error) {
+	key, err := s.requestKey(r)
+	if err != nil || key == "" {
+		return key, "", err
+	}
+	if _, ok := s.store.(SessionReplacement); !ok {
+		return "", "", contract.ErrUnauthenticated
+	}
+	previous, err := s.store.GetSession(r.Context(), key)
+	if err != nil {
+		return "", "", err
+	}
+	if previous == nil {
+		return "", "", contract.ErrUnauthenticated
+	}
+	return key, previous.Revision, nil
+}
+
+func (s *Sessions) Callback(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
+	var result *CallbackResult
+	var err error
+	var old, revision string
+	query := r.URL.Query()
+	tenant := query.Get("tenant")
+	if !query.Has("tenant") {
+		result, err = s.login.Callback(r)
+	} else {
+		if _, err := s.login.callbackQuery(r); err != nil {
+			return err
+		}
+		if s.federation == nil || len(query["tenant"]) != 1 {
+			return contract.ErrUnauthenticated
+		}
+		old, revision, err = s.previousSession(r)
+		if err != nil {
+			return err
+		}
+		policy, maxAge, loadErr := s.federation.Policy(ctx, tenant)
+		if loadErr != nil {
+			return loadErr
+		}
+		credential, loadErr := s.federation.Credential(ctx)
+		if loadErr != nil {
+			return loadErr
+		}
+		result, err = s.login.FederationCallback(r, policy, maxAge, credential, old)
+	}
+	if err != nil {
+		return err
+	}
+	if result.ExpiresAt != 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, time.UnixMilli(result.ExpiresAt))
+		defer cancel()
+	}
 	tokens := result.Tokens
 	actor, err := s.auth.Verify(ctx, tokens.AccessToken, "bearer")
 	if err != nil {
@@ -76,6 +162,19 @@ func (s *Sessions) Callback(w http.ResponseWriter, r *http.Request) error {
 	if id.Issuer != tokens.Identity.Issuer() || id.Subject != tokens.Identity.Subject() ||
 		product != s.login.target.ProductID || environment != s.login.target.Environment {
 		return contract.ErrUnauthenticated
+	}
+	evidence := result.EnterpriseEvidence
+	if evidence != nil {
+		policy, maxAge, err := s.federation.Policy(ctx, tenant)
+		if err != nil {
+			return err
+		}
+		scope := evidence.EnterpriseScope
+		scope.TenantID, scope.OrganizationID, scope.PolicyVersion = policy.TenantID, policy.OrganizationID, policy.PolicyVersion
+		scope.Protocol, scope.ProviderID = policy.Protocol, policy.ProviderID
+		if err := contract.ValidateEnterpriseEvidence(evidence, scope, s.now(), maxAge); err != nil {
+			return err
+		}
 	}
 	if err = contract.CheckCancellation(ctx); err != nil {
 		return err
@@ -99,6 +198,14 @@ func (s *Sessions) Callback(w http.ResponseWriter, r *http.Request) error {
 		"absoluteExpiresAt": issued + s.absoluteMs, "idleExpiresAt": expires, "accessTokenExpiresAt": accessExpires,
 		"identityValidatedAt": actor.ValidatedAt(), "state": "active", "accessToken": tokens.AccessToken,
 	}
+	if evidence != nil {
+		payload["enterpriseEvidence"] = map[string]any{
+			"schemaVersion": 1, "productId": evidence.ProductID, "environment": evidence.Environment, "issuer": evidence.Issuer,
+			"subject": evidence.Subject, "clientId": evidence.ClientID, "tenantId": evidence.TenantID, "organizationId": evidence.OrganizationID,
+			"policyVersion": evidence.PolicyVersion, "providerId": evidence.ProviderID, "protocol": evidence.Protocol,
+			"upstreamSubject": evidence.UpstreamSubject, "providerSessionId": evidence.ProviderSessionID, "authTime": evidence.AuthTime, "verifiedAt": evidence.VerifiedAt,
+		}
+	}
 	if tokens.RefreshToken != "" {
 		payload["refreshToken"] = tokens.RefreshToken
 	}
@@ -106,7 +213,12 @@ func (s *Sessions) Callback(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return contract.ErrUnavailable
 	}
-	stored, err := s.store.CreateSession(ctx, key, value, expires)
+	var stored *postgres.Record
+	if old != "" {
+		stored, err = s.store.(SessionReplacement).ReplaceSession(ctx, old, revision, key, value, expires)
+	} else {
+		stored, err = s.store.CreateSession(ctx, key, value, expires)
+	}
 	if err != nil {
 		return err
 	}

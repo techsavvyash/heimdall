@@ -39,12 +39,13 @@ type browserLoginPayload struct {
 }
 
 type LoginFederation struct {
-	IntentID      string `json:"intentId"`
-	AuthRequestID string `json:"authRequestId"`
+	IntentID           string `json:"intentId"`
+	AuthRequestID      string `json:"authRequestId"`
+	PreviousSessionKey string `json:"previousSessionKey,omitempty"`
 }
 
 func (f LoginFederation) valid() bool {
-	return valid(f.IntentID, 200) && valid(f.AuthRequestID, 200)
+	return valid(f.IntentID, 200) && valid(f.AuthRequestID, 200) && (f.PreviousSessionKey == "" || validLoginSecret(f.PreviousSessionKey))
 }
 
 type StartedLogin struct {
@@ -156,9 +157,12 @@ func decodeBrowserLogin(stored *Record) (browserLoginPayload, error) {
 			return browserLoginPayload{}, contract.ErrUnavailable
 		}
 	}
-	if record.Federation != nil && (record.TenantPolicy == nil || !record.TenantPolicy.StrictSSO ||
-		!record.Federation.valid() || loginFields(fields["federation"], []string{"intentId", "authRequestId"}, nil) == nil) {
-		return browserLoginPayload{}, contract.ErrUnavailable
+	if record.Federation != nil {
+		federation := loginFields(fields["federation"], []string{"intentId", "authRequestId"}, []string{"previousSessionKey"})
+		if record.TenantPolicy == nil || !record.TenantPolicy.StrictSSO || !record.Federation.valid() ||
+			federation == nil || (federation["previousSessionKey"] != nil) != (record.Federation.PreviousSessionKey != "") {
+			return browserLoginPayload{}, contract.ErrUnavailable
+		}
 	}
 	if (record.State != "pending" || record.ClaimedAt != nil) &&
 		(record.State != "claimed" || record.ClaimedAt == nil || *record.ClaimedAt < 0 || *record.ClaimedAt > maxSafe) {
@@ -251,22 +255,22 @@ func (l *BrowserLoginRecords) start(ctx context.Context, target LoginTarget, pre
 // Claim must return successfully before the caller attempts code exchange.
 // Target comes from trusted routing and current tenant policy.
 func (l *BrowserLoginRecords) Claim(ctx context.Context, target LoginTarget, state, binding string) (ClaimedLogin, error) {
-	payload, err := l.claim(ctx, target, state, binding, "")
+	payload, err := l.claim(ctx, target, state, binding, "", "")
 	return ClaimedLogin{payload.Nonce, payload.PKCEVerifier}, err
 }
 
-func (l *BrowserLoginRecords) ClaimFederation(ctx context.Context, target LoginTarget, state, binding, intentID string) (ClaimedFederation, error) {
+func (l *BrowserLoginRecords) ClaimFederation(ctx context.Context, target LoginTarget, state, binding, intentID, previousSessionKey string) (ClaimedFederation, error) {
 	if !valid(intentID, 200) {
 		return ClaimedFederation{}, contract.ErrUnauthenticated
 	}
-	payload, err := l.claim(ctx, target, state, binding, intentID)
+	payload, err := l.claim(ctx, target, state, binding, intentID, previousSessionKey)
 	if err != nil {
 		return ClaimedFederation{}, err
 	}
 	return ClaimedFederation{ClaimedLogin{payload.Nonce, payload.PKCEVerifier}, payload.Federation.AuthRequestID, payload.ExpiresAt}, nil
 }
 
-func (l *BrowserLoginRecords) claim(ctx context.Context, target LoginTarget, state, binding, intentID string) (browserLoginPayload, error) {
+func (l *BrowserLoginRecords) claim(ctx context.Context, target LoginTarget, state, binding, intentID, previousSessionKey string) (browserLoginPayload, error) {
 	if err := contract.CheckCancellation(ctx); err != nil {
 		return browserLoginPayload{}, err
 	}
@@ -295,11 +299,12 @@ func (l *BrowserLoginRecords) claim(ctx context.Context, target LoginTarget, sta
 	if err := contract.ValidateLoginClaim(payload.LoginRecord, scope, now); err != nil {
 		return browserLoginPayload{}, err
 	}
-	expectedIntent := ""
+	expectedIntent, expectedSession := "", ""
 	if payload.Federation != nil {
 		expectedIntent = payload.Federation.IntentID
+		expectedSession = payload.Federation.PreviousSessionKey
 	}
-	if expectedIntent != intentID {
+	if expectedIntent != intentID || expectedSession != previousSessionKey {
 		return browserLoginPayload{}, contract.ErrUnauthenticated
 	}
 	payload.State, payload.ClaimedAt = "claimed", &now

@@ -21,7 +21,7 @@ type LoginRecords interface {
 
 type federationLoginRecords interface {
 	StartFederation(context.Context, postgres.LoginTarget, func(string, string, string, int64) (postgres.LoginFederation, string, error)) (postgres.StartedLogin, string, error)
-	ClaimFederation(context.Context, postgres.LoginTarget, string, string, string) (postgres.ClaimedFederation, error)
+	ClaimFederation(context.Context, postgres.LoginTarget, string, string, string, string) (postgres.ClaimedFederation, error)
 }
 
 type HTTP struct {
@@ -169,7 +169,7 @@ func (h *HTTP) browserBinding(r *http.Request, state string) (string, error) {
 	return bindings[0], nil
 }
 
-func (h *HTTP) StartFederation(w http.ResponseWriter, r *http.Request, policy contract.LoginPolicy, credential string) error {
+func (h *HTTP) StartFederation(w http.ResponseWriter, r *http.Request, policy contract.LoginPolicy, credential, previousSessionKey string) error {
 	records, supported := h.records.(federationLoginRecords)
 	if !supported || r.Method != http.MethodGet || !h.sameHost(r.Host) {
 		return contract.ErrInvalidArgument
@@ -188,7 +188,9 @@ func (h *HTTP) StartFederation(w http.ResponseWriter, r *http.Request, policy co
 		callback := *h.callback
 		callback.RawQuery = url.Values{"state": {state}, "tenant": {policy.TenantID}}.Encode()
 		prepared, err := federation.Start(r.Context(), authorization, callback.String(), policy.ProviderID, policy.Protocol)
-		return postgres.LoginFederation{IntentID: prepared.IntentID, AuthRequestID: prepared.AuthRequestID}, prepared.AuthorizationURL, err
+		return postgres.LoginFederation{
+			IntentID: prepared.IntentID, AuthRequestID: prepared.AuthRequestID, PreviousSessionKey: previousSessionKey,
+		}, prepared.AuthorizationURL, err
 	})
 	if err != nil {
 		return err
@@ -197,7 +199,7 @@ func (h *HTTP) StartFederation(w http.ResponseWriter, r *http.Request, policy co
 	return nil
 }
 
-func (h *HTTP) FederationCallback(r *http.Request, policy contract.LoginPolicy, maxAgeMS int64, credential string) (*CallbackResult, error) {
+func (h *HTTP) FederationCallback(r *http.Request, policy contract.LoginPolicy, maxAgeMS int64, credential, previousSessionKey string) (*CallbackResult, error) {
 	query, err := h.callbackQuery(r)
 	if err != nil {
 		return nil, err
@@ -214,7 +216,7 @@ func (h *HTTP) FederationCallback(r *http.Request, policy contract.LoginPolicy, 
 	}
 	target := h.target
 	target.TenantPolicy = &policy
-	claimed, err := records.ClaimFederation(r.Context(), target, state, binding, query.Get("id"))
+	claimed, err := records.ClaimFederation(r.Context(), target, state, binding, query.Get("id"), previousSessionKey)
 	if err != nil {
 		return nil, err
 	}

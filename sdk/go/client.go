@@ -78,12 +78,14 @@ type BrowserStorage struct {
 }
 
 type SessionOptions struct {
+	FederationCredential                      func(context.Context) (string, error)
 	CallbackURL, ReturnTo, ZitadelAPIAudience string
 	AbsoluteLifetime, IdleLifetime            time.Duration
 }
 
 type Sessions interface {
 	Start(http.ResponseWriter, *http.Request) error
+	StartFederation(http.ResponseWriter, *http.Request, string) error
 	Callback(http.ResponseWriter, *http.Request) error
 	Authenticate(*http.Request) (*Principal, error)
 	Logout(http.ResponseWriter, *http.Request) error
@@ -374,7 +376,21 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 			if err != nil {
 				return nil, err
 			}
-			return browserlogin.NewSessions(login, authentication, sessions, session.ReturnTo, session.AbsoluteLifetime, session.IdleLifetime, nil)
+			browser, err := browserlogin.NewSessions(login, authentication, sessions, session.ReturnTo, session.AbsoluteLifetime, session.IdleLifetime, nil)
+			if err != nil {
+				return nil, err
+			}
+			if source := options.TenantSSOPolicy; source != nil && session.FederationCredential != nil {
+				browser.ConfigureFederation(browserlogin.FederationOptions{
+					Credential: func(ctx context.Context) (string, error) {
+						return auditflow.LoadCredential(ctx, session.FederationCredential)
+					},
+					Policy: func(ctx context.Context, tenant string) (contract.LoginPolicy, int64, error) {
+						return auditflow.LoadLoginPolicy(ctx, tenant, source)
+					},
+				})
+			}
+			return browser, nil
 		}
 	}
 	return client, nil

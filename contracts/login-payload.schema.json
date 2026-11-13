@@ -160,7 +160,13 @@
       "additionalProperties": false,
       "properties": {
         "intentId": { "$ref": "#/$defs/providerRequestId" },
-        "authRequestId": { "$ref": "#/$defs/providerRequestId" }
+        "authRequestId": { "$ref": "#/$defs/providerRequestId" },
+        "previousSessionKey": {
+          "type": "string",
+          "minLength": 43,
+          "maxLength": 43,
+          "pattern": "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$"
+        }
       },
       "required": ["intentId", "authRequestId"]
     },
