@@ -17,9 +17,9 @@ type BrowserOIDCConfig struct {
 }
 
 type BrowserOIDC struct {
-	tokenEndpoint string
-	config        BrowserOIDCConfig
-	verifier      *TokenVerifier
+	tokenEndpoint, authorizationEndpoint string
+	config                               BrowserOIDCConfig
+	verifier                             *TokenVerifier
 }
 
 func visibleToken(value string, max int) bool {
@@ -47,7 +47,17 @@ func NewBrowserOIDC(ctx context.Context, config BrowserOIDCConfig) (*BrowserOIDC
 	if err != nil {
 		return nil, err
 	}
-	return &BrowserOIDC{metadata.TokenEndpoint, config, verifier}, nil
+	return &BrowserOIDC{metadata.TokenEndpoint, metadata.AuthorizationEndpoint, config, verifier}, nil
+}
+
+func (b *BrowserOIDC) AuthorizationURL(state, nonce, pkceChallenge string) string {
+	target, _ := url.Parse(b.authorizationEndpoint)
+	target.RawQuery = url.Values{
+		"client_id": {b.config.ClientID}, "redirect_uri": {b.config.RedirectURI}, "response_type": {"code"},
+		"scope": {"openid profile offline_access urn:zitadel:iam:org:project:id:" + b.config.Audience + ":aud"},
+		"state": {state}, "nonce": {nonce}, "code_challenge": {pkceChallenge}, "code_challenge_method": {"S256"},
+	}.Encode()
+	return target.String()
 }
 
 type BrowserTokens struct {

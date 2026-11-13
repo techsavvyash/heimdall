@@ -148,7 +148,8 @@ try:
         # that fault isolated from other suites' multi-connection transactions.
         run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-maintenance.test.ts"], env=env)
         run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-records.test.ts", "test/postgres-readiness.test.ts", "test/postgres-audit.test.ts", "test/postgres-sessions.test.ts"], env=env)
-        run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-login.test.ts"], env=env)
+        run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-login.test.ts", "test/browser-login-http.test.ts"], env=env)
+        subprocess.run(["go", "test", "-race", "-count=1", "./internal/browserlogin"], cwd=ROOT / "sdk/go", env=env, check=True)
         subprocess.run(["go", "test", "-race", "-count=1", "./internal/postgres"], cwd=ROOT / "sdk/go", env=env, check=True)
     for language in ("ts", "go"):
         with CommitLossProxy(int(port)) as proxy:

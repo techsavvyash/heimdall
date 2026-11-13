@@ -31,6 +31,20 @@ export async function createBrowserOIDC(config: Config, signal?: AbortSignal) {
     Buffer.from(formEncode(clientId) + ":" + formEncode(clientSecret)).toString("base64");
 
   return {
+    authorizationURL(state: string, nonce: string, pkceChallenge: string) {
+      const url = new URL(metadata.authorization_endpoint);
+      url.search = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: "code",
+        scope: `openid profile offline_access urn:zitadel:iam:org:project:id:${audience}:aud`,
+        state,
+        nonce,
+        code_challenge: pkceChallenge,
+        code_challenge_method: "S256",
+      }).toString();
+      return url.href;
+    },
     // Claim is supplied by the callback so no code is dispatched before a confirmed claim.
     async exchange(code: string, claim: () => Promise<Claim>, caller?: AbortSignal) {
       if (caller) checkCancellation(caller);
