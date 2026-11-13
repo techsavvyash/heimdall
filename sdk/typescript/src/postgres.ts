@@ -1,3 +1,4 @@
+import { RecordMaintenance } from "./internal/postgres/maintenance.js";
 import { OperationRecords } from "./internal/postgres/operations.js";
 import { WorkspaceRecords } from "./internal/postgres/workspaces.js";
 import { CandidateRecords } from "./internal/postgres/candidates.js";
@@ -123,4 +124,11 @@ export function createManagedPostgresStorage(
     },
     managed: Object.freeze(managed),
   });
+}
+
+/** Bounded cleanup for expired session and login records with the caller's pool. */
+export function createRecordMaintenance(pool: Pool, productId: string, environment: string) {
+  if (typeof pool?.connect !== "function") throw new HeimdallError("invalid_argument");
+  const maintenance = new RecordMaintenance(pool, productId, environment);
+  return Object.freeze({ cleanupExpired: maintenance.cleanupExpired.bind(maintenance) });
 }

@@ -13,7 +13,13 @@ const f = JSON.parse(
 );
 const vectors = JSON.parse(
   readFileSync(new URL("../../../contracts/fixtures/operation-scan.json", import.meta.url), "utf8"),
-) as { cases: { queue: "runnable" | "recovery" | "completion"; now: number; ids: string[] }[] };
+) as {
+  cases: {
+    queue: "runnable" | "recovery" | "completion" | "reconcile";
+    now: number;
+    ids: string[];
+  }[];
+};
 const store = (p: Pool, scope: string) =>
   operationRecords(p, { ...f.binding, productId: scope }, []);
 test("operation scan validates bounds and preserves cancellation", async () => {

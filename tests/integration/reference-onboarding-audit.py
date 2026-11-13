@@ -22,7 +22,7 @@ def verify(products, payloads):
             ("create_workspace.confirm", "succeeded"): 1,
             ("create_workspace.complete", "succeeded"): 2 if "reconcile" in item else 1,
         }
-        actor = lifecycle[0]["actor"]
+        actor = next(e["actor"] for e in lifecycle if e["action"] == "workspace.create")
         scheduler = {"kind": "system", "id": "workspace-reconcile"}
         assert all(e["actor"] == actor or
                    (e["actor"] == scheduler and e["action"] == "create_workspace.complete")

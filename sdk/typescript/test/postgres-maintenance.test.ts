@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { expect, test } from "vitest";
+import { createRecordMaintenance } from "../src/postgres.js";
 import { RecordMaintenance } from "../src/internal/postgres/maintenance.js";
 const fixture = JSON.parse(
   readFileSync(new URL("../../../contracts/fixtures/record-cleanup.json", import.meta.url), "utf8"),
@@ -23,7 +24,10 @@ const seed = async (
 test("record cleanup validates bounds and cancellation without connecting", async () => {
   const pool = new Pool();
   try {
-    expect(() => new RecordMaintenance(pool, "../bad", "test")).toThrow("invalid_argument");
+    expect(() => createRecordMaintenance(pool, "../bad", "test")).toThrow("invalid_argument");
+    await expect(
+      createRecordMaintenance(pool, "cleanup", "test").cleanupExpired(1, AbortSignal.abort()),
+    ).rejects.toThrow("cancelled");
     expect(() => new RecordMaintenance(pool, "cleanup\n", "test")).toThrow("invalid_argument");
     for (const limit of [...fixture.invalidLimits, 1.5, NaN])
       await expect(

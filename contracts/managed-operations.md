@@ -137,13 +137,14 @@ product/environment; every payload still binds to its indexed canonical actor an
 target hashes, fingerprint, manifest and model pins. Public operation lookup remains
 actor-scoped. A maintenance result is not a newly authenticated principal.
 
-Three fixed queues prevent accidental replay classification:
+Fixed queues distinguish due work from quarantine and local completion:
 
-| Queue      | States                 | Time filter                   |
-| ---------- | ---------------------- | ----------------------------- |
-| runnable   | pending, retryable     | nextAttemptAt <= now          |
-| recovery   | dispatching, uncertain | None; age never proves safety |
-| completion | confirmed              | None; local completion only   |
+| Queue      | States                 | Time filter                                      |
+| ---------- | ---------------------- | ------------------------------------------------ |
+| runnable   | pending, retryable     | nextAttemptAt <= now                             |
+| recovery   | dispatching, uncertain | None; age never proves safety                    |
+| completion | confirmed              | None; local completion only                      |
+| reconcile  | all unfinished         | Due time applies to pending and retryable states |
 
 Terminal records are excluded but retained in storage. Unknown queue names,
 malformed positions, unsafe timestamps and limits outside 1..100 are invalid.
