@@ -6,6 +6,7 @@ import {
 import { Pool } from "pg";
 import {
   createDirectoryCleanup,
+  createDirectoryEnrollment,
   createManagedPostgresStorage,
   createPostgresStorage,
 } from "../src/postgres.js";
@@ -89,6 +90,23 @@ function setup(failure = "", environment = "production") {
     "fetch",
     vi.fn<typeof fetch>(async (input, init) => {
       const url = String(input);
+      if (url === config.issuer + "/v2/users/member-to-administer") {
+        return Response.json({
+          user: {
+            userId: "member-to-administer",
+            state: "USER_STATE_ACTIVE",
+            human: {},
+            details: { resourceOwner: "org-a" },
+          },
+        });
+      }
+      if (url === config.issuer + "/scim/v2/org-a/Users/member-to-administer") {
+        return Response.json({
+          id: "member-to-administer",
+          active: true,
+          externalId: "directory-key",
+        });
+      }
       if (url.endsWith("openid-configuration")) {
         order.push("discovery");
         return Response.json(metadata, { status: failure === "discovery" ? 503 : 200 });
@@ -1033,11 +1051,34 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         revision: queued.rows[0].revision,
         workspaces: [winner.workspaceId],
       };
-      await changes.add(
-        actor,
-        { target, roles: fixtureMembership.initialRoles, idempotencyKey: "directory-seed" },
-        call,
-      );
+      const enroll = createDirectoryEnrollment(pool, {
+        ...s.config,
+        organizationId: "org-a",
+        token: "viewer",
+      });
+      const enrollment = {
+        subject: target.subject,
+        workspaceId: winner.workspaceId,
+        ruleId: "employee-v1",
+        roles: fixtureMembership.initialRoles,
+      };
+      const granted = await enroll(runtime, actor, enrollment, call.signal);
+      expect(granted.status).toBe("confirmed");
+      await expect(enroll(runtime, actor, enrollment, call.signal)).resolves.toEqual(granted);
+      await expect(
+        enroll(runtime, actor, { ...enrollment, roles: [] }, call.signal),
+      ).rejects.toThrow("conflict");
+      await expect(
+        enroll(runtime, actor, { ...enrollment, ruleId: "other-rule" }, call.signal),
+      ).rejects.toThrow("conflict");
+      expect(
+        (
+          await admin.query(
+            "SELECT operation_id FROM heimdall_directory.enrollments WHERE environment=$1 AND operation_id IS NOT NULL",
+            [s.config.environment],
+          )
+        ).rows,
+      ).toEqual([{ operation_id: granted.operationId }]);
       await expect(directory.reconcile(runtime, actor, plan, call.signal)).rejects.toThrow(
         "conflict",
       );
@@ -1050,6 +1091,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         },
         call.signal,
       );
+      await expect(enroll(runtime, actor, enrollment, call.signal)).rejects.toThrow("conflict");
       s.fga.fault = "lost_response";
       const beforeCleanup = s.fga.writes;
       const pending = await directory.reconcile(runtime, actor, plan, call.signal);

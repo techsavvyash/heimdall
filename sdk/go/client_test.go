@@ -274,6 +274,10 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 			body = map[string]any{"active": true, "iss": issuer, "sub": "runtime-user", "aud": "ledger-api", "exp": expiresAt}
 		case "/v2/users/runtime-user":
 			body = map[string]any{"user": map[string]any{"userId": "runtime-user", "state": "USER_STATE_ACTIVE", "human": map[string]any{}}}
+		case "/v2/users/member-to-administer":
+			body = map[string]any{"user": map[string]any{"userId": "member-to-administer", "state": "USER_STATE_ACTIVE", "human": map[string]any{}, "details": map[string]string{"resourceOwner": "org-a"}}}
+		case "/scim/v2/org-a/Users/member-to-administer":
+			body = map[string]any{"id": "member-to-administer", "active": true, "externalId": "directory-key"}
 		default:
 			w.WriteHeader(404)
 			body = map[string]any{}
@@ -1239,9 +1243,30 @@ VALUES('ledger',$1,sha256(convert_to($2,'UTF8')),$3,$4,'org-a',1,'inactive') RET
 		environment, "user:"+base64.RawURLEncoding.EncodeToString(rawIdentity), target.Issuer, target.Subject).Scan(&revision); err != nil {
 		t.Fatal(err)
 	}
-	add.IdempotencyKey = "directory-seed"
-	if added, err := members.Add(ctx, actor, add); err != nil || added.Status != "confirmed" {
-		t.Fatal("directory seed", added, err)
+	enroll, err := postgres.NewDirectoryEnrollment(db, "ledger", environment, provisioning.DirectoryReaderOptions{Issuer: target.Issuer, OrganizationID: "org-a", Token: "viewer", TransportProfile: "loopback"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	enrollment := postgres.DirectoryEnrollmentInput{Subject: target.Subject, WorkspaceID: workspaceID, RuleID: "employee-v1", Roles: mutation.InitialRoles}
+	granted, err := enroll(ctx, client, actor, enrollment)
+	if err != nil || granted.Status != "confirmed" {
+		t.Fatal("directory enrollment", granted, err)
+	}
+	if again, err := enroll(ctx, client, actor, enrollment); err != nil || again != granted {
+		t.Fatal("directory enrollment retry", again, err)
+	}
+	changed := enrollment
+	changed.Roles = nil
+	if _, err := enroll(ctx, client, actor, changed); !errors.Is(err, heimdall.ErrConflict) {
+		t.Fatal("directory enrollment plan changed", err)
+	}
+	changed.RuleID = "other-rule"
+	if _, err := enroll(ctx, client, actor, changed); !errors.Is(err, heimdall.ErrConflict) {
+		t.Fatal("existing membership adopted by another rule", err)
+	}
+	var operation string
+	if err := admin.QueryRow("SELECT operation_id FROM heimdall_directory.enrollments WHERE environment=$1 AND operation_id IS NOT NULL", environment).Scan(&operation); err != nil || operation != granted.OperationID {
+		t.Fatal("directory provenance missing", err)
 	}
 	if _, err := directory.Reconcile(ctx, client, actor, target.Subject, revision, []string{workspaceID}); !errors.Is(err, heimdall.ErrConflict) {
 		t.Fatal("directory removal without local denial", err)
@@ -1250,6 +1275,9 @@ VALUES('ledger',$1,sha256(convert_to($2,'UTF8')),$3,$4,'org-a',1,'inactive') RET
 		Identity: target, Context: "bearer", TokenDigest: strings.Repeat("0", 64), Reason: "identity_inactive",
 	}); err != nil {
 		t.Fatal("directory deny", err)
+	}
+	if _, err := enroll(ctx, client, actor, enrollment); !errors.Is(err, heimdall.ErrConflict) {
+		t.Fatal("denied subject enrollment", err)
 	}
 	h.providerFault.Store("lost_response")
 	beforeCleanup := h.writes.Load()

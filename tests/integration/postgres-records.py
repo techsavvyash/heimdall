@@ -103,6 +103,8 @@ try:
         (ROOT / "contracts/persistence/directory/0002.sql").read_text() +
         (ROOT / "contracts/persistence/directory/0003.sql").read_text() +
         (ROOT / "contracts/persistence/directory/0004.sql").read_text() +
+        (ROOT / "contracts/persistence/directory/0005.sql").read_text() +
+        "GRANT SELECT,INSERT,UPDATE ON heimdall_directory.enrollments TO heimdall_public_runtime; "
         "GRANT SELECT,INSERT,UPDATE ON heimdall_directory.polling TO heimdall_public_runtime; "
         "GRANT SELECT,INSERT ON heimdall_directory.subjects TO heimdall_public_runtime; "
         "GRANT USAGE ON SCHEMA heimdall_directory TO heimdall_public_runtime; "
