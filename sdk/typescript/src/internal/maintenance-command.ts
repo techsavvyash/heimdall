@@ -25,11 +25,13 @@ type Operation = Pick<
   at: number;
 };
 
+type RetirementContinuation = RetirementCursor & { bindingId: string };
+
 type RetirementSweep = {
   id: string;
   tenantId: string | null;
   at: number;
-  after: RetirementCursor | null;
+  after: RetirementContinuation | null;
 };
 type RetirementBatch = {
   productId: string;
@@ -40,7 +42,7 @@ type RetirementBatch = {
   retainForMs: number;
   sweep: RetirementSweep;
   operations: Operation[];
-  next: RetirementCursor | null;
+  next: RetirementContinuation | null;
 };
 const token = (v: unknown) =>
   typeof v === "string" && v.length > 0 && v.length <= 128 && !/[^A-Za-z0-9_-]/.test(v);
@@ -151,14 +153,21 @@ export class MaintenanceCommand {
       token(cursor.eventId);
     if (sweep.after !== null && !matches(sweep.after)) throw new HeimdallError("invalid_argument");
     if (signal) checkCancellation(signal);
-    const page = await scan(
-      sweep.tenantId,
-      sweep.at,
-      this.retainForMs,
-      sweep.after && { ...sweep.after },
-      limit,
-      signal,
-    );
+    const binding = {
+      ...scope,
+      modelId: this.modelId,
+      manifestVersion: this.manifestVersion,
+      retainForMs: this.retainForMs,
+      sweep,
+    };
+    let after: RetirementCursor | null = null;
+    if (sweep.after) {
+      const { bindingId, ...cursor } = sweep.after;
+      if (bindingId !== retirementOperationId(binding, "cursor:" + cursor.eventId))
+        throw new HeimdallError("conflict");
+      after = cursor;
+    }
+    const page = await scan(sweep.tenantId, sweep.at, this.retainForMs, after, limit, signal);
     if (
       !page ||
       !Array.isArray(page.eventIds) ||
@@ -168,13 +177,6 @@ export class MaintenanceCommand {
       (page.next !== null && (!matches(page.next) || page.next.eventId === sweep.after?.eventId))
     )
       throw new HeimdallError("audit_unavailable");
-    const binding = {
-      ...scope,
-      modelId: this.modelId,
-      manifestVersion: this.manifestVersion,
-      retainForMs: this.retainForMs,
-      sweep,
-    };
     const operations: Operation[] = page.eventIds.map((targetEventId) => ({
       tenantId: sweep.tenantId,
       action: "audit.retention.retire",
@@ -188,7 +190,10 @@ export class MaintenanceCommand {
         {
           ...binding,
           operations,
-          next: page.next && { ...page.next },
+          next: page.next && {
+            ...page.next,
+            bindingId: retirementOperationId(binding, "cursor:" + page.next.eventId),
+          },
         },
         signal,
       ))

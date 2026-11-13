@@ -858,6 +858,14 @@ Each candidate becomes a retirement proposal with the sweep time and an
 operation ID derived from the sweep, target and pinned deployment configuration.
 Both SDKs derive the same IDs.
 
+The saved continuation carries a binding ID derived from the same configuration
+and sweep fields, with `cursor:` followed by the cursor event ID as the final
+field. Both SDKs check it before the next scan and pass only the underlying
+cursor to the storage reader. A structurally valid cursor with a missing or
+different binding ID conflicts. Start a fresh sweep after changing policy,
+model or manifest configuration. The binding detects drift within the trusted
+product queue. It does not authenticate queue contents from untrusted sources.
+
 The product's save callback inserts the proposals and advances the expected
 cursor in one transaction. It records completion separately from the null
 cursor used to start a sweep. A rejected cursor comparison returns conflict.

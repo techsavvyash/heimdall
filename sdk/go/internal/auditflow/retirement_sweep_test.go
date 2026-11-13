@@ -14,9 +14,10 @@ import (
 
 func TestRetirementSweep(t *testing.T) {
 	var f struct {
-		Sweep      RetirementSweep
-		Events     []string
-		Operations []MaintenanceOperation
+		Sweep        RetirementSweep
+		Events       []string
+		Operations   []MaintenanceOperation
+		Continuation RetirementContinuation
 	}
 	raw, err := os.ReadFile("../../../../contracts/fixtures/retirement-sweep.json")
 	if err != nil || json.Unmarshal(raw, &f) != nil {
@@ -55,10 +56,31 @@ func TestRetirementSweep(t *testing.T) {
 		t.Fatal(err)
 	}
 	page.EventIDs = nil
-	page.Next = &contract.RetirementCursor{ProductID: "ledger", Environment: "production", Now: f.Sweep.At, RetainForMS: 1000, EventID: "cursor"}
+	page.Next = &f.Continuation.RetirementCursor
 	if err := command.QueueRetirementPage(ctx, f.Sweep, 8, scan, func(_ context.Context, b RetirementBatch) (bool, error) {
-		return len(b.Operations) == 0 && b.Next.EventID == "cursor", nil
+		return len(b.Operations) == 0 && reflect.DeepEqual(b.Next, &f.Continuation), nil
 	}); err != nil {
+		t.Fatal(err)
+	}
+	resumed := f.Sweep
+	resumed.After = &f.Continuation
+	rescan := func(_ context.Context, _ *string, _, _ int64, after *contract.RetirementCursor, _ int) (*contract.RetirementPage, error) {
+		if !reflect.DeepEqual(after, &f.Continuation.RetirementCursor) {
+			t.Fatal("wrong resume position", after)
+		}
+		return &contract.RetirementPage{}, nil
+	}
+	finish := func(_ context.Context, b RetirementBatch) (bool, error) { return b.Next == nil, nil }
+	if err := command.QueueRetirementPage(ctx, resumed, 8, rescan, finish); err != nil {
+		t.Fatal(err)
+	}
+	command.modelID = "changed-model"
+	if err := command.QueueRetirementPage(ctx, resumed, 8, scan, save); !errors.Is(err, contract.ErrConflict) {
+		t.Fatal(err)
+	}
+	command.modelID = "pinned-model"
+	resumed.ID = "different-sweep"
+	if err := command.QueueRetirementPage(ctx, resumed, 8, scan, save); !errors.Is(err, contract.ErrConflict) {
 		t.Fatal(err)
 	}
 }

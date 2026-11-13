@@ -11,22 +11,27 @@ import (
 )
 
 type RetirementSweep struct {
-	ID       string                     `json:"id"`
-	TenantID *string                    `json:"tenantId"`
-	At       int64                      `json:"at"`
-	After    *contract.RetirementCursor `json:"after"`
+	ID       string                  `json:"id"`
+	TenantID *string                 `json:"tenantId"`
+	At       int64                   `json:"at"`
+	After    *RetirementContinuation `json:"after"`
+}
+
+type RetirementContinuation struct {
+	contract.RetirementCursor
+	BindingID string `json:"bindingId"`
 }
 
 type RetirementBatch struct {
-	ProductID       string                     `json:"productId"`
-	Environment     string                     `json:"environment"`
-	PolicyVersion   string                     `json:"policyVersion"`
-	ModelID         string                     `json:"modelId"`
-	ManifestVersion int                        `json:"manifestVersion"`
-	RetainForMS     int64                      `json:"retainForMs"`
-	Sweep           RetirementSweep            `json:"sweep"`
-	Operations      []MaintenanceOperation     `json:"operations"`
-	Next            *contract.RetirementCursor `json:"next"`
+	ProductID       string                  `json:"productId"`
+	Environment     string                  `json:"environment"`
+	PolicyVersion   string                  `json:"policyVersion"`
+	ModelID         string                  `json:"modelId"`
+	ManifestVersion int                     `json:"manifestVersion"`
+	RetainForMS     int64                   `json:"retainForMs"`
+	Sweep           RetirementSweep         `json:"sweep"`
+	Operations      []MaintenanceOperation  `json:"operations"`
+	Next            *RetirementContinuation `json:"next"`
 }
 
 // QueueRetirementPage scans one page and asks the product to atomically save
@@ -45,16 +50,24 @@ func (c *MaintenanceCommand) QueueRetirementPage(ctx context.Context, sweep Reti
 		value := *sweep.TenantID
 		sweep.TenantID = &value
 	}
-	if sweep.After != nil {
-		value := *sweep.After
-		if !c.matchesRetirementCursor(sweep, &value) {
-			return contract.ErrInvalidArgument
-		}
-		value.TenantID = sweep.TenantID
-		sweep.After = &value
-	}
 	if err := contract.CheckCancellation(ctx); err != nil {
 		return err
+	}
+	batch := RetirementBatch{
+		ProductID: c.auth.writer.product, Environment: c.auth.writer.environment, PolicyVersion: c.auth.policy,
+		ModelID: c.modelID, ManifestVersion: c.manifestVersion, RetainForMS: c.retainForMS,
+		Sweep: sweep,
+	}
+	if sweep.After != nil {
+		value := *sweep.After
+		if !c.matchesRetirementCursor(sweep, &value.RetirementCursor) {
+			return contract.ErrInvalidArgument
+		}
+		if value.BindingID != batch.operationID("cursor:"+value.EventID) {
+			return contract.ErrConflict
+		}
+		value.TenantID = sweep.TenantID
+		batch.Sweep.After = &value
 	}
 	var scanTenant *string
 	if sweep.TenantID != nil {
@@ -62,8 +75,8 @@ func (c *MaintenanceCommand) QueueRetirementPage(ctx context.Context, sweep Reti
 		scanTenant = &value
 	}
 	var scanAfter *contract.RetirementCursor
-	if sweep.After != nil {
-		value := *sweep.After
+	if batch.Sweep.After != nil {
+		value := batch.Sweep.After.RetirementCursor
 		value.TenantID = scanTenant
 		scanAfter = &value
 	}
@@ -76,11 +89,12 @@ func (c *MaintenanceCommand) QueueRetirementPage(ctx context.Context, sweep Reti
 			(sweep.After != nil && page.Next.EventID == sweep.After.EventID))) {
 		return contract.ErrAuditUnavailable
 	}
-	batch := RetirementBatch{
-		ProductID: c.auth.writer.product, Environment: c.auth.writer.environment, PolicyVersion: c.auth.policy,
-		ModelID: c.modelID, ManifestVersion: c.manifestVersion, RetainForMS: c.retainForMS,
-		Sweep: sweep, Operations: make([]MaintenanceOperation, 0, len(page.EventIDs)), Next: page.Next,
+	if page.Next != nil {
+		cursor := *page.Next
+		cursor.TenantID = sweep.TenantID
+		batch.Next = &RetirementContinuation{cursor, batch.operationID("cursor:" + cursor.EventID)}
 	}
+	batch.Operations = make([]MaintenanceOperation, 0, len(page.EventIDs))
 	seen := make(map[string]bool, len(page.EventIDs))
 	for _, id := range page.EventIDs {
 		if !maintenanceToken.MatchString(id) || seen[id] {

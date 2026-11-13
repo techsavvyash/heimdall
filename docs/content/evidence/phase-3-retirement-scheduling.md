@@ -11,7 +11,8 @@ durable queue before dispatch.
 
 ```mermaid
 flowchart LR
-  Job[Product scheduler] --> Scan[Scan one scoped page]
+  Job[Product scheduler] --> Resume[Validate saved continuation binding]
+  Resume --> Scan[Scan one scoped page]
   Scan --> Save[Save proposals and cursor together]
   Save --> Load[Reload saved batch]
   Load --> Check[Check pinned configuration]
@@ -19,8 +20,9 @@ flowchart LR
   Authorize --> Retire[Recheck eligibility and retire atomically]
 ```
 
-The saved batch binds the policy, model, manifest and duration. A change to
-any of those settings causes a conflict before dispatch. The product owns
+The saved batch binds the policy, model, manifest and duration. The saved
+continuation also binds those fields and the sweep ID, so changed configuration
+cannot advance the saved sweep. The product owns
 the queue, scheduling and credential supply. It keeps the original proposal
 for a retry after an unknown outcome.
 
@@ -32,3 +34,7 @@ and cursor updates in the same SQL statement. The queue test tables were
 added to the disposable template during the run. Go reloaded one saved page
 and TypeScript reloaded three. Each SDK dispatched its saved target, received
 the original receipt on retry, and left one matching retirement marker.
+
+Both SDKs use the same fixture to verify the continuation digest, resume at the
+saved position and reject a changed model or sweep ID before calling the reader.
+Previously saved continuations without a binding ID need a fresh sweep.

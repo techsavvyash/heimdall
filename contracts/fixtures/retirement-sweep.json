@@ -21,5 +21,14 @@
       "operationId": "sweep-1abef1cd2339b272f82e66579e3c73c22e044aa63c24ee06761c00672c01670c",
       "at": 10000
     }
-  ]
+  ],
+  "continuation": {
+    "productId": "ledger",
+    "environment": "production",
+    "tenantId": null,
+    "now": 10000,
+    "retainForMs": 1000,
+    "eventId": "cursor",
+    "bindingId": "sweep-0d9721b3a79ec39622f7461566c4844c293552a24a129df208bb5c67a0e2a699"
+  }
 }

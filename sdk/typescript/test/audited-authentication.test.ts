@@ -636,35 +636,30 @@ test.skipIf(!process.env.HEIMDALL_TEST_AUDITED_EXPORT_READER)(
 
 test("retirement sweep persists stable proposals with the cursor", async () => {
   const f = read("fixtures/retirement-sweep.json");
-  const command = new MaintenanceCommand(
-    setup(async (e) => receipt(e)),
-    {
-      applyHold: async () => {
-        throw new Error();
+  const createCommand = (modelId: string) =>
+    new MaintenanceCommand(
+      setup(async (e) => receipt(e)),
+      {
+        applyHold: async () => {
+          throw new Error();
+        },
+        retire: async () => {
+          throw new Error();
+        },
       },
-      retire: async () => {
-        throw new Error();
-      },
-    },
-    "pinned-model",
-    7,
-    1000,
-    async () => false,
-    () => f.sweep.at,
-  );
-  const next = {
-    productId: "ledger",
-    environment: "production",
-    tenantId: null,
-    now: f.sweep.at,
-    retainForMs: 1000,
-    eventId: "cursor",
-  };
+      modelId,
+      7,
+      1000,
+      async () => false,
+      () => f.sweep.at,
+    );
+  const command = createCommand("pinned-model");
+  const { bindingId, ...next } = f.continuation;
   const scan = async () => ({ eventIds: f.events, next });
   let stored: Parameters<Parameters<typeof command.queueRetirementPage>[3]>[0] | undefined;
   const save: Parameters<typeof command.queueRetirementPage>[3] = async (batch) => {
     expect(batch.operations).toEqual(f.operations);
-    expect(batch.next).toEqual(next);
+    expect(batch.next).toEqual(f.continuation);
     if (stored) return false;
     stored = batch;
     throw new HeimdallError("outcome_unknown");
@@ -684,10 +679,45 @@ test("retirement sweep persists stable proposals with the cursor", async () => {
     async () => ({ eventIds: [], next }),
     async (batch) => {
       expect(batch.operations).toEqual([]);
-      expect(batch.next).toEqual(next);
+      expect(batch.next).toEqual(f.continuation);
       return true;
     },
   );
+  const resumed = { ...f.sweep, after: f.continuation };
+  await command.queueRetirementPage(
+    resumed,
+    8,
+    async (_tenant, _now, _duration, after) => {
+      expect(after).toEqual(next);
+      return { eventIds: [], next: null };
+    },
+    async (batch) => batch.next === null,
+  );
+  for (const sweep of [
+    { ...resumed, id: "different-sweep" },
+    { ...resumed, after: { ...next, bindingId: bindingId.slice(1) } },
+  ]) {
+    await expect(
+      command.queueRetirementPage(
+        sweep,
+        8,
+        async () => {
+          throw new Error("unexpected scan");
+        },
+        save,
+      ),
+    ).rejects.toMatchObject({ code: "conflict" });
+  }
+  await expect(
+    createCommand("changed-model").queueRetirementPage(
+      resumed,
+      8,
+      async () => {
+        throw new Error("unexpected scan");
+      },
+      save,
+    ),
+  ).rejects.toMatchObject({ code: "conflict" });
 });
 
 test.each(
