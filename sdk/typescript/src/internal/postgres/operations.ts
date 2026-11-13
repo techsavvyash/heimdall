@@ -347,7 +347,10 @@ export class OperationRecords {
     actor: Identity,
     expectedGeneration: number,
     transition: string,
-    metadata: Omit<Allocation, "workspaceId" | "operationId"> & { nextAttemptAt: number },
+    metadata: Omit<Allocation, "workspaceId" | "operationId"> & {
+      nextAttemptAt: number;
+      recoveryOperator?: string;
+    },
     caller?: AbortSignal,
   ): Promise<ManagedOperation> {
     const signal = caller
@@ -374,13 +377,21 @@ export class OperationRecords {
         "rejected",
         "complete",
         "cancel",
-      ].includes(transition)
+        "recover",
+      ].includes(transition) ||
+      (transition === "recover" && !token(m.recoveryOperator, 128)) ||
+      (m.recoveryOperator !== undefined &&
+        (!token(m.recoveryOperator, 128) ||
+          !["recover", "confirm", "complete"].includes(transition)))
     )
       throw new HeimdallError("invalid_argument");
     const actorHash = hash(actor),
       b = this.binding;
     const before = await this.read(operationId, actorHash, false, signal);
     if (!before) throw new HeimdallError("conflict");
+    if (m.recoveryOperator !== undefined && before.intent.kind !== "create_workspace")
+      throw new HeimdallError("conflict");
+    const dispatch = transition === "dispatch" || transition === "recover";
     const state = nextOperationState(
       before.state,
       transition,
@@ -390,10 +401,10 @@ export class OperationRecords {
     );
     if (
       before.generation === Number.MAX_SAFE_INTEGER ||
-      (transition === "dispatch" && before.dispatchCount === Number.MAX_SAFE_INTEGER)
+      (dispatch && before.dispatchCount === Number.MAX_SAFE_INTEGER)
     )
       throw new HeimdallError("unavailable");
-    const count = before.dispatchCount + (transition === "dispatch" ? 1 : 0);
+    const count = before.dispatchCount + (dispatch ? 1 : 0);
     const family = before.intent.kind === "transfer_owner" ? "ownership" : "membership";
     const stage =
       transition === "dispatch" ? "attempt" : transition === "retry" ? "intent" : "completed";
@@ -410,17 +421,20 @@ export class OperationRecords {
     const event = {
       schemaVersion: 1,
       eventId: m.eventId,
-      eventType: `heimdall.${family}.${stage}`,
+      eventType:
+        transition === "recover" ? "heimdall.recovery.completed" : `heimdall.${family}.${stage}`,
       eventVersion: 1,
       occurredAt: m.occurredAt,
       recordedAt: m.recordedAt,
       productId: b.productId,
       environment: b.environment,
       tenantId: before.workspaceId,
-      actor: { kind: "user", ...before.intent.actor },
+      actor: m.recoveryOperator
+        ? { kind: "system", id: m.recoveryOperator }
+        : { kind: "user", ...before.intent.actor },
       target: { type: "workspace", id: before.workspaceId },
       action: `${before.intent.kind}.${transition}`,
-      outcome,
+      outcome: transition === "recover" ? "succeeded" : outcome,
       requestId: m.requestId,
       source: "sdk",
       sdkVersion: "0.0.0",

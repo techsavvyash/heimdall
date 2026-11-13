@@ -538,5 +538,41 @@
     "generation": 0,
     "expectedGeneration": 0,
     "error": "invalid_argument"
+  },
+  {
+    "name": "uncertain-recover",
+    "state": "uncertain",
+    "event": "recover",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "expected": "dispatching"
+  },
+  {
+    "name": "dispatching-recover",
+    "state": "dispatching",
+    "event": "recover",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "expected": "dispatching"
+  },
+  {
+    "name": "confirmed-recover",
+    "state": "confirmed",
+    "event": "recover",
+    "dispatchCount": 1,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
+  },
+  {
+    "name": "pending-recover",
+    "state": "pending",
+    "event": "recover",
+    "dispatchCount": 0,
+    "generation": 4,
+    "expectedGeneration": 4,
+    "error": "conflict"
   }
 ]

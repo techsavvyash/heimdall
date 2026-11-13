@@ -171,7 +171,13 @@ export function intentDigests(
 const transitions: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   pending: { dispatch: "dispatching", pre_dispatch_failure: "retryable", cancel: "cancelled" },
   retryable: { retry: "pending", cancel: "cancelled" },
-  dispatching: { confirm: "confirmed", uncertain: "uncertain", rejected: "retryable" },
+  dispatching: {
+    confirm: "confirmed",
+    uncertain: "uncertain",
+    rejected: "retryable",
+    recover: "dispatching",
+  },
+  uncertain: { recover: "dispatching" },
   confirmed: { complete: "completed" },
 };
 // This computes a proposed transition. The database must enforce generation CAS.

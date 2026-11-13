@@ -9,8 +9,8 @@ import (
 )
 
 type OperationTransitionMetadata struct {
-	EventID, RequestID, PolicyVersion     string
-	OccurredAt, RecordedAt, NextAttemptAt int64
+	EventID, RequestID, PolicyVersion, RecoveryOperator string
+	OccurredAt, RecordedAt, NextAttemptAt               int64
 }
 
 // Advance commits local state only. Trusted orchestration must verify remote outcomes.
@@ -19,8 +19,13 @@ func (o *OperationRecords) Advance(ctx context.Context, id string, actor contrac
 		return nil, contract.ErrInvalidArgument
 	}
 	switch transition {
-	case "dispatch", "pre_dispatch_failure", "retry", "confirm", "uncertain", "rejected", "complete", "cancel":
+	case "dispatch", "pre_dispatch_failure", "retry", "confirm", "uncertain", "rejected", "complete", "cancel", "recover":
 	default:
+		return nil, contract.ErrInvalidArgument
+	}
+	if transition == "recover" && m.RecoveryOperator == "" ||
+		m.RecoveryOperator != "" && (!valid(m.RecoveryOperator, 128) ||
+			(transition != "recover" && transition != "confirm" && transition != "complete")) {
 		return nil, contract.ErrInvalidArgument
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -39,15 +44,19 @@ func (o *OperationRecords) Advance(ctx context.Context, id string, actor contrac
 	if before == nil {
 		return nil, contract.ErrConflict
 	}
+	if m.RecoveryOperator != "" && before.Intent.Kind != "create_workspace" {
+		return nil, contract.ErrConflict
+	}
+	dispatch := transition == "dispatch" || transition == "recover"
 	state, e := contract.NextOperationState(before.State, transition, before.DispatchCount, before.Generation, expected)
 	if e != nil {
 		return nil, e
 	}
-	if before.Generation == maxSafe || (transition == "dispatch" && before.DispatchCount == maxSafe) {
+	if before.Generation == maxSafe || (dispatch && before.DispatchCount == maxSafe) {
 		return nil, contract.ErrUnavailable
 	}
 	count := before.DispatchCount
-	if transition == "dispatch" {
+	if dispatch {
 		count++
 	}
 	family, stage, outcome := "membership", "completed", "failed"
@@ -66,6 +75,12 @@ func (o *OperationRecords) Advance(ctx context.Context, id string, actor contrac
 	}
 	b := o.binding
 	event := map[string]any{"schemaVersion": float64(1), "eventId": m.EventID, "eventType": "heimdall." + family + "." + stage, "eventVersion": float64(1), "occurredAt": float64(m.OccurredAt), "recordedAt": float64(m.RecordedAt), "productId": b.ProductID, "environment": b.Environment, "tenantId": before.WorkspaceID, "actor": map[string]any{"kind": "user", "issuer": before.Intent.Actor.Issuer, "subject": before.Intent.Actor.Subject}, "target": map[string]any{"type": "workspace", "id": before.WorkspaceID}, "action": before.Intent.Kind + "." + transition, "outcome": outcome, "requestId": m.RequestID, "source": "sdk", "sdkVersion": "0.0.0", "attributes": map[string]any{}, "operationId": id, "modelId": b.ModelID, "manifestVersion": float64(b.ManifestVersion), "policyVersion": m.PolicyVersion}
+	if m.RecoveryOperator != "" {
+		event["actor"] = map[string]any{"kind": "system", "id": m.RecoveryOperator}
+	}
+	if transition == "recover" {
+		event["eventType"], event["outcome"] = "heimdall.recovery.completed", "succeeded"
+	}
 	if e = validateOperationAudit(event); e != nil {
 		return nil, e
 	}

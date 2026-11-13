@@ -1,3 +1,4 @@
+import { recoverWorkspaceCreation } from "../src/provisioning/index.js";
 import { Pool } from "pg";
 import { createManagedPostgresStorage, createPostgresStorage } from "../src/postgres.js";
 import { readFileSync } from "node:fs";
@@ -97,6 +98,7 @@ function setup(failure = "", environment = "production") {
       }
       if (url.endsWith("/write")) {
         fga.writes++;
+        if (fga.fault === "lost_before_apply") throw new Error("simulated interrupted write");
         tuples.push(...JSON.parse(String(init?.body)).writes.tuple_keys);
         if (fga.fault === "lost_response") throw new Error("simulated lost response");
         return Response.json({});
@@ -566,10 +568,10 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         );
         expect(await api.get(actor, result.operationId, call)).toEqual(result);
         const stored = await admin.query(
-          "SELECT state FROM heimdall_managed.operations WHERE environment='onboarding-ts' AND operation_id=$1",
+          "SELECT state,generation FROM heimdall_managed.operations WHERE environment='onboarding-ts' AND operation_id=$1",
           [result.operationId],
         );
-        const uncertain = item.fault === "lost_response";
+        const uncertain = ["lost_response", "lost_before_apply"].includes(item.fault);
         expect(stored.rows[0]?.state).toBe(
           activationFailure
             ? "confirmed"
@@ -593,8 +595,55 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
                 status: "active",
               },
         );
-        if (!uncertain) expectedActive.push(result.workspaceId);
-        expect(s.fga.writes - before).toBe(item.fault === "before_dispatch" ? 1 : item.writes);
+        const recovery = {
+          operationId: result.operationId,
+          initiatingActor: { issuer: actor.issuer, subject: actor.subject },
+          expectedGeneration: Number(stored.rows[0]?.generation),
+          policyVersion: "p1",
+          auditSinks: ["siem"],
+          recoveryToken: "new-key",
+        };
+        const runRecovery = (
+          verifyQuiescence: Parameters<typeof recoverWorkspaceCreation>[3]["verifyQuiescence"],
+        ) =>
+          recoverWorkspaceCreation(
+            pool,
+            JSON.stringify(s.config),
+            JSON.stringify(base.manifest),
+            {
+              ...recovery,
+              verifyQuiescence,
+            },
+            call.signal,
+          );
+        await expect(runRecovery(async () => null)).rejects.toThrow(
+          uncertain ? "forbidden" : "conflict",
+        );
+        const recovered = await runRecovery(async (scope) =>
+          scope.workspaceId === result.workspaceId &&
+          scope.generation === recovery.expectedGeneration
+            ? { operatorId: "operator", evidenceId: "drain-record" }
+            : null,
+        ).catch((error: { code: string }) => error.code);
+        expect(recovered).toEqual(
+          uncertain
+            ? {
+                operationId: result.operationId,
+                workspaceId: result.workspaceId,
+                status: "active",
+              }
+            : "conflict",
+        );
+        if (uncertain)
+          await runRecovery(async () => null).catch((error: { code: string }) => {
+            if (error.code !== "conflict") throw error;
+          });
+        expectedActive.push(result.workspaceId);
+        expect(s.fga.writes - before).toBe(
+          item.fault === "before_dispatch"
+            ? 1
+            : item.writes + Number(item.fault === "lost_before_apply"),
+        );
         permit = true;
       }
       const race = { name: "Concurrent", idempotencyKey: "concurrent-create" };
@@ -616,6 +665,18 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         "SELECT count(*)::int AS count FROM heimdall.audit_deliveries WHERE environment='onboarding-ts' AND sink_id='siem'",
       );
       expect(counts.rows[0]?.count).toBeGreaterThan(20);
+      const audit = await admin.query(
+        "SELECT event->>'payload' AS payload FROM heimdall.audit_events WHERE environment='onboarding-ts'",
+      );
+      const recoveryEvents = audit.rows
+        .map(({ payload }) => JSON.parse(Buffer.from(payload, "base64url").toString()))
+        .filter((event) => event.requestId === "drain-record");
+      expect(recoveryEvents).toHaveLength(6);
+      expect(
+        recoveryEvents.every(
+          (event) => event.actor.kind === "system" && event.actor.id === "operator",
+        ),
+      ).toBe(true);
     } finally {
       await Promise.all([pool.end(), admin.end()]);
     }

@@ -168,7 +168,8 @@ func IntentDigests(i Intent, idempotencyKey string) (IntentDigest, error) {
 var operationTransitions = map[string]map[string]string{
 	"pending":     {"dispatch": "dispatching", "pre_dispatch_failure": "retryable", "cancel": "cancelled"},
 	"retryable":   {"retry": "pending", "cancel": "cancelled"},
-	"dispatching": {"confirm": "confirmed", "uncertain": "uncertain", "rejected": "retryable"},
+	"dispatching": {"confirm": "confirmed", "uncertain": "uncertain", "rejected": "retryable", "recover": "dispatching"},
+	"uncertain":   {"recover": "dispatching"},
 	"confirmed":   {"complete": "completed"},
 }
 

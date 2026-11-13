@@ -281,8 +281,10 @@ mutation occurred. Transport failures do not qualify.
 
 Uncertain has no automatic outgoing transition. Lease expiry, a relationship read,
 or a stopped worker cannot clear it. Operator recovery must establish real
-quiescence and reconcile under the eventual verified recovery protocol. This pure
-state helper does not fence remote requests or provide a force-unblock API.
+quiescence. For workspace creation, a trusted recovery command can claim a new
+dispatch generation with a durable evidence reference before verifying or
+repairing the recorded owner grant. This pure state helper does not fence remote
+requests or provide a force-unblock API.
 
 ## Audit envelope v1
 

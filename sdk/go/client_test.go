@@ -14,6 +14,7 @@ import (
 	"github.com/techsavvyash/heimdall/sdk/go/internal/configuration"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	postgres "github.com/techsavvyash/heimdall/sdk/go/postgres"
+	"github.com/techsavvyash/heimdall/sdk/go/provisioning"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -113,10 +114,13 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 				w.WriteHeader(400)
 				return
 			}
+			h.writes.Add(1)
+			if h.providerFault.Load() == "lost_before_apply" {
+				panic(http.ErrAbortHandler)
+			}
 			tupleMu.Lock()
 			tuples = append(tuples, write.Writes.Tuples...)
 			tupleMu.Unlock()
-			h.writes.Add(1)
 			if h.providerFault.Load() == "lost_response" {
 				panic(http.ErrAbortHandler)
 			}
@@ -752,13 +756,14 @@ func TestPublicManagedOnboarding(t *testing.T) {
 			t.Fatal("operation status", got, err)
 		}
 		var state string
-		if err := admin.QueryRow("SELECT state FROM heimdall_managed.operations WHERE environment='onboarding-go' AND operation_id=$1", result.OperationID).Scan(&state); err != nil {
+		var generation int64
+		if err := admin.QueryRow("SELECT state,generation FROM heimdall_managed.operations WHERE environment='onboarding-go' AND operation_id=$1", result.OperationID).Scan(&state, &generation); err != nil {
 			t.Fatal(err)
 		}
 		if item.Fault == "activation_failure" && state != "confirmed" {
 			t.Fatal(state)
 		}
-		if item.Fault == "lost_response" {
+		if item.Fault == "lost_response" || item.Fault == "lost_before_apply" {
 			allowed, err := h.options.Storage.Managed.Allows(ctx, result.WorkspaceID)
 			if state != "uncertain" || allowed || err != nil {
 				t.Fatal("uncertain gate", state, allowed, err)
@@ -769,10 +774,36 @@ func TestPublicManagedOnboarding(t *testing.T) {
 		if err != nil {
 			t.Fatal(item.Fault, err)
 		}
-		if item.Fault == "lost_response" {
+		if item.Fault == "lost_response" || item.Fault == "lost_before_apply" {
 			if resumed != result {
 				t.Fatal("uncertain dispatch was resumed", resumed)
 			}
+			identity := actor.Identity()
+			recovery := provisioning.WorkspaceRecoveryOptions{
+				OperationID: result.OperationID, ExpectedGeneration: generation, PolicyVersion: "p1",
+				InitiatingIssuer: identity.Issuer, InitiatingSubject: identity.Subject,
+				RecoveryToken: "new-key", AuditSinks: []string{"siem"},
+				VerifyQuiescence: func(context.Context, provisioning.WorkspaceRecoveryScope) (provisioning.WorkspaceRecoveryEvidence, error) {
+					return provisioning.WorkspaceRecoveryEvidence{}, nil
+				},
+			}
+			if _, err := provisioning.RecoverWorkspaceCreation(ctx, db, h.config, h.manifest, recovery); !errors.Is(err, heimdall.ErrForbidden) {
+				t.Fatal("accepted missing quiescence proof", err)
+			}
+			recovery.VerifyQuiescence = func(_ context.Context, scope provisioning.WorkspaceRecoveryScope) (provisioning.WorkspaceRecoveryEvidence, error) {
+				if scope.WorkspaceID != result.WorkspaceID || scope.Generation != generation {
+					return provisioning.WorkspaceRecoveryEvidence{}, heimdall.ErrForbidden
+				}
+				return provisioning.WorkspaceRecoveryEvidence{OperatorID: "operator", EvidenceID: "drain-record"}, nil
+			}
+			recovered, err := provisioning.RecoverWorkspaceCreation(ctx, db, h.config, h.manifest, recovery)
+			if err != nil || recovered.Status != "active" || recovered.WorkspaceID != result.WorkspaceID {
+				t.Fatal("recovery", recovered, err)
+			}
+			if _, err := provisioning.RecoverWorkspaceCreation(ctx, db, h.config, h.manifest, recovery); !errors.Is(err, heimdall.ErrConflict) {
+				t.Fatal("stale recovery", err)
+			}
+			active = append(active, recovered.WorkspaceID)
 		} else {
 			if resumed.Status != "active" {
 				t.Fatal(item.Fault, resumed)
@@ -780,7 +811,7 @@ func TestPublicManagedOnboarding(t *testing.T) {
 			active = append(active, resumed.WorkspaceID)
 		}
 		writes := item.Writes
-		if item.Fault == "before_dispatch" {
+		if item.Fault == "before_dispatch" || item.Fault == "lost_before_apply" {
 			writes++
 		}
 		if h.writes.Load()-before != writes {
@@ -833,6 +864,13 @@ func TestPublicManagedOnboarding(t *testing.T) {
 	}
 	if !slices.Equal(discovered, active) {
 		t.Fatal("candidate state", discovered, active)
+	}
+	var recoveryCount int
+	if err := admin.QueryRow(`SELECT count(*) FROM heimdall.audit_events WHERE environment='onboarding-go'
+		AND convert_from(decode(translate(event->>'payload','-_','+/') ||
+		repeat('=', (4-length(event->>'payload')%4)%4), 'base64'),'UTF8')::jsonb
+		@> '{"requestId":"drain-record","actor":{"kind":"system","id":"operator"}}'`).Scan(&recoveryCount); err != nil || recoveryCount != 6 {
+		t.Fatal("recovery audit", recoveryCount, err)
 	}
 	var count int
 	if err := admin.QueryRow("SELECT count(*) FROM heimdall.audit_deliveries WHERE environment='onboarding-go' AND sink_id='siem'").Scan(&count); err != nil || count <= 20 {

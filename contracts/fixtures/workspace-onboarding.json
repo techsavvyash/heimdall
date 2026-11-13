@@ -5,6 +5,12 @@
     { "fault": "none", "status": "active", "writes": 1 },
     { "fault": "before_dispatch", "status": "pending", "reason": "retryable", "writes": 0 },
     { "fault": "lost_response", "status": "pending", "reason": "recovery_required", "writes": 1 },
+    {
+      "fault": "lost_before_apply",
+      "status": "pending",
+      "reason": "recovery_required",
+      "writes": 1
+    },
     { "fault": "activation_failure", "status": "pending", "writes": 1 }
   ]
 }
