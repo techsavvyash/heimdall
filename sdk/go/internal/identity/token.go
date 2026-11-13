@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"io"
@@ -40,7 +41,7 @@ type TokenVerifier struct {
 	mu                     sync.Mutex
 	keys                   map[string]*rsa.PublicKey
 	fetchedAt, attemptedAt time.Time
-	failed                 bool
+	refreshError           error
 	pending                chan struct{}
 }
 
@@ -138,7 +139,7 @@ func (v *TokenVerifier) refresh(start time.Time, done chan struct{}) {
 			if e == nil && len(raw) <= 262144 {
 				keys, err = parseKeys(raw)
 			} else {
-				err = contract.ErrUnavailable
+				err = e
 			}
 		} else {
 			err = contract.ErrUnavailable
@@ -146,8 +147,13 @@ func (v *TokenVerifier) refresh(start time.Time, done chan struct{}) {
 	}
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	v.failed = err != nil || keys == nil
-	if !v.failed {
+	v.refreshError = nil
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		v.refreshError = contract.ErrDeadlineExceeded
+	} else if err != nil || keys == nil {
+		v.refreshError = contract.ErrUnavailable
+	}
+	if v.refreshError == nil {
 		v.keys = keys
 		v.fetchedAt = start
 	}
@@ -180,7 +186,10 @@ func (v *TokenVerifier) key(ctx context.Context, kid string) (*rsa.PublicKey, er
 	}
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if v.now().Before(v.fetchedAt) || v.now().Sub(v.fetchedAt) >= 5*time.Minute || v.failed {
+	if v.refreshError != nil {
+		return nil, v.refreshError
+	}
+	if v.now().Before(v.fetchedAt) || v.now().Sub(v.fetchedAt) >= 5*time.Minute {
 		return nil, contract.ErrUnavailable
 	}
 	if v.keys[kid] == nil {
