@@ -1,0 +1,6 @@
+services:
+  postgres:
+    environment:
+      PGDATA: /run/recovery-data/postgres
+    tmpfs:
+      - /run/recovery-data:size=256m

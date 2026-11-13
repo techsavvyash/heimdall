@@ -17,9 +17,70 @@ const env = {
   HEIMDALL_PROBE_POSTGRES_PASSWORD: password,
   HEIMDALL_PROBE_OPENFGA_KEY: oldKey,
 };
-const compose = ["compose", "-p", project, "-f", "deploy/verification/compose.yaml"];
+const compose = [
+  "compose",
+  "-p",
+  project,
+  "-f",
+  "deploy/verification/compose.yaml",
+  "-f",
+  "deploy/verification/recovery.compose.yaml",
+];
 const execute = promisify(execFile);
 const observations = {};
+const journalDB = process.env.HEIMDALL_RECOVERY_DATABASE_URL;
+const sdk = journalDB
+  ? await import("../../sdk/typescript/test/fixtures/openfga-sdk-recovery.mjs")
+  : null;
+const evidenceId = runId;
+const committedId = "committed-response-lost";
+const interruptedId = "blocked";
+let recoveryInput;
+async function journal(phase, operationId, generation) {
+  const { stdout } = await execute(
+    "go",
+    ["test", "./provisioning", "-run", "^TestPinnedWorkspaceRecoveryProbe$", "-count=1", "-v"],
+    {
+      cwd: "sdk/go",
+      env: {
+        ...process.env,
+        HEIMDALL_TEST_DATABASE_URL: journalDB,
+        HEIMDALL_PROBE_OPENFGA_KEY: env.HEIMDALL_PROBE_OPENFGA_KEY,
+        HEIMDALL_RECOVERY_PROBE_INPUT: JSON.stringify({
+          ...recoveryInput,
+          phase,
+          operationId,
+          generation,
+          evidenceId,
+        }),
+      },
+      timeout: 60000,
+    },
+  ).catch(() => {
+    throw new Error("SDK journal probe failed in phase " + phase);
+  });
+  return JSON.parse(stdout.match(/^RECOVERY_PROBE (.+)$/m)[1]);
+}
+function quarantined(result) {
+  assert.deepEqual(result, {
+    state: "dispatching",
+    generation: 2,
+    blocked: true,
+    lifecycle: "pending",
+    indexed: false,
+    audited: 0,
+  });
+}
+function activated(result) {
+  assert.deepEqual(result, {
+    state: "completed",
+    generation: 5,
+    blocked: false,
+    lifecycle: "active",
+    indexed: true,
+    audited: 3,
+  });
+}
 let lockProcess;
 let responseDropper;
 let lockCompletion;
@@ -87,26 +148,40 @@ try {
   await docker([...compose, "up", "-d", "openfga"]);
   await ready();
   const store = await ok("/stores", { name: `recovery-${runId}` });
-  const model = await ok(`/stores/${store.id}/authorization-models`, {
-    schema_version: "1.1",
-    type_definitions: [
-      { type: "user" },
-      {
-        type: "workspace",
-        relations: { member: { this: {} } },
-        metadata: { relations: { member: { directly_related_user_types: [{ type: "user" }] } } },
-      },
-    ],
-  });
-  const tuple = { user: "user:maya", relation: "member", object: "workspace:blocked" };
-  const write = {
+  const model = await ok(
+    `/stores/${store.id}/authorization-models`,
+    sdk?.recoveryModel ?? {
+      schema_version: "1.1",
+      type_definitions: [
+        { type: "user" },
+        {
+          type: "workspace",
+          relations: { member: { this: {} } },
+          metadata: { relations: { member: { directly_related_user_types: [{ type: "user" }] } } },
+        },
+      ],
+    },
+  );
+  if (sdk) {
+    recoveryInput = sdk.recoveryProbeConfig(project, store.id, model.authorization_model_id);
+    for (const id of [committedId, interruptedId]) quarantined(await journal("dispatch", id));
+  }
+  const user = sdk
+    ? "user:" +
+      Buffer.from(JSON.stringify([recoveryInput.config.issuer, "recovery-probe"])).toString(
+        "base64url",
+      )
+    : "user:maya";
+  const tuple = { user, relation: "member", object: "workspace:" + interruptedId };
+  const committedTuple = { ...tuple, object: "workspace:" + committedId };
+  const writePayload = (member) => ({
     authorization_model_id: model.authorization_model_id,
-    writes: { tuple_keys: [tuple] },
-  };
-
-  // A local fault proxy lets the upstream commit, then destroys the response socket.
-  const committedTuple = { ...tuple, object: "workspace:committed-response-lost" };
-  const committedWrite = { ...write, writes: { tuple_keys: [committedTuple] } };
+    writes: {
+      tuple_keys: sdk ? [member, { ...member, relation: sdk.recoveryOwnerRelation }] : [member],
+    },
+  });
+  const write = writePayload(tuple);
+  const committedWrite = writePayload(committedTuple);
   let completeDrop;
   const dropped = new Promise((resolve) => {
     completeDrop = resolve;
@@ -245,32 +320,64 @@ try {
     ).tuples.length,
     1,
   );
-  await ok(`/stores/${store.id}/write`, {
-    authorization_model_id: model.authorization_model_id,
-    deletes: { tuple_keys: [committedTuple] },
-  });
-  assert.equal((await request(`/stores/${store.id}/write`, committedWrite, oldKey)).status, 401);
-  assert.equal(
-    (
-      await ok(`/stores/${store.id}/read`, {
-        tuple_key: committedTuple,
-        consistency: "HIGHER_CONSISTENCY",
-      })
-    ).tuples.length,
-    0,
-  );
-  observations.committedWriteReconciledAfterQuiescence = true;
+  if (sdk) {
+    for (const id of [committedId, interruptedId]) quarantined(await journal("observe", id));
+    const confirmed = await sdk.recoverTypeScript(
+      journalDB,
+      {
+        ...recoveryInput,
+        operationId: committedId,
+        generation: 2,
+        evidenceId,
+      },
+      newKey,
+    );
+    assert.equal(confirmed.status, "active");
+    activated(await journal("observe", committedId));
+    activated(await journal("recover", interruptedId, 2));
+    for (const member of [committedTuple, tuple]) {
+      for (const relation of ["member", sdk.recoveryOwnerRelation]) {
+        const current = await ok(`/stores/${store.id}/read`, {
+          tuple_key: { ...member, relation },
+          consistency: "HIGHER_CONSISTENCY",
+        });
+        assert.equal(current.tuples.length, 1);
+      }
+    }
+    assert.equal((await request(`/stores/${store.id}/write`, write, oldKey)).status, 401);
+    observations.sdkJournal = {
+      typeScript: "recovered committed grant",
+      go: "repaired interrupted grant",
+      both: "atomic activation, candidate index and three routed recovery audit events",
+    };
+  } else {
+    await ok(`/stores/${store.id}/write`, {
+      authorization_model_id: model.authorization_model_id,
+      deletes: { tuple_keys: [committedTuple] },
+    });
+    assert.equal((await request(`/stores/${store.id}/write`, committedWrite, oldKey)).status, 401);
+    assert.equal(
+      (
+        await ok(`/stores/${store.id}/read`, {
+          tuple_key: committedTuple,
+          consistency: "HIGHER_CONSISTENCY",
+        })
+      ).tuples.length,
+      0,
+    );
+    observations.committedWriteReconciledAfterQuiescence = true;
 
-  await ok(`/stores/${store.id}/write`, write);
-  assert.equal((await read()).tuples.length, 1);
-  await ok(`/stores/${store.id}/write`, {
-    authorization_model_id: model.authorization_model_id,
-    deletes: { tuple_keys: [tuple] },
-  });
-  assert.equal((await request(`/stores/${store.id}/write`, write, oldKey)).status, 401);
-  assert.equal((await read()).tuples.length, 0);
-  observations.newCredentialReconcileAndCleanup =
-    "confirmed; delayed old credential cannot regrant";
+    await ok(`/stores/${store.id}/write`, write);
+    assert.equal((await read()).tuples.length, 1);
+    await ok(`/stores/${store.id}/write`, {
+      authorization_model_id: model.authorization_model_id,
+      deletes: { tuple_keys: [tuple] },
+    });
+    assert.equal((await request(`/stores/${store.id}/write`, write, oldKey)).status, 401);
+    assert.equal((await read()).tuples.length, 0);
+    observations.newCredentialReconcileAndCleanup =
+      "confirmed; delayed old credential cannot regrant";
+  }
 } catch (error) {
   let message = String(error);
   for (const secret of [password, oldKey, newKey])
@@ -317,7 +424,11 @@ if (!process.exitCode)
           "single local OpenFGA replica and isolated database",
           "all API credentials rotated; no other credential paths",
           "not yet verified with Railway deployment controls",
-          "product lifecycle gate, durable journal and recovery authorization not implemented",
+          ...(sdk
+            ? [
+                "fixture initiates journal and provider dispatch separately; deployment proof is supplied by the test operator",
+              ]
+            : ["service-only mode"]),
           "deployment-wide maintenance; not per-workspace fencing",
         ],
       },

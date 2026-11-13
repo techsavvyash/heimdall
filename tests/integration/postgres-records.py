@@ -99,6 +99,10 @@ try:
         capture_output=True, text=True)
     run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/runtime.test.ts"], env=runtime_env)
     subprocess.run(["go", "test", "-race", "-count=1", ".", "-run", "TestPublicPostgresRuntime|TestPublicManagedRuntime|TestPublicManagedOnboarding|TestPostgresFactory"], cwd=ROOT / "sdk/go", env=runtime_env, check=True)
+    if os.environ.get("HEIMDALL_PROBE_SDK_RECOVERY") == "1":
+        run(["pnpm", "run", "build"])
+        recovery_env = dict(env, HEIMDALL_RECOVERY_DATABASE_URL=runtime_dsn + "&options=-c%20role%3Dheimdall_public_runtime")
+        run(["node", "tests/integration/openfga-recovery.mjs"], env=recovery_env)
     if os.environ.get("HEIMDALL_PROBE_REFERENCE_PRODUCTS") == "1":
         import tempfile
         schemas = "\n".join((ROOT / "examples" / name / "schema.sql").read_text()

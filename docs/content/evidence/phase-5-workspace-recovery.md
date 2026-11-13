@@ -30,4 +30,16 @@ The SDK uses generation CAS to admit one recovery attempt for a specific generat
 
 Run `heimdall-records-042da65d7d5b4d11bcbdf7571aa48736` passed on pinned PostgreSQL 17.11. The shared PostgreSQL tests exercise both SDKs with controlled provider faults. One fault applies the owner grant and loses the response. Recovery verifies it without repeating the write. Another fault stops the original write before applying it. Recovery dispatches the missing grant once. Both check denial without proof, stale replay, managed discovery and the recovery audit.
 
-The service-side drain and credential retirement procedure is documented in [[phase-2-railway-recovery]]. The complete maintenance procedure and SDK recovery still need a combined pinned-service fault test. Membership and ownership-transfer recovery remain part of Phase 5.
+## Pinned-service recovery drill
+
+Run `02059ce4-e0ef-400d-a03e-d550b692faac` combined the SDK recovery with OpenFGA 1.22.0 and PostgreSQL 17.11 in an isolated Compose deployment. The probe committed two blocked journal entries before sending the owner and member writes. It dropped one response after commit and held the other write at a PostgreSQL table lock. It then stopped the OpenFGA container, drained the remaining database backends, replaced the API credential, and restarted the service.
+
+| Check | Observed result |
+| --- | --- |
+| Before recovery | Both operations remained dispatching at generation 2. Workspaces were pending, blocked and absent from the candidate index. |
+| Delayed old request | HTTP 401 after the credential replacement. The interrupted grant was still absent. |
+| TypeScript recovery | Confirmed the committed owner and membership, then activated the workspace. |
+| Go recovery | Repaired the interrupted owner and membership grant, then activated the workspace. |
+| PostgreSQL readback | Both operations reached generation 5 with active, unblocked workspaces, a discovery candidate and three recovery events routed to the outbox. |
+
+The fixture uses the journal and provider dispatch in separate steps to control the timing of each fault. Its operator callback uses observations from the owned deployment. The product runtime fault tests above cover the request path. The combined drill used Compose. [[phase-2-railway-recovery]] records the separate Railway service-control drill. Membership and ownership-transfer recovery remain part of Phase 5.

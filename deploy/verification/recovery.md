@@ -82,3 +82,15 @@ credential and owned store before resuming. Keep affected product gates closed.
 The script's success/failure is not a signed recovery receipt and cannot itself
 clear the future SDK's journal. The topology assumptions and later SDK gates in
 the evidence page remain mandatory.
+
+## Combined SDK journal drill
+
+Run from the repository root with Node, pnpm, Go, Docker Compose, and a free
+loopback port 8080.
+
+    HEIMDALL_PROBE_SDK_RECOVERY=1 python3 tests/integration/postgres-records.py
+
+This runs the same isolated service controls and recovers two durable workspace
+operations using the TypeScript and Go provisioning APIs. Both PostgreSQL
+instances are disposable. See the workspace recovery evidence in Quartz for
+the verified scope and outcomes.
