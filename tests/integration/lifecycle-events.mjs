@@ -1,8 +1,17 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { collectWindow, eventKey, timestampNanos, formatNanos } from "./event-window.mjs";
 
 // Capability probe only: durable checkpoints and product routing belong in the SDK worker.
-export async function probeLifecycleEvents({ ok, request, orgs, users, scopedToken, runId }) {
+export async function probeLifecycleEvents({
+  ok,
+  request,
+  orgs,
+  users,
+  scopedToken,
+  runId,
+  issuer,
+}) {
   const path = "/admin/v1/events/_search";
   const filter = { resourceOwner: orgs[0], aggregateId: users[0], asc: true, limit: 2 };
   const denied = await request("POST", path, filter, scopedToken);
@@ -132,6 +141,61 @@ export async function probeLifecycleEvents({ ok, request, orgs, users, scopedTok
       collectWindow(readWindow, boundary - 1000n, boundary + 1000n, 1),
       /Saturated timestamp boundary/,
     );
+    let sdkReaders;
+    if (process.env.HEIMDALL_PROBE_EVENT_SDK === "true") {
+      const { createIdentityEventReader } =
+        await import("../../sdk/typescript/dist/provisioning/index.js");
+      const options = { issuer, organizationId: orgs[0], token: token.token, pageSize: 8 };
+      const since = formatNanos(lower);
+      const until = formatNanos(upper);
+      const expectedKeys = baseline.events.map(eventKey).sort();
+      const reader = createIdentityEventReader(options);
+      const signal = AbortSignal.timeout(30000);
+      const scan = await reader.readWindow(since, until, signal);
+      assert.deepEqual(
+        scan.events
+          .map((event) => JSON.stringify([event.aggregateType, event.aggregateId, event.sequence]))
+          .sort(),
+        expectedKeys,
+      );
+      assert(scan.requests > 1);
+      assert.deepEqual(
+        await reader.readWindow(formatNanos(boundary), formatNanos(boundary + 1000n), signal),
+        {
+          events: [],
+          requests: 1,
+        },
+      );
+      const go = spawnSync(
+        "go",
+        ["test", "-race", "-count=1", "./provisioning", "-run", "^TestLiveIdentityEventReader$"],
+        {
+          cwd: new URL("../../sdk/go/", import.meta.url),
+          env: {
+            PATH: process.env.PATH,
+            HOME: process.env.HOME,
+            HEIMDALL_TEST_IDENTITY_EVENT_READER: JSON.stringify({
+              options,
+              since,
+              until,
+              expectedKeys,
+              emptySince: formatNanos(boundary),
+              emptyUntil: formatNanos(boundary + 1000n),
+            }),
+          },
+          encoding: "utf8",
+          timeout: 90000,
+        },
+      );
+      if (go.status !== 0)
+        console.error(
+          go.stdout?.match(
+            /(?:live event scan failed|live empty scan failed|live event mismatch)(?: (?:unavailable|conflict|deadline_exceeded|<nil>))?/,
+          )?.[0] ?? "Go event reader failed",
+        );
+      assert.equal(go.status, 0);
+      sdkReaders = ["typescript", "go"];
+    }
     return {
       scimCredentialEventsStatus: denied.status,
       collectorRole: "IAM_OWNER_VIEWER",
@@ -154,6 +218,7 @@ export async function probeLifecycleEvents({ ok, request, orgs, users, scopedTok
         replayMatched: true,
         exclusiveBoundsVerified: true,
         saturatedBoundaryRefused: true,
+        sdkReaders,
       },
     };
   } finally {

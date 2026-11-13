@@ -69,3 +69,29 @@ flowchart LR
 Capacity includes used and reserved events, envelope bytes, delivery rows and retained metadata rows alongside their limits. The retained-row limit accounts for both the configured row and byte limits. Capacity applies to the entire database. Expose it only to trusted operators. Record delivery call errors and outcome counts in the product scheduler to measure failure rate. The metrics query reads delivery metadata without decoding event payloads and inherits the PostgreSQL read deadline.
 
 PostgreSQL run `heimdall-records-1d78bc12f4aa4fed97242bd62b32123d` verified both SDKs report deferred events during an outage, quarantined records after rejection, database capacity, empty metrics for another sink, and cancellation.
+
+## ZITADEL historical event reader
+
+The provisioning entry points expose `createIdentityEventReader(options).readWindow(since, until, signal)` in TypeScript and `NewIdentityEventReader(options).ReadWindow(ctx, since, until)` in Go. The product operator supplies a trusted issuer, an organization ID and a server-side event reader credential. The verified ZITADEL role is instance-wide. Keep the credential in a trusted worker and bind the organization ID to a verified product mapping before routing any records.
+
+```mermaid
+sequenceDiagram
+  participant W as Product worker
+  participant S as Heimdall SDK
+  participant Z as ZITADEL event API
+  W->>S: Read fixed historical bounds for a configured organization
+  S->>Z: Search ascending events by resource owner and time
+  Z-->>S: Return bounded page
+  opt Page at configured limit
+    S->>Z: Search smaller ranges covering the midpoint
+    Z-->>S: Return subdivided pages
+  end
+  S->>S: Validate ownership and confirm exact aggregate-local event IDs
+  S-->>W: Return bounded metadata or fail the entire scan
+```
+
+Both bounds are exclusive UTC timestamps at microsecond precision. Results contain the organization, aggregate type and ID, event type, creation time and exact decimal sequence. Provider payloads and editor fields are omitted. The readers enforce a maximum of 128 requests, a 30-second operation deadline and 5-second request deadlines. A saturated microsecond, a missing observation during subdivision or an exceeded request budget fails the scan. A credential or provider failure cannot produce an empty successful result. ZITADEL can represent a successful empty page as an empty JSON object.
+
+Railway ZITADEL run `528c1ed3-b9d6-4a5c-873f-f926914b1428` matched all 22 events across four aggregates against an unsaturated baseline in both SDKs. Both returned an empty result for the exclusive-boundary query. Shared fixtures cover saturated and malformed pages, a wrong organization and the full uint64 range.
+
+This reader supports explicit historical scans. The independent durable checkpoint, provider retention and live visibility handling, authorized routing and SIEM delivery for identity events remain open in Phase 6.
