@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -153,7 +154,20 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	var tenantSSO heimdall.TenantSSOPolicySource
-	if os.Getenv("HEIMDALL_REFERENCE_STRICT_SSO") == "1" {
+	federationPolicies := os.Getenv("HEIMDALL_TENANT_SSO_POLICIES")
+	if federationPolicies != "" {
+		var policies map[string]heimdall.TenantSSOPolicy
+		if json.Unmarshal([]byte(federationPolicies), &policies) != nil || policies == nil {
+			log.Fatal("Invalid federation policies")
+		}
+		tenantSSO = func(_ context.Context, workspace string) (*heimdall.TenantSSOPolicy, error) {
+			policy, found := policies[workspace]
+			if !found {
+				return nil, nil
+			}
+			return &policy, nil
+		}
+	} else if os.Getenv("HEIMDALL_REFERENCE_STRICT_SSO") == "1" {
 		tenantSSO = func(_ context.Context, workspaceID string) (*heimdall.TenantSSOPolicy, error) {
 			if workspaceID != "globex" {
 				return nil, nil
@@ -181,7 +195,12 @@ func main() {
 	if err != nil {
 		log.Fatal("Heimdall startup: ", err)
 	}
-	sessions, err := auth.NewSessions(ctx, heimdall.SessionOptions{CallbackURL: callback, ReturnTo: "/workspaces", ZitadelAPIAudience: required("HEIMDALL_ZITADEL_API_AUDIENCE")})
+	sessionOptions := heimdall.SessionOptions{CallbackURL: callback, ReturnTo: "/workspaces", ZitadelAPIAudience: required("HEIMDALL_ZITADEL_API_AUDIENCE")}
+	if federationPolicies != "" {
+		credential := required("HEIMDALL_FEDERATION_CREDENTIAL")
+		sessionOptions.FederationCredential = func(context.Context) (string, error) { return credential, nil }
+	}
+	sessions, err := auth.NewSessions(ctx, sessionOptions)
 	if err != nil {
 		log.Fatal("Session startup: ", err)
 	}
@@ -215,6 +234,15 @@ func main() {
 		return nil
 	})
 	mount("GET /auth/start", sessions.Start)
+	if federationPolicies != "" {
+		mount("GET /auth/federation", func(w http.ResponseWriter, r *http.Request) error {
+			workspace := r.URL.Query()["workspace"]
+			if len(workspace) != 1 {
+				return heimdall.ErrInvalidArgument
+			}
+			return sessions.StartFederation(w, r, workspace[0])
+		})
+	}
 	mount("GET "+callbackURL.Path, sessions.Callback)
 	mount("POST /auth/logout", sessions.Logout)
 	mount("GET /workspaces", func(w http.ResponseWriter, r *http.Request) error {
@@ -222,7 +250,15 @@ func main() {
 		if err != nil {
 			return err
 		}
-		page, err := discovery.List(r.Context(), actor, heimdall.WorkspaceListOptions{Cursor: r.URL.Query().Get("cursor")})
+		options := heimdall.WorkspaceListOptions{Cursor: r.URL.Query().Get("cursor")}
+		if r.URL.Query().Has("limit") {
+			limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+			if err != nil || limit < 1 || limit > 100 {
+				return heimdall.ErrInvalidArgument
+			}
+			options.Limit = limit
+		}
+		page, err := discovery.List(r.Context(), actor, options)
 		if err != nil {
 			return err
 		}

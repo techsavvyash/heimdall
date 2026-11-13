@@ -18,6 +18,7 @@ export async function verifyReferenceProduct(input, authorize) {
     runId,
     otherWorkspace,
     exportToken,
+    federation,
   } = input;
   const ledger = config.productId === "ledger";
   const port = ledger ? 18640 : 18641;
@@ -82,12 +83,19 @@ export async function verifyReferenceProduct(input, authorize) {
     assert.equal(sqlCode, 0, "Reference fixture SQL failed " + sqlState);
   }
   assert(/^[A-Za-z0-9:_-]+$/.test(principal));
+  if (federation) assert(/^[A-Za-z0-9:_-]+$/.test(federation.principal));
   await executeSQL(`
     INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at)
     VALUES ('${schema}','verification','acme','Acme','active',false,1,1), ('${schema}','verification','globex','Globex','active',false,1,1) ON CONFLICT DO NOTHING;
     INSERT INTO heimdall_managed.membership_candidates(product_id,environment,workspace_id,identity_hash,principal,observed_at)
     SELECT '${schema}','verification',workspace,sha256(convert_to('${principal}','UTF8')),'${principal}',1 FROM (VALUES ('acme'),('globex')) c(workspace);
     ${seed} ON CONFLICT DO NOTHING;
+    ${
+      federation
+        ? `INSERT INTO heimdall_managed.membership_candidates(product_id,environment,workspace_id,identity_hash,principal,observed_at)
+      VALUES ('${schema}','verification','globex',sha256(convert_to('${federation.principal}','UTF8')),'${federation.principal}',1);`
+        : ""
+    }
   `);
   const runtimeDB = remote
     ? process.env[
@@ -115,6 +123,12 @@ export async function verifyReferenceProduct(input, authorize) {
     HEIMDALL_WORKSPACE_CREATOR_SUBJECT: user,
     HEIMDALL_REFERENCE_MEMBER_SUBJECT: recipient,
     HEIMDALL_REFERENCE_STRICT_SSO: "1",
+    ...(federation
+      ? {
+          HEIMDALL_TENANT_SSO_POLICIES: JSON.stringify(federation.policies),
+          HEIMDALL_FEDERATION_CREDENTIAL: federation.credential,
+        }
+      : {}),
     HEIMDALL_CLIENT_SECRET: clientSecret,
     HEIMDALL_OPENFGA_KEY: process.env.HEIMDALL_PROBE_OPENFGA_KEY,
     HEIMDALL_RECORD_KEY_ID: "fixture",
@@ -228,6 +242,76 @@ export async function verifyReferenceProduct(input, authorize) {
       await new Promise((resolve) => setTimeout(resolve, remote ? 2000 : 200));
     }
     assert(ready, "Reference backend failed readiness");
+    if (federation) {
+      const expectStatus = async (path, status, cookie = "") => {
+        const response = await request(path, { headers: { cookie } });
+        assert.equal(response.status, status, `${schema} ${path.split("?")[0]} status`);
+        return response;
+      };
+      const start = async (tenant, previous = "") => {
+        const response = await expectStatus("/auth/federation?workspace=" + tenant, 303, previous);
+        const binding = response.headers.getSetCookie()[0].split(";")[0];
+        return {
+          path: await authorize(response.headers.get("location"), tenant),
+          cookie: [binding, previous].filter(Boolean).join("; "),
+        };
+      };
+      const finish = async (flow) => {
+        const response = await expectStatus(flow.path, 303, flow.cookie);
+        return response.headers
+          .getSetCookie()
+          .find((value) => value.includes("-session="))
+          .split(";")[0];
+      };
+      const before = await finish(await start("acme"));
+      const page = await (await expectStatus("/workspaces?limit=1", 200, before)).json();
+      assert.deepEqual(
+        page.items.map(({ id }) => id),
+        ["acme"],
+      );
+      assert(page.nextCursor, "fixture must issue an Acme cursor");
+      const collection = ledger ? "invoices" : "tickets";
+      await expectStatus("/workspaces/acme/" + collection, 200, before);
+      await expectStatus("/workspaces/globex/" + collection, 403, before);
+      const stale = await start("globex", before);
+      const winner = await start("globex", before);
+      const after = await finish(winner);
+      assert.notEqual(after, before);
+      await expectStatus(stale.path, 401, stale.cookie);
+      await expectStatus(winner.path, 401, winner.cookie);
+      await expectStatus("/workspaces", 401, before);
+      await expectStatus("/workspaces?cursor=" + encodeURIComponent(page.nextCursor), 400, after);
+      const next = await (await expectStatus("/workspaces", 200, after)).json();
+      assert.deepEqual(
+        next.items.map(({ id }) => id),
+        ["globex"],
+      );
+      assert.deepEqual(await (await expectStatus("/workspaces/acme/roles", 200, after)).json(), {
+        roles: [],
+      });
+      assert.deepEqual(await (await expectStatus("/workspaces/globex/roles", 200, after)).json(), {
+        roles: [manifest.ownerRole],
+      });
+      await expectStatus("/workspaces/acme/" + collection, 403, after);
+      await expectStatus("/workspaces/globex/" + collection, 200, after);
+      const logout = await request("/auth/logout", {
+        method: "POST",
+        headers: { cookie: after, origin },
+      });
+      assert.equal(logout.status, 204);
+      return {
+        product: schema,
+        deployment,
+        switch: "passed",
+        priorCookie: 401,
+        staleCallback: 401,
+        replay: 401,
+        priorCursor: 400,
+        discoveryBefore: "acme",
+        discoveryAfter: "globex",
+        resourceAfter: { acme: 403, globex: 200 },
+      };
+    }
     async function signIn(recipient = false) {
       const start = await request("/auth/start");
       assert.equal(start.status, 303, `Reference ${schema} login start returned ${start.status}`);
@@ -749,6 +833,25 @@ export async function verifyReferenceProduct(input, authorize) {
       otherTenant: 403,
     };
   } finally {
+    if (federation && remote) {
+      for (const name of ["HEIMDALL_FEDERATION_CREDENTIAL", "HEIMDALL_TENANT_SSO_POLICIES"]) {
+        const cleanup = spawnSync(
+          "railway",
+          [
+            "variable",
+            "set",
+            "--service",
+            "reference-" + schema,
+            "--environment",
+            "verification",
+            "--skip-deploys",
+            name + "=",
+          ],
+          { stdio: "ignore", timeout: 30000 },
+        );
+        assert.equal(cleanup.status, 0, "Could not clear disposable federation variables");
+      }
+    }
     if (child && child.exitCode === null) {
       child.kill();
       await once(child, "exit");

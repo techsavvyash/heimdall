@@ -647,7 +647,8 @@ try {
         organizationId: orgId,
         name: `federation-product-${runId}`,
       });
-  const redirectUri = "https://heimdall-product.example.invalid/callback";
+  const redirectUri =
+    sharedClient?.redirectUri ?? "https://heimdall-product.example.invalid/callback";
   const app = sharedClient
     ? { oidcConfiguration: sharedClient }
     : await za("POST", "/zitadel.application.v2.ApplicationService/CreateApplication", {
@@ -1011,6 +1012,42 @@ try {
       bridge.closeAllConnections();
       bridge.close();
     }
+  }
+  if (process.send && process.env.HEIMDALL_PROBE_SWITCH_CHILD === "1") {
+    const apiAudience = [idClaims.aud]
+      .flat()
+      .find((value) => value !== client.clientId && value !== project.projectId);
+    assert(apiAudience);
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("Switch probe parent timed out")), 900000);
+      process.on("disconnect", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      process.on("message", async (message) => {
+        if (message.type !== "authorize") return;
+        try {
+          const { target } = await authenticate(false, message.location, redirectUri);
+          assert.equal(target.origin + target.pathname, redirectUri);
+          process.send({ type: "callback", location: target.href });
+        } catch {
+          process.send({ type: "failure" });
+        }
+      });
+      process.send({
+        type: "ready",
+        apiAudience,
+        subject: user.id,
+        credential: flowPat,
+        policy: {
+          providerId: provider.id,
+          organizationId: orgId,
+          protocol,
+          policyVersion: "switch-v1",
+          maxAgeMs: 300000,
+        },
+      });
+    });
   }
   if (sharedClient)
     observations.push({

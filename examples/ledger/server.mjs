@@ -17,6 +17,9 @@ const config = JSON.parse(configJSON);
 if (config.productId !== "ledger") throw new Error("Expected the Ledger product");
 const callbackUrl = required("HEIMDALL_CALLBACK_URL");
 const origin = new URL(callbackUrl).origin;
+const federationPolicies = process.env.HEIMDALL_TENANT_SSO_POLICIES
+  ? new Map(Object.entries(JSON.parse(process.env.HEIMDALL_TENANT_SSO_POLICIES)))
+  : null;
 const workspaceCreator = process.env.HEIMDALL_WORKSPACE_CREATOR_SUBJECT;
 const pool = new Pool({ connectionString: required("DATABASE_URL") });
 const keyUsagePool = new Pool({ connectionString: required("HEIMDALL_KEY_DATABASE_URL") });
@@ -36,20 +39,22 @@ const auth = await createHeimdall(
   manifestJSON,
   {
     policyVersion: required("HEIMDALL_POLICY_VERSION"),
-    ...(process.env.HEIMDALL_REFERENCE_STRICT_SSO === "1"
-      ? {
-          tenantSSOPolicy: async (workspaceId) =>
-            workspaceId === "globex"
-              ? {
-                  organizationId: "reference-globex",
-                  providerId: "reference-globex-oidc",
-                  policyVersion: "reference-sso-v1",
-                  protocol: "oidc",
-                  maxAgeMs: 900_000,
-                }
-              : null,
-        }
-      : {}),
+    ...(federationPolicies
+      ? { tenantSSOPolicy: async (workspaceId) => federationPolicies.get(workspaceId) ?? null }
+      : process.env.HEIMDALL_REFERENCE_STRICT_SSO === "1"
+        ? {
+            tenantSSOPolicy: async (workspaceId) =>
+              workspaceId === "globex"
+                ? {
+                    organizationId: "reference-globex",
+                    providerId: "reference-globex-oidc",
+                    policyVersion: "reference-sso-v1",
+                    protocol: "oidc",
+                    maxAgeMs: 900_000,
+                  }
+                : null,
+          }
+        : {}),
     authorizeWorkspaceCreation: async (actor) => actor.subject === workspaceCreator,
     authorizeWorkspaceLifecycle: async (actor) => actor.subject === workspaceCreator,
     ...(exportPool
@@ -83,6 +88,9 @@ const sessions = await auth.createSessions(
     callbackUrl,
     returnTo: "/workspaces",
     zitadelAPIAudience: required("HEIMDALL_ZITADEL_API_AUDIENCE"),
+    ...(federationPolicies
+      ? { federation: { credential: async () => required("HEIMDALL_FEDERATION_CREDENTIAL") } }
+      : {}),
   },
   { signal },
 );
@@ -229,6 +237,11 @@ async function route(request) {
   if (request.method === "GET" && url.pathname === "/")
     return read({ login: "/auth/start", workspaces: "/workspaces" });
   if (url.pathname === "/auth/start") return sessions.start(request);
+  if (federationPolicies && url.pathname === "/auth/federation") {
+    const workspace = url.searchParams.getAll("workspace");
+    if (workspace.length !== 1) throw new HeimdallError("invalid_argument");
+    return sessions.startFederation(request, workspace[0]);
+  }
   if (url.pathname === new URL(callbackUrl).pathname) return sessions.callback(request);
   if (url.pathname === "/auth/logout") return sessions.logout(request);
   if (request.method === "GET" && url.pathname === "/managed-export" && auth.exportManagedPage) {
@@ -336,6 +349,7 @@ async function route(request) {
     return read(
       await discovery.list(actor, {
         signal: request.signal,
+        ...(url.searchParams.has("limit") ? { limit: Number(url.searchParams.get("limit")) } : {}),
         ...(url.searchParams.has("cursor") ? { cursor: url.searchParams.get("cursor") } : {}),
       }),
     );
