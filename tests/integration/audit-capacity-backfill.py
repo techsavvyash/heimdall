@@ -724,6 +724,51 @@ try:
   assert sql("SELECT count(*) FROM heimdall.audit_deliveries WHERE product_id='creation-cross'", 'managed_operations_v4')=='2'
   assert sql("SELECT count(*) FROM heimdall.audit_events e LEFT JOIN heimdall_retention.event_identities i USING(product_id,environment,event_id) LEFT JOIN heimdall_capacity.event_charges c USING(product_id,environment,event_id) WHERE i.event_id IS NULL OR c.event_id IS NULL", 'managed_operations_v4')=='0'
   print('Managed operation v4 runtime writes, bidirectional reads, state transitions and COMMIT-loss recovery passed',flush=True)
+  # Restore mixed audit and managed state into a target isolated from application logins.
+  backup_source='restore_source_v5'
+  restored='restore_target_v5'
+  sql('CREATE DATABASE '+backup_source+' TEMPLATE retention_activation')
+  sql("UPDATE heimdall_capacity.policy SET event_limit=100000,byte_limit=1000000000,delivery_limit=100000; UPDATE heimdall_capacity.upgrade SET event_limit=100000,byte_limit=1000000000,delivery_limit=100000; UPDATE heimdall_retention.capacity SET row_limit=100000,byte_limit=819200000; UPDATE heimdall_retention.upgrade SET row_limit=100000,byte_limit=819200000",backup_source)
+  cli(command,backup_source)
+  cli(activate_release,backup_source)
+  sql(runtime_grants.replace('retained_runtime_profile','heimdall_managed_runtime')+"; GRANT USAGE ON SCHEMA heimdall_managed TO heimdall_managed_runtime; GRANT SELECT ON heimdall_managed.schema_metadata,heimdall_managed.migrations TO heimdall_managed_runtime; GRANT SELECT,INSERT,UPDATE ON heimdall_managed.workspaces,heimdall_managed.operations,heimdall_managed.membership_candidates TO heimdall_managed_runtime; GRANT DELETE ON heimdall_managed.membership_candidates TO heimdall_managed_runtime; GRANT USAGE ON ALL SEQUENCES IN SCHEMA heimdall_managed TO heimdall_managed_runtime", backup_source)
+  backup_operations_env=dict(env,HEIMDALL_TEST_MANAGED_DATABASE_URL=dsn(backup_source),HEIMDALL_TEST_MANAGED_OPERATIONS_V4='1')
+  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-operation-transitions.test.ts'],env=backup_operations_env)
+  go('^TestOperationTransition$',backup_operations_env)
+  sql("UPDATE heimdall.audit_deliveries SET state='delivered',delivered_at=6001 WHERE product_id='ledger' AND environment='staging'",backup_source)
+  sql(retirement_grants,backup_source)
+  retire_test('go',dict(env,HEIMDALL_TEST_RETIRE_URL=dsn(backup_source)+role,HEIMDALL_TEST_RETIRE_ADMIN=dsn(backup_source),HEIMDALL_TEST_RETIRE_CASE='completed'))
+  hold_env=dict(env,HEIMDALL_TEST_HOLD_URL=dsn(backup_source)+'&options=-c%20role%3Dretained_retirement_runtime',HEIMDALL_TEST_HOLD_ADMIN=dsn(backup_source),HEIMDALL_TEST_HOLD_PROFILE='go')
+  sql('GRANT INSERT,UPDATE ON heimdall_retention.event_holds TO retained_retirement_runtime; GRANT UPDATE(release_event_id) ON heimdall_retention.hold_release_reservations TO retained_retirement_runtime',backup_source)
+  sql("ALTER TABLE heimdall_retention.event_holds ADD CONSTRAINT test_late_hold_failure CHECK(hold_id<>'rollback')",backup_source)
+  hold_test('go',hold_env)
+  sql('ALTER TABLE heimdall_retention.event_holds DROP CONSTRAINT test_late_hold_failure',backup_source)
+  sql("UPDATE heimdall.audit_deliveries SET state='delivered',delivered_at=6001 WHERE product_id='holds-go' AND environment='production' AND event_id='ordinary'",backup_source)
+  sql('CREATE ROLE restore_runtime_probe LOGIN')
+  sql('CREATE DATABASE '+restored+' WITH ALLOW_CONNECTIONS false')
+  sql('REVOKE CONNECT ON DATABASE '+restored+' FROM PUBLIC')
+  sql('ALTER DATABASE '+restored+' WITH ALLOW_CONNECTIONS true')
+  archive=Path(directory)/'managed-v5.dump'
+  with archive.open('wb') as output:
+   run(['docker','exec',name,'pg_dump','-U','postgres','-d',backup_source,'-Fc','--no-owner','--no-privileges'],stdout=output)
+  with archive.open('rb') as backup:
+   run(['docker','exec','-i',name,'pg_restore','-U','postgres','-d',restored,'--no-owner','--no-privileges','--exit-on-error','--single-transaction'],stdin=backup,capture_output=True)
+  denied=subprocess.run(['docker','exec',name,'psql','-U','restore_runtime_probe','-d',restored,'-c','SELECT 1'],capture_output=True,text=True)
+  assert denied.returncode and 'permission denied for database' in denied.stderr
+  cli(['--status','managed-v5'],restored)
+  cli(['--status','managed-v4'],restored,1)
+  assert sql("SELECT count(*) FROM heimdall_managed.operations WHERE product_id='transition-go' AND operation_id='safe-retry' AND state='uncertain'",restored)=='1'
+  assert sql("SELECT mutation_blocked FROM heimdall_managed.workspaces WHERE product_id='transition-go' AND workspace_id='safe-retry'",restored)=='t'
+  for table in ['heimdall_capacity.policy','heimdall_retention.capacity','heimdall_retention.hold_release_capacity']:
+   assert sql('SELECT to_jsonb(t) FROM '+table+' t',restored)==sql('SELECT to_jsonb(t) FROM '+table+' t',backup_source)
+  assert int(sql('SELECT active_count FROM heimdall_retention.hold_release_capacity',restored))>0
+  assert int(sql("SELECT count(*) FROM heimdall.audit_deliveries WHERE state='pending'",restored))>0
+  assert sql("SELECT count(*) FROM heimdall_retention.retirements",restored)==sql("SELECT count(*) FROM heimdall_retention.retirements",backup_source)
+  sql("CREATE ROLE restore_inspector; GRANT USAGE ON SCHEMA heimdall,heimdall_managed,heimdall_capacity,heimdall_retention TO restore_inspector; GRANT SELECT ON ALL TABLES IN SCHEMA heimdall,heimdall_managed,heimdall_capacity,heimdall_retention TO restore_inspector",restored)
+  restored_env=dict(env,HEIMDALL_TEST_RESTORED_STORAGE_URL=dsn(restored)+'&options=-c%20role%3Drestore_inspector')
+  go('^TestRestoredStorage$',restored_env)
+  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-restored-storage.test.ts'],env=restored_env)
+  print('Restored v5 storage passed: isolated target, retired receipt, pending decision and uncertain operation in TS and Go',flush=True)
   def runtime_profile(language,selected):
    if language=='go':go('^TestRetainedRuntime$',selected)
    else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-runtime.test.ts'],env=selected)
