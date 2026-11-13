@@ -99,6 +99,13 @@ try:
         capture_output=True, text=True)
     run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/runtime.test.ts"], env=runtime_env)
     subprocess.run(["go", "test", "-race", "-count=1", ".", "-run", "TestPublicPostgresRuntime|TestPublicManagedRuntime|TestPublicManagedOnboarding|TestPostgresFactory"], cwd=ROOT / "sdk/go", env=runtime_env, check=True)
+    if os.environ.get("HEIMDALL_PROBE_PINNED_ADMIN") == "1":
+        from pinned_openfga import pinned_openfga
+        with pinned_openfga(ROOT) as provider:
+            pinned_env = dict(runtime_env, **provider)
+            run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/runtime.test.ts", "-t", "managed onboarding safely"], env=pinned_env)
+            subprocess.run(["go", "test", "-race", "-count=1", ".", "-run", "^TestPublicManagedOnboarding$"], cwd=ROOT / "sdk/go", env=pinned_env, check=True)
+            print(json.dumps({"run": name, "pinnedAdministration": ["typescript", "go"], "result": "passed"}), flush=True)
     if os.environ.get("HEIMDALL_PROBE_SDK_RECOVERY") == "1":
         run(["pnpm", "run", "build"])
         recovery_env = dict(env, HEIMDALL_RECOVERY_DATABASE_URL=runtime_dsn + "&options=-c%20role%3Dheimdall_public_runtime")

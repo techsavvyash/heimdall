@@ -15,6 +15,7 @@ import (
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	postgres "github.com/techsavvyash/heimdall/sdk/go/postgres"
 	"github.com/techsavvyash/heimdall/sdk/go/provisioning"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -72,8 +73,87 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 	var issuer string
 	var model map[string]any
 	var ownerRelation, ownerEffective string
+	var pinned struct{ URL, StoreID, ModelID string }
+	if len(environment) > 0 && environment[0] == "onboarding-go" && os.Getenv("HEIMDALL_TEST_PINNED_OPENFGA") != "" {
+		var bindings map[string]struct{ URL, StoreID, ModelID string }
+		if json.Unmarshal([]byte(os.Getenv("HEIMDALL_TEST_PINNED_OPENFGA")), &bindings) != nil {
+			t.Fatal("invalid pinned OpenFGA scope")
+		}
+		pinned = bindings["go"]
+	}
+	pinnedKey := os.Getenv("HEIMDALL_TEST_PINNED_OPENFGA_KEY")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if pinned.URL != "" && strings.HasPrefix(r.URL.Path, "/stores/") {
+			fault := h.providerFault.Load()
+			if strings.HasSuffix(r.URL.Path, "/read") && fault == "before_dispatch" {
+				w.WriteHeader(503)
+				return
+			}
+			isWrite := strings.HasSuffix(r.URL.Path, "/write")
+			if isWrite {
+				h.writes.Add(1)
+				if fault == "lost_before_apply" {
+					panic(http.ErrAbortHandler)
+				}
+			}
+			payload, err := io.ReadAll(r.Body)
+			if err != nil {
+				w.WriteHeader(500)
+				return
+			}
+			forward := func(method, path string, payload []byte) (*http.Response, error) {
+				req, err := http.NewRequestWithContext(r.Context(), method, pinned.URL+path, bytes.NewReader(payload))
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set("Authorization", "Bearer "+pinnedKey)
+				req.Header.Set("Content-Type", "application/json")
+				return http.DefaultClient.Do(req)
+			}
+			response, err := forward(r.Method, r.URL.Path, payload)
+			if err != nil {
+				w.WriteHeader(502)
+				return
+			}
+			defer response.Body.Close()
+			if isWrite && response.StatusCode == 200 {
+				var write struct {
+					Writes struct {
+						Tuples []map[string]string `json:"tuple_keys"`
+					}
+					Deletes struct {
+						Tuples []map[string]string `json:"tuple_keys"`
+					}
+				}
+				if json.Unmarshal(payload, &write) != nil {
+					w.WriteHeader(500)
+					return
+				}
+				changes := append(write.Writes.Tuples, write.Deletes.Tuples...)
+				read, _ := json.Marshal(map[string]any{"tuple_key": map[string]string{"object": changes[0]["object"], "relation": ownerRelation}, "consistency": "HIGHER_CONSISTENCY"})
+				owners, err := forward("POST", "/stores/"+pinned.StoreID+"/read", read)
+				if err != nil {
+					w.WriteHeader(502)
+					return
+				}
+				var result struct{ Tuples []json.RawMessage }
+				decodeErr := json.NewDecoder(owners.Body).Decode(&result)
+				owners.Body.Close()
+				if owners.StatusCode != 200 || decodeErr != nil {
+					w.WriteHeader(502)
+					return
+				}
+				h.owners.Store(int64(len(result.Tuples)))
+				if fault == "lost_response" || (fault == "lost_owner_delete" &&
+					slices.ContainsFunc(write.Deletes.Tuples, func(tuple map[string]string) bool { return tuple["relation"] == ownerRelation })) {
+					panic(http.ErrAbortHandler)
+				}
+			}
+			w.WriteHeader(response.StatusCode)
+			_, _ = io.Copy(w, response.Body)
+			return
+		}
 		var body any
 		switch r.URL.Path {
 		case "/.well-known/openid-configuration":
@@ -206,6 +286,11 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 	base.Manifest["clients"].(map[string]any)["web"].(map[string]any)["transportProfile"] = "loopback"
 	if len(environment) > 0 {
 		base.Config["environment"] = environment[0]
+	}
+	if pinned.URL != "" {
+		base.Config["environment"] = "onboarding-go-pinned"
+		base.Config["openfga"].(map[string]any)["storeId"] = pinned.StoreID
+		base.Config["openfga"].(map[string]any)["modelId"] = pinned.ModelID
 	}
 	h.config, _ = json.Marshal(base.Config)
 	h.manifest, _ = json.Marshal(base.Manifest)
@@ -701,6 +786,11 @@ func TestPublicManagedOnboarding(t *testing.T) {
 		t.Skip("managed PostgreSQL runtime")
 	}
 	h := setupRuntime(t, "", "onboarding-go")
+	environment, recoveryKey := "onboarding-go", "new-key"
+	if os.Getenv("HEIMDALL_TEST_PINNED_OPENFGA") != "" {
+		environment += "-pinned"
+		recoveryKey = os.Getenv("HEIMDALL_TEST_PINNED_OPENFGA_KEY")
+	}
 	db, err := sql.Open("postgres", dsn+"&options=-c%20role%3Dheimdall_public_runtime")
 	if err != nil {
 		t.Fatal(err)
@@ -711,7 +801,7 @@ func TestPublicManagedOnboarding(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer admin.Close()
-	h.options.Storage, err = postgres.NewManagedStorage(db, postgres.StorageOptions{ProductID: "ledger", Environment: "onboarding-go", AuditSinks: []string{"siem"}})
+	h.options.Storage, err = postgres.NewManagedStorage(db, postgres.StorageOptions{ProductID: "ledger", Environment: environment, AuditSinks: []string{"siem"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -765,7 +855,7 @@ func TestPublicManagedOnboarding(t *testing.T) {
 		h.providerFault.Store(item.Fault)
 		if item.Fault == "activation_failure" {
 			_, err := admin.Exec(`CREATE FUNCTION public.fail_onboarding_go() RETURNS trigger LANGUAGE plpgsql AS $$
-			BEGIN IF NEW.environment='onboarding-go' AND NEW.lifecycle='active' THEN
+			BEGIN IF NEW.environment='` + environment + `' AND NEW.lifecycle='active' THEN
 			  RAISE EXCEPTION 'test activation failure'; END IF; RETURN NEW; END $$;
 			CREATE TRIGGER fail_onboarding_go BEFORE UPDATE ON heimdall_managed.workspaces
 			FOR EACH ROW EXECUTE FUNCTION public.fail_onboarding_go()`)
@@ -795,7 +885,7 @@ func TestPublicManagedOnboarding(t *testing.T) {
 		}
 		var state string
 		var generation int64
-		if err := admin.QueryRow("SELECT state,generation FROM heimdall_managed.operations WHERE environment='onboarding-go' AND operation_id=$1", result.OperationID).Scan(&state, &generation); err != nil {
+		if err := admin.QueryRow("SELECT state,generation FROM heimdall_managed.operations WHERE environment='"+environment+"' AND operation_id=$1", result.OperationID).Scan(&state, &generation); err != nil {
 			t.Fatal(err)
 		}
 		if item.Fault == "activation_failure" && state != "confirmed" {
@@ -820,7 +910,7 @@ func TestPublicManagedOnboarding(t *testing.T) {
 			recovery := provisioning.WorkspaceRecoveryOptions{
 				OperationID: result.OperationID, ExpectedGeneration: generation, PolicyVersion: "p1",
 				InitiatingIssuer: identity.Issuer, InitiatingSubject: identity.Subject,
-				RecoveryToken: "new-key", AuditSinks: []string{"siem"},
+				RecoveryToken: recoveryKey, AuditSinks: []string{"siem"},
 				VerifyQuiescence: func(context.Context, provisioning.WorkspaceRecoveryScope) (provisioning.WorkspaceRecoveryEvidence, error) {
 					return provisioning.WorkspaceRecoveryEvidence{}, nil
 				},
@@ -932,7 +1022,7 @@ func TestPublicManagedOnboarding(t *testing.T) {
 		t.Fatal("unexpected write count")
 	}
 	var candidateCount int
-	if err := admin.QueryRow("SELECT count(*) FROM heimdall_managed.membership_candidates WHERE environment='onboarding-go' AND workspace_id=$1", workspaceID).Scan(&candidateCount); err != nil || candidateCount != 1 {
+	if err := admin.QueryRow("SELECT count(*) FROM heimdall_managed.membership_candidates WHERE environment='"+environment+"' AND workspace_id=$1", workspaceID).Scan(&candidateCount); err != nil || candidateCount != 1 {
 		t.Fatal("candidate cleanup", candidateCount, err)
 	}
 	discovery, err := client.NewWorkspaceDiscovery(heimdall.DiscoveryOptions{ActiveKeyID: "cursor", Keys: map[string][]byte{"cursor": make([]byte, 32)}})
@@ -985,13 +1075,13 @@ func TestPublicManagedOnboarding(t *testing.T) {
 		}
 		var state string
 		var generation int64
-		if err := admin.QueryRow("SELECT state,generation FROM heimdall_managed.operations WHERE environment='onboarding-go' AND operation_id=$1", pending.OperationID).Scan(&state, &generation); err != nil || state != "uncertain" {
+		if err := admin.QueryRow("SELECT state,generation FROM heimdall_managed.operations WHERE environment='"+environment+"' AND operation_id=$1", pending.OperationID).Scan(&state, &generation); err != nil || state != "uncertain" {
 			t.Fatal("read quarantine", state, err)
 		}
 		identity := actor.Identity()
 		options := provisioning.WorkspaceRecoveryOptions{
 			OperationID: pending.OperationID, ExpectedGeneration: generation, PolicyVersion: "p1",
-			InitiatingIssuer: identity.Issuer, InitiatingSubject: identity.Subject, RecoveryToken: "new-key", AuditSinks: []string{"siem"},
+			InitiatingIssuer: identity.Issuer, InitiatingSubject: identity.Subject, RecoveryToken: recoveryKey, AuditSinks: []string{"siem"},
 			VerifyQuiescence: func(context.Context, provisioning.WorkspaceRecoveryScope) (provisioning.WorkspaceRecoveryEvidence, error) {
 				return provisioning.WorkspaceRecoveryEvidence{}, nil
 			},
@@ -1022,7 +1112,7 @@ func TestPublicManagedOnboarding(t *testing.T) {
 		if h.writes.Load()-before != 1+item.RepairWrites {
 			t.Fatal("unexpected recovery write count")
 		}
-		if err := admin.QueryRow("SELECT count(*) FROM heimdall_managed.membership_candidates WHERE environment='onboarding-go' AND workspace_id=$1", workspaceID).Scan(&candidateCount); err != nil || candidateCount != item.Candidates {
+		if err := admin.QueryRow("SELECT count(*) FROM heimdall_managed.membership_candidates WHERE environment='"+environment+"' AND workspace_id=$1", workspaceID).Scan(&candidateCount); err != nil || candidateCount != item.Candidates {
 			t.Fatal("candidate recovery", candidateCount, err)
 		}
 	}
@@ -1068,13 +1158,13 @@ func TestPublicManagedOnboarding(t *testing.T) {
 			t.Fatal("gate", err)
 		}
 		var generation int64
-		if err := admin.QueryRow("SELECT generation FROM heimdall_managed.operations WHERE environment='onboarding-go' AND operation_id=$1", pending.OperationID).Scan(&generation); err != nil {
+		if err := admin.QueryRow("SELECT generation FROM heimdall_managed.operations WHERE environment='"+environment+"' AND operation_id=$1", pending.OperationID).Scan(&generation); err != nil {
 			t.Fatal(err)
 		}
 		h.providerFault.Store("none")
 		result, err := provisioning.RecoverOwnershipTransfer(ctx, db, h.config, h.manifest, provisioning.WorkspaceRecoveryOptions{
 			OperationID: pending.OperationID, ExpectedGeneration: generation, PolicyVersion: "p1",
-			InitiatingIssuer: actor.Identity().Issuer, InitiatingSubject: actor.Identity().Subject, RecoveryToken: "new-key", AuditSinks: []string{"siem"},
+			InitiatingIssuer: actor.Identity().Issuer, InitiatingSubject: actor.Identity().Subject, RecoveryToken: recoveryKey, AuditSinks: []string{"siem"},
 			VerifyQuiescence: func(_ context.Context, scope provisioning.WorkspaceRecoveryScope) (provisioning.WorkspaceRecoveryEvidence, error) {
 				if scope.Kind != "transfer_owner" {
 					return provisioning.WorkspaceRecoveryEvidence{}, heimdall.ErrForbidden
@@ -1096,14 +1186,14 @@ func TestPublicManagedOnboarding(t *testing.T) {
 		}
 	}
 	var recoveryCount int
-	if err := admin.QueryRow(`SELECT count(*) FROM heimdall.audit_events WHERE environment='onboarding-go'
+	if err := admin.QueryRow(`SELECT count(*) FROM heimdall.audit_events WHERE environment='` + environment + `'
 		AND convert_from(decode(translate(event->>'payload','-_','+/') ||
 		repeat('=', (4-length(event->>'payload')%4)%4), 'base64'),'UTF8')::jsonb
 		->>'requestId' IN ('drain-record','membership-drain','ownership-drain')`).Scan(&recoveryCount); err != nil || recoveryCount != 21 {
 		t.Fatal("recovery audit", recoveryCount, err)
 	}
 	var count int
-	if err := admin.QueryRow("SELECT count(*) FROM heimdall.audit_deliveries WHERE environment='onboarding-go' AND sink_id='siem'").Scan(&count); err != nil || count <= 20 {
+	if err := admin.QueryRow("SELECT count(*) FROM heimdall.audit_deliveries WHERE environment='" + environment + "' AND sink_id='siem'").Scan(&count); err != nil || count <= 20 {
 		t.Fatal("audit routing", count, err)
 	}
 }

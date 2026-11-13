@@ -24,7 +24,20 @@ afterEach(() => {
 function setup(failure = "", environment = "production") {
   vi.spyOn(Date, "now").mockReturnValue(token.now);
   const config = { ...base.config, environment, issuer: token.issuer, audience: token.audience };
-  const artifact = compileTenantModel(base.manifest, config);
+  const pinned = environment === "onboarding-ts" && process.env.HEIMDALL_TEST_PINNED_OPENFGA;
+  if (pinned) {
+    config.environment += "-pinned";
+    config.openfga = JSON.parse(pinned).ts;
+    config.transportProfile = "loopback";
+  }
+  const manifest = structuredClone(base.manifest);
+  if (pinned)
+    manifest.clients.web = {
+      redirectUris: ["http://127.0.0.1:9090/callback"],
+      transportProfile: "loopback",
+    };
+  const artifact = compileTenantModel(manifest, config);
+  const realFetch = globalThis.fetch;
   const metadata = JSON.parse(
     JSON.stringify(read("oidc-discovery.json").metadata).replaceAll(
       "https://identity.example.test",
@@ -44,7 +57,7 @@ function setup(failure = "", environment = "production") {
       clientSecret: async () => "secret",
       openfgaKey: async () => {
         if (failure === "credential") throw new Error("secret");
-        return "key";
+        return pinned ? process.env.HEIMDALL_TEST_PINNED_OPENFGA_KEY! : "key";
       },
     },
     storage: {
@@ -75,6 +88,47 @@ function setup(failure = "", environment = "production") {
       if (url.endsWith("openid-configuration")) {
         order.push("discovery");
         return Response.json(metadata, { status: failure === "discovery" ? 503 : 200 });
+      }
+      if (pinned && url.startsWith(config.openfga.url + "/stores/")) {
+        const forward = (path: string, body?: unknown) =>
+          realFetch(config.openfga.url + path, {
+            signal: init?.signal ?? null,
+            headers: {
+              authorization: "Bearer " + process.env.HEIMDALL_TEST_PINNED_OPENFGA_KEY,
+              "content-type": "application/json",
+            },
+            ...(body ? { method: "POST", body: JSON.stringify(body) } : {}),
+          });
+        if (url.endsWith("/read") && fga.fault === "before_dispatch")
+          return Response.json({}, { status: 503 });
+        if (!url.endsWith("/write"))
+          return forward(
+            new URL(url).pathname,
+            init?.body ? JSON.parse(String(init.body)) : undefined,
+          );
+        fga.writes++;
+        if (fga.fault === "lost_before_apply") throw new Error("simulated interrupted write");
+        const mutation = JSON.parse(String(init?.body));
+        const response = await forward(new URL(url).pathname, mutation);
+        if (!response.ok) return response;
+        const owner = artifact.roles[manifest.ownerRole]!.assignment;
+        const object = (mutation.writes?.tuple_keys ?? mutation.deletes?.tuple_keys)?.[0]?.object;
+        const owners = await forward("/stores/" + config.openfga.storeId + "/read", {
+          tuple_key: { object, relation: owner },
+          consistency: "HIGHER_CONSISTENCY",
+        });
+        fga.ownerCount = (await owners.json()).tuples.length;
+        if (
+          fga.fault === "lost_response" ||
+          (fga.fault === "lost_owner_delete" &&
+            mutation.deletes?.tuple_keys.some(
+              (tuple: { relation: string }) => tuple.relation === owner,
+            ))
+        ) {
+          await response.body?.cancel();
+          throw new Error("simulated lost response");
+        }
+        return response;
       }
       if (url.includes("authorization-models")) {
         order.push("model");
@@ -184,7 +238,7 @@ function setup(failure = "", environment = "production") {
       return Response.json(status.user);
     }),
   );
-  return { config, options, events, order, fga };
+  return { config, manifest, options, events, order, fga };
 }
 test.each(cases)("public runtime startup $name", async (c) => {
   const s = setup(c.failure);
@@ -558,7 +612,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         return permit;
       };
       const open = () =>
-        createHeimdall(JSON.stringify(s.config), JSON.stringify(base.manifest), s.options, call);
+        createHeimdall(JSON.stringify(s.config), JSON.stringify(s.manifest), s.options, call);
       const runtime = await open();
       const actor = await runtime.tokens.verify(raw, call);
       const api = runtime.onboarding!;
@@ -578,7 +632,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         let creationError = "";
         if (activationFailure) {
           await admin.query(`CREATE FUNCTION public.fail_onboarding_ts() RETURNS trigger LANGUAGE plpgsql AS $$
-            BEGIN IF NEW.environment='onboarding-ts' AND NEW.lifecycle='active' THEN
+            BEGIN IF NEW.environment='${s.config.environment}' AND NEW.lifecycle='active' THEN
               RAISE EXCEPTION 'test activation failure'; END IF; RETURN NEW; END $$;
             CREATE TRIGGER fail_onboarding_ts BEFORE UPDATE ON heimdall_managed.workspaces
             FOR EACH ROW EXECUTE FUNCTION public.fail_onboarding_ts()`);
@@ -609,7 +663,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         );
         expect(await api.get(actor, result.operationId, call)).toEqual(result);
         const stored = await admin.query(
-          "SELECT state,generation FROM heimdall_managed.operations WHERE environment='onboarding-ts' AND operation_id=$1",
+          `SELECT state,generation FROM heimdall_managed.operations WHERE environment='${s.config.environment}' AND operation_id=$1`,
           [result.operationId],
         );
         const uncertain = ["lost_response", "lost_before_apply"].includes(item.fault);
@@ -642,7 +696,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
           expectedGeneration: Number(stored.rows[0]?.generation),
           policyVersion: "p1",
           auditSinks: ["siem"],
-          recoveryToken: "new-key",
+          recoveryToken: process.env.HEIMDALL_TEST_PINNED_OPENFGA_KEY ?? "new-key",
         };
         const runRecovery = (
           verifyQuiescence: Parameters<typeof recoverWorkspaceCreation>[3]["verifyQuiescence"],
@@ -650,7 +704,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
           recoverWorkspaceCreation(
             pool,
             JSON.stringify(s.config),
-            JSON.stringify(base.manifest),
+            JSON.stringify(s.manifest),
             {
               ...recovery,
               verifyQuiescence,
@@ -753,7 +807,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       );
       expect(s.fga.writes - beforeChanges).toBe(fixtureMembership.confirmedWrites);
       const candidates = await admin.query(
-        "SELECT count(*)::int AS count FROM heimdall_managed.membership_candidates WHERE environment='onboarding-ts' AND workspace_id=$1",
+        `SELECT count(*)::int AS count FROM heimdall_managed.membership_candidates WHERE environment='${s.config.environment}' AND workspace_id=$1`,
         [winner.workspaceId],
       );
       expect(candidates.rows[0]?.count).toBe(1);
@@ -792,7 +846,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         );
         expect(s.fga.writes - before).toBe(1);
         const state = await admin.query(
-          "SELECT state,generation FROM heimdall_managed.operations WHERE environment='onboarding-ts' AND operation_id=$1",
+          `SELECT state,generation FROM heimdall_managed.operations WHERE environment='${s.config.environment}' AND operation_id=$1`,
           [pending.operationId],
         );
         expect(state.rows[0]?.state).toBe("uncertain");
@@ -802,7 +856,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
           expectedGeneration: generation,
           policyVersion: "p1",
           initiatingActor: { issuer: actor.issuer, subject: actor.subject },
-          recoveryToken: "new-key",
+          recoveryToken: process.env.HEIMDALL_TEST_PINNED_OPENFGA_KEY ?? "new-key",
           auditSinks: ["siem"],
           verifyQuiescence: async () => null,
         };
@@ -810,7 +864,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
           recoverMembership(
             pool,
             JSON.stringify(s.config),
-            JSON.stringify(base.manifest),
+            JSON.stringify(s.manifest),
             opts,
             call.signal,
           );
@@ -838,7 +892,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         expect(await s.options.storage.managed!.allows(winner.workspaceId, call.signal)).toBe(true);
         expect(s.fga.writes - before).toBe(1 + item.repairWrites);
         const indexed = await admin.query(
-          "SELECT count(*)::int AS count FROM heimdall_managed.membership_candidates WHERE environment='onboarding-ts' AND workspace_id=$1",
+          `SELECT count(*)::int AS count FROM heimdall_managed.membership_candidates WHERE environment='${s.config.environment}' AND workspace_id=$1`,
           [winner.workspaceId],
         );
         expect(indexed.rows[0]?.count).toBe(item.candidates);
@@ -882,20 +936,20 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
           false,
         );
         const state = await admin.query(
-          "SELECT generation FROM heimdall_managed.operations WHERE environment='onboarding-ts' AND operation_id=$1",
+          `SELECT generation FROM heimdall_managed.operations WHERE environment='${s.config.environment}' AND operation_id=$1`,
           [pending.operationId],
         );
         s.fga.fault = "none";
         const result = await recoverOwnershipTransfer(
           pool,
           JSON.stringify(s.config),
-          JSON.stringify(base.manifest),
+          JSON.stringify(s.manifest),
           {
             operationId: pending.operationId,
             expectedGeneration: Number(state.rows[0]?.generation),
             policyVersion: "p1",
             initiatingActor: { issuer: actor.issuer, subject: actor.subject },
-            recoveryToken: "new-key",
+            recoveryToken: process.env.HEIMDALL_TEST_PINNED_OPENFGA_KEY ?? "new-key",
             auditSinks: ["siem"],
             verifyQuiescence: async (scope) => {
               expect(scope.kind).toBe("transfer_owner");
@@ -913,11 +967,11 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         expect(await runtime.tenant(created.workspaceId).roles(actor, call)).toEqual([]);
       }
       const counts = await admin.query(
-        "SELECT count(*)::int AS count FROM heimdall.audit_deliveries WHERE environment='onboarding-ts' AND sink_id='siem'",
+        `SELECT count(*)::int AS count FROM heimdall.audit_deliveries WHERE environment='${s.config.environment}' AND sink_id='siem'`,
       );
       expect(counts.rows[0]?.count).toBeGreaterThan(20);
       const audit = await admin.query(
-        "SELECT event->>'payload' AS payload FROM heimdall.audit_events WHERE environment='onboarding-ts'",
+        `SELECT event->>'payload' AS payload FROM heimdall.audit_events WHERE environment='${s.config.environment}'`,
       );
       const recoveryEvents = audit.rows
         .map(({ payload }) => JSON.parse(Buffer.from(payload, "base64url").toString()))
@@ -934,4 +988,5 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       await Promise.all([pool.end(), admin.end()]);
     }
   },
+  60000,
 );

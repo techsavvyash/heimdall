@@ -30,4 +30,19 @@ The SDK requires active ownership or membership-gated delegation and checks each
 
 Retry the same command with its original key and input to inspect the result or finish durable confirmation. A reused key with changed input conflicts. An uncertain write keeps the workspace blocked and prevents conflicting mutations. See [[phase-5-membership-recovery]] for operator recovery of membership writes.
 
-Run `heimdall-records-281fd3a0aed447028928831d90da702c` passed on PostgreSQL 17.11. The shared PostgreSQL scenario exercises both public SDKs with controlled OpenFGA responses. It verifies add, idempotency, role replacement, owner protection, removal and candidate cleanup, and the blocked gate after a committed write loses its response. Pinned-service and reference product administration checks, invitation acceptance, and ownership transfer remain Phase 5 work.
+Run `heimdall-records-281fd3a0aed447028928831d90da702c` passed on PostgreSQL 17.11. The shared PostgreSQL scenario exercises both public SDKs with controlled OpenFGA responses. It verifies add, idempotency, role replacement, owner protection, removal and candidate cleanup, and the blocked gate after a committed write loses its response. The pinned-service run below extends this coverage to the live provider.
+
+## Pinned-service verification
+
+Run `heimdall-records-7311a10dcc554ccc8ce635a016b1d183` passed the shared TypeScript and Go administration matrix against OpenFGA 1.22.0 and PostgreSQL 17.11. Each SDK used its own store and the checked-in Ledger model. The suite exercises member addition, role replacement, removal, ownership transfer, and recovery with injected request and response failures. It verifies recovery write counts, the workspace gate, discovery candidates, and durable audit. The transfer faults verify that at least one owner survives both interrupted stages.
+
+```mermaid
+flowchart LR
+  Actor[Fixture identity] --> SDK[Public TypeScript or Go SDK]
+  SDK --> Journal[Managed PostgreSQL journal and audit]
+  SDK --> Fault[Request and response fault harness]
+  Fault --> FGA[Pinned OpenFGA store]
+  FGA --> PG[OpenFGA PostgreSQL]
+```
+
+Run `HEIMDALL_PROBE_PINNED_ADMIN=1 python3 tests/integration/postgres-records.py` from the repository root with Node, pnpm, Go, Docker Compose, and a free loopback port 8080. The probe uses fixture identities and operator evidence callbacks. The earlier [[phase-5-workspace-recovery|workspace creation drill]] exercises actual service stop, drain and credential retirement. Reference product administration and invitation acceptance remain open.
