@@ -92,6 +92,7 @@ function setup(failure = "", environment = "production") {
                 ),
               ).toString("base64url") ||
           ![
+            "member",
             artifact.permissions["invoice.approve"],
             ...Object.values(artifact.roles).map((r) => r.effective),
           ].includes(check.tuple_key.relation)
@@ -102,7 +103,9 @@ function setup(failure = "", environment = "production") {
         return Response.json({
           allowed:
             check.tuple_key.object === "workspace:acme" &&
-            ["p_0", artifact.roles.approver!.effective].includes(check.tuple_key.relation),
+            ["member", "p_0", artifact.roles.approver!.effective].includes(
+              check.tuple_key.relation,
+            ),
         });
       }
       if (url.endsWith("/keys")) return Response.json(token.jwks);
@@ -305,6 +308,39 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       expect(
         eventsForRoles.filter((event) => event.parentDecisionId === parent.decisionId),
       ).toHaveLength(8);
+      const discovery = runtime.createWorkspaceDiscovery({
+        scanBudget: 1,
+        activeKeyId: "cursor",
+        keys: { cursor: Buffer.alloc(32, 4) },
+        source: {
+          scan: async ({ after }) => {
+            const id = after === null ? "globex" : after === "globex" ? "acme" : "outage";
+            return {
+              items: [{ workspace: { id, name: "Shared name" }, position: id }],
+              exhausted: id !== "globex",
+            };
+          },
+        },
+      });
+      const sparse = await discovery.list(actor, { signal });
+      expect(sparse.items).toEqual([]);
+      expect(sparse.nextCursor).toMatch(/^hc1\./);
+      const page = await discovery.list(actor, { signal, cursor: sparse.nextCursor! });
+      expect(page).toEqual({ items: [{ id: "acme", name: "Shared name" }], nextCursor: null });
+      await expect(
+        discovery.list(actor, { signal, cursor: sparse.nextCursor! + "x" }),
+      ).rejects.toThrow("invalid_argument");
+      const unavailable = runtime.createWorkspaceDiscovery({
+        activeKeyId: "cursor",
+        keys: { cursor: Buffer.alloc(32, 4) },
+        source: {
+          scan: async () => ({
+            items: [{ workspace: { id: "outage", name: "Unavailable" }, position: "outage" }],
+            exhausted: true,
+          }),
+        },
+      });
+      await expect(unavailable.list(actor, { signal })).rejects.toThrow("unavailable");
       await storage.identity.invalidate(
         {
           issuer: token.issuer,
@@ -319,11 +355,11 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       const events = await pool.query(
         "SELECT count(*)::int AS count FROM heimdall.audit_events WHERE product_id='ledger' AND environment='public-ts'",
       );
-      expect(events.rows[0].count).toBe(33);
+      expect(events.rows[0].count).toBe(45);
       const delivery = await pool.query(
         "SELECT sink_id, count(*)::int AS count FROM heimdall.audit_deliveries WHERE product_id='ledger' AND environment='public-ts' GROUP BY sink_id",
       );
-      expect(delivery.rows).toEqual([{ sink_id: "siem", count: 33 }]);
+      expect(delivery.rows).toEqual([{ sink_id: "siem", count: 45 }]);
       await expect(storage.appendAudit({}, signal)).rejects.toThrow("invalid_argument");
       expect((await pool.query("SELECT 1 AS alive")).rows[0].alive).toBe(1);
     } finally {

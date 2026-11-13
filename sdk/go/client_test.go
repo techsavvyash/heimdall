@@ -81,7 +81,7 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 			}
 			user := "user:" + base64.RawURLEncoding.EncodeToString([]byte(`["`+issuer+`","runtime-user"]`))
 			if json.NewDecoder(r.Body).Decode(&check) != nil || check.Model != "model-1" ||
-				check.Consistency != "HIGHER_CONSISTENCY" || check.Tuple["user"] != user || !slices.Contains([]string{"p_0", "e_0", "e_1", "e_2", "e_3"}, check.Tuple["relation"]) {
+				check.Consistency != "HIGHER_CONSISTENCY" || check.Tuple["user"] != user || !slices.Contains([]string{"member", "p_0", "e_0", "e_1", "e_2", "e_3"}, check.Tuple["relation"]) {
 				w.WriteHeader(400)
 				return
 			}
@@ -89,7 +89,7 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 				w.WriteHeader(503)
 				return
 			}
-			body = map[string]any{"allowed": check.Tuple["object"] == "workspace:acme" && slices.Contains([]string{"p_0", "e_1"}, check.Tuple["relation"])}
+			body = map[string]any{"allowed": check.Tuple["object"] == "workspace:acme" && slices.Contains([]string{"member", "p_0", "e_1"}, check.Tuple["relation"])}
 		case "/oauth/v2/keys":
 			body = map[string]any{"keys": []any{map[string]any{"kty": "RSA", "kid": "runtime", "alg": "RS256", "n": base64.RawURLEncoding.EncodeToString(key.N.Bytes()), "e": "AQAB"}}}
 		case "/oauth/v2/introspect":
@@ -300,6 +300,13 @@ func TestPostgresFactory(t *testing.T) {
 		t.Fatal("factory opened connection")
 	}
 }
+
+type workspaceScan func(context.Context, heimdall.ScanOptions) (heimdall.CandidatePage, error)
+
+func (scan workspaceScan) Scan(ctx context.Context, options heimdall.ScanOptions) (heimdall.CandidatePage, error) {
+	return scan(ctx, options)
+}
+
 func TestPublicPostgresRuntime(t *testing.T) {
 	url := os.Getenv("HEIMDALL_TEST_DATABASE_URL")
 	if url == "" || os.Getenv("HEIMDALL_TEST_READ_PEER") != "" {
@@ -413,6 +420,41 @@ func TestPublicPostgresRuntime(t *testing.T) {
 			t.Fatal("incorrect parent decision ID")
 		}
 	}
+	discoveryOptions := heimdall.DiscoveryOptions{
+		ScanBudget: 1, ActiveKeyID: "cursor", Keys: map[string][]byte{"cursor": bytes.Repeat([]byte{4}, 32)},
+		Source: workspaceScan(func(_ context.Context, scan heimdall.ScanOptions) (heimdall.CandidatePage, error) {
+			id := "globex"
+			if scan.After == "globex" {
+				id = "acme"
+			}
+			return heimdall.CandidatePage{Items: []heimdall.Candidate{{Workspace: heimdall.Workspace{ID: id, Name: "Shared name"}, Position: id}}, Exhausted: id != "globex"}, nil
+		}),
+	}
+	discovery, err := client.NewWorkspaceDiscovery(discoveryOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sparse, err := discovery.List(ctx, actor, heimdall.WorkspaceListOptions{})
+	if err != nil || len(sparse.Items) != 0 || !strings.HasPrefix(sparse.NextCursor, "hc1.") {
+		t.Fatal("expected empty page with cursor", err)
+	}
+	page, err := discovery.List(ctx, actor, heimdall.WorkspaceListOptions{Cursor: sparse.NextCursor})
+	if err != nil || !slices.Equal(page.Items, []heimdall.Workspace{{ID: "acme", Name: "Shared name"}}) || page.NextCursor != "" {
+		t.Fatal("expected allowed workspace", err)
+	}
+	if _, err := discovery.List(ctx, actor, heimdall.WorkspaceListOptions{Cursor: sparse.NextCursor + "x"}); !errors.Is(err, heimdall.ErrInvalidArgument) {
+		t.Fatal(err)
+	}
+	discoveryOptions.Source = workspaceScan(func(context.Context, heimdall.ScanOptions) (heimdall.CandidatePage, error) {
+		return heimdall.CandidatePage{Items: []heimdall.Candidate{{Workspace: heimdall.Workspace{ID: "outage", Name: "Unavailable"}, Position: "outage"}}, Exhausted: true}, nil
+	})
+	unavailable, err := client.NewWorkspaceDiscovery(discoveryOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page, err := unavailable.List(ctx, actor, heimdall.WorkspaceListOptions{}); !errors.Is(err, heimdall.ErrUnavailable) || page.NextCursor != "" || len(page.Items) != 0 {
+		t.Fatal("expected failed page", err)
+	}
 	err = storage.Identity.Invalidate(ctx, heimdall.IdentityNegative{Identity: actor.Identity(), Context: "bearer", TokenDigest: strings.Repeat("a", 64), Reason: "identity_inactive"})
 	if err != nil {
 		t.Fatal(err)
@@ -421,10 +463,10 @@ func TestPublicPostgresRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_events WHERE product_id='ledger' AND environment='public-go'").Scan(&count); err != nil || count != 33 {
+	if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_events WHERE product_id='ledger' AND environment='public-go'").Scan(&count); err != nil || count != 45 {
 		t.Fatal(count, err)
 	}
-	if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_deliveries WHERE product_id='ledger' AND environment='public-go' AND sink_id='siem'").Scan(&count); err != nil || count != 33 {
+	if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_deliveries WHERE product_id='ledger' AND environment='public-go' AND sink_id='siem'").Scan(&count); err != nil || count != 45 {
 		t.Fatal(count, err)
 	}
 	if _, err = storage.AppendAudit(ctx, map[string]any{}); !errors.Is(err, heimdall.ErrInvalidArgument) {

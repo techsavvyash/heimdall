@@ -68,7 +68,7 @@ export class AuditedAuthentication {
   }
   async checkPermission(
     principal: Principal,
-    tenantId: string,
+    tenantId: string | null,
     permission: string,
     modelId: string,
     manifestVersion: number,
@@ -97,7 +97,10 @@ export class AuditedAuthentication {
         environment: this.environment,
         tenantId,
         actor: { kind: "user", issuer: principal.issuer, subject: principal.subject },
-        target: { type: "workspace", id: tenantId },
+        target:
+          tenantId === null
+            ? { type: "product", id: this.productId }
+            : { type: "workspace", id: tenantId },
         action: permission,
         permission,
         outcome: "requested",

@@ -23,6 +23,7 @@ export const auditTypes: Readonly<Record<string, readonly string[]>> = {
   "heimdall.identity.observed": ["succeeded", "failed"],
 };
 type AuditEvent = {
+  productId?: string;
   eventType: string;
   eventVersion: number;
   occurredAt: number;
@@ -145,7 +146,8 @@ export function validateAuditEvent(
       !event.modelId ||
       !event.manifestVersion ||
       (["allow", "deny"].includes(event.outcome) &&
-        ((!event.tenantId && !maintenanceAuditScope(event)) || !event.permission)))
+        ((!event.tenantId && !maintenanceAuditScope(event) && !discoveryAuditScope(event)) ||
+          !event.permission)))
   )
     invalid();
   if (
@@ -173,6 +175,19 @@ export function validateAuditEvent(
   )
     invalid();
   if (event.eventType === "heimdall.policy.completed" && !event.policyVersion) invalid();
+}
+
+function discoveryAuditScope(event: AuditEvent): boolean {
+  return (
+    event.tenantId === null &&
+    event.source === "sdk" &&
+    event.actor.kind === "user" &&
+    event.action === "workspaces.list" &&
+    event.permission === event.action &&
+    typeof event.productId === "string" &&
+    event.target?.type === "product" &&
+    event.target.id === event.productId
+  );
 }
 
 export function maintenanceTargetType(action: unknown): string | undefined {

@@ -70,6 +70,24 @@ func TestLiveRuntime(t *testing.T) {
 			}
 		}
 	}
+	if c.Permission != "" {
+		discovery, err := client.NewWorkspaceDiscovery(heimdall.DiscoveryOptions{
+			ActiveKeyID: "fixture", Keys: map[string][]byte{"fixture": make([]byte, 32)},
+			Source: workspaceScan(func(context.Context, heimdall.ScanOptions) (heimdall.CandidatePage, error) {
+				return heimdall.CandidatePage{Items: []heimdall.Candidate{
+					{Position: "a", Workspace: heimdall.Workspace{ID: "acme", Name: "Acme"}},
+					{Position: "b", Workspace: heimdall.Workspace{ID: "globex", Name: "Globex"}},
+				}, Exhausted: true}, nil
+			}),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		page, err := discovery.List(context.Background(), p, heimdall.WorkspaceListOptions{})
+		if err != nil || len(page.Items) != 1 || page.Items[0].ID != "acme" || page.NextCursor != "" {
+			t.Fatal("unexpected discovery page", err)
+		}
+	}
 	mu.Lock()
 	defer mu.Unlock()
 	expected := "succeeded,deny"

@@ -54,6 +54,21 @@ test.skipIf(!process.env.HEIMDALL_TEST_RUNTIME || !!process.env.HEIMDALL_TEST_RU
       tenants.map((id) => runtime.tenant(id).roles(principal, { signal })),
     );
     expect(roleLists).toEqual(c.permission ? [[c.effectiveRole], []] : []);
+    const discovery = runtime.createWorkspaceDiscovery({
+      activeKeyId: "fixture",
+      keys: { fixture: Buffer.alloc(32, 7) },
+      source: {
+        scan: async () => ({
+          items: tenants.map((id) => ({ position: id, workspace: { id, name: id } })),
+          exhausted: true,
+        }),
+      },
+    });
+    const page = await discovery.list(principal, { signal });
+    expect(page).toEqual({
+      items: c.permission ? [{ id: "acme", name: "acme" }] : [],
+      nextCursor: null,
+    });
     const outcomes = events
       .map((e) => e.outcome)
       .slice(0, c.permission ? 6 : 2)

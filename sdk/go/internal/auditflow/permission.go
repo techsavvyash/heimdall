@@ -32,6 +32,10 @@ func (a *Authentication) CheckLinkedPermission(ctx context.Context, principal *i
 	if parent != "" {
 		event["parentDecisionId"] = parent
 	}
+	if tenant == "" {
+		event["tenantId"] = nil
+		event["target"] = map[string]any{"type": "product", "id": a.writer.product}
+	}
 	allowed, err := a.writer.run(ctx, event, func(ctx context.Context, decisionID string) (bool, error) {
 		if err := a.verifier.CheckCurrent(ctx, principal); err != nil {
 			return false, err

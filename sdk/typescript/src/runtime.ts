@@ -1,3 +1,5 @@
+import { workspaceDiscovery } from "./internal/workspace-discovery.js";
+import type { DiscoveryOptions, WorkspaceDiscovery } from "./internal/workspace-discovery.js";
 import { encodeIdentity } from "./internal/identity-encoding.js";
 import { browserSession } from "./internal/browser-session.js";
 import { createBrowserLoginHTTP } from "./internal/browser-login-http.js";
@@ -54,6 +56,7 @@ export type Tenant = Readonly<{
 }>;
 export type Heimdall = Readonly<{
   tenant(id: string): Tenant;
+  createWorkspaceDiscovery(options: DiscoveryOptions): WorkspaceDiscovery;
   createSessions(options: SessionOptions, request: { signal: AbortSignal }): Promise<Sessions>;
   tokens: Readonly<{
     verify(accessToken: string, options: { signal: AbortSignal }): Promise<Principal>;
@@ -147,6 +150,19 @@ export async function createHeimdall(
       append,
     );
     return Object.freeze({
+      createWorkspaceDiscovery(options: DiscoveryOptions) {
+        return workspaceDiscovery(
+          options,
+          {
+            productId: config.productId,
+            environment: config.environment,
+            modelId: config.openfga.modelId,
+            manifestVersion: config.manifestVersion,
+          },
+          authentication,
+          model,
+        );
+      },
       tenant(id: string) {
         if (typeof id !== "string" || !/^[A-Za-z0-9_-]{1,128}(?![\s\S])/.test(id))
           throw new HeimdallError("invalid_argument");

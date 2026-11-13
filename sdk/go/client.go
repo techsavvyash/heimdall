@@ -73,6 +73,7 @@ type Sessions interface {
 }
 
 type Client struct {
+	discovery      *discoveryRuntime
 	authentication *auditflow.Authentication
 	createSessions func(context.Context, SessionOptions) (Sessions, error)
 	tenantCheck    func(context.Context, string, *Principal, string) (bool, error)
@@ -176,7 +177,10 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 	if err != nil {
 		return nil, err
 	}
-	client := &Client{authentication: authentication}
+	client := &Client{authentication: authentication, discovery: &discoveryRuntime{
+		scope:   contract.CursorScope{ProductID: cfg.ProductID, Environment: cfg.Environment, ModelID: cfg.OpenFGA.ModelID},
+		version: cfg.ManifestVersion, auth: authentication, model: model,
+	}}
 	client.tenantCheck = func(ctx context.Context, tenant string, actor *Principal, permission string) (bool, error) {
 		if _, err := verified.Permission(permission); err != nil {
 			return false, err

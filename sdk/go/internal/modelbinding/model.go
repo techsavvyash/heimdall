@@ -245,6 +245,10 @@ func (p *PinnedModel) Check(ctx context.Context, user, workspace, permission str
 	return p.checkRelation(ctx, user, workspace, relation)
 }
 
+func (p *PinnedModel) CheckMembership(ctx context.Context, user, workspace string) (bool, error) {
+	return p.checkRelation(ctx, user, workspace, "member")
+}
+
 func (p *PinnedModel) CheckRole(ctx context.Context, user, workspace, role string) (bool, error) {
 	relations, err := contract.ResolveRoleRelations(p.compiled, role)
 	if err != nil {

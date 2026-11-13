@@ -142,6 +142,9 @@ export class PinnedModel {
       throw new HeimdallError("invalid_argument");
     return this.checkRelation(user, workspace, this.compiled.permissions[permission]!, signal);
   }
+  checkMembership(user: string, workspace: string, signal: AbortSignal) {
+    return this.checkRelation(user, workspace, "member", signal);
+  }
   async checkRole(user: string, workspace: string, role: string, signal: AbortSignal) {
     if (!Object.hasOwn(this.compiled.roles, role)) throw new HeimdallError("invalid_argument");
     return this.checkRelation(user, workspace, this.compiled.roles[role]!.effective, signal);

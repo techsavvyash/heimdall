@@ -23,6 +23,7 @@ var AuditTypes = map[string][]string{
 }
 
 type AuditEvent struct {
+	ProductID                                                   string `json:"productId"`
 	EventType                                                   string
 	EventVersion                                                int
 	OccurredAt, RecordedAt                                      int64
@@ -132,7 +133,7 @@ func ValidateAuditEvent(e AuditEvent, origin string, custom func(string, int, ma
 		return ErrInvalidArgument
 	}
 	hasTenant := e.TenantID != nil && *e.TenantID != ""
-	if strings.HasPrefix(e.EventType, "heimdall.authorization.") && (e.DecisionID == "" || e.ModelID == "" || e.ManifestVersion == 0 || ((e.Outcome == "allow" || e.Outcome == "deny") && ((!hasTenant && !maintenanceAuditScope(e)) || e.Permission == ""))) {
+	if strings.HasPrefix(e.EventType, "heimdall.authorization.") && (e.DecisionID == "" || e.ModelID == "" || e.ManifestVersion == 0 || ((e.Outcome == "allow" || e.Outcome == "deny") && ((!hasTenant && !maintenanceAuditScope(e) && !discoveryAuditScope(e)) || e.Permission == ""))) {
 		return ErrInvalidArgument
 	}
 	if MaintenanceTargetType(e.Action) == "managed_export" &&
@@ -172,4 +173,9 @@ func maintenanceAuditScope(e AuditEvent) bool {
 	return e.TenantID == nil && e.Source == "sdk" && e.Actor.Kind == "user" &&
 		e.Target.Type != "" && e.Target.Type == MaintenanceTargetType(e.Action) && e.OperationID != "" && e.PolicyVersion != "" &&
 		e.Permission == e.Action && e.Action != "managed.export.operations"
+}
+
+func discoveryAuditScope(e AuditEvent) bool {
+	return e.TenantID == nil && e.Source == "sdk" && e.Actor.Kind == "user" &&
+		e.Action == "workspaces.list" && e.Permission == e.Action && e.Target.Type == "product" && e.ProductID != "" && e.Target.ID == e.ProductID
 }

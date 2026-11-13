@@ -13,3 +13,10 @@ export type {
 } from "./runtime.js";
 export { HeimdallError } from "./internal/errors.js";
 export { auditDigest as auditEventDigest } from "./internal/audit-receipts.js";
+
+export type {
+  DiscoveryOptions,
+  Workspace,
+  WorkspaceSource,
+  WorkspaceDiscovery,
+} from "./internal/workspace-discovery.js";
