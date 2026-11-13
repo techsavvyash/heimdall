@@ -81,11 +81,19 @@ async function sdkRuntime(client, c) {
             { user, object: "workspace:acme", relation: "member" },
             { user, object: "workspace:acme", relation: assignment },
             { user, object: "workspace:globex", relation: assignment },
+            ...(c.reference ? [{ user, object: "workspace:globex", relation: "member" }] : []),
           ],
         },
       });
     }
     if (c.reference) {
+      const user = "user:" + Buffer.from(JSON.stringify([issuer, c.subject])).toString("base64url");
+      const { allowed } = await api(`/stores/${store.id}/check`, {
+        authorization_model_id: model.authorization_model_id,
+        consistency: "HIGHER_CONSISTENCY",
+        tuple_key: { user, object: "workspace:globex", relation: "member" },
+      });
+      assert.equal(allowed, true, "Strict SSO fixture must have real OpenFGA membership");
       observations.push(
         await verifyReferenceProduct(
           {

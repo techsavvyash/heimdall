@@ -1,6 +1,6 @@
 import { HeimdallError } from "./errors.js";
 
-type Scope = {
+export type EnterpriseScope = {
   productId: string;
   environment: string;
   issuer: string;
@@ -12,7 +12,7 @@ type Scope = {
   providerId: string;
   protocol: "saml" | "oidc";
 };
-type Evidence = Scope & {
+export type EnterpriseEvidence = EnterpriseScope & {
   upstreamSubject: string;
   providerSessionId: string;
   authTime: number;
@@ -22,8 +22,8 @@ type Evidence = Scope & {
 // Schema-validated, authenticated stored evidence only. Does not verify a provider or token.
 // Scope and maxAgeMs come from the current trusted target policy, never the browser.
 export function validateEnterpriseEvidence(
-  evidence: Evidence | null,
-  scope: Scope,
+  evidence: EnterpriseEvidence | null,
+  scope: EnterpriseScope,
   now: number,
   maxAgeMs: number,
 ): void {
@@ -49,4 +49,44 @@ export function validateEnterpriseEvidence(
     now - evidence.authTime >= maxAgeMs
   )
     throw new HeimdallError("unauthenticated");
+}
+
+export type TenantSSOPolicy = Pick<
+  EnterpriseScope,
+  "organizationId" | "providerId" | "policyVersion" | "protocol"
+> & {
+  maxAgeMs: number;
+};
+
+export function readEnterpriseEvidence(value: unknown): EnterpriseEvidence {
+  if (typeof value !== "object" || !value || Array.isArray(value))
+    throw new HeimdallError("unavailable");
+  const e = value as Record<string, unknown>;
+  const fields = {
+    productId: 64,
+    environment: 64,
+    issuer: 2048,
+    subject: 1024,
+    clientId: 128,
+    tenantId: 128,
+    organizationId: 128,
+    policyVersion: 128,
+    providerId: 128,
+    upstreamSubject: 1024,
+    providerSessionId: 128,
+  };
+  if (
+    Object.keys(e).length !== Object.keys(fields).length + 4 ||
+    e.schemaVersion !== 1 ||
+    (e.protocol !== "saml" && e.protocol !== "oidc") ||
+    ![e.authTime, e.verifiedAt].every(
+      (v) => typeof v === "number" && Number.isSafeInteger(v) && v >= 0,
+    ) ||
+    !Object.entries(fields).every(([key, max]) => {
+      const v = e[key];
+      return typeof v === "string" && v.isWellFormed() && v.length > 0 && [...v].length <= max;
+    })
+  )
+    throw new HeimdallError("unavailable");
+  return Object.freeze({ ...e }) as EnterpriseEvidence;
 }

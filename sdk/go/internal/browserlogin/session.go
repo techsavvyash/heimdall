@@ -275,6 +275,9 @@ func (s *Sessions) Authenticate(r *http.Request) (*identity.Principal, error) {
 	if s.now() >= min(expires, accessExpires, refreshDeadline) {
 		return nil, contract.ErrUnauthenticated
 	}
+	if record.EnterpriseEvidence != nil {
+		actor = identity.WithEnterpriseEvidence(actor, *record.EnterpriseEvidence)
+	}
 	return actor, nil
 }
 
@@ -347,6 +350,13 @@ func readSession(value []byte, expiry *int64) (map[string]any, contract.SessionR
 			return nil, record, "", contract.ErrUnavailable
 		}
 		*out = field
+	}
+	if evidence, present := payload["enterpriseEvidence"]; present {
+		decoded, err := contract.ReadEnterpriseEvidence(evidence)
+		if err != nil {
+			return nil, record, "", err
+		}
+		record.EnterpriseEvidence = decoded
 	}
 	attempt, present := payload["refreshAttempt"]
 	switch record.State {

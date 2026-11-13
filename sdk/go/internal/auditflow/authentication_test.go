@@ -113,6 +113,60 @@ func TestAuditedAuthentication(t *testing.T) {
 		}
 		return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(string(body))), Header: make(http.Header)}, nil
 	})
+	t.Run("strict tenant authorization is session-local", func(t *testing.T) {
+		var outcomes []string
+		a := setup(func(_ context.Context, event map[string]any) (contract.AuditReceipt, error) {
+			if event["eventType"] == "heimdall.authorization.completed" {
+				outcomes = append(outcomes, event["outcome"].(string))
+			}
+			return receipt(event), nil
+		})
+		policy := TenantSSOPolicy{"acme-org", "acme-saml", "enterprise-v1", "saml", 60000}
+		a.tenantSSO = func(_ context.Context, tenant string) (*TenantSSOPolicy, error) {
+			if tenant == "open" {
+				return nil, nil
+			}
+			if tenant == "globex" {
+				return &TenantSSOPolicy{"globex-org", "globex-oidc", "enterprise-v1", "oidc", 60000}, nil
+			}
+			return &policy, nil
+		}
+		ctx := context.Background()
+		actor, err := a.Verify(ctx, raw, "bearer")
+		if err != nil {
+			t.Fatal(err)
+		}
+		at := f.Now - 1000
+		id := actor.Identity()
+		session := identity.WithEnterpriseEvidence(actor, contract.EnterpriseEvidence{
+			EnterpriseScope: contract.EnterpriseScope{
+				ProductID: config.ProductID, Environment: config.Environment, ClientID: config.ClientID,
+				Issuer: id.Issuer, Subject: id.Subject, TenantID: "acme", OrganizationID: policy.OrganizationID,
+				ProviderID: policy.ProviderID, PolicyVersion: policy.PolicyVersion, Protocol: policy.Protocol,
+			},
+			UpstreamSubject: "employee", ProviderSessionID: "provider-session", AuthTime: at / 1000 * 1000, VerifiedAt: at,
+		})
+		var evaluated atomic.Int64
+		check := func(actor *identity.Principal, tenant string, want bool) {
+			t.Helper()
+			got, err := a.CheckPermission(ctx, actor, tenant, "workspace.member", "model", 1, func(context.Context) (bool, error) {
+				evaluated.Add(1)
+				return true, nil
+			})
+			if got != want || err != nil {
+				t.Fatal(tenant, got, err)
+			}
+		}
+		check(actor, "acme", false)
+		check(session, "acme", true)
+		check(session, "globex", false)
+		policy.PolicyVersion = "enterprise-v2"
+		check(session, "acme", false)
+		check(actor, "open", true)
+		if evaluated.Load() != 2 || strings.Join(outcomes, ",") != "deny,allow,deny,deny,allow" {
+			t.Fatal(evaluated.Load(), outcomes)
+		}
+	})
 	var releases []struct {
 		Name, Error string
 		AdvanceMs   int64

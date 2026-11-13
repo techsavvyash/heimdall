@@ -769,3 +769,69 @@ test.each(
   });
   expect(events.at(-1)?.outcome).toBe(c.expected === "inventory" ? "succeeded" : "failed");
 });
+
+test("strict tenant authorization uses session-local evidence and current policy", async () => {
+  provider();
+  const events: Record<string, unknown>[] = [];
+  const policy = {
+    organizationId: "acme-org",
+    providerId: "acme-saml",
+    policyVersion: "enterprise-v1",
+    protocol: "saml" as const,
+    maxAgeMs: 60000,
+  };
+  const runner = new AuditedAuthentication(
+    config,
+    async () => "secret",
+    { check: async () => false, invalidate: async () => {} },
+    async (event) => {
+      events.push(event);
+      return receipt(event);
+    },
+    () => f.now,
+    async (id) =>
+      id === "open"
+        ? null
+        : id === "globex"
+          ? { ...policy, organizationId: "globex-org", providerId: "globex-oidc", protocol: "oidc" }
+          : policy,
+  );
+  const actor = await runner.verify(raw, "bearer");
+  const verifiedAt = f.now - 1000;
+  const session = runner.sessionPrincipal(actor, {
+    ...policy,
+    productId: config.productId,
+    environment: config.environment,
+    clientId: config.clientId,
+    issuer: actor.issuer,
+    subject: actor.subject,
+    tenantId: "acme",
+    upstreamSubject: "employee",
+    providerSessionId: "provider-session",
+    authTime: Math.floor(verifiedAt / 1000) * 1000,
+    verifiedAt,
+  });
+  const evaluate = vi.fn<() => Promise<boolean>>(async () => true);
+  const check = (principal: typeof actor, tenant: string) =>
+    runner.checkPermission(
+      principal,
+      tenant,
+      "workspace.member",
+      "model",
+      1,
+      evaluate,
+      AbortSignal.timeout(5000),
+    );
+  expect(await check(actor, "acme")).toBe(false);
+  expect(await check(session, "acme")).toBe(true);
+  expect(await check(session, "globex")).toBe(false);
+  policy.policyVersion = "enterprise-v2";
+  expect(await check(session, "acme")).toBe(false);
+  expect(await check(actor, "open")).toBe(true);
+  expect(evaluate).toHaveBeenCalledTimes(2);
+  expect(
+    events
+      .filter((event) => event.eventType === "heimdall.authorization.completed")
+      .map((event) => event.outcome),
+  ).toEqual(["deny", "allow", "deny", "deny", "allow"]);
+});

@@ -35,6 +35,8 @@ Provider links within a user’s owning organization require verified identity o
 
 Pinned-service progress: [[evidence/phase-2-federation-binding]] verifies an intent-to-session-to-token evidence chain for both SAML and OIDC. The implementation still needs strict target-policy and browser-transaction checks, and atomic persistence. [[evidence/phase-2-enterprise-contract]] records the structured evidence schema and shared TS/Go policy-gate amendment; those internal validators do not verify provider provenance. This is evidence of capability, not completed SDK enforcement.
 
+[[evidence/phase-6-tenant-sso-gate]] documents the implemented TS and Go authorization gate for existing sessions and workspace access. Strict workspaces require saved evidence matching the current trusted policy before authorization can evaluate membership or roles. The live provider login path that issues this evidence is still in development.
+
 [[evidence/phase-2-self-service-evidence]] verifies session reads with an API-audience user token, avoiding a Login PAT for that read. The returned intent factor contains only a timestamp; it cannot replace verified provider ID/upstream subject provenance. Ordinary hosted-login callback integration remains unproven for the full strict-evidence chain.
 
 ## SCIM users and lifecycle

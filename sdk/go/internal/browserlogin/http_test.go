@@ -400,6 +400,32 @@ func testBrowserLoginHTTP(t *testing.T, usePostgres bool) {
 	if err != nil || touched == nil || touched.Revision == stored.Revision {
 		t.Fatal("session activity did not advance", err)
 	}
+	if err = json.Unmarshal(touched.Value, &payload); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UnixMilli()
+	payload["enterpriseEvidence"] = map[string]any{
+		"schemaVersion": 1, "productId": f.ProductID, "environment": f.Environment,
+		"issuer": payload["issuer"], "subject": "alice", "clientId": f.ClientID,
+		"tenantId": "acme", "organizationId": "acme-org", "policyVersion": "acme-v1",
+		"providerId": "acme-saml", "protocol": "saml", "upstreamSubject": "upstream-alice",
+		"providerSessionId": "provider-session", "verifiedAt": now, "authTime": now / 1000 * 1000,
+	}
+	updated, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if written, err := sessionsStore.CompareAndSwapSession(context.Background(), recordKey, touched.Revision, updated, touched.ExpiresAt); err != nil || written == nil {
+		t.Fatal("seed session evidence", err)
+	}
+	federated, err := sessions.Authenticate(protected)
+	if err != nil || identity.EnterpriseEvidence(federated) == nil || identity.EnterpriseEvidence(federated).ProviderID != "acme-saml" {
+		t.Fatal("stored evidence did not reach the session principal", err)
+	}
+	bearer, err := auth.Verify(context.Background(), payload["accessToken"].(string), "bearer")
+	if err != nil || bearer == federated || identity.EnterpriseEvidence(bearer) != nil {
+		t.Fatal("session evidence leaked to bearer principal", err)
+	}
 	logout := func(origin string) (*http.Response, error) {
 		r := httptest.NewRequest(http.MethodPost, "https://ledger.example.test/auth/logout", nil)
 		r.Header.Set("Cookie", sessionCookie)

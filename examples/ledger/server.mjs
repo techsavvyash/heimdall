@@ -36,6 +36,20 @@ const auth = await createHeimdall(
   manifestJSON,
   {
     policyVersion: required("HEIMDALL_POLICY_VERSION"),
+    ...(process.env.HEIMDALL_REFERENCE_STRICT_SSO === "1"
+      ? {
+          tenantSSOPolicy: async (workspaceId) =>
+            workspaceId === "globex"
+              ? {
+                  organizationId: "reference-globex",
+                  providerId: "reference-globex-oidc",
+                  policyVersion: "reference-sso-v1",
+                  protocol: "oidc",
+                  maxAgeMs: 900_000,
+                }
+              : null,
+        }
+      : {}),
     authorizeWorkspaceCreation: async (actor) => actor.subject === workspaceCreator,
     authorizeWorkspaceLifecycle: async (actor) => actor.subject === workspaceCreator,
     ...(exportPool

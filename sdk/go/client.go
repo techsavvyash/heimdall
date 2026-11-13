@@ -50,7 +50,11 @@ type RuntimeStorage struct {
 type Credentials struct {
 	ClientSecret, OpenFGAKey func(context.Context) (string, error)
 }
+type TenantSSOPolicy = auditflow.TenantSSOPolicy
+type TenantSSOPolicySource = auditflow.TenantSSOPolicySource
+
 type Options struct {
+	TenantSSOPolicy             TenantSSOPolicySource
 	AuthorizeManagedExport      ManagedExportPolicy
 	AuthorizeWorkspaceCreation  WorkspaceCreationPolicy
 	AuthorizeWorkspaceLifecycle WorkspaceLifecyclePolicy
@@ -222,7 +226,7 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 			return storage.Identity.Invalidate(ctx, negative)
 		}
 	}
-	authentication, err := auditflow.NewAuthentication(identity.StatusConfig{Config: identity.Config{Issuer: cfg.Issuer, Audience: cfg.Audience, JWKSURI: metadata.JWKSURI, Profile: profile}, ProductID: cfg.ProductID, Environment: cfg.Environment, PolicyVersion: options.PolicyVersion, ClientID: cfg.ClientID, FreshnessMs: &freshness}, options.Credentials.ClientSecret, gate, storage.AppendAudit, nil)
+	authentication, err := auditflow.NewAuthentication(identity.StatusConfig{Config: identity.Config{Issuer: cfg.Issuer, Audience: cfg.Audience, JWKSURI: metadata.JWKSURI, Profile: profile}, ProductID: cfg.ProductID, Environment: cfg.Environment, PolicyVersion: options.PolicyVersion, ClientID: cfg.ClientID, FreshnessMs: &freshness}, options.Credentials.ClientSecret, gate, storage.AppendAudit, nil, options.TenantSSOPolicy)
 	if err != nil {
 		return nil, err
 	}

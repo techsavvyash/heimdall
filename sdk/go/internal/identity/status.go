@@ -37,6 +37,21 @@ type Principal struct {
 	product, environment, policy string
 	validatedAt, expiresAt       int64
 	owner                        *IdentityVerifier
+	enterprise                   *contract.EnterpriseEvidence
+}
+
+// WithEnterpriseEvidence creates a session-local copy without modifying the cached bearer principal.
+func WithEnterpriseEvidence(p *Principal, evidence contract.EnterpriseEvidence) *Principal {
+	copy := *p
+	copy.enterprise = &evidence
+	return &copy
+}
+func EnterpriseEvidence(p *Principal) *contract.EnterpriseEvidence {
+	if p.enterprise == nil {
+		return nil
+	}
+	copy := *p.enterprise
+	return &copy
 }
 
 func (p *Principal) Identity() Identity { return p.identity }
@@ -366,7 +381,7 @@ func (v *IdentityVerifier) Verify(ctx context.Context, raw, contextKey string) (
 	if reason != "" {
 		return deny(reason)
 	}
-	principal := &Principal{identity, v.config.ProductID, v.config.Environment, v.config.PolicyVersion, started, expires, v}
+	principal := &Principal{identity, v.config.ProductID, v.config.Environment, v.config.PolicyVersion, started, expires, v, nil}
 	until := min(started+v.freshness, expires)
 	v.mu.Lock()
 	if observation.reason == "" && v.now().UnixMilli() < until {

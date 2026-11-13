@@ -70,6 +70,12 @@ export class IdentityVerifier {
   owns(value: unknown) {
     return typeof value === "object" && value !== null && this.principals.has(value);
   }
+  sessionPrincipal(principal: Principal): Principal {
+    if (!this.owns(principal)) throw new HeimdallError("unauthenticated");
+    const copy = Object.freeze({ ...principal });
+    this.principals.add(copy);
+    return copy;
+  }
   private async bounded<T>(
     action: () => Promise<T>,
     signal: AbortSignal,

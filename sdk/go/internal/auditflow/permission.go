@@ -41,6 +41,9 @@ func (a *Authentication) CheckLinkedPermission(ctx context.Context, principal *i
 		if err := a.verifier.CheckCurrent(ctx, principal); err != nil {
 			return false, err
 		}
+		if allowed, err := a.permitsTenant(ctx, principal, tenant); err != nil || !allowed {
+			return false, err
+		}
 		return evaluate(ctx, decisionID)
 	})
 	if err != nil || !allowed {

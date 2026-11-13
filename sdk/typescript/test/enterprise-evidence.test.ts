@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { describe, expect, it } from "vitest";
-import { validateEnterpriseEvidence } from "../src/internal/enterprise-evidence.js";
+import {
+  readEnterpriseEvidence,
+  validateEnterpriseEvidence,
+} from "../src/internal/enterprise-evidence.js";
 const root = new URL("../../../contracts/", import.meta.url);
 const read = (name: string): unknown => JSON.parse(readFileSync(new URL(name, root), "utf8"));
 const shape = new Ajv2020({ strict: true }).compile(
@@ -20,9 +23,10 @@ const cases = [
   ...(read("fixtures/enterprise-two-tenants-v1.json") as EvidenceCase[]),
 ];
 describe("enterprise evidence target-policy gate", () => {
-  it.each(cases.filter((c) => c.evidence !== null))("structural precondition $name", (c) =>
-    expect(shape(c.evidence)).toBe(true),
-  );
+  it.each(cases.filter((c) => c.evidence !== null))("structural precondition $name", (c) => {
+    expect(shape(c.evidence)).toBe(true);
+    expect(readEnterpriseEvidence(c.evidence)).toEqual(c.evidence);
+  });
   it.each(cases.filter((c) => c.error))("rejects $name", (c) => {
     expect(() => validateEnterpriseEvidence(c.evidence, c.scope, c.now, c.maxAgeMs)).toThrow(
       c.error,

@@ -43,3 +43,6 @@ export type {
 } from "./internal/managed-memberships.js";
 
 export type { ReconcileOptions, ReconcileResult } from "./internal/reconcile-operations.js";
+
+export type { TenantSSOPolicySource } from "./internal/audited-authentication.js";
+export type { TenantSSOPolicy } from "./internal/enterprise-evidence.js";

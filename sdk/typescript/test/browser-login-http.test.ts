@@ -270,6 +270,36 @@ async function browserLifecycle(usePostgres: boolean) {
     expect((await sessions.authenticate(authenticated)).subject).toBe("alice");
     const touched = (await store.getSession(key))!;
     expect(touched.revision).not.toBe(stored.revision);
+    const enterpriseEvidence = {
+      schemaVersion: 1,
+      productId: f.productId,
+      environment: f.environment,
+      issuer,
+      subject: "alice",
+      clientId: f.clientId,
+      tenantId: "acme",
+      organizationId: "acme-org",
+      policyVersion: "acme-v1",
+      providerId: "acme-saml",
+      protocol: "saml",
+      upstreamSubject: "upstream-alice",
+      providerSessionId: "provider-session",
+      verifiedAt: Date.now(),
+      authTime: 0,
+    };
+    enterpriseEvidence.authTime = Math.floor(enterpriseEvidence.verifiedAt / 1000) * 1000;
+    const payload = JSON.parse(touched.value.toString());
+    await store.compareAndSwapSession(
+      key,
+      touched.revision,
+      Buffer.from(JSON.stringify({ ...payload, enterpriseEvidence })),
+      touched.expiresAt,
+    );
+    const enterpriseActor = await sessions.authenticate(authenticated);
+    const bearerActor = await auth.verify(payload.accessToken, "bearer");
+    expect(enterpriseActor).not.toBe(bearerActor);
+    expect(auth.owns(enterpriseActor)).toBe(true);
+    expect(enterpriseActor.subject).toBe(bearerActor.subject);
     const logout = (origin?: string) =>
       new Request(new URL("/auth/logout", f.redirectUri), {
         method: "POST",

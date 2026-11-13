@@ -16,9 +16,11 @@ type Authentication struct {
 	writer        *Decision
 	policy        string
 	releaseWindow int64
+	clientID      string
+	tenantSSO     TenantSSOPolicySource
 }
 
-func NewAuthentication(config identity.StatusConfig, secret func(context.Context) (string, error), gate identity.Gate, append Append, now func() time.Time) (*Authentication, error) {
+func NewAuthentication(config identity.StatusConfig, secret func(context.Context) (string, error), gate identity.Gate, append Append, now func() time.Time, tenantSSO ...TenantSSOPolicySource) (*Authentication, error) {
 	writer, err := New(config.ProductID, config.Environment, append, contract.ValidateAuditShape, now)
 	if err != nil {
 		return nil, err
@@ -34,7 +36,11 @@ func NewAuthentication(config identity.StatusConfig, secret func(context.Context
 	if window == 0 {
 		window = 5000
 	}
-	return &Authentication{verifier, writer, config.PolicyVersion, window}, nil
+	a := &Authentication{verifier: verifier, writer: writer, policy: config.PolicyVersion, releaseWindow: window, clientID: config.ClientID}
+	if len(tenantSSO) != 0 {
+		a.tenantSSO = tenantSSO[0]
+	}
+	return a, nil
 }
 func (a *Authentication) Owns(p *identity.Principal) bool { return a.verifier.Owns(p) }
 func (a *Authentication) Verify(ctx context.Context, raw, sessionContext string) (*identity.Principal, error) {

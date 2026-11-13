@@ -1,5 +1,8 @@
 import type { ManagedExport } from "./internal/postgres/export.js";
-import type { MaintenanceContext } from "./internal/audited-authentication.js";
+import type {
+  MaintenanceContext,
+  TenantSSOPolicySource,
+} from "./internal/audited-authentication.js";
 import { randomUUID } from "node:crypto";
 import { managedMemberships, type Memberships } from "./internal/managed-memberships.js";
 import type { ManagedWorkspace, WorkspaceRecords } from "./internal/postgres/workspaces.js";
@@ -61,6 +64,7 @@ export type RuntimeStorage = {
 };
 export type RuntimeOptions = {
   policyVersion: string;
+  tenantSSOPolicy?: TenantSSOPolicySource;
   authorizeWorkspaceCreation?: WorkspaceCreationPolicy;
   authorizeWorkspaceLifecycle?: WorkspaceLifecyclePolicy;
   authorizeManagedExport?: ManagedExportPolicy;
@@ -200,6 +204,9 @@ export async function createHeimdall(
   const secret = options.credentials.clientSecret.bind(options.credentials);
   const key = options.credentials.openfgaKey.bind(options.credentials);
   const policyVersion = options.policyVersion;
+  const tenantSSOPolicy = options.tenantSSOPolicy;
+  if (tenantSSOPolicy !== undefined && typeof tenantSSOPolicy !== "function")
+    throw new HeimdallError("invalid_argument");
   const authorize = options.authorizeWorkspaceCreation;
   const authorizeLifecycle = options.authorizeWorkspaceLifecycle;
   const operations = storage.managed?.operations?.({
@@ -257,6 +264,8 @@ export async function createHeimdall(
       secret,
       gate,
       append,
+      Date.now,
+      tenantSSOPolicy,
     );
     const onboarding =
       operations &&

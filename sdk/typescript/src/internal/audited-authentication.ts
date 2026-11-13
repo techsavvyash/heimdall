@@ -1,3 +1,8 @@
+import {
+  validateEnterpriseEvidence,
+  type EnterpriseEvidence,
+  type TenantSSOPolicy,
+} from "./enterprise-evidence.js";
 import { maintenanceTargetType } from "./audit.js";
 import { validateAuditShape } from "./audit-shape.js";
 import { randomUUID } from "node:crypto";
@@ -6,6 +11,10 @@ import { AuditedDecision, bounded, commitAuditEvent, known } from "./audited-dec
 import { checkCancellation, HeimdallError } from "./errors.js";
 
 type Arguments = ConstructorParameters<typeof IdentityVerifier>;
+export type TenantSSOPolicySource = (
+  tenantId: string,
+  signal: AbortSignal,
+) => Promise<TenantSSOPolicy | null>;
 type Principal = Awaited<ReturnType<IdentityVerifier["verify"]>>;
 type MaintenanceRequest = {
   tenantId: string | null;
@@ -38,12 +47,15 @@ export class AuditedAuthentication {
   private readonly environment: string;
   private readonly policyVersion: string;
   private readonly releaseWindow: number;
+  private readonly clientId: string;
+  private readonly enterprise = new WeakMap<Principal, EnterpriseEvidence>();
   constructor(
     config: Arguments[0],
     secret: Arguments[1],
     gate: Arguments[2],
     private readonly append: Parameters<typeof commitAuditEvent>[1],
     private readonly now: () => number = Date.now,
+    private readonly tenantSSO?: TenantSSOPolicySource,
   ) {
     if (
       ![config.productId, config.environment].every((v) => /^[A-Za-z0-9_-]{1,64}$/.test(v)) ||
@@ -54,6 +66,7 @@ export class AuditedAuthentication {
     this.productId = config.productId;
     this.environment = config.environment;
     this.policyVersion = config.policyVersion;
+    this.clientId = config.clientId;
     this.releaseWindow = config.freshnessMs === 0 ? 5000 : (config.freshnessMs ?? 60000);
   }
   maintenanceScope() {
@@ -65,6 +78,54 @@ export class AuditedAuthentication {
   }
   owns(value: unknown): boolean {
     return this.verifier.owns(value);
+  }
+  sessionPrincipal(actor: Principal, evidence: EnterpriseEvidence): Principal {
+    const copy = this.verifier.sessionPrincipal(actor);
+    this.enterprise.set(copy, evidence);
+    return copy;
+  }
+
+  private async permitsTenant(actor: Principal, tenantId: string, signal: AbortSignal) {
+    if (!this.tenantSSO) return true;
+    let policy: TenantSSOPolicy | null;
+    try {
+      policy = await this.tenantSSO(tenantId, signal);
+    } catch {
+      checkCancellation(signal);
+      throw new HeimdallError("unavailable");
+    }
+    checkCancellation(signal);
+    if (policy === null) return true;
+    if (
+      !policy ||
+      ![policy.organizationId, policy.providerId, policy.policyVersion].every(
+        (v) => typeof v === "string" && v.length > 0 && v.isWellFormed() && [...v].length <= 128,
+      ) ||
+      (policy.protocol !== "saml" && policy.protocol !== "oidc") ||
+      !Number.isSafeInteger(policy.maxAgeMs) ||
+      policy.maxAgeMs <= 0
+    )
+      throw new HeimdallError("unavailable");
+    try {
+      validateEnterpriseEvidence(
+        this.enterprise.get(actor) ?? null,
+        {
+          ...policy,
+          productId: this.productId,
+          environment: this.environment,
+          clientId: this.clientId,
+          issuer: actor.issuer,
+          subject: actor.subject,
+          tenantId,
+        },
+        this.now(),
+        policy.maxAgeMs,
+      );
+      return true;
+    } catch (error) {
+      if (known(error).code === "unauthenticated") return false;
+      throw new HeimdallError("unavailable");
+    }
   }
   async checkPermission(
     principal: Principal,
@@ -116,6 +177,8 @@ export class AuditedAuthentication {
       },
       async (operation, decisionId) => {
         await this.verifier.checkCurrent(principal, operation);
+        if (tenantId !== null && !(await this.permitsTenant(principal, tenantId, operation)))
+          return false;
         return evaluate(operation, decisionId);
       },
       signal,

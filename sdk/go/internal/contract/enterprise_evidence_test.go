@@ -37,8 +37,16 @@ func TestEnterpriseEvidence(t *testing.T) {
 			if string(c.Evidence) != "null" {
 				checkShape(t, schema, c.Evidence)
 			}
-			if err := json.Unmarshal(c.Evidence, &e); err != nil {
-				t.Fatal(err)
+			if string(c.Evidence) != "null" {
+				var raw any
+				if err := json.Unmarshal(c.Evidence, &raw); err != nil {
+					t.Fatal(err)
+				}
+				var err error
+				e, err = ReadEnterpriseEvidence(raw)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 			err := ValidateEnterpriseEvidence(e, c.Scope, c.Now, c.MaxAgeMs)
 			if c.Error != "" {

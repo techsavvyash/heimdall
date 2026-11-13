@@ -1,3 +1,4 @@
+import { readEnterpriseEvidence } from "./enterprise-evidence.js";
 import { createHash, randomBytes } from "node:crypto";
 import type { AuditedAuthentication } from "./audited-authentication.js";
 import type { createBrowserLoginHTTP } from "./browser-login-http.js";
@@ -15,7 +16,8 @@ type Options = {
 
 export function browserSession(
   login: Login,
-  auth: Pick<AuditedAuthentication, "verify">,
+  auth: Pick<AuditedAuthentication, "verify"> &
+    Partial<Pick<AuditedAuthentication, "sessionPrincipal">>,
   store: Pick<
     SessionRecords,
     "createSession" | "getSession" | "compareAndSwapSession" | "deleteSession"
@@ -201,7 +203,9 @@ export function browserSession(
       }
       if (now() >= Math.min(expires, accessExpires, refreshDeadline))
         throw new HeimdallError("unauthenticated");
-      return actor;
+      return payload.enterpriseEvidence && auth.sessionPrincipal
+        ? auth.sessionPrincipal(actor, payload.enterpriseEvidence)
+        : actor;
     },
 
     async logout(request: Request): Promise<Response> {
@@ -265,6 +269,8 @@ export function readSession(bytes: Uint8Array, expires?: number): SessionPayload
         : Object.hasOwn(payload, "refreshAttempt"))
     )
       throw new Error();
+    if (Object.hasOwn(payload, "enterpriseEvidence"))
+      payload.enterpriseEvidence = readEnterpriseEvidence(payload.enterpriseEvidence);
     return payload;
   } catch {
     throw new HeimdallError("unavailable");

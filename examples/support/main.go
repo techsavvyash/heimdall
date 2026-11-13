@@ -152,8 +152,21 @@ func main() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	var tenantSSO heimdall.TenantSSOPolicySource
+	if os.Getenv("HEIMDALL_REFERENCE_STRICT_SSO") == "1" {
+		tenantSSO = func(_ context.Context, workspaceID string) (*heimdall.TenantSSOPolicy, error) {
+			if workspaceID != "globex" {
+				return nil, nil
+			}
+			return &heimdall.TenantSSOPolicy{
+				OrganizationID: "reference-globex", ProviderID: "reference-globex-oidc",
+				PolicyVersion: "reference-sso-v1", Protocol: "oidc", MaxAgeMS: 900_000,
+			}, nil
+		}
+	}
 	auth, err := heimdall.New(ctx, configJSON, manifestJSON, heimdall.Options{
-		PolicyVersion: required("HEIMDALL_POLICY_VERSION"), Storage: storage, AuthorizeManagedExport: exportPolicy,
+		TenantSSOPolicy: tenantSSO,
+		PolicyVersion:   required("HEIMDALL_POLICY_VERSION"), Storage: storage, AuthorizeManagedExport: exportPolicy,
 		AuthorizeWorkspaceCreation: func(_ context.Context, actor *heimdall.Principal, _ string) (bool, error) {
 			return actor.Identity().Subject == workspaceCreator, nil
 		},

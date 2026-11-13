@@ -114,6 +114,7 @@ export async function verifyReferenceProduct(input, authorize) {
     HEIMDALL_POLICY_VERSION: "reference-v1",
     HEIMDALL_WORKSPACE_CREATOR_SUBJECT: user,
     HEIMDALL_REFERENCE_MEMBER_SUBJECT: recipient,
+    HEIMDALL_REFERENCE_STRICT_SSO: "1",
     HEIMDALL_CLIENT_SECRET: clientSecret,
     HEIMDALL_OPENFGA_KEY: process.env.HEIMDALL_PROBE_OPENFGA_KEY,
     HEIMDALL_RECORD_KEY_ID: "fixture",
@@ -706,6 +707,13 @@ export async function verifyReferenceProduct(input, authorize) {
       discovery: "Acme",
       roles: { acme: [manifest.ownerRole], globex: [] },
       scopedRead: 200,
+      strictSSO: {
+        workspace: "globex",
+        membership: "allowed by OpenFGA",
+        discovery: "omitted",
+        roles: [],
+        scopedRead: denied.status,
+      },
       onboarding: {
         ...workspace,
         replay: 200,
