@@ -70,3 +70,5 @@ sequenceDiagram
 ```
 
 The shared tests exercise the store boundary with disposable PostgreSQL. Wrong intent, rotated policy and ordinary callbacks are rejected before claim. One of eight parallel claims gets the exchange material. A lost response after a committed claim yields an uncertain outcome and a replay cannot recover the exchange material. The HTTP adapter and provider calls shown in the diagram are the integration path for this storage change.
+
+Storage commit `247965c` passed the workspace checks and the pinned PostgreSQL regression run `heimdall-records-d9ae3b53311b49be8b4ec3890f929263`. Both SDKs passed the browser transaction tests against a disposable database on Railway PostgreSQL, `heimdall_intent_c5c7b091888a`, which was removed after the run. The remote Vitest invocation used a 30-second suite timeout after the default five-second test timeout elapsed over SSH. Each SDK operation kept its existing deadline.
