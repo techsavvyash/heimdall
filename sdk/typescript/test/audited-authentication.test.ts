@@ -350,16 +350,6 @@ test("bound maintenance command", async () => {
         attributes: {},
         policyVersion: "p1",
       });
-    let found = false;
-    if (durable) {
-      let after = null;
-      do {
-        const page = await durable.scanRetirementCandidates(null, f.now, 1000, after, 8);
-        found ||= page.eventIds.includes(target);
-        after = page.next;
-      } while (!found && after);
-    }
-    expect(found).toBe(!!durable);
     const auth = setup(durable ? durable.append : async (event) => receipt(event));
     const command = new MaintenanceCommand(
       auth,
@@ -389,6 +379,48 @@ test("bound maintenance command", async () => {
       ),
       () => f.now,
     );
+    let queued: Parameters<typeof command.runQueuedRetirement>[1] | undefined;
+    let queuedIndex = -1;
+    if (durable && pool) {
+      const statement = readFileSync(
+        new URL("../../../contracts/fixtures/retirement-sweep-save.sql", import.meta.url),
+        "utf8",
+      );
+      const sweep: Parameters<typeof command.queueRetirementPage>[0] = {
+        id: "sweep-ts",
+        tenantId: null,
+        at: f.now,
+        after: null,
+      };
+      do {
+        const position = JSON.stringify(sweep.after);
+        await command.queueRetirementPage(
+          sweep,
+          8,
+          durable.scanRetirementCandidates,
+          async (batch) => {
+            const result = await pool.query(statement, [
+              sweep.id,
+              position,
+              JSON.stringify(batch.next),
+              JSON.stringify(batch),
+            ]);
+            return result.rowCount === 1;
+          },
+        );
+        const result = await pool.query<{
+          batch: Parameters<typeof command.runQueuedRetirement>[1];
+        }>("SELECT batch FROM public.test_retirement_batches WHERE id=$1 AND position=$2::jsonb", [
+          sweep.id,
+          position,
+        ]);
+        const batch = result.rows[0]!.batch;
+        queuedIndex = batch.operations.findIndex((op) => op.targetEventId === target);
+        if (queuedIndex >= 0) queued = batch;
+        sweep.after = batch.next;
+      } while (!queued && sweep.after);
+      if (!queued) throw new Error("target was not queued");
+    }
     const shared = read("fixtures/maintenance-command.json") as (Pick<
       Parameters<typeof command.run>[1],
       "tenantId" | "action" | "operationId"
@@ -403,7 +435,11 @@ test("bound maintenance command", async () => {
         targetEventId: target,
         at: f.now + (c.future ? 1 : 0),
       };
-      const result = await command.run(raw, op).then(
+      const execution =
+        queued && !c.future && c.action === "audit.retention.retire"
+          ? command.runQueuedRetirement(raw, queued, queuedIndex)
+          : command.run(raw, op);
+      const result = await execution.then(
         (value) => ({ status: "receipt", value }),
         (e: HeimdallError) => ({ status: e.code, value: undefined }),
       );
@@ -548,3 +584,59 @@ test.skipIf(!process.env.HEIMDALL_TEST_AUDITED_EXPORT_READER)(
     }
   },
 );
+
+test("retirement sweep persists stable proposals with the cursor", async () => {
+  const f = read("fixtures/retirement-sweep.json");
+  const command = new MaintenanceCommand(
+    setup(async (e) => receipt(e)),
+    {
+      applyHold: async () => {
+        throw new Error();
+      },
+      retire: async () => {
+        throw new Error();
+      },
+    },
+    "pinned-model",
+    7,
+    1000,
+    async () => false,
+    () => f.sweep.at,
+  );
+  const next = {
+    productId: "ledger",
+    environment: "production",
+    tenantId: null,
+    now: f.sweep.at,
+    retainForMs: 1000,
+    eventId: "cursor",
+  };
+  const scan = async () => ({ eventIds: f.events, next });
+  let stored: Parameters<Parameters<typeof command.queueRetirementPage>[3]>[0] | undefined;
+  const save: Parameters<typeof command.queueRetirementPage>[3] = async (batch) => {
+    expect(batch.operations).toEqual(f.operations);
+    expect(batch.next).toEqual(next);
+    if (stored) return false;
+    stored = batch;
+    throw new HeimdallError("outcome_unknown");
+  };
+  await expect(command.queueRetirementPage(f.sweep, 8, scan, save)).rejects.toMatchObject({
+    code: "outcome_unknown",
+  });
+  await expect(command.queueRetirementPage(f.sweep, 8, scan, save)).rejects.toMatchObject({
+    code: "conflict",
+  });
+  await expect(
+    command.runQueuedRetirement("unused", { ...stored!, policyVersion: "p2" }, 0),
+  ).rejects.toMatchObject({ code: "conflict" });
+  await command.queueRetirementPage(
+    f.sweep,
+    8,
+    async () => ({ eventIds: [], next }),
+    async (batch) => {
+      expect(batch.operations).toEqual([]);
+      expect(batch.next).toEqual(next);
+      return true;
+    },
+  );
+});

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"os"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -68,8 +67,9 @@ func testMaintenanceCommand(t *testing.T, bearer string, now int64, issuer, audi
 	appendEvent := func(_ context.Context, event map[string]any) (contract.AuditReceipt, error) {
 		return receipt(event), nil
 	}
+	var db *sql.DB
 	if url := os.Getenv("HEIMDALL_TEST_MAINTENANCE_COMMAND_URL"); url != "" {
-		db, e := sql.Open("postgres", url)
+		db, e = sql.Open("postgres", url)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -86,20 +86,6 @@ func testMaintenanceCommand(t *testing.T, bearer string, now int64, issuer, audi
 		}
 		if _, e = durable.Append(ctx, seed); e != nil {
 			t.Fatal(e)
-		}
-		var cursor *postgres.RetirementCursor
-		for {
-			page, e := durable.ScanRetirementCandidates(ctx, nil, now, 1000, cursor, 8)
-			if e != nil {
-				t.Fatal(e)
-			}
-			if slices.Contains(page.EventIDs, target) {
-				break
-			}
-			if page.Next == nil {
-				t.Fatal("product-level target was not discovered")
-			}
-			cursor = page.Next
 		}
 		store = durable
 		appendEvent = durable.Append
@@ -129,6 +115,52 @@ func testMaintenanceCommand(t *testing.T, bearer string, now int64, issuer, audi
 	if e != nil {
 		t.Fatal(e)
 	}
+	var queued RetirementBatch
+	var queuedIndex int
+	if durable, ok := store.(*postgres.RetainedRuntimeAudit); ok {
+		statement, err := os.ReadFile("../../../../contracts/fixtures/retirement-sweep-save.sql")
+		if err != nil {
+			t.Fatal(err)
+		}
+		sweep := RetirementSweep{ID: "sweep-go", At: now}
+		for {
+			err := command.QueueRetirementPage(ctx, sweep, 8, durable.ScanRetirementCandidates, func(ctx context.Context, batch RetirementBatch) (bool, error) {
+				position, _ := json.Marshal(batch.Sweep.After)
+				next, _ := json.Marshal(batch.Next)
+				payload, _ := json.Marshal(batch)
+				result, err := db.ExecContext(ctx, string(statement), sweep.ID, string(position), string(next), string(payload))
+				if err != nil {
+					return false, err
+				}
+				count, err := result.RowsAffected()
+				return count == 1, err
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			position, _ := json.Marshal(sweep.After)
+			var payload []byte
+			if err = db.QueryRowContext(ctx, "SELECT batch FROM public.test_retirement_batches WHERE id=$1 AND position=$2::jsonb", sweep.ID, string(position)).Scan(&payload); err != nil || json.Unmarshal(payload, &queued) != nil {
+				t.Fatal("reload saved batch", err)
+			}
+			queuedIndex = -1
+			for i, op := range queued.Operations {
+				if op.TargetEventID == target {
+					queuedIndex = i
+					break
+				}
+			}
+			if queuedIndex >= 0 {
+				break
+			}
+			if queued.Next == nil {
+				t.Fatal("target was not queued")
+			}
+			sweep.After = queued.Next
+		}
+
+	}
+
 	var original contract.AuditReceipt
 	for _, c := range cases {
 		op := c.MaintenanceOperation
@@ -139,7 +171,13 @@ func testMaintenanceCommand(t *testing.T, bearer string, now int64, issuer, audi
 			op.At++
 		}
 		before := fake.calls
-		result, err := command.Run(ctx, bearer, op)
+		var result contract.AuditReceipt
+		var err error
+		if queued.Operations != nil && !c.Future && c.Action == "audit.retention.retire" {
+			result, err = command.RunQueuedRetirement(ctx, bearer, queued, queuedIndex)
+		} else {
+			result, err = command.Run(ctx, bearer, op)
+		}
 		status := "receipt"
 		if err != nil {
 			status = err.Error()

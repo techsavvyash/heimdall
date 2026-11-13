@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
+import type { RetirementCursor } from "./postgres/audit.js";
 import { auditHoldEventId, type AuditHoldRequest } from "./audit-hold.js";
 import { auditRetirementEventId, type AuditRetirementRequest } from "./audit-retire.js";
 import type { AuditedAuthentication } from "./audited-authentication.js";
-import { HeimdallError } from "./errors.js";
+import { HeimdallError, checkCancellation } from "./errors.js";
 
 type RunMaintenance = AuditedAuthentication["runMaintenance"];
 type Store = {
@@ -22,6 +24,46 @@ type Operation = Pick<
 > & {
   at: number;
 };
+
+type RetirementSweep = {
+  id: string;
+  tenantId: string | null;
+  at: number;
+  after: RetirementCursor | null;
+};
+type RetirementBatch = {
+  productId: string;
+  environment: string;
+  policyVersion: string;
+  modelId: string;
+  manifestVersion: number;
+  retainForMs: number;
+  sweep: RetirementSweep;
+  operations: Operation[];
+  next: RetirementCursor | null;
+};
+const token = (v: unknown) =>
+  typeof v === "string" && v.length > 0 && v.length <= 128 && !/[^A-Za-z0-9_-]/.test(v);
+
+function retirementOperationId(
+  batch: Omit<RetirementBatch, "operations" | "next">,
+  target: string,
+) {
+  const fields = [
+    "heimdall.retirement-proposal.v1",
+    batch.productId,
+    batch.environment,
+    batch.policyVersion,
+    batch.modelId,
+    batch.manifestVersion,
+    batch.sweep.tenantId ?? "",
+    batch.sweep.id,
+    batch.sweep.at,
+    batch.retainForMs,
+    target,
+  ];
+  return "sweep-" + createHash("sha256").update(fields.join("\0")).digest("hex");
+}
 
 const holdActions = {
   "audit.hold.administrative.acquire": ["administrative", "acquire"],
@@ -60,6 +102,124 @@ export class MaintenanceCommand {
     )
       throw new HeimdallError("invalid_argument");
     this.store = { applyHold: store.applyHold.bind(store), retire: store.retire.bind(store) };
+  }
+
+  async queueRetirementPage(
+    input: RetirementSweep,
+    limit: number,
+    scan: (
+      tenant: string | null,
+      now: number,
+      duration: number,
+      after: RetirementCursor | null,
+      limit: number,
+      signal?: AbortSignal,
+    ) => Promise<{ eventIds: string[]; next: RetirementCursor | null }>,
+    save: (batch: RetirementBatch, signal?: AbortSignal) => Promise<boolean>,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const now = this.now();
+    if (
+      !input ||
+      !token(input.id) ||
+      (input.tenantId !== null && !token(input.tenantId)) ||
+      !Number.isSafeInteger(now) ||
+      !Number.isSafeInteger(input.at) ||
+      input.at < 0 ||
+      input.at > now ||
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 8 ||
+      typeof scan !== "function" ||
+      typeof save !== "function"
+    )
+      throw new HeimdallError("invalid_argument");
+    const sweep = {
+      id: input.id,
+      tenantId: input.tenantId,
+      at: input.at,
+      after: input.after && { ...input.after },
+    };
+    const scope = this.authentication.maintenanceScope();
+    const matches = (cursor: RetirementCursor) =>
+      cursor &&
+      cursor.productId === scope.productId &&
+      cursor.environment === scope.environment &&
+      cursor.tenantId === sweep.tenantId &&
+      cursor.now === sweep.at &&
+      cursor.retainForMs === this.retainForMs &&
+      token(cursor.eventId);
+    if (sweep.after !== null && !matches(sweep.after)) throw new HeimdallError("invalid_argument");
+    if (signal) checkCancellation(signal);
+    const page = await scan(
+      sweep.tenantId,
+      sweep.at,
+      this.retainForMs,
+      sweep.after && { ...sweep.after },
+      limit,
+      signal,
+    );
+    if (
+      !page ||
+      !Array.isArray(page.eventIds) ||
+      page.eventIds.length > limit ||
+      !page.eventIds.every(token) ||
+      new Set(page.eventIds).size !== page.eventIds.length ||
+      (page.next !== null && (!matches(page.next) || page.next.eventId === sweep.after?.eventId))
+    )
+      throw new HeimdallError("audit_unavailable");
+    const binding = {
+      ...scope,
+      modelId: this.modelId,
+      manifestVersion: this.manifestVersion,
+      retainForMs: this.retainForMs,
+      sweep,
+    };
+    const operations: Operation[] = page.eventIds.map((targetEventId) => ({
+      tenantId: sweep.tenantId,
+      action: "audit.retention.retire",
+      targetEventId,
+      operationId: retirementOperationId(binding, targetEventId),
+      at: sweep.at,
+    }));
+    if (signal) checkCancellation(signal);
+    if (
+      !(await save(
+        {
+          ...binding,
+          operations,
+          next: page.next && { ...page.next },
+        },
+        signal,
+      ))
+    )
+      throw new HeimdallError("conflict");
+  }
+
+  async runQueuedRetirement(
+    bearer: string,
+    batch: RetirementBatch,
+    index: number,
+    signal?: AbortSignal,
+  ) {
+    if (!batch?.sweep || !Number.isInteger(index) || !batch.operations?.[index])
+      throw new HeimdallError("invalid_argument");
+    const op = batch.operations[index];
+    const scope = this.authentication.maintenanceScope();
+    if (
+      op.action !== "audit.retention.retire" ||
+      op.tenantId !== batch.sweep.tenantId ||
+      op.at !== batch.sweep.at ||
+      op.operationId !== retirementOperationId(batch, op.targetEventId) ||
+      batch.productId !== scope.productId ||
+      batch.environment !== scope.environment ||
+      batch.policyVersion !== scope.policyVersion ||
+      batch.modelId !== this.modelId ||
+      batch.manifestVersion !== this.manifestVersion ||
+      batch.retainForMs !== this.retainForMs
+    )
+      throw new HeimdallError("conflict");
+    return this.run(bearer, op, signal);
   }
 
   async run(bearer: string, operation: Operation, signal?: AbortSignal) {

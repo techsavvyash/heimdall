@@ -610,12 +610,23 @@ try:
   database='maintenance_commands_v5'
   sql('CREATE DATABASE '+database+' TEMPLATE retirement_runtime_v5')
   sql('GRANT INSERT,UPDATE ON heimdall_retention.event_holds TO retained_retirement_runtime; GRANT UPDATE(release_event_id) ON heimdall_retention.hold_release_reservations TO retained_retirement_runtime',database)
+  sql("""CREATE TABLE public.test_retirement_sweeps(id text PRIMARY KEY, position jsonb NOT NULL DEFAULT 'null', complete boolean NOT NULL DEFAULT false);
+   CREATE TABLE public.test_retirement_batches(id text NOT NULL, position jsonb NOT NULL, batch jsonb NOT NULL, PRIMARY KEY(id,position));
+   INSERT INTO public.test_retirement_sweeps(id) VALUES ('sweep-go'),('sweep-ts');
+   GRANT SELECT,UPDATE ON public.test_retirement_sweeps TO retained_retirement_runtime;
+   GRANT SELECT,INSERT ON public.test_retirement_batches TO retained_retirement_runtime""",database)
   command_env=dict(env,HEIMDALL_TEST_MAINTENANCE_COMMAND_URL=dsn(database)+'&options=-c%20role%3Dretained_retirement_runtime')
   subprocess.run(['go','test','-race','-count=1','./internal/auditflow','-run','^TestAuditedMaintenance$/^bound_maintenance_command$'],cwd=ROOT/'sdk/go',env=command_env,check=True)
   run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/audited-authentication.test.ts','-t','bound maintenance command'],env=command_env)
   assert sql("SELECT count(*) FROM heimdall_retention.retirements WHERE product_id='ledger' AND environment='production' AND tenant_id IS NULL AND target_event_id IN ('bound-maintenance-go','bound-maintenance-ts')",database)=='2'
   assert sql("SELECT count(*) FROM heimdall_retention.event_holds WHERE product_id='ledger' AND environment='production' AND event_id IN ('bound-maintenance-go','bound-maintenance-ts') AND tenant_id IS NULL AND release_event_id IS NOT NULL",database)=='4'
   assert sql("SELECT count(*) FROM heimdall.audit_events WHERE product_id='ledger' AND environment='production' AND event_id IN ('bound-maintenance-go','bound-maintenance-ts')",database)=='0'
+  assert sql("""SELECT count(*) FROM public.test_retirement_batches b
+    CROSS JOIN LATERAL jsonb_array_elements(b.batch->'operations') AS proposal(op)
+    JOIN heimdall_retention.retirements r ON r.product_id=b.batch->>'productId'
+     AND r.environment=b.batch->>'environment' AND r.retirement_id=op->>'operationId'
+     AND r.target_event_id=op->>'targetEventId'
+    WHERE r.target_event_id IN ('bound-maintenance-go','bound-maintenance-ts')""",database)=='2'
   print('Bound maintenance commands passed: exact actor and policy, denied cross-scope mutation, both hold purposes and retirement retries in TS and Go',flush=True)
   # END bound maintenance command proof
   # BEGIN retained hold fault proof

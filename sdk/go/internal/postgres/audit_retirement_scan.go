@@ -9,20 +9,8 @@ import (
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 )
 
-// RetirementCursor is trusted maintenance state for one sweep.
-type RetirementCursor struct {
-	ProductID   string  `json:"productId"`
-	Environment string  `json:"environment"`
-	TenantID    *string `json:"tenantId"`
-	Now         int64   `json:"now"`
-	RetainForMS int64   `json:"retainForMs"`
-	EventID     string  `json:"eventId"`
-}
-
-type RetirementPage struct {
-	EventIDs []string          `json:"eventIds"`
-	Next     *RetirementCursor `json:"next"`
-}
+type RetirementCursor = contract.RetirementCursor
+type RetirementPage = contract.RetirementPage
 
 var retirementPageSQL = `
 WITH scanned AS MATERIALIZED (
@@ -95,7 +83,7 @@ func (a *RetainedRuntimeAudit) ScanRetirementCandidates(ctx context.Context, ten
 		}
 	}
 	if scanned == limit {
-		page.Next = &RetirementCursor{audit.product, audit.environment, tenant, now, retainForMS, *lastScanned}
+		page.Next = &RetirementCursor{ProductID: audit.product, Environment: audit.environment, TenantID: tenant, Now: now, RetainForMS: retainForMS, EventID: *lastScanned}
 	}
 	if e = tx.Rollback(); e != nil {
 		return nil, databaseError(ctx)

@@ -1,0 +1,25 @@
+{
+  "sweep": {
+    "id": "daily-1",
+    "tenantId": null,
+    "at": 10000,
+    "after": null
+  },
+  "events": ["root-a", "root-b"],
+  "operations": [
+    {
+      "tenantId": null,
+      "action": "audit.retention.retire",
+      "targetEventId": "root-a",
+      "operationId": "sweep-deeaa6ee57681d87b934fdef368529e33d0481339b8c1b9985a6d6e5c88ea5e8",
+      "at": 10000
+    },
+    {
+      "tenantId": null,
+      "action": "audit.retention.retire",
+      "targetEventId": "root-b",
+      "operationId": "sweep-1abef1cd2339b272f82e66579e3c73c22e044aa63c24ee06761c00672c01670c",
+      "at": 10000
+    }
+  ]
+}

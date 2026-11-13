@@ -30,7 +30,7 @@ import { HeimdallError } from "../errors.js";
 import { transaction, query, readSnapshot } from "./query.js";
 const token = (v: unknown, max: number): v is string =>
   typeof v === "string" && v.length > 0 && v.length <= max && !/[^A-Za-z0-9_-]/.test(v);
-type RetirementCursor = {
+export type RetirementCursor = {
   productId: string;
   environment: string;
   tenantId: string | null;

@@ -847,3 +847,27 @@ It operates on the verified actor and scope produced by audited authentication.
 Retry hold release requires both an exact grant and a read-only evidence check
 for the specific target event and hold operation. Missing evidence blocks the
 release. A dependency error propagates through the audited decision path.
+
+## Scheduler handoff
+
+The internal maintenance command exposes TS `queueRetirementPage` and Go
+`QueueRetirementPage`. The product allocates a unique sweep ID for one exact
+nullable tenant, fixes its timestamp and starts with a null cursor. The
+command scans at most one page per call using its pinned retention duration.
+Each candidate becomes a retirement proposal with the sweep time and an
+operation ID derived from the sweep, target and pinned deployment configuration.
+Both SDKs derive the same IDs.
+
+The product's save callback inserts the proposals and advances the expected
+cursor in one transaction. It records completion separately from the null
+cursor used to start a sweep. A rejected cursor comparison returns conflict.
+If the commit outcome is unknown, reload the saved sweep and proposals before
+dispatching or advancing again. Empty pages still save their continuation or
+completion. The product owns scheduling, retry timing and queue storage.
+
+TS `runQueuedRetirement` and Go `RunQueuedRetirement` execute one saved proposal
+under its pinned product, environment, policy version, model, manifest version
+and duration. Configuration drift returns conflict before authorization. Each
+dispatch verifies the current operator, records the decision and rechecks
+eligibility. After an unknown execution outcome, keep the original proposal
+and retry with the same operator identity and pinned configuration.

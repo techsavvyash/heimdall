@@ -48,6 +48,13 @@ export class AuditedAuthentication {
     this.policyVersion = config.policyVersion;
     this.releaseWindow = config.freshnessMs === 0 ? 5000 : (config.freshnessMs ?? 60000);
   }
+  maintenanceScope() {
+    return {
+      productId: this.productId,
+      environment: this.environment,
+      policyVersion: this.policyVersion,
+    };
+  }
   owns(value: unknown): boolean {
     return this.verifier.owns(value);
   }
