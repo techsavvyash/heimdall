@@ -15,5 +15,6 @@
       "protocol": "oidc"
     }
   },
+  "federation": { "intentId": "intent_1", "authRequestId": "request_1" },
   "lifetimeMs": 600000
 }

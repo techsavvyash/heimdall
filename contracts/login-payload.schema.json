@@ -155,6 +155,15 @@
         }
       ]
     },
+    "federation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "intentId": { "$ref": "#/$defs/providerRequestId" },
+        "authRequestId": { "$ref": "#/$defs/providerRequestId" }
+      },
+      "required": ["intentId", "authRequestId"]
+    },
     "state": {
       "enum": ["pending", "claimed"]
     },
@@ -180,7 +189,26 @@
     "tenantPolicy",
     "state"
   ],
+  "$defs": {
+    "providerRequestId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "not": { "pattern": "[^A-Za-z0-9_-]" }
+    }
+  },
   "allOf": [
+    {
+      "if": { "required": ["federation"], "properties": { "federation": {} } },
+      "then": {
+        "properties": {
+          "tenantPolicy": {
+            "type": "object",
+            "properties": { "strictSSO": { "const": true } }
+          }
+        }
+      }
+    },
     {
       "if": {
         "properties": {

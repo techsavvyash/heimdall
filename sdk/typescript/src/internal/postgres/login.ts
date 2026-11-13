@@ -6,12 +6,22 @@ import type { LoginScope } from "../login-contract.js";
 import type { PostgresRecords } from "./records.js";
 
 type Target = Omit<LoginScope, "browserBindingDigest">;
+type Federation = { intentId: string; authRequestId: string };
+type PreparedFederation = Federation & { authorizationUrl: string };
+type LoginStart = {
+  state: string;
+  browserBinding: string;
+  nonce: string;
+  pkceChallenge: string;
+  expiresAt: number;
+};
 type Payload = LoginScope & {
   schemaVersion: 1;
   createdAt: number;
   expiresAt: number;
   nonce: string;
   pkceVerifier: string;
+  federation?: Federation;
 } & ({ state: "pending" } | { state: "claimed"; claimedAt: number });
 
 const lifetimeMs = 600_000;
@@ -69,6 +79,14 @@ function validTarget(target: Target): boolean {
   );
 }
 
+function validFederation(value: unknown): value is Federation {
+  return (
+    shape(value, ["intentId", "authRequestId"]) &&
+    token(value.intentId, 200) &&
+    token(value.authRequestId, 200)
+  );
+}
+
 function decode(bytes: Uint8Array, expiresAt: number): Payload {
   let value: unknown;
   try {
@@ -95,10 +113,13 @@ function decode(bytes: Uint8Array, expiresAt: number): Payload {
         "pkceVerifier",
         "state",
       ],
-      ["claimedAt"],
+      ["claimedAt", "federation"],
     ) ||
     value.schemaVersion !== 1 ||
     !validTarget(value as unknown as Target) ||
+    (Object.hasOwn(value, "federation") &&
+      (!validFederation(value.federation) ||
+        (value.tenantPolicy as Target["tenantPolicy"])?.strictSSO !== true)) ||
     !instant(value.createdAt) ||
     !instant(value.expiresAt) ||
     value.expiresAt !== expiresAt ||
@@ -126,6 +147,25 @@ export class BrowserLoginRecords {
   ) {}
 
   async start(target: Target, signal?: AbortSignal) {
+    const { login } = await this.startRecord(target, signal);
+    return login;
+  }
+
+  async startFederation(
+    target: Target,
+    prepare: (login: Omit<LoginStart, "browserBinding">) => Promise<PreparedFederation>,
+    signal?: AbortSignal,
+  ) {
+    if (target.tenantPolicy?.strictSSO !== true) throw new HeimdallError("invalid_argument");
+    const { login, authorizationUrl } = await this.startRecord(target, signal, prepare);
+    return { ...login, authorizationUrl: authorizationUrl! };
+  }
+
+  private async startRecord(
+    target: Target,
+    signal?: AbortSignal,
+    prepare?: (login: Omit<LoginStart, "browserBinding">) => Promise<PreparedFederation>,
+  ) {
     if (signal) checkCancellation(signal);
     const createdAt = this.now();
     const expiresAt = createdAt + lifetimeMs;
@@ -140,6 +180,16 @@ export class BrowserLoginRecords {
     const browserBinding = secret();
     const nonce = secret();
     const pkceVerifier = secret();
+    const pkceChallenge = hash(pkceVerifier).digest("base64url");
+    const prepared = await prepare?.({ state, nonce, pkceChallenge, expiresAt });
+    const federation = prepared && {
+      intentId: prepared.intentId,
+      authRequestId: prepared.authRequestId,
+    };
+    if (prepared && (!validFederation(federation) || !prepared.authorizationUrl))
+      throw new HeimdallError("unavailable");
+    if (signal) checkCancellation(signal);
+    if (this.now() >= expiresAt) throw new HeimdallError("unauthenticated");
     const record: Payload = {
       schemaVersion: 1,
       productId: target.productId,
@@ -155,6 +205,7 @@ export class BrowserLoginRecords {
       nonce,
       pkceVerifier,
       state: "pending",
+      ...(federation ? { federation } : {}),
     };
     const created = await this.store.create(
       "login",
@@ -165,16 +216,42 @@ export class BrowserLoginRecords {
     );
     if (!created) throw new HeimdallError("unauthenticated");
     if (signal) checkCancellation(signal);
+    if (this.now() >= expiresAt) throw new HeimdallError("unauthenticated");
     return {
-      state,
-      browserBinding,
-      nonce,
-      pkceChallenge: hash(pkceVerifier).digest("base64url"),
-      expiresAt,
+      login: { state, browserBinding, nonce, pkceChallenge, expiresAt },
+      authorizationUrl: prepared?.authorizationUrl,
     };
   }
 
   async claim(target: Target, state: string, browserBinding: string, signal?: AbortSignal) {
+    const { nonce, pkceVerifier } = await this.claimRecord(target, state, browserBinding, signal);
+    return { nonce, pkceVerifier };
+  }
+
+  async claimFederation(
+    target: Target,
+    state: string,
+    browserBinding: string,
+    intentId: string,
+    signal?: AbortSignal,
+  ) {
+    if (!token(intentId, 200)) throw new HeimdallError("unauthenticated");
+    const claim = await this.claimRecord(target, state, browserBinding, signal, intentId);
+    return {
+      nonce: claim.nonce,
+      pkceVerifier: claim.pkceVerifier,
+      authRequestId: claim.federation!.authRequestId,
+      expiresAt: claim.expiresAt,
+    };
+  }
+
+  private async claimRecord(
+    target: Target,
+    state: string,
+    browserBinding: string,
+    signal?: AbortSignal,
+    intentId?: string,
+  ) {
     if (signal) checkCancellation(signal);
     if (!browserSecret(state) || !browserSecret(browserBinding))
       throw new HeimdallError("unauthenticated");
@@ -190,6 +267,7 @@ export class BrowserLoginRecords {
       { ...target, browserBindingDigest: hash(browserBinding).digest("hex") },
       now,
     );
+    if (record.federation?.intentId !== intentId) throw new HeimdallError("unauthenticated");
     const claimed: Payload = { ...record, state: "claimed", claimedAt: now };
     const updated = await this.store.compareAndSwap(
       "login",
@@ -201,6 +279,7 @@ export class BrowserLoginRecords {
     );
     if (!updated) throw new HeimdallError("unauthenticated");
     if (signal) checkCancellation(signal);
-    return { nonce: record.nonce, pkceVerifier: record.pkceVerifier };
+    if (this.now() >= record.expiresAt) throw new HeimdallError("unauthenticated");
+    return record;
   }
 }

@@ -32,9 +32,19 @@ func (t LoginTarget) scope(browserBinding string) contract.LoginScope {
 
 type browserLoginPayload struct {
 	contract.LoginRecord
-	SchemaVersion int    `json:"schemaVersion"`
-	Nonce         string `json:"nonce"`
-	PKCEVerifier  string `json:"pkceVerifier"`
+	SchemaVersion int              `json:"schemaVersion"`
+	Nonce         string           `json:"nonce"`
+	PKCEVerifier  string           `json:"pkceVerifier"`
+	Federation    *LoginFederation `json:"federation,omitempty"`
+}
+
+type LoginFederation struct {
+	IntentID      string `json:"intentId"`
+	AuthRequestID string `json:"authRequestId"`
+}
+
+func (f LoginFederation) valid() bool {
+	return valid(f.IntentID, 200) && valid(f.AuthRequestID, 200)
 }
 
 type StartedLogin struct {
@@ -44,6 +54,12 @@ type StartedLogin struct {
 
 type ClaimedLogin struct {
 	Nonce, PKCEVerifier string
+}
+
+type ClaimedFederation struct {
+	ClaimedLogin
+	AuthRequestID string
+	ExpiresAt     int64
 }
 
 type loginStore interface {
@@ -125,7 +141,7 @@ func decodeBrowserLogin(stored *Record) (browserLoginPayload, error) {
 	fields := loginFields(stored.Value, []string{
 		"schemaVersion", "productId", "environment", "issuer", "clientId", "redirectUri",
 		"returnToKey", "browserBindingDigest", "tenantPolicy", "createdAt", "expiresAt", "nonce", "pkceVerifier", "state",
-	}, []string{"claimedAt"})
+	}, []string{"claimedAt", "federation"})
 	if fields == nil || json.Unmarshal(stored.Value, &record) != nil || record.SchemaVersion != 1 ||
 		!validLoginScope(record.LoginScope) || record.CreatedAt < 0 || record.CreatedAt > maxSafe ||
 		record.ExpiresAt < 0 || record.ExpiresAt > maxSafe || record.ExpiresAt != stored.ExpiresAt ||
@@ -139,6 +155,10 @@ func decodeBrowserLogin(stored *Record) (browserLoginPayload, error) {
 			(policy["protocol"] != nil) != (record.TenantPolicy.Protocol != "") {
 			return browserLoginPayload{}, contract.ErrUnavailable
 		}
+	}
+	if record.Federation != nil && (record.TenantPolicy == nil || !record.TenantPolicy.StrictSSO ||
+		!record.Federation.valid() || loginFields(fields["federation"], []string{"intentId", "authRequestId"}, nil) == nil) {
+		return browserLoginPayload{}, contract.ErrUnavailable
 	}
 	if (record.State != "pending" || record.ClaimedAt != nil) &&
 		(record.State != "claimed" || record.ClaimedAt == nil || *record.ClaimedAt < 0 || *record.ClaimedAt > maxSafe) {
@@ -162,14 +182,26 @@ func validLoginSecret(value string) bool {
 }
 
 func (l *BrowserLoginRecords) Start(ctx context.Context, target LoginTarget) (StartedLogin, error) {
+	started, _, err := l.start(ctx, target, nil)
+	return started, err
+}
+
+func (l *BrowserLoginRecords) StartFederation(ctx context.Context, target LoginTarget, prepare func(state, nonce, pkceChallenge string, expiresAt int64) (LoginFederation, string, error)) (StartedLogin, string, error) {
+	if target.TenantPolicy == nil || !target.TenantPolicy.StrictSSO || prepare == nil {
+		return StartedLogin{}, "", contract.ErrInvalidArgument
+	}
+	return l.start(ctx, target, prepare)
+}
+
+func (l *BrowserLoginRecords) start(ctx context.Context, target LoginTarget, prepare func(state, nonce, pkceChallenge string, expiresAt int64) (LoginFederation, string, error)) (StartedLogin, string, error) {
 	if err := contract.CheckCancellation(ctx); err != nil {
-		return StartedLogin{}, err
+		return StartedLogin{}, "", err
 	}
 	created := l.now()
 	state, binding := loginSecret(), loginSecret()
 	scope := target.scope(binding)
 	if created < 0 || created > maxSafe-loginLifetimeMs || !validLoginScope(scope) || !l.store.MatchesScope(target.ProductID, target.Environment) {
-		return StartedLogin{}, contract.ErrInvalidArgument
+		return StartedLogin{}, "", contract.ErrInvalidArgument
 	}
 	expires := created + loginLifetimeMs
 	nonce, verifier := loginSecret(), loginSecret()
@@ -177,69 +209,116 @@ func (l *BrowserLoginRecords) Start(ctx context.Context, target LoginTarget) (St
 		LoginRecord:   contract.LoginRecord{LoginScope: scope, CreatedAt: created, ExpiresAt: expires, State: "pending"},
 		SchemaVersion: 1, Nonce: nonce, PKCEVerifier: verifier,
 	}
+	challenge := sha256.Sum256([]byte(verifier))
+	pkceChallenge := base64.RawURLEncoding.EncodeToString(challenge[:])
+	var location string
+	if prepare != nil {
+		federation, destination, err := prepare(state, nonce, pkceChallenge, expires)
+		if err != nil {
+			return StartedLogin{}, "", err
+		}
+		if !federation.valid() || destination == "" {
+			return StartedLogin{}, "", contract.ErrUnavailable
+		}
+		payload.Federation, location = &federation, destination
+	}
+	if err := contract.CheckCancellation(ctx); err != nil {
+		return StartedLogin{}, "", err
+	}
+	if l.now() >= expires {
+		return StartedLogin{}, "", contract.ErrUnauthenticated
+	}
 	value, err := json.Marshal(payload)
 	if err != nil {
-		return StartedLogin{}, contract.ErrInvalidArgument
+		return StartedLogin{}, "", contract.ErrInvalidArgument
 	}
 	stored, err := l.store.Create(ctx, "login", state, value, expires)
 	if err != nil {
-		return StartedLogin{}, err
+		return StartedLogin{}, "", err
 	}
 	if stored == nil {
-		return StartedLogin{}, contract.ErrUnauthenticated
+		return StartedLogin{}, "", contract.ErrUnauthenticated
 	}
 	if err := contract.CheckCancellation(ctx); err != nil {
-		return StartedLogin{}, err
+		return StartedLogin{}, "", err
 	}
-	challenge := sha256.Sum256([]byte(verifier))
-	return StartedLogin{state, binding, nonce, base64.RawURLEncoding.EncodeToString(challenge[:]), expires}, nil
+	if l.now() >= expires {
+		return StartedLogin{}, "", contract.ErrUnauthenticated
+	}
+	return StartedLogin{state, binding, nonce, pkceChallenge, expires}, location, nil
 }
 
 // Claim must return successfully before the caller attempts code exchange.
 // Target comes from trusted routing and current tenant policy.
 func (l *BrowserLoginRecords) Claim(ctx context.Context, target LoginTarget, state, binding string) (ClaimedLogin, error) {
+	payload, err := l.claim(ctx, target, state, binding, "")
+	return ClaimedLogin{payload.Nonce, payload.PKCEVerifier}, err
+}
+
+func (l *BrowserLoginRecords) ClaimFederation(ctx context.Context, target LoginTarget, state, binding, intentID string) (ClaimedFederation, error) {
+	if !valid(intentID, 200) {
+		return ClaimedFederation{}, contract.ErrUnauthenticated
+	}
+	payload, err := l.claim(ctx, target, state, binding, intentID)
+	if err != nil {
+		return ClaimedFederation{}, err
+	}
+	return ClaimedFederation{ClaimedLogin{payload.Nonce, payload.PKCEVerifier}, payload.Federation.AuthRequestID, payload.ExpiresAt}, nil
+}
+
+func (l *BrowserLoginRecords) claim(ctx context.Context, target LoginTarget, state, binding, intentID string) (browserLoginPayload, error) {
 	if err := contract.CheckCancellation(ctx); err != nil {
-		return ClaimedLogin{}, err
+		return browserLoginPayload{}, err
 	}
 	if !validLoginSecret(state) || !validLoginSecret(binding) {
-		return ClaimedLogin{}, contract.ErrUnauthenticated
+		return browserLoginPayload{}, contract.ErrUnauthenticated
 	}
 	scope := target.scope(binding)
 	if !validLoginScope(scope) {
-		return ClaimedLogin{}, contract.ErrInvalidArgument
+		return browserLoginPayload{}, contract.ErrInvalidArgument
 	}
 	if !l.store.MatchesScope(target.ProductID, target.Environment) {
-		return ClaimedLogin{}, contract.ErrUnauthenticated
+		return browserLoginPayload{}, contract.ErrUnauthenticated
 	}
 	stored, err := l.store.Get(ctx, "login", state)
 	if err != nil {
-		return ClaimedLogin{}, err
+		return browserLoginPayload{}, err
 	}
 	if stored == nil {
-		return ClaimedLogin{}, contract.ErrUnauthenticated
+		return browserLoginPayload{}, contract.ErrUnauthenticated
 	}
 	payload, err := decodeBrowserLogin(stored)
 	if err != nil {
-		return ClaimedLogin{}, err
+		return browserLoginPayload{}, err
 	}
 	now := l.now()
 	if err := contract.ValidateLoginClaim(payload.LoginRecord, scope, now); err != nil {
-		return ClaimedLogin{}, err
+		return browserLoginPayload{}, err
+	}
+	expectedIntent := ""
+	if payload.Federation != nil {
+		expectedIntent = payload.Federation.IntentID
+	}
+	if expectedIntent != intentID {
+		return browserLoginPayload{}, contract.ErrUnauthenticated
 	}
 	payload.State, payload.ClaimedAt = "claimed", &now
 	value, err := json.Marshal(payload)
 	if err != nil {
-		return ClaimedLogin{}, contract.ErrUnavailable
+		return browserLoginPayload{}, contract.ErrUnavailable
 	}
 	updated, err := l.store.CompareAndSwap(ctx, "login", state, stored.Revision, value, payload.ExpiresAt)
 	if err != nil {
-		return ClaimedLogin{}, err
+		return browserLoginPayload{}, err
 	}
 	if updated == nil {
-		return ClaimedLogin{}, contract.ErrUnauthenticated
+		return browserLoginPayload{}, contract.ErrUnauthenticated
 	}
 	if err := contract.CheckCancellation(ctx); err != nil {
-		return ClaimedLogin{}, err
+		return browserLoginPayload{}, err
 	}
-	return ClaimedLogin{payload.Nonce, payload.PKCEVerifier}, nil
+	if l.now() >= payload.ExpiresAt {
+		return browserLoginPayload{}, contract.ErrUnauthenticated
+	}
+	return payload, nil
 }

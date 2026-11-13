@@ -48,3 +48,25 @@ The live federation probe created fresh codes for each SDK and assertion against
 | SAML | `2d2291e5-71e5-4436-994a-4963842d9ceb` |
 
 Run the federation probe with `HEIMDALL_PROBE_SDK_FEDERATION=1` and the protected verification configuration described in [[phase-2-browser-federation]]. The probe supplies provider provenance directly to the internal exchange. Binding a product browser transaction to the exact provider intent and issuing an encrypted, identity-bound session are still required.
+
+## Browser transaction storage
+
+The SDK login store can now persist the exact ZITADEL provider intent and downstream authorization request in the same encrypted record as browser state, nonce, PKCE material and the workspace policy. The provider IDs are captured by the server before the browser is redirected. The callback must present the original state, browser cookie and intent ID, and the current tenant policy must still match. The SDK releases the saved authorization request ID and exchange material only after the single-use claim succeeds.
+
+```mermaid
+sequenceDiagram
+  participant B as Browser
+  participant SDK as Product SDK
+  participant Z as ZITADEL
+  participant DB as Encrypted login store
+  B->>SDK: Start tenant SSO
+  SDK->>Z: Prepare authorization request and provider intent
+  Z-->>SDK: Request and intent identifiers
+  SDK->>DB: Store both identifiers with state and tenant policy
+  SDK-->>B: Set binding cookie and redirect to identity provider
+  B->>SDK: Return with state, cookie and provider intent
+  SDK->>DB: Verify the binding and atomically claim the attempt
+  DB-->>SDK: Release exchange material to the winning callback
+```
+
+The shared tests exercise the store boundary with disposable PostgreSQL. Wrong intent, rotated policy and ordinary callbacks are rejected before claim. One of eight parallel claims gets the exchange material. A lost response after a committed claim yields an uncertain outcome and a replay cannot recover the exchange material. The HTTP adapter and provider calls shown in the diagram are the integration path for this storage change.

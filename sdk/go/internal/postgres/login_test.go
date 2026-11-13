@@ -34,6 +34,7 @@ func TestBrowserLoginRecords(t *testing.T) {
 	var fixture struct {
 		Target     LoginTarget
 		LifetimeMs int64
+		Federation LoginFederation
 	}
 	raw, err := os.ReadFile("../../../../contracts/fixtures/browser-login-records.json")
 	if err != nil {
@@ -119,6 +120,49 @@ func TestBrowserLoginRecords(t *testing.T) {
 	if claim.Nonce != started.Nonce || base64.RawURLEncoding.EncodeToString(challenge[:]) != started.PKCEChallenge {
 		t.Fatal("callback did not return original OIDC material")
 	}
+	const destination = "https://idp.example.test/authorize"
+	federated, location, err := login.StartFederation(ctx, target, func(_, _, _ string, _ int64) (LoginFederation, string, error) {
+		return fixture.Federation, destination, nil
+	})
+	if err != nil || location != destination {
+		t.Fatal("federation start failed", err)
+	}
+	if _, err := login.Claim(ctx, target, federated.State, federated.BrowserBinding); !errors.Is(err, contract.ErrUnauthenticated) {
+		t.Fatal("ordinary callback claimed a federation record", err)
+	}
+	if _, err := login.ClaimFederation(ctx, target, federated.State, federated.BrowserBinding, "wrong_intent"); !errors.Is(err, contract.ErrUnauthenticated) {
+		t.Fatal("wrong intent claimed the record", err)
+	}
+	stale := target
+	policy := *target.TenantPolicy
+	policy.PolicyVersion = "v2"
+	stale.TenantPolicy = &policy
+	if _, err := login.ClaimFederation(ctx, stale, federated.State, federated.BrowserBinding, fixture.Federation.IntentID); !errors.Is(err, contract.ErrUnauthenticated) {
+		t.Fatal("changed policy claimed the record", err)
+	}
+	federatedClaims := make(chan ClaimedFederation, 8)
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			claim, err := login.ClaimFederation(ctx, target, federated.State, federated.BrowserBinding, fixture.Federation.IntentID)
+			if err == nil {
+				federatedClaims <- claim
+			} else if !errors.Is(err, contract.ErrUnauthenticated) {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	if len(federatedClaims) != 1 {
+		t.Fatalf("expected one federation winner, got %d", len(federatedClaims))
+	}
+	if winner := <-federatedClaims; winner.AuthRequestID != fixture.Federation.AuthRequestID || winner.ExpiresAt != federated.ExpiresAt || winner.Nonce != federated.Nonce {
+		t.Fatal("wrong federation binding")
+	}
+	if _, err := login.ClaimFederation(ctx, target, second.State, second.BrowserBinding, fixture.Federation.IntentID); !errors.Is(err, contract.ErrUnauthenticated) {
+		t.Fatal("federation callback claimed an ordinary record", err)
+	}
 	lost := start()
 	unknown := NewBrowserLoginRecords(lostLoginWrite{store}, clock)
 	if result, err := unknown.Claim(ctx, target, lost.State, lost.BrowserBinding); result != (ClaimedLogin{}) || !errors.Is(err, contract.ErrOutcomeUnknown) {
@@ -126,6 +170,18 @@ func TestBrowserLoginRecords(t *testing.T) {
 	}
 	if _, err := login.Claim(ctx, target, lost.State, lost.BrowserBinding); !errors.Is(err, contract.ErrUnauthenticated) {
 		t.Fatal(err)
+	}
+	lostFederation, _, err := login.StartFederation(ctx, target, func(_, _, _ string, _ int64) (LoginFederation, string, error) {
+		return fixture.Federation, destination, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result, err := unknown.ClaimFederation(ctx, target, lostFederation.State, lostFederation.BrowserBinding, fixture.Federation.IntentID); result != (ClaimedFederation{}) || !errors.Is(err, contract.ErrOutcomeUnknown) {
+		t.Fatal("unconfirmed federation claim must withhold the exchange material", err)
+	}
+	if _, err := login.ClaimFederation(ctx, target, lostFederation.State, lostFederation.BrowserBinding, fixture.Federation.IntentID); !errors.Is(err, contract.ErrUnauthenticated) {
+		t.Fatal("consumed federation claim replayed", err)
 	}
 	malformed := start()
 	stored, err := store.Get(ctx, "login", malformed.State)

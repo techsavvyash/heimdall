@@ -586,5 +586,91 @@
       "state": "pending"
     },
     "valid": false
+  },
+  {
+    "name": "valid-federation",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": {
+        "tenantId": "acme",
+        "organizationId": "org-acme",
+        "policyVersion": "v1",
+        "strictSSO": true,
+        "providerId": "acme-sso",
+        "protocol": "oidc"
+      },
+      "state": "pending",
+      "federation": {
+        "intentId": "intent_1",
+        "authRequestId": "request_1"
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "federation-without-strict-policy",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": null,
+      "state": "pending",
+      "federation": {
+        "intentId": "intent_1",
+        "authRequestId": "request_1"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "federation-with-malformed-intent",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://identity.example",
+      "clientId": "ledger-web",
+      "redirectUri": "https://ledger.example/auth/callback",
+      "returnToKey": "home",
+      "createdAt": 1000,
+      "expiresAt": 601000,
+      "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "pkceVerifier": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "browserBindingDigest": "abababababababababababababababababababababababababababababababab",
+      "tenantPolicy": {
+        "tenantId": "acme",
+        "organizationId": "org-acme",
+        "policyVersion": "v1",
+        "strictSSO": true,
+        "providerId": "acme-sso",
+        "protocol": "oidc"
+      },
+      "state": "pending",
+      "federation": {
+        "intentId": "id/other",
+        "authRequestId": "request_1"
+      }
+    },
+    "valid": false
   }
 ]

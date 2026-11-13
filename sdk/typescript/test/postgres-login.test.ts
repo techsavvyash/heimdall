@@ -11,7 +11,12 @@ import { PostgresRecords } from "../src/internal/postgres/records.js";
 const {
   target,
   lifetimeMs,
-}: { target: Omit<LoginScope, "browserBindingDigest">; lifetimeMs: number } = JSON.parse(
+  federation,
+}: {
+  target: Omit<LoginScope, "browserBindingDigest">;
+  lifetimeMs: number;
+  federation: { intentId: string; authRequestId: string };
+} = JSON.parse(
   readFileSync(
     new URL("../../../contracts/fixtures/browser-login-records.json", import.meta.url),
     "utf8",
@@ -70,6 +75,49 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       expect(
         claims.flatMap((claim) => (claim.status === "rejected" ? [claim.reason.message] : [])),
       ).toEqual(Array(7).fill("unauthenticated"));
+      const authorizationUrl = "https://idp.example.test/authorize";
+      const federated = await login.startFederation(target, async () => ({
+        ...federation,
+        authorizationUrl,
+      }));
+      expect(federated.authorizationUrl).toBe(authorizationUrl);
+      await expect(login.claim(target, federated.state, federated.browserBinding)).rejects.toThrow(
+        "unauthenticated",
+      );
+      await expect(
+        login.claimFederation(target, federated.state, federated.browserBinding, "wrong_intent"),
+      ).rejects.toThrow("unauthenticated");
+      await expect(
+        login.claimFederation(
+          { ...target, tenantPolicy: { ...target.tenantPolicy!, policyVersion: "v2" } },
+          federated.state,
+          federated.browserBinding,
+          federation.intentId,
+        ),
+      ).rejects.toThrow("unauthenticated");
+      const federatedClaims = await Promise.allSettled(
+        Array.from({ length: 8 }, () =>
+          login.claimFederation(
+            target,
+            federated.state,
+            federated.browserBinding,
+            federation.intentId,
+          ),
+        ),
+      );
+      expect(
+        federatedClaims.flatMap((claim) => (claim.status === "fulfilled" ? [claim.value] : [])),
+      ).toEqual([
+        {
+          nonce: federated.nonce,
+          pkceVerifier: expect.any(String),
+          authRequestId: federation.authRequestId,
+          expiresAt: federated.expiresAt,
+        },
+      ]);
+      await expect(
+        login.claimFederation(target, second.state, second.browserBinding, federation.intentId),
+      ).rejects.toThrow("unauthenticated");
       const unknown = new BrowserLoginRecords(
         {
           matchesScope: store.matchesScope.bind(store),
@@ -89,6 +137,27 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       await expect(login.claim(target, lost.state, lost.browserBinding)).rejects.toThrow(
         "unauthenticated",
       );
+
+      const lostFederation = await login.startFederation(target, async () => ({
+        ...federation,
+        authorizationUrl,
+      }));
+      await expect(
+        unknown.claimFederation(
+          target,
+          lostFederation.state,
+          lostFederation.browserBinding,
+          federation.intentId,
+        ),
+      ).rejects.toThrow("outcome_unknown");
+      await expect(
+        login.claimFederation(
+          target,
+          lostFederation.state,
+          lostFederation.browserBinding,
+          federation.intentId,
+        ),
+      ).rejects.toThrow("unauthenticated");
 
       const malformed = await login.start(target);
       const stored = (await store.get("login", malformed.state))!;
