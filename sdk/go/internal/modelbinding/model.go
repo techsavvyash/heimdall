@@ -1,6 +1,7 @@
 package modelbinding
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
@@ -213,44 +214,9 @@ func (p *PinnedModel) Verify(ctx context.Context) (*Verified, error) {
 	if e := contract.CheckCancellation(ctx); e != nil {
 		return nil, e
 	}
-	type loaded struct {
-		key string
-		err error
-	}
-	done := make(chan loaded, 1)
-	go func() { key, e := p.credential(ctx); done <- loaded{key, e} }()
-	var key string
-	select {
-	case <-ctx.Done():
-		return nil, contract.CheckCancellation(ctx)
-	case r := <-done:
-		if r.err != nil {
-			return nil, failure(ctx)
-		}
-		key = r.key
-	}
-	if len(key) > 8192 || !credentialValue.MatchString(key) {
-		return nil, contract.ErrUnavailable
-	}
-	req, e := http.NewRequestWithContext(ctx, "GET", strings.TrimSuffix(p.config.URL, "/")+"/stores/"+p.config.StoreID+"/authorization-models/"+p.config.ModelID, nil)
+	raw, e := p.request(ctx, "GET", "/authorization-models/"+p.config.ModelID, nil, 1048576)
 	if e != nil {
-		return nil, contract.ErrUnavailable
-	}
-	req.Header.Set("Authorization", "Bearer "+key)
-	response, e := p.client.Do(req)
-	if e != nil {
-		return nil, failure(ctx)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != 200 {
-		return nil, contract.ErrUnavailable
-	}
-	raw, e := io.ReadAll(io.LimitReader(response.Body, 1048577))
-	if e != nil {
-		return nil, failure(ctx)
-	}
-	if len(raw) > 1048576 || !utf8.Valid(raw) {
-		return nil, contract.ErrUnavailable
+		return nil, e
 	}
 	var envelope map[string]any
 	if json.Unmarshal(raw, &envelope) != nil || len(envelope) != 1 {
@@ -271,6 +237,83 @@ func (p *PinnedModel) Verify(ctx context.Context) (*Verified, error) {
 	}
 	return &Verified{p.config.StoreID, p.config.ModelID, p.compiled}, nil
 }
+func (p *PinnedModel) Check(ctx context.Context, user, workspace, permission string) (bool, error) {
+	relation, ok := p.compiled.Permissions[permission]
+	if !ok {
+		return false, contract.ErrInvalidArgument
+	}
+	body, err := json.Marshal(map[string]any{
+		"authorization_model_id": p.config.ModelID,
+		"tuple_key":              map[string]string{"user": user, "object": "workspace:" + workspace, "relation": relation},
+		"consistency":            "HIGHER_CONSISTENCY",
+	})
+	if err != nil {
+		return false, contract.ErrUnavailable
+	}
+	raw, err := p.request(ctx, "POST", "/check", body, 65536)
+	if err != nil {
+		return false, err
+	}
+	var reply map[string]any
+	if json.Unmarshal(raw, &reply) != nil {
+		return false, contract.ErrUnavailable
+	}
+	allowed, ok := reply["allowed"].(bool)
+	if !ok {
+		return false, contract.ErrUnavailable
+	}
+	return allowed, contract.CheckCancellation(ctx)
+}
+
+func (p *PinnedModel) request(ctx context.Context, method, path string, body []byte, limit int64) ([]byte, error) {
+	if err := contract.CheckCancellation(ctx); err != nil {
+		return nil, err
+	}
+	type loaded struct {
+		key string
+		err error
+	}
+	done := make(chan loaded, 1)
+	go func() { key, e := p.credential(ctx); done <- loaded{key, e} }()
+	var key string
+	select {
+	case <-ctx.Done():
+		return nil, contract.CheckCancellation(ctx)
+	case r := <-done:
+		if r.err != nil {
+			return nil, failure(ctx)
+		}
+		key = r.key
+	}
+	if len(key) > 8192 || !credentialValue.MatchString(key) {
+		return nil, contract.ErrUnavailable
+	}
+	req, e := http.NewRequestWithContext(ctx, method, strings.TrimSuffix(p.config.URL, "/")+"/stores/"+p.config.StoreID+path, bytes.NewReader(body))
+	if e != nil {
+		return nil, contract.ErrUnavailable
+	}
+	req.Header.Set("Authorization", "Bearer "+key)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	response, e := p.client.Do(req)
+	if e != nil {
+		return nil, failure(ctx)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != 200 {
+		return nil, contract.ErrUnavailable
+	}
+	raw, e := io.ReadAll(io.LimitReader(response.Body, limit+1))
+	if e != nil {
+		return nil, failure(ctx)
+	}
+	if int64(len(raw)) > limit || !utf8.Valid(raw) {
+		return nil, contract.ErrUnavailable
+	}
+	return raw, contract.CheckCancellation(ctx)
+}
+
 func failure(ctx context.Context) error {
 	if e := contract.CheckCancellation(ctx); e != nil {
 		return e

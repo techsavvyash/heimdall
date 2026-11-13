@@ -66,6 +66,59 @@ export class AuditedAuthentication {
   owns(value: unknown): boolean {
     return this.verifier.owns(value);
   }
+  async checkPermission(
+    principal: Principal,
+    tenantId: string,
+    permission: string,
+    modelId: string,
+    manifestVersion: number,
+    evaluate: (signal: AbortSignal) => Promise<boolean>,
+    signal: AbortSignal,
+  ) {
+    if (!this.owns(principal)) throw new HeimdallError("unauthenticated");
+    const at = this.now();
+    const decision = new AuditedDecision(
+      this.productId,
+      this.environment,
+      this.append,
+      validateAuditShape,
+      this.now,
+    );
+    const allowed = await decision.run(
+      {
+        schemaVersion: 1,
+        eventId: "pending",
+        eventType: "heimdall.authorization.requested",
+        eventVersion: 1,
+        occurredAt: at,
+        recordedAt: at,
+        productId: this.productId,
+        environment: this.environment,
+        tenantId,
+        actor: { kind: "user", issuer: principal.issuer, subject: principal.subject },
+        target: { type: "workspace", id: tenantId },
+        action: permission,
+        permission,
+        outcome: "requested",
+        requestId: randomUUID(),
+        source: "sdk",
+        sdkVersion: "0.0.0",
+        attributes: {},
+        decisionId: "pending",
+        modelId,
+        manifestVersion,
+        policyVersion: this.policyVersion,
+      },
+      async (operation) => {
+        await this.verifier.checkCurrent(principal, operation);
+        return evaluate(operation);
+      },
+      signal,
+    );
+    if (allowed) await this.verifier.checkCurrent(principal, signal);
+    return allowed;
+  }
+
   // Internal boundary. The deployment supplies read-only policy and the trusted port.
   async runMaintenance(
     raw: string,

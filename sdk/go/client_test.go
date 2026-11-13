@@ -72,6 +72,23 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 			body = discovery.Metadata
 		case "/stores/store-1/authorization-models/model-1":
 			body = map[string]any{"authorization_model": model}
+		case "/stores/store-1/check":
+			var check struct {
+				Model       string `json:"authorization_model_id"`
+				Consistency string
+				Tuple       map[string]string `json:"tuple_key"`
+			}
+			user := "user:" + base64.RawURLEncoding.EncodeToString([]byte(`["`+issuer+`","runtime-user"]`))
+			if json.NewDecoder(r.Body).Decode(&check) != nil || check.Model != "model-1" ||
+				check.Consistency != "HIGHER_CONSISTENCY" || check.Tuple["user"] != user || check.Tuple["relation"] != "p_0" {
+				w.WriteHeader(400)
+				return
+			}
+			if check.Tuple["object"] == "workspace:outage" {
+				w.WriteHeader(503)
+				return
+			}
+			body = map[string]any{"allowed": check.Tuple["object"] == "workspace:acme"}
 		case "/oauth/v2/keys":
 			body = map[string]any{"keys": []any{map[string]any{"kty": "RSA", "kid": "runtime", "alg": "RS256", "n": base64.RawURLEncoding.EncodeToString(key.N.Bytes()), "e": "AQAB"}}}
 		case "/oauth/v2/introspect":
@@ -331,6 +348,18 @@ func TestPublicPostgresRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if allowed, err := client.Tenant("acme").Can(ctx, actor, "invoice.approve"); err != nil || !allowed {
+		t.Fatal(allowed, err)
+	}
+	if err := client.Tenant("globex").Require(ctx, actor, "invoice.approve"); !errors.Is(err, heimdall.ErrForbidden) {
+		t.Fatal(err)
+	}
+	if allowed, err := client.Tenant("outage").Can(ctx, actor, "invoice.approve"); allowed || !errors.Is(err, heimdall.ErrUnavailable) {
+		t.Fatal(allowed, err)
+	}
+	if allowed, err := client.Tenant("acme").Can(ctx, &heimdall.Principal{}, "invoice.approve"); allowed || !errors.Is(err, heimdall.ErrUnauthenticated) {
+		t.Fatal(allowed, err)
+	}
 	if _, err = client.Tokens().Verify(ctx, "invalid"); !errors.Is(err, heimdall.ErrUnauthenticated) {
 		t.Fatal(err)
 	}
@@ -342,10 +371,10 @@ func TestPublicPostgresRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_events WHERE product_id='ledger' AND environment='public-go'").Scan(&count); err != nil || count != 3 {
+	if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_events WHERE product_id='ledger' AND environment='public-go'").Scan(&count); err != nil || count != 9 {
 		t.Fatal(count, err)
 	}
-	if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_deliveries WHERE product_id='ledger' AND environment='public-go' AND sink_id='siem'").Scan(&count); err != nil || count != 3 {
+	if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_deliveries WHERE product_id='ledger' AND environment='public-go' AND sink_id='siem'").Scan(&count); err != nil || count != 9 {
 		t.Fatal(count, err)
 	}
 	if _, err = storage.AppendAudit(ctx, map[string]any{}); !errors.Is(err, heimdall.ErrInvalidArgument) {

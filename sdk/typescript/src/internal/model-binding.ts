@@ -1,3 +1,4 @@
+import { bounded } from "./audited-decision.js";
 import { isDeepStrictEqual } from "node:util";
 import { compileTenantModel } from "./tenant-model.js";
 import { validateEndpoint } from "./endpoints.js";
@@ -117,50 +118,8 @@ export class PinnedModel {
   async verify(signal?: AbortSignal) {
     const bounded = AbortSignal.any([AbortSignal.timeout(5000), ...(signal ? [signal] : [])]);
     checkCancellation(bounded);
-    let abort: (() => void) | undefined;
     try {
-      const key = await Promise.race([
-        Promise.resolve().then(() => this.credential(bounded)),
-        new Promise<never>((_resolve, reject) => {
-          abort = () => {
-            try {
-              checkCancellation(bounded);
-            } catch (e) {
-              reject(e);
-            }
-          };
-          bounded.addEventListener("abort", abort, { once: true });
-          if (bounded.aborted) abort();
-        }),
-      ]);
-      if (typeof key !== "string" || !/^[\x21-\x7e]{1,8192}$/.test(key)) throw new Error();
-      const response = await fetch(
-        `${this.config.url.replace(/\/$/, "")}/stores/${this.config.storeId}/authorization-models/${this.config.modelId}`,
-        { headers: { authorization: `Bearer ${key}` }, redirect: "error", signal: bounded },
-      );
-      if (response.status !== 200 || !response.body) {
-        await response.body?.cancel();
-        throw new Error();
-      }
-      const parts: Uint8Array[] = [];
-      let size = 0;
-      const reader = response.body.getReader();
-      try {
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          size += value.length;
-          if (size > 1048576) throw new Error();
-          parts.push(value);
-        }
-      } finally {
-        await reader.cancel();
-      }
-      const parsed = object(
-        JSON.parse(
-          new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(Buffer.concat(parts)),
-        ),
-      );
+      const parsed = await this.request("/authorization-models/" + this.config.modelId, bounded);
       if (Object.keys(parsed).length !== 1) throw new Error();
       const model = object(parsed.authorization_model);
       if (model.id !== this.config.modelId) throw new Error();
@@ -176,8 +135,66 @@ export class PinnedModel {
     } catch {
       checkCancellation(bounded);
       throw new HeimdallError("unavailable");
-    } finally {
-      if (abort) bounded.removeEventListener("abort", abort);
+    }
+  }
+  async check(user: string, workspace: string, permission: string, signal: AbortSignal) {
+    if (!Object.hasOwn(this.compiled.permissions, permission))
+      throw new HeimdallError("invalid_argument");
+    const result = await this.request("/check", signal, {
+      authorization_model_id: this.config.modelId,
+      tuple_key: {
+        user,
+        object: "workspace:" + workspace,
+        relation: this.compiled.permissions[permission],
+      },
+      consistency: "HIGHER_CONSISTENCY",
+    });
+    if (typeof result.allowed !== "boolean") throw new HeimdallError("unavailable");
+    return result.allowed;
+  }
+
+  private async request(path: string, signal: AbortSignal, body?: Record<string, unknown>) {
+    try {
+      const key = await bounded(this.credential, signal);
+      if (typeof key !== "string" || !/^[\x21-\x7e]{1,8192}$/.test(key)) throw new Error();
+      const headers = new Headers({ authorization: `Bearer ${key}` });
+      if (body) headers.set("content-type", "application/json");
+      const response = await fetch(
+        `${this.config.url.replace(/\/$/, "")}/stores/${this.config.storeId}${path}`,
+        {
+          headers,
+          redirect: "error",
+          signal,
+          ...(body ? { method: "POST", body: JSON.stringify(body) } : {}),
+        },
+      );
+      if (response.status !== 200 || !response.body) {
+        await response.body?.cancel();
+        throw new Error();
+      }
+      const parts: Uint8Array[] = [];
+      let size = 0;
+      const reader = response.body.getReader();
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          size += value.length;
+          if (size > (body ? 65536 : 1048576)) throw new Error();
+          parts.push(value);
+        }
+      } finally {
+        await reader.cancel();
+      }
+      checkCancellation(signal);
+      return object(
+        JSON.parse(
+          new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(Buffer.concat(parts)),
+        ),
+      );
+    } catch {
+      checkCancellation(signal);
+      throw new HeimdallError("unavailable");
     }
   }
 }

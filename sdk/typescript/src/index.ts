@@ -1,6 +1,7 @@
 export { createHeimdall } from "./runtime.js";
 export type {
   Heimdall,
+  Tenant,
   RuntimeOptions,
   SessionOptions,
   Sessions,

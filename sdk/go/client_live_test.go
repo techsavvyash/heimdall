@@ -20,8 +20,8 @@ func TestLiveRuntime(t *testing.T) {
 		t.Skip("optional live runtime")
 	}
 	var c struct {
-		Config, Manifest             json.RawMessage
-		ClientSecret, Token, Subject string
+		Config, Manifest                         json.RawMessage
+		ClientSecret, Token, Subject, Permission string
 	}
 	if json.Unmarshal([]byte(raw), &c) != nil {
 		t.Fatal("runtime input")
@@ -50,9 +50,21 @@ func TestLiveRuntime(t *testing.T) {
 	if _, e = client.Tokens().Verify(context.Background(), "invalid"); !errors.Is(e, heimdall.ErrUnauthenticated) {
 		t.Fatal(e)
 	}
+	if c.Permission != "" {
+		for _, id := range []string{"acme", "globex"} {
+			allowed, err := client.Tenant(id).Can(context.Background(), p, c.Permission)
+			if err != nil || allowed != (id == "acme") {
+				t.Fatal("unexpected permission result", err)
+			}
+		}
+	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(outcomes) != 2 || outcomes[0] != "succeeded" || outcomes[1] != "deny" {
+	expected := "succeeded,deny"
+	if c.Permission != "" {
+		expected += ",requested,allow,requested,deny"
+	}
+	if strings.Join(outcomes, ",") != expected {
 		t.Fatal("audit outcomes")
 	}
 }

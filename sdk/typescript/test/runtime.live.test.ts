@@ -44,7 +44,17 @@ test.skipIf(!process.env.HEIMDALL_TEST_RUNTIME || !!process.env.HEIMDALL_TEST_RU
     await expect(
       runtime.tokens.verify("invalid", { signal: new AbortController().signal }),
     ).rejects.toThrow("unauthenticated");
-    expect(events.map((e) => e.outcome)).toEqual(["succeeded", "deny"]);
+    const signal = new AbortController().signal;
+    const tenants = c.permission ? ["acme", "globex"] : [];
+    const decisions = await Promise.all(
+      tenants.map((id) => runtime.tenant(id).can(principal, c.permission, { signal })),
+    );
+    expect(decisions).toEqual(c.permission ? [true, false] : []);
+    expect(events.map((e) => e.outcome).sort()).toEqual(
+      c.permission
+        ? ["allow", "deny", "deny", "requested", "requested", "succeeded"]
+        : ["deny", "succeeded"],
+    );
   },
   30000,
 );

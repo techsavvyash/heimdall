@@ -74,6 +74,7 @@ type Sessions interface {
 type Client struct {
 	authentication *auditflow.Authentication
 	createSessions func(context.Context, SessionOptions) (Sessions, error)
+	tenantCheck    func(context.Context, string, *Principal, string) (bool, error)
 }
 
 func (c *Client) NewSessions(ctx context.Context, options SessionOptions) (Sessions, error) {
@@ -162,7 +163,8 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 	if err != nil {
 		return nil, err
 	}
-	if _, err = model.Verify(ctx); err != nil {
+	verified, err := model.Verify(ctx)
+	if err != nil {
 		return nil, err
 	}
 	if err = contract.CheckCancellation(ctx); err != nil {
@@ -173,6 +175,19 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 		return nil, err
 	}
 	client := &Client{authentication: authentication}
+	client.tenantCheck = func(ctx context.Context, tenant string, actor *Principal, permission string) (bool, error) {
+		if _, err := verified.Permission(permission); err != nil {
+			return false, err
+		}
+		return authentication.CheckPermission(ctx, actor, tenant, permission, cfg.OpenFGA.ModelID, cfg.ManifestVersion, func(ctx context.Context) (bool, error) {
+			id := actor.Identity()
+			user, err := contract.EncodeIdentity(id.Issuer, id.Subject)
+			if err != nil {
+				return false, err
+			}
+			return model.Check(ctx, user, tenant, permission)
+		})
+	}
 	if storage.Browser != nil && storage.Browser.Login != nil && storage.Browser.Sessions != nil {
 		browser := *storage.Browser
 		redirects := deployment.Manifest().Clients[cfg.ClientKey].RedirectURIs
@@ -217,3 +232,28 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 // AuditEventDigest computes the portable digest for a custom durable audit implementation.
 // It does not validate event semantics or prove persistence.
 func AuditEventDigest(event map[string]any) (string, error) { return contract.AuditDigest(event) }
+
+type Tenant struct {
+	client *Client
+	id     string
+}
+
+var tenantID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+
+func (c *Client) Tenant(id string) *Tenant { return &Tenant{c, id} }
+func (t *Tenant) Can(ctx context.Context, actor *Principal, permission string) (bool, error) {
+	if ctx == nil || t == nil || t.client == nil || t.client.tenantCheck == nil || !tenantID.MatchString(t.id) {
+		return false, ErrInvalidArgument
+	}
+	return t.client.tenantCheck(ctx, t.id, actor, permission)
+}
+func (t *Tenant) Require(ctx context.Context, actor *Principal, permission string) error {
+	allowed, err := t.Can(ctx, actor, permission)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return ErrForbidden
+	}
+	return nil
+}

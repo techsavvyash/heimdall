@@ -1,3 +1,4 @@
+import { encodeIdentity } from "./internal/identity-encoding.js";
 import { browserSession } from "./internal/browser-session.js";
 import { createBrowserLoginHTTP } from "./internal/browser-login-http.js";
 import { parseDeployment } from "./internal/configuration.js";
@@ -46,7 +47,12 @@ export type Sessions = Readonly<{
   authenticate(request: Request): Promise<Principal>;
   logout(request: Request): Promise<Response>;
 }>;
+export type Tenant = Readonly<{
+  can(actor: Principal, permission: string, options: { signal: AbortSignal }): Promise<boolean>;
+  require(actor: Principal, permission: string, options: { signal: AbortSignal }): Promise<void>;
+}>;
 export type Heimdall = Readonly<{
+  tenant(id: string): Tenant;
   createSessions(options: SessionOptions, request: { signal: AbortSignal }): Promise<Sessions>;
   tokens: Readonly<{
     verify(accessToken: string, options: { signal: AbortSignal }): Promise<Principal>;
@@ -120,9 +126,8 @@ export async function createHeimdall(
       config.issuer.replace(/\/$/, "") + "/oauth/v2/introspect"
     )
       throw new HeimdallError("unavailable");
-    await new PinnedModel({ ...config.openfga, profile }, manifest, config, artifact, key).verify(
-      signal,
-    );
+    const model = new PinnedModel({ ...config.openfga, profile }, manifest, config, artifact, key);
+    await model.verify(signal);
     checkCancellation(signal);
     const authentication = new AuditedAuthentication(
       {
@@ -141,6 +146,34 @@ export async function createHeimdall(
       append,
     );
     return Object.freeze({
+      tenant(id: string) {
+        if (typeof id !== "string" || !/^[A-Za-z0-9_-]{1,128}(?![\s\S])/.test(id))
+          throw new HeimdallError("invalid_argument");
+        const can: Tenant["can"] = async (actor, permission, options) => {
+          if (
+            !(options?.signal instanceof AbortSignal) ||
+            typeof permission !== "string" ||
+            !Object.hasOwn(artifact.permissions, permission)
+          )
+            throw new HeimdallError("invalid_argument");
+          return authentication.checkPermission(
+            actor,
+            id,
+            permission,
+            config.openfga.modelId,
+            config.manifestVersion,
+            (signal) =>
+              model.check(encodeIdentity(actor.issuer, actor.subject), id, permission, signal),
+            options.signal,
+          );
+        };
+        return Object.freeze({
+          can,
+          async require(actor: Principal, permission: string, options: { signal: AbortSignal }) {
+            if (!(await can(actor, permission, options))) throw new HeimdallError("forbidden");
+          },
+        });
+      },
       async createSessions(options: SessionOptions, request: { signal: AbortSignal }) {
         if (
           !browser ||

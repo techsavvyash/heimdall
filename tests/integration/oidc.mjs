@@ -61,6 +61,27 @@ async function sdkRuntime(client, c) {
       manifestVersion: manifest.version,
       openfga: { url: base, storeId: store.id, modelId: model.authorization_model_id },
     };
+    let permission;
+    if (process.env.HEIMDALL_PROBE_TENANT_CHECK === "1") {
+      const role = fixture.manifest.ownerRole;
+      [permission] = fixture.manifest.roles[role];
+      const canonical = JSON.stringify([issuer, c.subject]).replace(
+        /[\u007f-\uffff]/g,
+        (character) => "\\u" + character.charCodeAt(0).toString(16).padStart(4, "0"),
+      );
+      const user = "user:" + Buffer.from(canonical, "ascii").toString("base64url");
+      const assignment = fixture.expected.roles[role].assignment;
+      await api(`/stores/${store.id}/write`, {
+        authorization_model_id: model.authorization_model_id,
+        writes: {
+          tuple_keys: [
+            { user, object: "workspace:acme", relation: "member" },
+            { user, object: "workspace:acme", relation: assignment },
+            { user, object: "workspace:globex", relation: assignment },
+          ],
+        },
+      });
+    }
     const env = {
       ...process.env,
       HEIMDALL_TEST_RUNTIME: JSON.stringify({
@@ -69,6 +90,7 @@ async function sdkRuntime(client, c) {
         clientSecret: client.clientSecret,
         token: c.token,
         subject: c.subject,
+        permission,
       }),
     };
     for (const language of ["ts", "go"]) {
