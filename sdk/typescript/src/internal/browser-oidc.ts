@@ -8,6 +8,7 @@ type Config = {
   profile: "production" | "loopback";
   clientId: string;
   audience: string;
+  zitadelAPIAudience?: string;
   clientSecret: string;
   redirectUri: string;
 };
@@ -20,9 +21,14 @@ const visible = (value: unknown, max: number): value is string =>
 const formEncode = (value: string) => new URLSearchParams([["v", value]]).toString().slice(2);
 
 export async function createBrowserOIDC(config: Config, signal?: AbortSignal) {
-  const { issuer, profile, clientId, clientSecret, redirectUri, audience } = config;
+  const { issuer, profile, clientId, clientSecret, redirectUri, audience, zitadelAPIAudience } =
+    config;
   validateEndpoint(redirectUri, profile);
-  if (!visible(clientId, 128) || !visible(clientSecret, 4096))
+  if (
+    !visible(clientId, 128) ||
+    !visible(clientSecret, 4096) ||
+    (zitadelAPIAudience !== undefined && !visible(zitadelAPIAudience, 128))
+  )
     throw new HeimdallError("invalid_argument");
   const metadata = await discoverOIDC(issuer, profile, signal);
   const verifier = new TokenVerifier({ issuer, profile, audience, jwksUri: metadata.jwks_uri });
@@ -37,7 +43,7 @@ export async function createBrowserOIDC(config: Config, signal?: AbortSignal) {
         client_id: clientId,
         redirect_uri: redirectUri,
         response_type: "code",
-        scope: `openid profile offline_access urn:zitadel:iam:org:project:id:${audience}:aud`,
+        scope: `openid profile offline_access urn:zitadel:iam:org:project:id:${audience}:aud${zitadelAPIAudience === undefined ? "" : " urn:zitadel:iam:org:project:id:zitadel:aud"}`,
         state,
         nonce,
         code_challenge: pkceChallenge,
@@ -124,6 +130,7 @@ export async function createBrowserOIDC(config: Config, signal?: AbortSignal) {
         nonce,
         payload.access_token,
         caller,
+        zitadelAPIAudience,
       );
       const access = await verifier.verify(payload.access_token, caller);
       if (identity.subject !== access.subject) throw new HeimdallError("unauthenticated");

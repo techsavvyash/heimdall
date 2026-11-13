@@ -38,6 +38,7 @@ export async function createBrowserLoginHTTP(
   };
 
   return {
+    scope: Object.freeze({ productId, environment, returnToKey, secure }),
     async start(request: Request) {
       if (request.method !== "GET" || new URL(request.url).origin !== callback.origin)
         throw new HeimdallError("invalid_argument");

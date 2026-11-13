@@ -349,9 +349,52 @@ try {
     return { verifier, nonce, code };
   }
   for (const client of clients) {
+    const auth = await authorize(client);
+    const result = await form("/oauth/v2/token", client, {
+      grant_type: "authorization_code",
+      code: auth.code,
+      redirect_uri: client.redirectUri,
+      code_verifier: auth.verifier,
+    });
+    assert(result.status === 200, `Code exchange failed: ${result.status} ${result.body.error}`);
+    const id = validateJWT(result.body.id_token, keys, client.clientId, user.id, auth.nonce);
+    const access = validateJWT(result.body.access_token, keys, client.projectId, user.id);
+    const withoutAPIAudience = await req(
+      "GET",
+      `/v2/sessions/${id.sid}`,
+      undefined,
+      result.body.access_token,
+    );
+    assert.equal(
+      withoutAPIAudience.status,
+      401,
+      "Product-only token must not access ZITADEL session API",
+    );
+    const apiAuth = await authorize(client, true);
+    const apiToken = await form("/oauth/v2/token", client, {
+      grant_type: "authorization_code",
+      code: apiAuth.code,
+      redirect_uri: client.redirectUri,
+      code_verifier: apiAuth.verifier,
+    });
+    assert.equal(apiToken.status, 200);
+    const apiID = validateJWT(
+      apiToken.body.id_token,
+      keys,
+      client.clientId,
+      user.id,
+      apiAuth.nonce,
+    );
     if (process.env.HEIMDALL_PROBE_SDK_BROWSER_EXCHANGE === "1") {
+      // Derive the verification deployment's exact API audience from a separately
+      // signed control token obtained with the API scope.
+      const apiAudiences = [apiID.aud]
+        .flat()
+        .filter((value) => value !== client.clientId && value !== client.projectId);
+      assert.equal(apiAudiences.length, 1, "Expected one ZITADEL API audience");
+      const [apiAudience] = apiAudiences;
       for (const language of ["ts", "go"]) {
-        const attempt = await authorize(client);
+        const attempt = await authorize(client, true);
         const env = {
           ...process.env,
           HEIMDALL_TEST_BROWSER_EXCHANGE: JSON.stringify({
@@ -361,6 +404,7 @@ try {
               clientId: client.clientId,
               clientSecret: client.clientSecret,
               audience: client.projectId,
+              zitadelAPIAudience: apiAudience,
               redirectUri: client.redirectUri,
             },
             code: attempt.code,
@@ -411,42 +455,6 @@ try {
         sdkBrowserExchange: { typescript: "passed", go: "passed" },
       });
     }
-    const auth = await authorize(client);
-    const result = await form("/oauth/v2/token", client, {
-      grant_type: "authorization_code",
-      code: auth.code,
-      redirect_uri: client.redirectUri,
-      code_verifier: auth.verifier,
-    });
-    assert(result.status === 200, `Code exchange failed: ${result.status} ${result.body.error}`);
-    const id = validateJWT(result.body.id_token, keys, client.clientId, user.id, auth.nonce);
-    const access = validateJWT(result.body.access_token, keys, client.projectId, user.id);
-    const withoutAPIAudience = await req(
-      "GET",
-      `/v2/sessions/${id.sid}`,
-      undefined,
-      result.body.access_token,
-    );
-    assert.equal(
-      withoutAPIAudience.status,
-      401,
-      "Product-only token must not access ZITADEL session API",
-    );
-    const apiAuth = await authorize(client, true);
-    const apiToken = await form("/oauth/v2/token", client, {
-      grant_type: "authorization_code",
-      code: apiAuth.code,
-      redirect_uri: client.redirectUri,
-      code_verifier: apiAuth.verifier,
-    });
-    assert.equal(apiToken.status, 200);
-    const apiID = validateJWT(
-      apiToken.body.id_token,
-      keys,
-      client.clientId,
-      user.id,
-      apiAuth.nonce,
-    );
     const apiAccess = validateJWT(apiToken.body.access_token, keys, client.projectId, user.id);
     const otherProduct = clients.find((candidate) => candidate !== client);
     assert(![apiAccess.aud].flat().includes(otherProduct.projectId));

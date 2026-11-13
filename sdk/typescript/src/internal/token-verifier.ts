@@ -168,14 +168,20 @@ export class TokenVerifier {
     nonce: string,
     accessToken: string,
     signal?: AbortSignal,
+    apiAudience?: string,
   ): Promise<Token> {
-    return this.verifySigned(token, signal, { audience, nonce, accessToken });
+    return this.verifySigned(token, signal, { audience, nonce, accessToken, apiAudience });
   }
 
   private async verifySigned(
     token: string,
     signal?: AbortSignal,
-    login?: { audience: string; nonce: string; accessToken: string },
+    login?: {
+      audience: string;
+      nonce: string;
+      accessToken: string;
+      apiAudience: string | undefined;
+    },
   ): Promise<Token> {
     const bounded = AbortSignal.any([AbortSignal.timeout(5000), ...(signal ? [signal] : [])]);
     checkCancellation(bounded);
@@ -230,7 +236,10 @@ export class TokenVerifier {
           payload.nonce !== login.nonce ||
           new Set(audiences).size !== audiences.length ||
           audiences.some(
-            (audience) => audience !== login.audience && audience !== this.config.audience,
+            (audience) =>
+              audience !== login.audience &&
+              audience !== this.config.audience &&
+              audience !== login.apiAudience,
           ) ||
           ((audiences.length > 1 || Object.hasOwn(payload, "azp")) &&
             payload.azp !== login.audience) ||

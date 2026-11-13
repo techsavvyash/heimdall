@@ -40,6 +40,9 @@ type Principal struct {
 }
 
 func (p *Principal) Identity() Identity { return p.identity }
+func (p *Principal) Scope() (product, environment, policy string) {
+	return p.product, p.environment, p.policy
+}
 func (p *Principal) Kind() string       { return "human" }
 func (p *Principal) ValidatedAt() int64 { return p.validatedAt }
 func (p *Principal) ExpiresAt() int64   { return p.expiresAt }

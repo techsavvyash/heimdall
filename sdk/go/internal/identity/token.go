@@ -190,15 +190,15 @@ func (v *TokenVerifier) key(ctx context.Context, kid string) (*rsa.PublicKey, er
 }
 
 type idTokenBinding struct {
-	audience, nonce, accessToken string
+	audience, nonce, accessToken, apiAudience string
 }
 
 func (v *TokenVerifier) Verify(ctx context.Context, raw string) (*VerifiedToken, error) {
 	return v.verify(ctx, raw, nil)
 }
 
-func (v *TokenVerifier) verifyIDToken(ctx context.Context, raw, audience, nonce, accessToken string) (*VerifiedToken, error) {
-	return v.verify(ctx, raw, &idTokenBinding{audience, nonce, accessToken})
+func (v *TokenVerifier) verifyIDToken(ctx context.Context, raw, audience, nonce, accessToken, apiAudience string) (*VerifiedToken, error) {
+	return v.verify(ctx, raw, &idTokenBinding{audience, nonce, accessToken, apiAudience})
 }
 
 func (v *TokenVerifier) verify(ctx context.Context, raw string, login *idTokenBinding) (*VerifiedToken, error) {
@@ -281,7 +281,7 @@ func (v *TokenVerifier) verify(ctx context.Context, raw string, login *idTokenBi
 		}
 		seen := make(map[string]bool, len(audiences))
 		for _, value := range audiences {
-			if seen[value] || (value != audience && value != v.config.Audience) {
+			if seen[value] || (value != audience && value != v.config.Audience && (login.apiAudience == "" || value != login.apiAudience)) {
 				return nil, contract.ErrUnauthenticated
 			}
 			seen[value] = true

@@ -24,7 +24,7 @@ sequenceDiagram
   end
 ```
 
-The ID token must name the configured client. Its only permitted additional audience is the configured product audience. If both are present, the authorized party must name the client. This matches the observed ZITADEL claims when the product audience scope is requested. The access token must name the product audience, and both tokens must identify the same subject. The SDKs also verify the ID token nonce and any access-token hash present. [OpenID Connect ID-token validation](https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation)
+The ID token must name the configured client. Its permitted additional audiences are the configured product audience and, for browser sessions that request self-service lookup, the explicitly configured ZITADEL API audience. If multiple audiences are present, the authorized party must name the client. This matches the observed ZITADEL claims when the product audience scope is requested. The access token must name the product audience, and both tokens must identify the same subject. The SDKs also verify the ID token nonce and any access-token hash present. [OpenID Connect ID-token validation](https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation)
 
 The shared fixture covers successful client-only and client-plus-product ID audiences, missing or incorrect authorized party, unrelated audiences, wrong nonce, incorrect access-token hash, subject mismatch, OAuth rejection, redirects, response size limits and uncertain claims. Go exercises HTTP against a local server. TypeScript exercises its Fetch call against a controlled transport. Both verify real signatures in these tests.
 

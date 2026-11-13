@@ -133,7 +133,7 @@ func TestBrowserOIDCExchange(t *testing.T) {
 	}))
 	defer server.Close()
 	ctx := context.Background()
-	browser, err := NewBrowserOIDC(ctx, BrowserOIDCConfig{server.URL, "loopback", f.ClientID, f.Audience, f.ClientSecret, redirect})
+	browser, err := NewBrowserOIDC(ctx, BrowserOIDCConfig{Issuer: server.URL, Profile: "loopback", ClientID: f.ClientID, Audience: f.Audience, ClientSecret: f.ClientSecret, RedirectURI: redirect})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,5 +191,19 @@ func TestLiveBrowserExchange(t *testing.T) {
 	}
 	if result.Identity.Subject() != f.Subject || result.RefreshToken == "" || result.AccessExpiresAt <= time.Now().UnixMilli() {
 		t.Fatal("unexpected verified exchange result")
+	}
+	cfg := browser.verifier.config
+	status, err := NewIdentityVerifier(StatusConfig{
+		Config: cfg, ProductID: "probe", Environment: "test", PolicyVersion: "p1", ClientID: f.Config.ClientID,
+	}, func(context.Context) (string, error) { return f.Config.ClientSecret, nil }, Gate{
+		Check:      func(context.Context, Identity) (bool, error) { return false, nil },
+		Invalidate: func(context.Context, Negative) error { return nil },
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal, err := status.Verify(ctx, result.AccessToken, "bearer")
+	if err != nil || principal.Identity().Subject != f.Subject {
+		t.Fatal("live identity status failed", err)
 	}
 }

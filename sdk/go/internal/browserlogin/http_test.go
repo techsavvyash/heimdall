@@ -21,10 +21,17 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/auditflow"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/identity"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/postgres"
 )
+
+type unknownSessionWrite struct{}
+
+func (unknownSessionWrite) CreateSession(context.Context, string, []byte, int64) (*postgres.Record, error) {
+	return nil, contract.ErrOutcomeUnknown
+}
 
 func TestBrowserLoginHTTP(t *testing.T) {
 	dsn := os.Getenv("HEIMDALL_TEST_DATABASE_URL")
@@ -46,6 +53,7 @@ func TestBrowserLoginHTTP(t *testing.T) {
 		Cases                                                                      []string
 	}
 	read("browser-login-http", &f)
+	f.Environment += "-go"
 	var discovery struct {
 		Issuer   string
 		Metadata map[string]any
@@ -59,6 +67,7 @@ func TestBrowserLoginHTTP(t *testing.T) {
 	jwks := map[string]any{"keys": []map[string]string{{"kty": "RSA", "kid": "login-http", "n": encode(key.N.Bytes()), "e": "AQAB"}}}
 	var pending sync.Map
 	var exchanges atomic.Int64
+	exp := time.Now().Unix() + 300
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		issuer := "http://" + r.Host
 		switch r.URL.Path {
@@ -73,6 +82,10 @@ func TestBrowserLoginHTTP(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(metadata)
 		case "/oauth/v2/keys":
 			_ = json.NewEncoder(w).Encode(jwks)
+		case "/oauth/v2/introspect":
+			_ = json.NewEncoder(w).Encode(map[string]any{"active": true, "iss": issuer, "sub": "alice", "aud": []string{f.Audience}, "exp": exp})
+		case "/v2/users/alice":
+			_, _ = w.Write([]byte(`{"user":{"userId":"alice","state":"USER_STATE_ACTIVE","human":{}}}`))
 		case "/oauth/v2/token":
 			exchanges.Add(1)
 			if r.ParseForm() != nil || r.Form.Get("redirect_uri") != f.RedirectURI {
@@ -85,7 +98,7 @@ func TestBrowserLoginHTTP(t *testing.T) {
 			}
 			sign := func(audience string, claims jwt.MapClaims) string {
 				claims["iss"], claims["sub"], claims["aud"] = issuer, "alice", audience
-				claims["iat"], claims["exp"] = time.Now().Unix(), time.Now().Add(5*time.Minute).Unix()
+				claims["iat"], claims["exp"] = time.Now().Unix(), exp
 				token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 				token.Header["kid"] = "login-http"
 				raw, err := token.SignedString(key)
@@ -215,5 +228,88 @@ func TestBrowserLoginHTTP(t *testing.T) {
 	}
 	if result, err := callback(a, http.MethodGet, f.RedirectURI, "", a.cookie); result != nil || !errors.Is(err, contract.ErrUnauthenticated) {
 		t.Fatal("replay accepted", err)
+	}
+	sessionsStore, err := postgres.NewSessionRecords(db, db, cipher, f.ProductID, f.Environment, func(value []byte) (postgres.SessionPrincipal, error) {
+		var principal postgres.SessionPrincipal
+		err := json.Unmarshal(value, &principal)
+		return principal, err
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gate, err := sessionsStore.IdentityGate(f.ProductID, f.Environment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	audit, err := postgres.NewAudit(db, f.ProductID, f.Environment, []string{"siem"}, contract.ValidateAuditShape)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var failAudit atomic.Bool
+	failAudit.Store(true)
+	auth, err := auditflow.NewAuthentication(identity.StatusConfig{
+		Config:    identity.Config{Issuer: server.URL, Audience: f.Audience, JWKSURI: server.URL + "/oauth/v2/keys", Profile: "loopback"},
+		ProductID: f.ProductID, Environment: f.Environment, PolicyVersion: "p1", ClientID: f.ClientID,
+	}, func(context.Context) (string, error) { return "fixture", nil }, gate, func(ctx context.Context, event map[string]any) (contract.AuditReceipt, error) {
+		if failAudit.Load() {
+			return contract.AuditReceipt{}, contract.ErrAuditUnavailable
+		}
+		return audit.Append(ctx, event)
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions, err := NewSessions(h, auth, sessionsStore, "/workspaces", 0, 0, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finish := func(sessions *Sessions, fx flow) (*http.Response, error) {
+		query := url.Values{"code": {f.Code}, "state": {fx.state}}
+		r := httptest.NewRequest(http.MethodGet, f.RedirectURI+"?"+query.Encode(), nil)
+		r.Header.Set("Cookie", fx.cookie)
+		w := httptest.NewRecorder()
+		err := sessions.Callback(w, r)
+		return w.Result(), err
+	}
+	res, err := finish(sessions, start())
+	res.Body.Close()
+	if !errors.Is(err, contract.ErrAuditUnavailable) || len(res.Cookies()) != 0 {
+		t.Fatal("audit failure released a cookie", err)
+	}
+	var count int
+	if err = db.QueryRow("SELECT count(*) FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind='session'", f.ProductID, f.Environment).Scan(&count); err != nil || count != 0 {
+		t.Fatal("audit failure created a session", err)
+	}
+	failAudit.Store(false)
+	uncertain, err := NewSessions(h, auth, unknownSessionWrite{}, "/workspaces", 0, 0, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err = finish(uncertain, start())
+	res.Body.Close()
+	if !errors.Is(err, contract.ErrOutcomeUnknown) || len(res.Cookies()) != 0 {
+		t.Fatal("unconfirmed session write released a cookie", err)
+	}
+	res, err = finish(sessions, start())
+	res.Body.Close()
+	if err != nil || res.StatusCode != 303 || res.Header.Get("Location") != "/workspaces" {
+		t.Fatal("callback failed", err)
+	}
+	cookies := res.Cookies()
+	if len(cookies) != 2 || cookies[0].MaxAge != -1 || !strings.HasSuffix(cookies[1].Name, "-session") || !cookies[1].Secure || !cookies[1].HttpOnly {
+		t.Fatal("invalid callback cookies")
+	}
+	opaque := cookies[1].Value
+	digest := sha256.Sum256([]byte(opaque))
+	stored, err := sessionsStore.GetSession(context.Background(), encode(digest[:]))
+	if err != nil || stored == nil {
+		t.Fatal("session was not committed", err)
+	}
+	var payload map[string]any
+	if err = json.Unmarshal(stored.Value, &payload); err != nil || payload["subject"] != "alice" || payload["policyVersion"] != "p1" || payload["state"] != "active" {
+		t.Fatal("invalid session payload", err)
+	}
+	if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_events WHERE product_id=$1 AND environment=$2", f.ProductID, f.Environment).Scan(&count); err != nil || count != 2 {
+		t.Fatal("expected two committed authentication events", err)
 	}
 }

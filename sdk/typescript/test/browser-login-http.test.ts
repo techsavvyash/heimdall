@@ -1,3 +1,9 @@
+import { HeimdallError } from "../src/internal/errors.js";
+import { AuditedAuthentication } from "../src/internal/audited-authentication.js";
+import { validateAuditShape } from "../src/internal/audit-shape.js";
+import { browserSession } from "../src/internal/browser-session.js";
+import { PostgresAudit } from "../src/internal/postgres/audit.js";
+import { SessionRecords } from "../src/internal/postgres/sessions.js";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
@@ -27,9 +33,14 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
     );
     const pending = new Map<string, string>();
     let exchanges = 0;
+    const exp = Math.floor(Date.now() / 1000) + 300;
     vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
       if (url.endsWith("/.well-known/openid-configuration")) return Response.json(metadata);
       if (url === metadata.jwks_uri) return Response.json(jwks);
+      if (url === metadata.introspection_endpoint)
+        return Response.json({ active: true, iss: issuer, sub: "alice", aud: [f.audience], exp });
+      if (url === issuer + "/v2/users/alice")
+        return Response.json({ user: { userId: "alice", state: "USER_STATE_ACTIVE", human: {} } });
       expect(url).toBe(metadata.token_endpoint);
       exchanges++;
       const body = init!.body as URLSearchParams;
@@ -44,7 +55,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
           .setSubject("alice")
           .setAudience(aud)
           .setIssuedAt()
-          .setExpirationTime("5m")
+          .setExpirationTime(exp)
           .sign(privateKey);
       return Response.json({
         token_type: "Bearer",
@@ -111,6 +122,96 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       expect(winners.map((r) => r.clearBindingCookie.includes("Max-Age=0"))).toEqual([true, true]);
       await expect(callback(a)).rejects.toThrow("unauthenticated");
       expect(exchanges).toBe(2);
+      const store = new SessionRecords(pool, pool, cipher, f.productId, f.environment, (value) =>
+        JSON.parse(Buffer.from(value).toString()),
+      );
+      const audit = new PostgresAudit(
+        pool,
+        f.productId,
+        f.environment,
+        ["siem"],
+        validateAuditShape,
+      );
+      let failAudit = true;
+      const auth = new AuditedAuthentication(
+        {
+          issuer,
+          profile: "production",
+          jwksUri: metadata.jwks_uri,
+          productId: f.productId,
+          environment: f.environment,
+          policyVersion: "p1",
+          audience: f.audience,
+          clientId: f.clientId,
+        },
+        async () => "fixture",
+        store.identityGate(f.productId, f.environment),
+        async (event, signal) => {
+          if (failAudit) throw new Error();
+          return audit.append(event, signal);
+        },
+      );
+      const sessions = browserSession(http, auth, store, {
+        returnTo: "/workspaces",
+      });
+      const requestFor = ({ state, cookie }: typeof a) =>
+        new Request(`${f.redirectUri}?code=${f.code}&state=${state}`, { headers: { cookie } });
+      const denied = await start();
+      await expect(sessions.callback(requestFor(denied))).rejects.toThrow("audit_unavailable");
+      expect(
+        Number(
+          (
+            await pool.query(
+              "SELECT count(*) FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind='session'",
+              [f.productId, f.environment],
+            )
+          ).rows[0].count,
+        ),
+      ).toBe(0);
+      failAudit = false;
+      const uncertain = browserSession(
+        http,
+        auth,
+        {
+          createSession: async () => {
+            throw new HeimdallError("outcome_unknown");
+          },
+        },
+        {
+          returnTo: "/workspaces",
+        },
+      );
+      await expect(uncertain.callback(requestFor(await start()))).rejects.toThrow(
+        "outcome_unknown",
+      );
+      const response = await sessions.callback(requestFor(await start()));
+      const cookies = response.headers.getSetCookie();
+      expect(response.status).toBe(303);
+      expect(response.headers.get("location")).toBe("/workspaces");
+      expect(cookies).toHaveLength(2);
+      expect(cookies[0]).toContain("Max-Age=0");
+      expect(cookies[1]).toMatch(/^__Host-heimdall-.*-session=[A-Za-z0-9_-]{43};/);
+      const opaque = cookies[1]!.split(";")[0]!.split("=")[1]!;
+      const key = createHash("sha256").update(opaque).digest("base64url");
+      expect(await store.getSession(opaque)).toBeNull();
+      const stored = (await store.getSession(key))!;
+      expect(JSON.parse(stored.value.toString())).toMatchObject({
+        productId: f.productId,
+        environment: f.environment,
+        subject: "alice",
+        state: "active",
+        policyVersion: "p1",
+      });
+      expect(
+        Number(
+          (
+            await pool.query(
+              "SELECT count(*) FROM heimdall.audit_events WHERE product_id=$1 AND environment=$2",
+              [f.productId, f.environment],
+            )
+          ).rows[0].count,
+        ),
+      ).toBe(2);
     } finally {
       vi.unstubAllGlobals();
       await pool.end();

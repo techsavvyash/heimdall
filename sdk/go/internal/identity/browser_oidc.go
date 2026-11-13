@@ -14,6 +14,7 @@ import (
 
 type BrowserOIDCConfig struct {
 	Issuer, Profile, ClientID, Audience, ClientSecret, RedirectURI string
+	ZitadelAPIAudience                                             string
 }
 
 type BrowserOIDC struct {
@@ -36,7 +37,7 @@ func visibleToken(value string, max int) bool {
 
 func NewBrowserOIDC(ctx context.Context, config BrowserOIDCConfig) (*BrowserOIDC, error) {
 	if contract.ValidateEndpoint(config.RedirectURI, config.Profile) != nil ||
-		!visibleToken(config.ClientID, 128) || !visibleToken(config.ClientSecret, 4096) {
+		!visibleToken(config.ClientID, 128) || !visibleToken(config.ClientSecret, 4096) || (config.ZitadelAPIAudience != "" && !visibleToken(config.ZitadelAPIAudience, 128)) {
 		return nil, contract.ErrInvalidArgument
 	}
 	metadata, err := DiscoverOIDC(ctx, config.Issuer, config.Profile)
@@ -52,9 +53,13 @@ func NewBrowserOIDC(ctx context.Context, config BrowserOIDCConfig) (*BrowserOIDC
 
 func (b *BrowserOIDC) AuthorizationURL(state, nonce, pkceChallenge string) string {
 	target, _ := url.Parse(b.authorizationEndpoint)
+	scope := "openid profile offline_access urn:zitadel:iam:org:project:id:" + b.config.Audience + ":aud"
+	if b.config.ZitadelAPIAudience != "" {
+		scope += " urn:zitadel:iam:org:project:id:zitadel:aud"
+	}
 	target.RawQuery = url.Values{
 		"client_id": {b.config.ClientID}, "redirect_uri": {b.config.RedirectURI}, "response_type": {"code"},
-		"scope": {"openid profile offline_access urn:zitadel:iam:org:project:id:" + b.config.Audience + ":aud"},
+		"scope": {scope},
 		"state": {state}, "nonce": {nonce}, "code_challenge": {pkceChallenge}, "code_challenge_method": {"S256"},
 	}.Encode()
 	return target.String()
@@ -82,7 +87,7 @@ func (b *BrowserOIDC) Exchange(ctx context.Context, code string, claim func() (n
 	if err != nil {
 		return nil, err
 	}
-	identity, err := b.verifier.verifyIDToken(ctx, tokens.IDToken, b.config.ClientID, nonce, tokens.AccessToken)
+	identity, err := b.verifier.verifyIDToken(ctx, tokens.IDToken, b.config.ClientID, nonce, tokens.AccessToken, b.config.ZitadelAPIAudience)
 	if err != nil {
 		return nil, err
 	}
