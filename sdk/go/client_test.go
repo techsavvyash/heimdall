@@ -20,11 +20,13 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
 type runtimeHarness struct {
+	checks           atomic.Int64
 	config, manifest []byte
 	options          heimdall.Options
 	token            string
@@ -74,6 +76,7 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 		case "/stores/store-1/authorization-models/model-1":
 			body = map[string]any{"authorization_model": model}
 		case "/stores/store-1/check":
+			h.checks.Add(1)
 			var check struct {
 				Model       string `json:"authorization_model_id"`
 				Consistency string
@@ -478,5 +481,81 @@ func TestPublicPostgresRuntime(t *testing.T) {
 	db.Close()
 	if _, err = heimdall.New(ctx, h.config, h.manifest, h.options); !errors.Is(err, heimdall.ErrUnavailable) {
 		t.Fatal(err)
+	}
+}
+
+func TestPublicManagedRuntime(t *testing.T) {
+	dsn := os.Getenv("HEIMDALL_TEST_DATABASE_URL")
+	if dsn == "" || os.Getenv("HEIMDALL_TEST_READ_PEER") != "" {
+		t.Skip("managed PostgreSQL runtime")
+	}
+	h := setupRuntime(t, "", "managed-go")
+	admin, err := sql.Open("postgres", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer admin.Close()
+	db, err := sql.Open("postgres", dsn+"&options=-c%20role%3Dheimdall_public_runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	h.options.Storage, err = postgres.NewManagedStorage(db, postgres.StorageOptions{ProductID: "ledger", Environment: "managed-go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	client, err := heimdall.New(ctx, h.config, h.manifest, h.options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor, err := client.Tokens().Verify(ctx, h.token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity := actor.Identity()
+	principal := "user:" + base64.RawURLEncoding.EncodeToString([]byte(`["`+identity.Issuer+`","runtime-user"]`))
+	if _, err = admin.Exec("INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at) VALUES('ledger','managed-go','acme','Acme','active',false,1,1)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = admin.Exec("INSERT INTO heimdall_managed.membership_candidates(product_id,environment,workspace_id,identity_hash,principal,observed_at) VALUES('ledger','managed-go','acme',sha256(convert_to($1,'UTF8')),$1,1)", principal); err != nil {
+		t.Fatal(err)
+	}
+	options := heimdall.DiscoveryOptions{ActiveKeyID: "cursor", Keys: map[string][]byte{"cursor": make([]byte, 32)}}
+	discovery, err := client.NewWorkspaceDiscovery(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	options.Source = workspaceScan(func(context.Context, heimdall.ScanOptions) (heimdall.CandidatePage, error) {
+		return heimdall.CandidatePage{Exhausted: true}, nil
+	})
+	if _, err = client.NewWorkspaceDiscovery(options); !errors.Is(err, heimdall.ErrInvalidArgument) {
+		t.Fatal(err)
+	}
+	tenant := client.Tenant("acme")
+	if err := tenant.Require(ctx, actor, "invoice.approve"); err != nil {
+		t.Fatal(err)
+	}
+	if roles, err := tenant.Roles(ctx, actor); err != nil || !slices.Equal(roles, []string{"approver"}) {
+		t.Fatal(roles, err)
+	}
+	if page, err := discovery.List(ctx, actor, heimdall.WorkspaceListOptions{}); err != nil || !slices.Equal(page.Items, []heimdall.Workspace{{ID: "acme", Name: "Acme"}}) {
+		t.Fatal(page, err)
+	}
+	count := h.checks.Load()
+	if _, err = admin.Exec("UPDATE heimdall_managed.workspaces SET mutation_blocked=true WHERE environment='managed-go'"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tenant.Require(ctx, actor, "invoice.approve"); !errors.Is(err, heimdall.ErrForbidden) {
+		t.Fatal(err)
+	}
+	if roles, err := tenant.Roles(ctx, actor); err != nil || len(roles) != 0 {
+		t.Fatal(roles, err)
+	}
+	if page, err := discovery.List(ctx, actor, heimdall.WorkspaceListOptions{}); err != nil || len(page.Items) != 0 {
+		t.Fatal(page, err)
+	}
+	if h.checks.Load() != count {
+		t.Fatal("blocked workspace called OpenFGA")
 	}
 }

@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-import { createPostgresStorage } from "../src/postgres.js";
+import { createManagedPostgresStorage, createPostgresStorage } from "../src/postgres.js";
 import { readFileSync } from "node:fs";
 import { afterEach, expect, test, vi } from "vitest";
 import { createHeimdall, auditEventDigest as auditDigest } from "../src/index.js";
@@ -79,6 +79,7 @@ function setup(failure = "", environment = "production") {
         });
       }
       if (url.endsWith("/check")) {
+        order.push("check");
         const check = JSON.parse(String(init?.body));
         if (
           check.authorization_model_id !== config.openfga.modelId ||
@@ -370,5 +371,64 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         signal,
       }),
     ).rejects.toThrow("unavailable");
+  },
+);
+
+test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TEST_READ_PEER)(
+  "managed runtime gates every tenant read and owns candidate discovery",
+  async () => {
+    const s = setup("", "managed-ts");
+    const dsn = process.env.HEIMDALL_TEST_DATABASE_URL;
+    const pool = new Pool({ connectionString: dsn, options: "-c role=heimdall_public_runtime" });
+    const admin = new Pool({ connectionString: dsn });
+    const signal = new AbortController().signal;
+    try {
+      s.options.storage = createManagedPostgresStorage(pool, { ...s.config, auditSinks: [] });
+      const runtime = await createHeimdall(
+        JSON.stringify(s.config),
+        JSON.stringify(base.manifest),
+        s.options,
+        { signal },
+      );
+      const actor = await runtime.tokens.verify(raw, { signal });
+      const principal =
+        "user:" +
+        Buffer.from(
+          JSON.stringify([token.issuer, token.subject]).replace(
+            /[\u007f-\uffff]/g,
+            (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"),
+          ),
+        ).toString("base64url");
+      await admin.query(
+        "INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at) VALUES('ledger','managed-ts','acme','Acme','active',false,1,1)",
+      );
+      await admin.query(
+        "INSERT INTO heimdall_managed.membership_candidates(product_id,environment,workspace_id,identity_hash,principal,observed_at) VALUES('ledger','managed-ts','acme',sha256(convert_to($1,'UTF8')),$1,1)",
+        [principal],
+      );
+      const options = { activeKeyId: "cursor", keys: { cursor: Buffer.alloc(32, 4) } };
+      expect(() =>
+        runtime.createWorkspaceDiscovery({
+          ...options,
+          source: { scan: async () => ({ items: [], exhausted: true }) },
+        }),
+      ).toThrow("invalid_argument");
+      const discovery = runtime.createWorkspaceDiscovery(options);
+      expect(await runtime.tenant("acme").can(actor, "invoice.approve", { signal })).toBe(true);
+      expect(await runtime.tenant("acme").roles(actor, { signal })).toEqual(["approver"]);
+      expect((await discovery.list(actor, { signal })).items).toEqual([
+        { id: "acme", name: "Acme" },
+      ]);
+      const requests = s.order.filter((entry) => entry === "check").length;
+      await admin.query(
+        "UPDATE heimdall_managed.workspaces SET mutation_blocked=true WHERE environment='managed-ts'",
+      );
+      expect(await runtime.tenant("acme").can(actor, "invoice.approve", { signal })).toBe(false);
+      expect(await runtime.tenant("acme").roles(actor, { signal })).toEqual([]);
+      expect((await discovery.list(actor, { signal })).items).toEqual([]);
+      expect(s.order.filter((entry) => entry === "check")).toHaveLength(requests);
+    } finally {
+      await Promise.all([pool.end(), admin.end()]);
+    }
   },
 );

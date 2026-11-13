@@ -56,10 +56,11 @@ type discoveryRuntime struct {
 	version int
 	auth    *auditflow.Authentication
 	model   *modelbinding.PinnedModel
+	managed *ManagedStorage
 }
 
 func (c *Client) NewWorkspaceDiscovery(options DiscoveryOptions) (*WorkspaceDiscovery, error) {
-	if c == nil || c.discovery == nil || options.Source == nil || options.ScanBudget < 0 || options.ScanBudget > 500 {
+	if c == nil || c.discovery == nil || (c.discovery.managed == nil) == (options.Source == nil) || options.ScanBudget < 0 || options.ScanBudget > 500 {
 		return nil, ErrInvalidArgument
 	}
 	signer, err := contract.NewCursorSigner(options.ActiveKeyID, options.Keys)
@@ -91,7 +92,7 @@ func discoveryText(value string, max int) bool {
 
 func (d *WorkspaceDiscovery) List(ctx context.Context, actor *Principal, options WorkspaceListOptions) (WorkspacePage, error) {
 	empty := WorkspacePage{}
-	if d == nil || d.source == nil || ctx == nil || options.Limit < 0 || options.Limit > 100 {
+	if d == nil || d.runtime.auth == nil || ctx == nil || options.Limit < 0 || options.Limit > 100 {
 		return empty, ErrInvalidArgument
 	}
 	if !d.runtime.auth.Owns(actor) {
@@ -102,6 +103,13 @@ func (d *WorkspaceDiscovery) List(ctx context.Context, actor *Principal, options
 		limit = 20
 	}
 	id := actor.Identity()
+	source := d.source
+	if d.runtime.managed != nil {
+		source = d.runtime.managed.Source(id)
+	}
+	if source == nil {
+		return empty, ErrUnavailable
+	}
 	user, err := contract.EncodeIdentity(id.Issuer, id.Subject)
 	if err != nil {
 		return empty, err
@@ -134,7 +142,7 @@ func (d *WorkspaceDiscovery) List(ctx context.Context, actor *Principal, options
 		ids := map[string]bool{}
 		for consumed := 0; consumed < d.budget && len(result.Items) < limit && !exhausted; {
 			size := min(20, d.budget-consumed)
-			page, err := d.source.Scan(ctx, ScanOptions{after, size})
+			page, err := source.Scan(ctx, ScanOptions{after, size})
 			if err != nil {
 				return false, err
 			}
@@ -154,6 +162,12 @@ func (d *WorkspaceDiscovery) List(ctx context.Context, actor *Principal, options
 				ids[item.ID], positions[position] = true, true
 				allowed, err := d.runtime.auth.CheckLinkedPermission(ctx, actor, item.ID, "workspace.member", scope.ModelID, d.runtime.version, parent,
 					func(ctx context.Context, _ string) (bool, error) {
+						if d.runtime.managed != nil {
+							allowed, err := d.runtime.managed.Allows(ctx, item.ID)
+							if err != nil || !allowed {
+								return false, err
+							}
+						}
 						return d.runtime.model.CheckMembership(ctx, user, item.ID)
 					})
 				if err != nil {

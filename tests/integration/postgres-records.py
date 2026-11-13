@@ -91,8 +91,14 @@ try:
         GRANT INSERT,UPDATE ON heimdall.records TO heimdall_public_runtime;
         GRANT USAGE ON SEQUENCE heimdall.record_revision_seq TO heimdall_public_runtime;
         """, capture_output=True, text=True)
+    subprocess.run(["go", "run", "./cmd/heimdall-migrate", "--initialize-managed-schema",
+                    "--sql", str(ROOT / "contracts/persistence/managed/0001.sql")],
+                   cwd=ROOT / "sdk/go", env=runtime_env, check=True)
+    run(["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime", "-v", "ON_ERROR_STOP=1"],
+        input="GRANT USAGE ON SCHEMA heimdall_managed TO heimdall_public_runtime; GRANT SELECT ON ALL TABLES IN SCHEMA heimdall_managed TO heimdall_public_runtime;",
+        capture_output=True, text=True)
     run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/runtime.test.ts"], env=runtime_env)
-    subprocess.run(["go", "test", "-race", "-count=1", ".", "-run", "TestPublicPostgresRuntime|TestPostgresFactory"], cwd=ROOT / "sdk/go", env=runtime_env, check=True)
+    subprocess.run(["go", "test", "-race", "-count=1", ".", "-run", "TestPublicPostgresRuntime|TestPublicManagedRuntime|TestPostgresFactory"], cwd=ROOT / "sdk/go", env=runtime_env, check=True)
     if os.environ.get("HEIMDALL_PROBE_DURABLE_RUNTIME") == "1":
         for args in (
             ["--prepare-hold-release-upgrade", "--writers-drained", "--sql-directory", str(ROOT / "contracts/persistence/session")],

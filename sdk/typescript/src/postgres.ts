@@ -1,3 +1,6 @@
+import { WorkspaceRecords } from "./internal/postgres/workspaces.js";
+import { CandidateRecords } from "./internal/postgres/candidates.js";
+import { workspaceGate } from "./internal/workspace-contract.js";
 import { HeimdallError } from "./internal/errors.js";
 import { readSession } from "./internal/browser-session.js";
 import { RecordCipher } from "./internal/envelopes.js";
@@ -8,7 +11,11 @@ import type { Pool } from "pg";
 import type { RuntimeStorage } from "./runtime.js";
 import { IdentityRecords } from "./internal/postgres/identity.js";
 import { PostgresAudit } from "./internal/postgres/audit.js";
-import { checkKeyUsageReadiness, checkRetentionReadiness } from "./internal/postgres/readiness.js";
+import {
+  checkKeyUsageReadiness,
+  checkRetentionReadiness,
+  checkManagedRetentionReadiness,
+} from "./internal/postgres/readiness.js";
 import { validateAuditShape } from "./internal/audit-shape.js";
 import { validateAuditEvent } from "./internal/audit.js";
 
@@ -63,5 +70,49 @@ export function createPostgresStorage(pool: Pool, options: PostgresStorageOption
     ...(browser ? { browser } : {}),
     identity: Object.freeze(identities),
     appendAudit: audit.append,
+  });
+}
+
+/** Managed runtime storage always gates tenant checks and owns discovery candidates. */
+export function createManagedPostgresStorage(
+  pool: Pool,
+  options: PostgresStorageOptions,
+): RuntimeStorage {
+  const storage = createPostgresStorage(pool, options);
+  const { productId, environment } = storage;
+  const workspaces = WorkspaceRecords.forRetainedRuntime(pool, productId, environment);
+  const candidates = CandidateRecords.forRetainedRuntime(pool, productId, environment);
+  const managed: NonNullable<RuntimeStorage["managed"]> = {
+    async allows(workspaceId, signal) {
+      return (
+        workspaceGate(await workspaces.get(workspaceId, signal), {
+          productId,
+          environment,
+          workspaceId,
+        }) === "check_relationships"
+      );
+    },
+    source(actor) {
+      return {
+        async scan({ after, limit }, { signal }) {
+          const page = await candidates.scan(actor, after ?? "0", limit, signal);
+          return {
+            items: page.items.map(({ position, workspace }) => ({
+              position,
+              workspace: { id: workspace.workspaceId, name: workspace.name },
+            })),
+            exhausted: page.nextPosition === null,
+          };
+        },
+      };
+    },
+  };
+  return Object.freeze({
+    ...storage,
+    async ready(signal: AbortSignal) {
+      await storage.ready(signal);
+      await checkManagedRetentionReadiness(pool, signal);
+    },
+    managed: Object.freeze(managed),
   });
 }

@@ -45,6 +45,7 @@ type RuntimeStorage struct {
 	Identity    IdentityGate
 	AppendAudit func(context.Context, map[string]any) (AuditReceipt, error)
 	Browser     *BrowserStorage
+	Managed     *ManagedStorage
 }
 type Credentials struct {
 	ClientSecret, OpenFGAKey func(context.Context) (string, error)
@@ -55,6 +56,11 @@ type Options struct {
 	Credentials         Credentials
 	Storage             RuntimeStorage
 }
+type ManagedStorage struct {
+	Allows func(context.Context, string) (bool, error)
+	Source func(Identity) WorkspaceSource
+}
+
 type BrowserStorage struct {
 	Login    *postgres.BrowserLoginRecords
 	Sessions *postgres.SessionRecords
@@ -177,9 +183,17 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 	if err != nil {
 		return nil, err
 	}
+	var managed *ManagedStorage
+	if storage.Managed != nil {
+		if storage.Managed.Allows == nil || storage.Managed.Source == nil {
+			return nil, ErrInvalidArgument
+		}
+		snapshot := *storage.Managed
+		managed = &snapshot
+	}
 	client := &Client{authentication: authentication, discovery: &discoveryRuntime{
 		scope:   contract.CursorScope{ProductID: cfg.ProductID, Environment: cfg.Environment, ModelID: cfg.OpenFGA.ModelID},
-		version: cfg.ManifestVersion, auth: authentication, model: model,
+		version: cfg.ManifestVersion, auth: authentication, model: model, managed: managed,
 	}}
 	client.tenantCheck = func(ctx context.Context, tenant string, actor *Principal, permission string) (bool, error) {
 		if _, err := verified.Permission(permission); err != nil {
@@ -191,6 +205,12 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 			if err != nil {
 				return false, err
 			}
+			if managed != nil {
+				allowed, err := managed.Allows(ctx, tenant)
+				if err != nil || !allowed {
+					return false, err
+				}
+			}
 			return model.Check(ctx, user, tenant, permission)
 		})
 	}
@@ -198,6 +218,12 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 	client.tenantRoles = func(ctx context.Context, tenant string, actor *Principal) ([]string, error) {
 		result := make([]string, 0)
 		_, err := authentication.CheckLinkedPermission(ctx, actor, tenant, "roles.list", cfg.OpenFGA.ModelID, cfg.ManifestVersion, "", func(ctx context.Context, parent string) (bool, error) {
+			if managed != nil {
+				allowed, err := managed.Allows(ctx, tenant)
+				if err != nil || !allowed {
+					return false, err
+				}
+			}
 			id := actor.Identity()
 			user, err := contract.EncodeIdentity(id.Issuer, id.Subject)
 			if err != nil {
@@ -205,6 +231,12 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 			}
 			for _, role := range roleNames {
 				allowed, err := authentication.CheckLinkedPermission(ctx, actor, tenant, "role."+role, cfg.OpenFGA.ModelID, cfg.ManifestVersion, parent, func(ctx context.Context, _ string) (bool, error) {
+					if managed != nil {
+						allowed, err := managed.Allows(ctx, tenant)
+						if err != nil || !allowed {
+							return false, err
+						}
+					}
 					return model.CheckRole(ctx, user, tenant, role)
 				})
 				if err != nil {
@@ -212,6 +244,15 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 				}
 				if allowed {
 					result = append(result, role)
+				}
+			}
+			if managed != nil && len(result) > 0 {
+				allowed, err := managed.Allows(ctx, tenant)
+				if err != nil {
+					return false, err
+				}
+				if !allowed {
+					result = result[:0]
 				}
 			}
 			return len(result) > 0, nil

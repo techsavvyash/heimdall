@@ -1,5 +1,9 @@
 import { workspaceDiscovery } from "./internal/workspace-discovery.js";
-import type { DiscoveryOptions, WorkspaceDiscovery } from "./internal/workspace-discovery.js";
+import type {
+  DiscoveryOptions,
+  WorkspaceDiscovery,
+  WorkspaceSource,
+} from "./internal/workspace-discovery.js";
 import { encodeIdentity } from "./internal/identity-encoding.js";
 import { browserSession } from "./internal/browser-session.js";
 import { createBrowserLoginHTTP } from "./internal/browser-login-http.js";
@@ -21,6 +25,10 @@ export type RuntimeStorage = {
   ready(signal: AbortSignal): Promise<void>;
   identity: IdentityGate;
   appendAudit: AuditAppend;
+  managed?: {
+    allows(id: string, signal: AbortSignal): Promise<boolean>;
+    source(actor: Principal): WorkspaceSource;
+  };
   browser?: {
     login: Parameters<typeof createBrowserLoginHTTP>[1];
     sessions: Parameters<typeof browserSession>[2];
@@ -102,6 +110,10 @@ export async function createHeimdall(
     check: storage.identity.check.bind(storage.identity),
     invalidate: storage.identity.invalidate.bind(storage.identity),
   };
+  const managed = storage.managed && {
+    allows: storage.managed.allows.bind(storage.managed),
+    source: storage.managed.source.bind(storage.managed),
+  };
   const browser = storage.browser && {
     login: {
       start: storage.browser.login.start.bind(storage.browser.login),
@@ -161,6 +173,7 @@ export async function createHeimdall(
           },
           authentication,
           model,
+          managed,
         );
       },
       tenant(id: string) {
@@ -179,7 +192,8 @@ export async function createHeimdall(
             permission,
             config.openfga.modelId,
             config.manifestVersion,
-            (signal) =>
+            async (signal) =>
+              (!managed || (await managed.allows(id, signal))) &&
               model.check(encodeIdentity(actor.issuer, actor.subject), id, permission, signal),
             options.signal,
           );
@@ -196,6 +210,7 @@ export async function createHeimdall(
               config.openfga.modelId,
               config.manifestVersion,
               async (operation, parent) => {
+                if (managed && !(await managed.allows(id, operation))) return false;
                 const user = encodeIdentity(actor.issuer, actor.subject);
                 for (const role of Object.keys(artifact.roles).sort()) {
                   const allowed = await authentication.checkPermission(
@@ -204,12 +219,16 @@ export async function createHeimdall(
                     "role." + role,
                     config.openfga.modelId,
                     config.manifestVersion,
-                    (signal) => model.checkRole(user, id, role, signal),
+                    async (signal) =>
+                      (!managed || (await managed.allows(id, signal))) &&
+                      model.checkRole(user, id, role, signal),
                     operation,
                     parent,
                   );
                   if (allowed) result.push(role);
                 }
+                if (managed && result.length && !(await managed.allows(id, operation)))
+                  result.length = 0;
                 return result.length > 0;
               },
               options.signal,

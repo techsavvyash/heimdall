@@ -18,7 +18,7 @@ export type WorkspaceSource = {
   }>;
 };
 export type DiscoveryOptions = {
-  source: WorkspaceSource;
+  source?: WorkspaceSource;
   activeKeyId: string;
   keys: Readonly<Record<string, Uint8Array>>;
   scanBudget?: number;
@@ -38,16 +38,20 @@ export function workspaceDiscovery(
   scope: { productId: string; environment: string; modelId: string; manifestVersion: number },
   auth: AuditedAuthentication,
   model: PinnedModel,
+  managed?: {
+    allows(id: string, signal: AbortSignal): Promise<boolean>;
+    source(actor: Principal): WorkspaceSource;
+  },
 ): WorkspaceDiscovery {
   const budget = options?.scanBudget ?? 500;
   if (
-    typeof options?.source?.scan !== "function" ||
+    (managed ? options?.source !== undefined : typeof options?.source?.scan !== "function") ||
     !Number.isSafeInteger(budget) ||
     budget < 1 ||
     budget > 500
   )
     throw new HeimdallError("invalid_argument");
-  const scan = options.source.scan.bind(options.source);
+  const coreScan = options.source?.scan.bind(options.source);
   const signer = new CursorSigner(options.activeKeyId, options.keys);
   const { manifestVersion, ...deployment } = scope;
   return Object.freeze({
@@ -62,6 +66,8 @@ export function workspaceDiscovery(
       )
         throw new HeimdallError("invalid_argument");
       if (!auth.owns(actor)) throw new HeimdallError("unauthenticated");
+      const source = managed?.source(actor);
+      const scan = source ? source.scan.bind(source) : coreScan!;
       const user = encodeIdentity(actor.issuer, actor.subject);
       const binding = { ...deployment, principal: createHash("sha256").update(user).digest("hex") };
       let after: string | null = null;
@@ -128,7 +134,9 @@ export function workspaceDiscovery(
                 "workspace.member",
                 scope.modelId,
                 manifestVersion,
-                (signal) => model.checkMembership(user, item.id, signal),
+                async (signal) =>
+                  (!managed || (await managed.allows(item.id, signal))) &&
+                  model.checkMembership(user, item.id, signal),
                 operation,
                 parent,
               );

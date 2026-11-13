@@ -107,3 +107,64 @@ func NewStorage(db *sql.DB, options StorageOptions) (heimdall.RuntimeStorage, er
 		},
 	}, nil
 }
+
+type candidateSource struct {
+	records *internal.CandidateRecords
+	actor   contract.Identity
+}
+
+func (s candidateSource) Scan(ctx context.Context, options heimdall.ScanOptions) (heimdall.CandidatePage, error) {
+	after := options.After
+	if after == "" {
+		after = "0"
+	}
+	page, err := s.records.Scan(ctx, s.actor, after, options.Limit)
+	if err != nil {
+		return heimdall.CandidatePage{}, err
+	}
+	items := make([]heimdall.Candidate, 0, len(page.Items))
+	for _, candidate := range page.Items {
+		items = append(items, heimdall.Candidate{Position: candidate.Position,
+			Workspace: heimdall.Workspace{ID: candidate.Workspace.WorkspaceID, Name: candidate.Workspace.Name}})
+	}
+	return heimdall.CandidatePage{Items: items, Exhausted: page.NextPosition == nil}, nil
+}
+
+// NewManagedStorage adds mandatory workspace lifecycle checks and indexed discovery.
+func NewManagedStorage(db *sql.DB, options StorageOptions) (heimdall.RuntimeStorage, error) {
+	storage, err := NewStorage(db, options)
+	if err != nil {
+		return heimdall.RuntimeStorage{}, err
+	}
+	workspaces, err := internal.NewRetainedWorkspaceRecords(db, options.ProductID, options.Environment)
+	if err != nil {
+		return heimdall.RuntimeStorage{}, err
+	}
+	candidates, err := internal.NewRetainedCandidateRecords(db, options.ProductID, options.Environment)
+	if err != nil {
+		return heimdall.RuntimeStorage{}, err
+	}
+	ready := storage.Ready
+	storage.Ready = func(ctx context.Context) error {
+		if err := ready(ctx); err != nil {
+			return err
+		}
+		return internal.CheckManagedRetentionReadiness(ctx, db)
+	}
+	storage.Managed = &heimdall.ManagedStorage{
+		Allows: func(ctx context.Context, id string) (bool, error) {
+			record, err := workspaces.Get(ctx, id)
+			if err != nil || record == nil {
+				return false, err
+			}
+			result, err := contract.WorkspaceGate(&record.WorkspaceRecord, contract.WorkspaceScope{
+				ProductID: options.ProductID, Environment: options.Environment, WorkspaceID: id,
+			})
+			return result == "check_relationships", err
+		},
+		Source: func(actor heimdall.Identity) heimdall.WorkspaceSource {
+			return candidateSource{candidates, contract.Identity{Issuer: actor.Issuer, Subject: actor.Subject}}
+		},
+	}
+	return storage, nil
+}
