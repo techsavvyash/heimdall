@@ -40,5 +40,12 @@
       "path": "keys/0001.sql",
       "checksum": "eb47f12e3a390f450d63fea50e8da47708e5e473c78bb14761b56cfdcc799bef"
     }
+  ],
+  "setup": [
+    {
+      "version": 1,
+      "path": "setup/0001.sql",
+      "checksum": "d17603a8fe7865f9a94eab614c5e4f5110ad6ab9634f1bff808a2f5e39fa5ff6"
+    }
   ]
 }

@@ -79,3 +79,11 @@ var managedCapacityReadinessSQL = "SELECT base.ready AND managed.ready AS ready 
 func CheckManagedCapacityReadiness(ctx context.Context, db *sql.DB) error {
 	return checkReadiness(ctx, db, managedCapacityReadinessSQL, sessionChecksum, decisionChecksum, capacityUpgradeChecksums[0], capacityUpgradeChecksums[1], managedChecksum)
 }
+
+const setupChecksum = "d17603a8fe7865f9a94eab614c5e4f5110ad6ab9634f1bff808a2f5e39fa5ff6"
+
+var setupReadinessSQL = strings.ReplaceAll(readinessSQL, "heimdall.", "heimdall_setup.")
+
+func CheckSetupReadiness(ctx context.Context, db *sql.DB) error {
+	return checkReadiness(ctx, db, setupReadinessSQL, setupChecksum)
+}

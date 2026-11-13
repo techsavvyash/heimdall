@@ -21,7 +21,8 @@ func run() int {
 	sqlPath := flag.String("sql", "", "path to the checksum-pinned selected migration 0001.sql")
 	initialize := flag.Bool("initialize-session-schema", false, "explicitly authorize installation in the selected application database")
 	managed := flag.Bool("initialize-managed-schema", false, "install managed schema after verifying session/audit readiness")
-	status := flag.String("status", "", "read-only compatibility status: session, managed, audit-v2, managed-v2, audit-v3, managed-v3, audit-v4, managed-v4, audit-v5 or managed-v5")
+	setup := flag.Bool("initialize-setup-schema", false, "install the independent operator setup journal")
+	status := flag.String("status", "", "read-only compatibility status: session, managed, setup, audit-v2, managed-v2, audit-v3, managed-v3, audit-v4, managed-v4, audit-v5 or managed-v5")
 	prepare := flag.Bool("prepare-audit-upgrade", false, "prepare audit v2 tables without activating runtime readiness")
 	capacity := flag.Bool("prepare-capacity-upgrade", false, "prepare offline audit-capacity ledger without activating runtime readiness")
 	retention := flag.Bool("prepare-retention-upgrade", false, "prepare offline retained identities and metadata quota; never activate runtime readiness")
@@ -101,13 +102,16 @@ func run() int {
 	if *initialize {
 		modes++
 	}
+	if *setup {
+		modes++
+	}
 	if *managed {
 		modes++
 	}
 	if *status != "" {
 		modes++
 	}
-	if (*retention && (*directory == "" || !*drained || *sqlPath != "" || *retentionRows < 1 || *retentionRows > 1099511627775 || *retentionBytes < 8192 || *retentionBytes > 9007199254740991)) || (!*retention && retentionSet) || (*capacity && (*directory == "" || !*drained || *sqlPath != "" || *capacityEvents < 1 || *capacityEvents > 9007199254740991 || *capacityBytes < 1 || *capacityBytes > 9007199254740991 || *capacityDeliveries < 1 || *capacityDeliveries > 9007199254740991)) || (!*capacity && capacitySet) || (activateMode && (!*drained || *directory != "" || *sqlPath != "")) || (backfillMode && (!*drained || *directory != "" || *sqlPath != "" || *batch < 1 || *batch > 100)) || (!backfillMode && batchSet) || modes != 1 || dsn == "" || flag.NArg() != 0 || (prepareMode && (*directory == "" || !*drained || *sqlPath != "")) || (!prepareMode && !backfillMode && !activateMode && (*directory != "" || *drained)) || (*status != "" && (*status != "session" && *status != "managed" && *status != "audit-v2" && *status != "managed-v2" && *status != "audit-v3" && *status != "managed-v3" && *status != "audit-v4" && *status != "managed-v4" && *status != "audit-v5" && *status != "managed-v5" || *sqlPath != "")) || (!prepareMode && !backfillMode && !activateMode && *status == "" && *sqlPath == "") {
+	if (*retention && (*directory == "" || !*drained || *sqlPath != "" || *retentionRows < 1 || *retentionRows > 1099511627775 || *retentionBytes < 8192 || *retentionBytes > 9007199254740991)) || (!*retention && retentionSet) || (*capacity && (*directory == "" || !*drained || *sqlPath != "" || *capacityEvents < 1 || *capacityEvents > 9007199254740991 || *capacityBytes < 1 || *capacityBytes > 9007199254740991 || *capacityDeliveries < 1 || *capacityDeliveries > 9007199254740991)) || (!*capacity && capacitySet) || (activateMode && (!*drained || *directory != "" || *sqlPath != "")) || (backfillMode && (!*drained || *directory != "" || *sqlPath != "" || *batch < 1 || *batch > 100)) || (!backfillMode && batchSet) || modes != 1 || dsn == "" || flag.NArg() != 0 || (prepareMode && (*directory == "" || !*drained || *sqlPath != "")) || (!prepareMode && !backfillMode && !activateMode && (*directory != "" || *drained)) || (*status != "" && (*status != "session" && *status != "managed" && *status != "setup" && *status != "audit-v2" && *status != "managed-v2" && *status != "audit-v3" && *status != "managed-v3" && *status != "audit-v4" && *status != "managed-v4" && *status != "audit-v5" && *status != "managed-v5" || *sqlPath != "")) || (!prepareMode && !backfillMode && !activateMode && *status == "" && *sqlPath == "") {
 		fmt.Fprintln(os.Stderr, "select one initialization, status, drained upgrade preparation, backfill or activation mode with its required inputs")
 		return 2
 	}
@@ -180,6 +184,12 @@ func run() int {
 	var step *postgres.AuditUpgradeStep
 	var capacityStep *postgres.CapacityBackfillProgress
 	switch {
+	case *setup:
+		family = "setup"
+		err = postgres.MigrateSetup(ctx, db, migration)
+	case *status == "setup":
+		family = "setup"
+		err = postgres.CheckSetupReadiness(ctx, db)
 	case *retirementIndex:
 		err = postgres.InstallRetirementIndex(ctx, db, retirementIndexSource, *drained)
 	case *holdRelease:

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { validateStorageCompatibility } from "../src/internal/storage-contract.js";
-it.each(["session", "managed", "keys"] as const)(
+it.each(["session", "managed", "keys", "setup"] as const)(
   "binds %s SQL bytes to compatibility policy",
   (family) => {
     const root = new URL("../../../contracts/persistence/", import.meta.url);
@@ -10,6 +10,7 @@ it.each(["session", "managed", "keys"] as const)(
       formatVersion: number;
       session: Array<{ version: number; path: string; checksum: string }>;
       managed: Array<{ version: number; path: string; checksum: string }>;
+      setup: Array<{ version: number; path: string; checksum: string }>;
       keys: Array<{ version: number; path: string; checksum: string }>;
     };
     expect(catalog.formatVersion).toBe(1);

@@ -30,6 +30,9 @@ func migrate(ctx context.Context, db *sql.DB, migration []byte, family string) e
 	if family == "keys" {
 		schema, checksum, readySQL = "heimdall_keys", keyUsageChecksum, keyUsageReadinessSQL
 	}
+	if family == "setup" {
+		schema, checksum, readySQL = "heimdall_setup", setupChecksum, setupReadinessSQL
+	}
 	digest := sha256.Sum256(migration)
 	if db == nil || ctx == nil || hex.EncodeToString(digest[:]) != checksum {
 		return contract.ErrInvalidArgument
@@ -121,4 +124,9 @@ func databaseError(ctx context.Context) error {
 // MigrateKeyUsage installs the independent shared key-accounting schema.
 func MigrateKeyUsage(ctx context.Context, db *sql.DB, migration []byte) error {
 	return migrate(ctx, db, migration, "keys")
+}
+
+// MigrateSetup installs the independent operator setup journal.
+func MigrateSetup(ctx context.Context, db *sql.DB, migration []byte) error {
+	return migrate(ctx, db, migration, "setup")
 }

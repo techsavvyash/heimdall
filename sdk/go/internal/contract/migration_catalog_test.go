@@ -21,16 +21,16 @@ func TestMigrationCatalog(t *testing.T) {
 		Path, Checksum string
 	}
 	var catalog struct {
-		FormatVersion          int
-		Session, Managed, Keys []entry
+		FormatVersion                 int
+		Session, Managed, Keys, Setup []entry
 	}
 	if err = json.Unmarshal(raw, &catalog); err != nil {
 		t.Fatal(err)
 	}
-	if catalog.FormatVersion != 1 || len(catalog.Session) == 0 || len(catalog.Managed) == 0 || len(catalog.Keys) == 0 {
+	if catalog.FormatVersion != 1 || len(catalog.Session) == 0 || len(catalog.Managed) == 0 || len(catalog.Keys) == 0 || len(catalog.Setup) == 0 {
 		t.Fatal("invalid catalog")
 	}
-	for family, entries := range map[string][]entry{"session": catalog.Session, "managed": catalog.Managed, "keys": catalog.Keys} {
+	for family, entries := range map[string][]entry{"session": catalog.Session, "managed": catalog.Managed, "keys": catalog.Keys, "setup": catalog.Setup} {
 		t.Run(family, func(t *testing.T) {
 			migrations := []MigrationChecksum{}
 			for index, m := range entries {
