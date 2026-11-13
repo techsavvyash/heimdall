@@ -20,7 +20,7 @@ def run(args, **kwargs):
     return subprocess.run(args, cwd=ROOT, check=True, **kwargs)
 
 try:
-    run(["docker", "run", "--detach", "--name", name, "-e", "POSTGRES_PASSWORD", "-p", "127.0.0.1::5432", IMAGE], env=env, stdout=subprocess.DEVNULL)
+    run(["docker", "run", "--detach", "--name", name, "-e", "POSTGRES_PASSWORD", "--tmpfs", "/var/lib/postgresql/data:rw,size=256m", "-p", "127.0.0.1::5432", IMAGE], env=env, stdout=subprocess.DEVNULL)
     for _ in range(60):
         ready = subprocess.run(["docker", "exec", name, "pg_isready", "-h", "127.0.0.1", "-U", "postgres"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if ready.returncode == 0:
@@ -99,6 +99,53 @@ try:
         capture_output=True, text=True)
     run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/runtime.test.ts"], env=runtime_env)
     subprocess.run(["go", "test", "-race", "-count=1", ".", "-run", "TestPublicPostgresRuntime|TestPublicManagedRuntime|TestPostgresFactory"], cwd=ROOT / "sdk/go", env=runtime_env, check=True)
+    if os.environ.get("HEIMDALL_PROBE_REFERENCE_PRODUCTS") == "1":
+        import tempfile
+        schemas = "\n".join((ROOT / "examples" / name / "schema.sql").read_text()
+                            for name in ("ledger", "support"))
+        schemas += "\nGRANT USAGE ON SCHEMA ledger,support TO heimdall_public_runtime; GRANT SELECT ON ledger.invoices,support.tickets TO heimdall_public_runtime;"
+        run(["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime", "-v", "ON_ERROR_STOP=1"],
+            input=schemas, capture_output=True, text=True)
+        run(["pnpm", "run", "build"])
+        with tempfile.TemporaryDirectory() as temp:
+            binary = str(Path(temp) / "support")
+            subprocess.run(["go", "build", "-o", binary, "."], cwd=ROOT / "examples/support", check=True)
+            reference_env = dict(env, HEIMDALL_PROBE_SDK_RUNTIME="1",
+                                 HEIMDALL_REFERENCE_DATABASE_URL=runtime_dsn,
+                                 HEIMDALL_REFERENCE_SUPPORT_BINARY=binary)
+            reference = subprocess.run(["node", "tests/integration/oidc.mjs"], cwd=ROOT, env=reference_env,
+                                       capture_output=True, text=True, timeout=240)
+            if reference.returncode != 0:
+                import re
+                diagnostics = re.findall(r"(?:AssertionError \[ERR_ASSERTION\]:[^\n]+|reference-products\.mjs:\d+:\d+|OIDC probe run: [a-f0-9-]+)", reference.stderr)
+                raise RuntimeError("Reference product verification failed: " + " | ".join(diagnostics)[:1000])
+            observations = json.loads(reference.stdout)["observations"]
+            products = [result for result in observations if "scopedRead" in result]
+            if len(products) != 2:
+                raise RuntimeError("missing reference product observations")
+            from base64 import urlsafe_b64decode
+            from collections import Counter
+            audit_rows = run(
+                ["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime", "-XAt", "-v", "ON_ERROR_STOP=1"],
+                input="SELECT event->>'payload' FROM heimdall.audit_events WHERE environment='verification'",
+                capture_output=True, text=True).stdout.splitlines()
+            audit_counts = Counter()
+            for payload in audit_rows:
+                event = json.loads(urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+                audit_counts[event["productId"], event["eventType"], event["outcome"]] += 1
+            expected = {
+                (product, "heimdall." + event_type, outcome): count
+                for product in ("ledger", "support")
+                for event_type, outcome, count in (
+                    ("authentication.completed", "succeeded", 4),
+                    ("authorization.requested", "requested", 5),
+                    ("authorization.completed", "allow", 3),
+                    ("authorization.completed", "deny", 2),
+                )
+            }
+            if audit_counts != expected:
+                raise RuntimeError("unexpected reference product audit history: " + str(audit_counts))
+            print(json.dumps({"referenceProducts": products}), flush=True)
     if os.environ.get("HEIMDALL_PROBE_DURABLE_RUNTIME") == "1":
         for args in (
             ["--prepare-hold-release-upgrade", "--writers-drained", "--sql-directory", str(ROOT / "contracts/persistence/session")],

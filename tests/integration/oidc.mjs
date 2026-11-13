@@ -1,3 +1,4 @@
+import { verifyReferenceProduct } from "./reference-products.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -62,7 +63,7 @@ async function sdkRuntime(client, c) {
       openfga: { url: base, storeId: store.id, modelId: model.authorization_model_id },
     };
     let permission, effectiveRole;
-    if (process.env.HEIMDALL_PROBE_TENANT_CHECK === "1") {
+    if (process.env.HEIMDALL_PROBE_TENANT_CHECK === "1" || c.reference) {
       const role = fixture.manifest.ownerRole;
       effectiveRole = role;
       [permission] = fixture.manifest.roles[role];
@@ -82,6 +83,21 @@ async function sdkRuntime(client, c) {
           ],
         },
       });
+    }
+    if (c.reference) {
+      observations.push(
+        await verifyReferenceProduct(
+          {
+            config,
+            manifest,
+            clientSecret: client.clientSecret,
+            apiAudience: c.reference.apiAudience,
+            user: c.subject,
+          },
+          c.reference.authorize,
+        ),
+      );
+      return;
     }
     const env = {
       ...process.env,
@@ -522,7 +538,38 @@ try {
     };
     statusCases.push(statusCase);
     sdkStatus(statusCase, "human", "active");
+    if (process.env.HEIMDALL_REFERENCE_DATABASE_URL) {
+      const audiences = [apiID.aud]
+        .flat()
+        .filter((value) => value !== client.clientId && value !== client.projectId);
+      assert.equal(audiences.length, 1);
+      statusCase.reference = {
+        apiAudience: audiences[0],
+        authorize: async (location) => {
+          const login = await redirect(location);
+          const id = login.searchParams.get("authRequest");
+          assert(id);
+          const result = await ok(
+            "POST",
+            `/v2/oidc/auth_requests/${id}`,
+            {
+              session: { sessionId: session.sessionId, sessionToken: session.sessionToken },
+            },
+            loginPat,
+          );
+          let target = new URL(result.callbackUrl);
+          for (let i = 0; i < 4 && target.origin === issuer; i++)
+            target = await redirect(target.href);
+          assert(
+            target.origin + target.pathname === client.redirectUri &&
+              target.searchParams.has("code"),
+          );
+          return target;
+        },
+      };
+    }
     await sdkRuntime(client, statusCase);
+    delete statusCase.reference;
     observations.push({
       product: client.product,
       selfServiceEvidence: {

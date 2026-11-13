@@ -1,0 +1,166 @@
+import { request as httpRequest } from "node:http";
+import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+
+export async function verifyReferenceProduct(input, authorize) {
+  const { config, manifest, clientSecret, apiAudience, user } = input;
+  const ledger = config.productId === "ledger";
+  const port = ledger ? 18640 : 18641;
+  const endpoint = `http://127.0.0.1:${port}`;
+  const callback = manifest.clients.web.redirectUris[0];
+  const host = new URL(callback).host;
+  const origin = new URL(callback).origin;
+  const db = process.env.HEIMDALL_REFERENCE_DATABASE_URL;
+  assert(db);
+  const principal =
+    "user:" + Buffer.from(JSON.stringify([config.issuer, user])).toString("base64url");
+  const schema = ledger ? "ledger" : "support";
+  const seed = ledger
+    ? "INSERT INTO ledger.invoices VALUES ('acme','acme-invoice',500),('globex','globex-invoice',800)"
+    : "INSERT INTO support.tickets VALUES ('acme','acme-ticket','Acme ticket'),('globex','globex-ticket','Globex ticket')";
+  const database = new URL(db);
+  const sql = spawn("psql", ["-Xq", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose"], {
+    env: {
+      ...process.env,
+      PGHOST: database.hostname,
+      PGPORT: database.port,
+      PGUSER: decodeURIComponent(database.username),
+      PGPASSWORD: decodeURIComponent(database.password),
+      PGDATABASE: database.pathname.slice(1),
+      PGSSLMODE: database.searchParams.get("sslmode") ?? "require",
+      PGOPTIONS: "",
+    },
+    stdio: ["pipe", "ignore", "pipe"],
+  });
+  assert(/^[A-Za-z0-9:_-]+$/.test(principal));
+  let sqlDiagnostic = "";
+  sql.stderr.setEncoding("utf8");
+  sql.stderr.on("data", (chunk) => {
+    sqlDiagnostic = (sqlDiagnostic + chunk).slice(-8192);
+  });
+  sql.stdin.end(`
+    INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at)
+    VALUES ('${schema}','verification','acme','Acme','active',false,1,1), ('${schema}','verification','globex','Globex','active',false,1,1);
+    INSERT INTO heimdall_managed.membership_candidates(product_id,environment,workspace_id,identity_hash,principal,observed_at)
+    SELECT '${schema}','verification',workspace,sha256(convert_to('${principal}','UTF8')),'${principal}',1 FROM (VALUES ('acme'),('globex')) c(workspace);
+    ${seed};
+  `);
+  const [sqlCode] = await once(sql, "exit");
+  const sqlState =
+    /ERROR:\s+([A-Z0-9]{5}):/.exec(sqlDiagnostic)?.[1] ?? "connection or client error";
+  assert.equal(sqlCode, 0, "Reference fixture seeding failed " + sqlState);
+  const runtimeDB = db + "&options=-c%20role%3Dheimdall_public_runtime";
+  const cmd = ledger
+    ? ["node", ["examples/ledger/server.mjs"]]
+    : [process.env.HEIMDALL_REFERENCE_SUPPORT_BINARY, []];
+  const child = spawn(cmd[0], cmd[1], {
+    stdio: "ignore",
+    env: {
+      ...process.env,
+      PORT: String(port),
+      DATABASE_URL: runtimeDB,
+      HEIMDALL_KEY_DATABASE_URL: runtimeDB,
+      [ledger ? "LEDGER_DATABASE_URL" : "SUPPORT_DATABASE_URL"]: runtimeDB,
+      HEIMDALL_CONFIG: JSON.stringify(config),
+      HEIMDALL_MANIFEST: JSON.stringify(manifest),
+      HEIMDALL_CALLBACK_URL: callback,
+      HEIMDALL_POLICY_VERSION: "reference-v1",
+      HEIMDALL_CLIENT_SECRET: clientSecret,
+      HEIMDALL_OPENFGA_KEY: process.env.HEIMDALL_PROBE_OPENFGA_KEY,
+      HEIMDALL_RECORD_KEY_ID: "fixture",
+      HEIMDALL_RECORD_KEYS: JSON.stringify({ fixture: Buffer.alloc(32, 7).toString("base64") }),
+      HEIMDALL_CURSOR_KEY: randomBytes(32).toString("base64"),
+      HEIMDALL_ZITADEL_API_AUDIENCE: apiAudience,
+    },
+  });
+  const request = (path, options = {}) =>
+    new Promise((resolve, reject) => {
+      const request = httpRequest(
+        endpoint + path,
+        {
+          ...options,
+          signal: AbortSignal.timeout(15000),
+          headers: { host, ...options.headers },
+        },
+        (response) => {
+          const parts = [];
+          response.on("data", (chunk) => parts.push(chunk));
+          response.on("error", reject);
+          response.on("end", () => {
+            const headers = new Headers();
+            for (let index = 0; index < response.rawHeaders.length; index += 2)
+              headers.append(response.rawHeaders[index], response.rawHeaders[index + 1]);
+            resolve(
+              new Response(parts.length ? Buffer.concat(parts) : null, {
+                status: response.statusCode,
+                headers,
+              }),
+            );
+          });
+        },
+      );
+      request.on("error", reject);
+      request.end();
+    });
+  try {
+    let ready = false;
+    for (let attempt = 0; attempt < 50; attempt++) {
+      if (child.exitCode !== null) break;
+      const response = await request("/healthz").catch(() => null);
+      if (response?.ok) {
+        await response.body?.cancel();
+        ready = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    assert(ready, "Reference backend failed readiness");
+    const start = await request("/auth/start");
+    assert.equal(start.status, 303, `Reference ${schema} login start returned ${start.status}`);
+    const binding = start.headers.getSetCookie()[0].split(";")[0];
+    const target = await authorize(start.headers.get("location"));
+    const complete = await request(target.pathname + target.search, {
+      headers: { cookie: binding },
+    });
+    assert.equal(complete.status, 303, `Reference ${schema} callback returned ${complete.status}`);
+    const cookie = complete.headers
+      .getSetCookie()
+      .find((value) => value.includes("-session="))
+      .split(";")[0];
+    const headers = { cookie };
+    const page = await request("/workspaces", { headers });
+    assert.equal(page.status, 200);
+    assert.deepEqual((await page.json()).items, [{ id: "acme", name: "Acme" }]);
+    const collection = ledger ? "invoices" : "tickets";
+    const allowed = await request(`/workspaces/acme/${collection}`, { headers });
+    assert.equal(allowed.status, 200);
+    assert.deepEqual(
+      await allowed.json(),
+      ledger
+        ? { invoices: [{ invoice_id: "acme-invoice", total_cents: 500 }] }
+        : { tickets: [{ ticket_id: "acme-ticket", summary: "Acme ticket" }] },
+    );
+    const denied = await request(`/workspaces/globex/${collection}`, { headers });
+    assert.equal(denied.status, 403);
+    await denied.body?.cancel();
+    const logout = await request("/auth/logout", { method: "POST", headers: { cookie, origin } });
+    assert.equal(logout.status, 204);
+    const replay = await request("/workspaces", { headers });
+    assert.equal(replay.status, 401);
+    await replay.body?.cancel();
+    return {
+      product: schema,
+      session: "issued and logged out",
+      discovery: "Acme",
+      scopedRead: 200,
+      otherTenant: 403,
+    };
+  } finally {
+    if (child.exitCode === null) {
+      child.kill();
+      await once(child, "exit");
+    }
+  }
+}

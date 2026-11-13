@@ -1,0 +1,12 @@
+{
+  "name": "@heimdall/ledger",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@heimdall/sdk": "workspace:*",
+    "pg": "8.23.1"
+  }
+}

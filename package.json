@@ -6,7 +6,7 @@
     "prepare": "node scripts/install-hooks.mjs",
     "format": "oxfmt --write sdk/typescript scripts contracts policies examples tests package.json knip.json .oxlintrc.json .oxfmtrc.json .github README.md AGENTS.md pnpm-workspace.yaml",
     "format:check": "oxfmt --check sdk/typescript scripts contracts policies examples tests package.json knip.json .oxlintrc.json .oxfmtrc.json .github README.md AGENTS.md pnpm-workspace.yaml",
-    "lint": "oxlint --deny-warnings sdk/typescript scripts tests/integration",
+    "lint": "oxlint --deny-warnings sdk/typescript examples/ledger scripts tests/integration",
     "typecheck": "pnpm --filter @heimdall/sdk run typecheck",
     "knip": "knip",
     "test": "pnpm --filter @heimdall/sdk run test",

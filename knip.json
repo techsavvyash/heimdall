@@ -10,6 +10,6 @@
       "entry": ["test/fixtures/recovery-restart-worker.ts"]
     }
   },
-  "ignoreBinaries": ["go"],
+  "ignoreBinaries": ["go", "psql"],
   "ignoreWorkspaces": ["docs"]
 }

@@ -9,6 +9,7 @@ ENV CI=true
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY sdk/typescript/package.json ./sdk/typescript/package.json
 COPY docs/package.json ./docs/package.json
+COPY examples/ledger/package.json ./examples/ledger/package.json
 COPY scripts/install-hooks.mjs ./scripts/install-hooks.mjs
 RUN pnpm install --frozen-lockfile
 COPY docs/ ./docs/
