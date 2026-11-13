@@ -40,11 +40,11 @@ The HTTP probe is in `tests/integration/reference-products.mjs`. It verifies the
 
 ## Railway verification
 
-Probe `90ff0825-2a42-436b-8b4a-de50f82c7959` ran the complete HTTP flow with the pinned ZITADEL and OpenFGA services and Railway PostgreSQL. The probe matched each backend's health response to its deployment and run ID before signing in.
+Probe `7620818d-bcc9-4416-bf7b-99ec43957c8b` ran the complete HTTP flow with the pinned ZITADEL and OpenFGA services and Railway PostgreSQL. The probe matched each backend's health response to its deployment and run ID before signing in.
 
 | Product | Deployment | Durable audit readback |
 | --- | --- | --- |
-| Ledger | `cc244cde-2f11-47cc-b2c4-91982859f2db` | One intent, dispatch, confirmation and activation. 30 matched decision pairs. |
-| Support | `8542fbeb-d975-4c4a-8568-e1087a471664` | One intent, dispatch, confirmation and activation. 29 matched decision pairs. |
+| Ledger | `31d4456b-9376-4b80-9851-172bbb61f079` | One intent, dispatch, confirmation and activation. 30 matched decision pairs. |
+| Support | `7802c1cf-18a7-4638-8a87-12a80a570a21` | One intent, dispatch, confirmation and activation. 29 matched decision pairs. |
 
-Readback used the exact operation IDs and initiating actors from this run. The probe used ZITADEL's Login API for the synthetic user and the products' normal session callbacks. [[phase-5-managed-onboarding]] covers fault injection for retryable and uncertain outcomes. Operator recovery and membership administration are still open in Phase 5.
+The repeat includes the Ledger request cancellation fix in `fa223c0`. Readback used the exact operation IDs and initiating actors from this run. The probe used ZITADEL's Login API for the synthetic user and the products' normal session callbacks. [[phase-5-managed-onboarding]] covers fault injection for retryable and uncertain outcomes. Operator recovery and membership administration are still open in Phase 5.
