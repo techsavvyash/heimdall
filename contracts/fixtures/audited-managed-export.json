@@ -1,0 +1,63 @@
+[
+  {
+    "name": "inventory",
+    "kind": "workspaces",
+    "workspaceId": null,
+    "expected": "page",
+    "scans": 1
+  },
+  {
+    "name": "workspace operations",
+    "kind": "operations",
+    "workspaceId": "tenant-1",
+    "expected": "page",
+    "scans": 1
+  },
+  {
+    "name": "unscoped operations",
+    "kind": "operations",
+    "workspaceId": null,
+    "expected": "invalid_argument",
+    "scans": 0
+  },
+  {
+    "name": "scope denied",
+    "kind": "workspaces",
+    "workspaceId": "tenant-2",
+    "fault": "deny",
+    "expected": "forbidden",
+    "scans": 0
+  },
+  {
+    "name": "decision unavailable",
+    "kind": "workspaces",
+    "workspaceId": null,
+    "fault": "decision",
+    "expected": "audit_unavailable",
+    "scans": 0
+  },
+  {
+    "name": "wrong page scope",
+    "kind": "workspaces",
+    "workspaceId": null,
+    "fault": "scope",
+    "expected": "unavailable",
+    "scans": 1
+  },
+  {
+    "name": "completion receipt mismatch",
+    "kind": "workspaces",
+    "workspaceId": null,
+    "fault": "receipt",
+    "expected": "audit_unavailable",
+    "scans": 1
+  },
+  {
+    "name": "identity revoked after read",
+    "kind": "workspaces",
+    "workspaceId": null,
+    "fault": "revoke",
+    "expected": "unauthenticated",
+    "scans": 1
+  }
+]

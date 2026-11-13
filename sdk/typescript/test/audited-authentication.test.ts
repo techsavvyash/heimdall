@@ -1,3 +1,4 @@
+import { ManagedExport } from "../src/internal/postgres/export.js";
 import { MaintenanceCommand } from "../src/internal/maintenance-command.js";
 import { validateAuditHold } from "../src/internal/audit-hold.js";
 import { validateAuditRetirement } from "../src/internal/audit-retire.js";
@@ -409,3 +410,115 @@ test("bound maintenance command", async () => {
     if (pool) await pool.end();
   }
 });
+
+const exportCases = read("fixtures/audited-managed-export.json") as {
+  name: string;
+  kind: "workspaces" | "operations";
+  workspaceId: string | null;
+  fault?: string;
+  expected: string;
+  scans: number;
+}[];
+test.each(exportCases)("audited managed export $name", async (c) => {
+  provider(cases.find((p) => p.expected === "active")!);
+  let revoked = false;
+  let scans = 0;
+  const events: Record<string, unknown>[] = [];
+  const runner = new AuditedAuthentication(
+    config,
+    async () => "secret",
+    { check: async () => revoked, invalidate: async () => {} },
+    async (event) => {
+      events.push(event);
+      const result = receipt(event);
+      if (
+        (c.fault === "receipt" && event.eventType === "heimdall.export.completed") ||
+        (c.fault === "decision" && event.outcome === "allow")
+      )
+        result.eventId = "wrong";
+      return result;
+    },
+    () => f.now,
+  );
+  const result = await runner
+    .runManagedExport(
+      raw,
+      { kind: c.kind, workspaceId: c.workspaceId, after: null, limit: 1, operationId: "export-1" },
+      "model",
+      1,
+      async (scope) =>
+        scope.tenantId === c.workspaceId &&
+        scope.action === "managed.export." + c.kind &&
+        c.fault !== "deny",
+      async (kind, workspaceId) => {
+        scans++;
+        if (events.at(-1)?.outcome !== "allow") throw new Error("missing allow");
+        revoked = c.fault === "revoke";
+        return JSON.stringify({
+          schemaVersion: 1,
+          productId: c.fault === "scope" ? "support" : "ledger",
+          environment: "production",
+          kind,
+          workspaceId,
+          items: [],
+          nextId: null,
+        });
+      },
+    )
+    .then(
+      () => "page",
+      (error: HeimdallError) => error.code,
+    );
+  expect({ result, scans }).toEqual({ result: c.expected, scans: c.scans });
+  const completion = events.find((event) => event.eventType === "heimdall.export.completed");
+  expect(completion?.outcome).toBe(
+    c.scans ? (c.fault === "scope" ? "failed" : "succeeded") : undefined,
+  );
+});
+
+test.skipIf(!process.env.HEIMDALL_TEST_AUDITED_EXPORT_READER)(
+  "live audited managed export",
+  async () => {
+    provider(cases.find((p) => p.expected === "active")!);
+    const reader = new Pool({ connectionString: process.env.HEIMDALL_TEST_AUDITED_EXPORT_READER });
+    const writer = new Pool({ connectionString: process.env.HEIMDALL_TEST_AUDITED_EXPORT_WRITER });
+    try {
+      const store = ManagedExport.forRetainedRuntime(reader, "ledger", "production");
+      const audit = PostgresAudit.forRetainedRuntime(
+        writer,
+        "ledger",
+        "production",
+        [],
+        validateAuditShape,
+      );
+      const page = await setup(audit.append).runManagedExport(
+        raw,
+        {
+          kind: "workspaces",
+          workspaceId: "export-probe",
+          after: null,
+          limit: 1,
+          operationId: "export-ts",
+        },
+        "model",
+        1,
+        async (scope) => scope.tenantId === "export-probe",
+        store.scan.bind(store),
+      );
+      expect(JSON.parse(page).items).toEqual([
+        {
+          productId: "ledger",
+          environment: "production",
+          workspaceId: "export-probe",
+          lifecycle: "suspended",
+          mutationBlocked: true,
+          revision: expect.stringMatching(/^[1-9][0-9]*$/),
+          createdAt: 1,
+          updatedAt: 2,
+        },
+      ]);
+    } finally {
+      await Promise.all([reader.end(), writer.end()]);
+    }
+  },
+);

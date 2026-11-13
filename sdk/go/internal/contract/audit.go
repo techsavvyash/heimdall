@@ -29,7 +29,7 @@ type AuditEvent struct {
 	Actor                                                       struct{ Kind string }
 	TenantID                                                    *string
 	Source, Outcome, Action                                     string
-	Target                                                      struct{ Type string }
+	Target                                                      struct{ Type, ID string }
 	Attributes                                                  map[string]any
 	DecisionID, OperationID, Permission, ModelID, PolicyVersion string
 	ManifestVersion                                             int
@@ -135,6 +135,18 @@ func ValidateAuditEvent(e AuditEvent, origin string, custom func(string, int, ma
 	if strings.HasPrefix(e.EventType, "heimdall.authorization.") && (e.DecisionID == "" || e.ModelID == "" || e.ManifestVersion == 0 || ((e.Outcome == "allow" || e.Outcome == "deny") && ((!hasTenant && !maintenanceAuditScope(e)) || e.Permission == ""))) {
 		return ErrInvalidArgument
 	}
+	if MaintenanceTargetType(e.Action) == "managed_export" &&
+		(strings.HasPrefix(e.EventType, "heimdall.authorization.") || e.EventType == "heimdall.export.completed") {
+		target := "inventory"
+		if hasTenant {
+			target = *e.TenantID
+		}
+		if e.Source != "sdk" || e.Actor.Kind != "user" || e.OperationID == "" || e.PolicyVersion == "" ||
+			e.Target.Type != "managed_export" || e.Target.ID != target || (!hasTenant && e.Action == "managed.export.operations") ||
+			(strings.HasPrefix(e.EventType, "heimdall.authorization.") && e.Permission != e.Action) {
+			return ErrInvalidArgument
+		}
+	}
 	if (strings.HasPrefix(e.EventType, "heimdall.membership.") || strings.HasPrefix(e.EventType, "heimdall.ownership.")) &&
 		(e.OperationID == "" || !hasTenant || e.ModelID == "" || e.ManifestVersion == 0 || e.Actor.Kind == "unknown") {
 		return ErrInvalidArgument
@@ -145,17 +157,19 @@ func ValidateAuditEvent(e AuditEvent, origin string, custom func(string, int, ma
 	return nil
 }
 
-// IsAuditMaintenanceAction identifies the privileged actions with product-level scope.
-func IsAuditMaintenanceAction(action string) bool {
+// MaintenanceTargetType binds reserved actions to their audit target type.
+func MaintenanceTargetType(action string) string {
 	switch action {
 	case "audit.retention.retire", "audit.hold.administrative.acquire", "audit.hold.administrative.release", "audit.hold.retry.acquire", "audit.hold.retry.release":
-		return true
+		return "audit_event"
+	case "managed.export.workspaces", "managed.export.operations":
+		return "managed_export"
 	}
-	return false
+	return ""
 }
 
 func maintenanceAuditScope(e AuditEvent) bool {
 	return e.TenantID == nil && e.Source == "sdk" && e.Actor.Kind == "user" &&
-		e.Target.Type == "audit_event" && e.OperationID != "" && e.PolicyVersion != "" &&
-		e.Permission == e.Action && IsAuditMaintenanceAction(e.Action)
+		e.Target.Type != "" && e.Target.Type == MaintenanceTargetType(e.Action) && e.OperationID != "" && e.PolicyVersion != "" &&
+		e.Permission == e.Action && e.Action != "managed.export.operations"
 }

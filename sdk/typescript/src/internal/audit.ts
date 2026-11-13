@@ -30,7 +30,7 @@ type AuditEvent = {
   actor: { kind: "user" | "unknown" | "system" };
   tenantId: string | null;
   action?: string;
-  target?: { type: string };
+  target?: { type: string; id?: string };
   source: string;
   outcome: string;
   attributes: Record<string, unknown>;
@@ -149,6 +149,20 @@ export function validateAuditEvent(
   )
     invalid();
   if (
+    maintenanceTargetType(event.action) === "managed_export" &&
+    (event.eventType.startsWith("heimdall.authorization.") ||
+      event.eventType === "heimdall.export.completed") &&
+    (event.source !== "sdk" ||
+      event.actor.kind !== "user" ||
+      !event.operationId ||
+      !event.policyVersion ||
+      event.target?.type !== "managed_export" ||
+      event.target.id !== (event.tenantId ?? "inventory") ||
+      (!event.tenantId && event.action === "managed.export.operations") ||
+      (event.eventType.startsWith("heimdall.authorization.") && event.permission !== event.action))
+  )
+    invalid();
+  if (
     (event.eventType.startsWith("heimdall.membership.") ||
       event.eventType.startsWith("heimdall.ownership.")) &&
     (!event.operationId ||
@@ -161,24 +175,30 @@ export function validateAuditEvent(
   if (event.eventType === "heimdall.policy.completed" && !event.policyVersion) invalid();
 }
 
-export function isAuditMaintenanceAction(action: unknown): action is string {
-  return [
-    "audit.retention.retire",
-    "audit.hold.administrative.acquire",
-    "audit.hold.administrative.release",
-    "audit.hold.retry.acquire",
-    "audit.hold.retry.release",
-  ].includes(action as string);
+export function maintenanceTargetType(action: unknown): string | undefined {
+  if (["managed.export.workspaces", "managed.export.operations"].includes(action as string))
+    return "managed_export";
+  if (
+    [
+      "audit.retention.retire",
+      "audit.hold.administrative.acquire",
+      "audit.hold.administrative.release",
+      "audit.hold.retry.acquire",
+      "audit.hold.retry.release",
+    ].includes(action as string)
+  )
+    return "audit_event";
 }
 function maintenanceAuditScope(event: AuditEvent): boolean {
   return (
     event.tenantId === null &&
     event.source === "sdk" &&
     event.actor.kind === "user" &&
-    event.target?.type === "audit_event" &&
+    !!event.target?.type &&
+    event.target.type === maintenanceTargetType(event.action) &&
     !!event.operationId &&
     !!event.policyVersion &&
     event.permission === event.action &&
-    isAuditMaintenanceAction(event.action)
+    event.action !== "managed.export.operations"
   );
 }

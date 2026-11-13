@@ -91,7 +91,7 @@ only after removing its own container. The verification run uses this mode with
 the same pinned PostgreSQL image and unchanged SQL/test assertions. It does not use
 an in-memory database or waive commit-loss, accounting or concurrency checks.
 
-The port remains internal and does not authenticate an operator or persist the
-required export-administration audit itself. Authorized artifact release,
-consistent inventory orchestration and complete restore/exit qualification remain
-open. Phase 3 is incomplete; see [[phase-3-readiness-audit]].
+The storage port remains internal. The audited release path now authenticates
+the operator and commits a matching completion before returning a page.
+Consistent inventory orchestration and complete restore qualification remain
+open. [[phase-3-audited-managed-export]] · [[phase-3-readiness-audit]]

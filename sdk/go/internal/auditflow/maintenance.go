@@ -33,9 +33,23 @@ func (a *Authentication) RunMaintenance(
 	policy func(context.Context, MaintenanceContext) (bool, error),
 	apply func(context.Context, MaintenanceContext) (contract.AuditReceipt, error),
 ) (contract.AuditReceipt, error) {
-	empty := contract.AuditReceipt{}
+	if apply == nil {
+		return contract.AuditReceipt{}, contract.ErrInvalidArgument
+	}
+	return runMaintenance(a, ctx, raw, request, policy, func(ctx context.Context, scope MaintenanceContext, _ func() error) (contract.AuditReceipt, error) {
+		return apply(ctx, scope)
+	}, "audit_event")
+}
+
+func runMaintenance[T any](
+	a *Authentication, ctx context.Context, raw string, request MaintenanceRequest,
+	policy func(context.Context, MaintenanceContext) (bool, error),
+	apply func(context.Context, MaintenanceContext, func() error) (T, error),
+	targetType string,
+) (T, error) {
+	var empty T
 	if a == nil || ctx == nil || policy == nil || apply == nil ||
-		!contract.IsAuditMaintenanceAction(request.Action) ||
+		contract.MaintenanceTargetType(request.Action) != targetType ||
 		(request.TenantID != nil && !maintenanceToken.MatchString(*request.TenantID)) ||
 		!maintenanceToken.MatchString(request.TargetEventID) || !maintenanceToken.MatchString(request.OperationID) ||
 		!maintenanceToken.MatchString(request.ModelID) || request.ManifestVersion < 1 || request.ManifestVersion > 2147483647 {
@@ -72,7 +86,7 @@ func (a *Authentication) RunMaintenance(
 		"eventVersion": float64(1), "occurredAt": at, "recordedAt": at,
 		"productId": a.writer.product, "environment": a.writer.environment, "tenantId": tenant,
 		"actor":  map[string]any{"kind": "user", "issuer": actor.Issuer, "subject": actor.Subject},
-		"target": map[string]any{"type": "audit_event", "id": r.TargetEventID},
+		"target": map[string]any{"type": targetType, "id": r.TargetEventID},
 		"action": r.Action, "permission": r.Action, "outcome": "requested", "requestId": r.OperationID,
 		"source": "sdk", "sdkVersion": "0.0.0", "attributes": map[string]any{},
 		"decisionId": "pending", "operationId": r.OperationID, "modelId": r.ModelID,
@@ -85,11 +99,14 @@ func (a *Authentication) RunMaintenance(
 	if !allowed {
 		return empty, contract.ErrForbidden
 	}
-	if e = contract.CheckCancellation(ctx); e != nil {
+	checkCurrent := func() error {
+		if e := contract.CheckCancellation(ctx); e != nil {
+			return e
+		}
+		return a.verifier.CheckCurrent(ctx, principal)
+	}
+	if e = checkCurrent(); e != nil {
 		return empty, e
 	}
-	if e = a.verifier.CheckCurrent(ctx, principal); e != nil {
-		return empty, e
-	}
-	return apply(ctx, contextFor())
+	return apply(ctx, contextFor(), checkCurrent)
 }

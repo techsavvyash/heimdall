@@ -182,6 +182,13 @@ func TestAuditedMaintenance(t *testing.T) {
 			}
 		})
 	}
+	t.Run("managed export", func(t *testing.T) {
+		testManagedExport(t, raw, token.Now, token.Issuer, token.Audience)
+	})
+
+	t.Run("live managed export", func(t *testing.T) {
+		testLiveManagedExport(t, raw, token.Now, token.Issuer, token.Audience)
+	})
 	t.Run("bound maintenance command", func(t *testing.T) {
 		testMaintenanceCommand(t, raw, token.Now, token.Issuer, token.Audience, token.Subject)
 	})

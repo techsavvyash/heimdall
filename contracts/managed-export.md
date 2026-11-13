@@ -95,3 +95,27 @@ readiness is not an export permission or a consistent whole-inventory snapshot.
 The activated profile in `tests/integration/audit-capacity-backfill.py` now runs the
 shared export fixtures, restricted-column reads, reciprocal language reads,
 readiness refusal, cancellation and post-timeout reuse through retained factories.
+
+## Authorized page release
+
+The internal TS `runManagedExport` and Go `RunManagedExport` compose the retained
+export reader with the deployment's audited authentication and policy. The
+deployment supplies the pinned model and manifest version, the trusted reader,
+and a policy that evaluates the verified actor and exact product, environment,
+workspace and export kind. A whole-product inventory requires an explicit grant
+for the null workspace. Operations always require a named workspace.
+
+Each invocation persists the authorization request and outcome before accessing
+the reader. It checks that the returned page header matches the authorized scope,
+then records `heimdall.export.completed` with the actor, policy, scope, export kind
+and operation ID. A read failure records a failed outcome with a typed reason.
+The page stays private until a matching audit receipt commits and the identity
+passes a final local deny, expiry, freshness and cancellation check. A successful
+completion records that a page was prepared for release. Transport delivery can
+still fail. Each retry is a fresh authorized read with its own audit records.
+
+The product owns the policy implementation, transport and artifact destination.
+For a consistent multi-page exit inventory, the product drains writers before
+the first page and keeps them drained until the final page. Page reads use the
+restricted export credential. Authorization and completion use the separate
+retained audit writer.

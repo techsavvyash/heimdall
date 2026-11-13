@@ -1,4 +1,4 @@
-import { isAuditMaintenanceAction } from "./audit.js";
+import { maintenanceTargetType } from "./audit.js";
 import { validateAuditShape } from "./audit-shape.js";
 import { randomUUID } from "node:crypto";
 import { IdentityVerifier } from "./identity-verifier.js";
@@ -62,13 +62,32 @@ export class AuditedAuthentication {
     ) => ReturnType<Parameters<typeof commitAuditEvent>[1]>,
     signal?: AbortSignal,
   ) {
+    if (typeof apply !== "function") throw new HeimdallError("invalid_argument");
+    return this.runOperatorAction(
+      raw,
+      request,
+      "audit_event",
+      policy,
+      (scope) => apply(scope, signal),
+      signal,
+    );
+  }
+
+  private async runOperatorAction<T>(
+    raw: string,
+    request: MaintenanceRequest,
+    targetType: string,
+    policy: (scope: MaintenanceContext, signal: AbortSignal) => Promise<boolean>,
+    apply: (scope: MaintenanceContext, checkCurrent: () => Promise<void>) => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<T> {
     if (!request) throw new HeimdallError("invalid_argument");
     const { tenantId, action, targetEventId, operationId, modelId, manifestVersion } = request;
     const r = { tenantId, action, targetEventId, operationId, modelId, manifestVersion };
     const token = (v: unknown) =>
       typeof v === "string" && /^[A-Za-z0-9_-]{1,128}(?![\s\S])/.test(v);
     if (
-      !isAuditMaintenanceAction(r.action) ||
+      maintenanceTargetType(r.action) !== targetType ||
       (r.tenantId !== null && !token(r.tenantId)) ||
       ![r.targetEventId, r.operationId, r.modelId].every(token) ||
       !Number.isInteger(r.manifestVersion) ||
@@ -108,7 +127,7 @@ export class AuditedAuthentication {
         environment: this.environment,
         tenantId: r.tenantId,
         actor: { kind: "user", ...actor },
-        target: { type: "audit_event", id: r.targetEventId },
+        target: { type: targetType, id: r.targetEventId },
         action: r.action,
         permission: r.action,
         outcome: "requested",
@@ -126,11 +145,122 @@ export class AuditedAuthentication {
       signal,
     );
     if (!allowed) throw new HeimdallError("forbidden");
-    if (signal) checkCancellation(signal);
-    await this.verifier.checkCurrent(principal, signal);
-    if (signal) checkCancellation(signal);
-    return apply(scope, signal);
+    const checkCurrent = async () => {
+      if (signal) checkCancellation(signal);
+      await this.verifier.checkCurrent(principal, signal);
+      if (signal) checkCancellation(signal);
+    };
+    await checkCurrent();
+    return apply(scope, checkCurrent);
   }
+
+  async runManagedExport(
+    raw: string,
+    request: {
+      kind: "workspaces" | "operations";
+      workspaceId: string | null;
+      after: string | null;
+      limit: number;
+      operationId: string;
+    },
+    modelId: string,
+    manifestVersion: number,
+    policy: (scope: MaintenanceContext, signal: AbortSignal) => Promise<boolean>,
+    scan: (
+      kind: "workspaces" | "operations",
+      workspaceId: string | null,
+      after: string | null,
+      limit: number,
+      signal: AbortSignal,
+    ) => Promise<string>,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    if (!request) throw new HeimdallError("invalid_argument");
+    const { kind, workspaceId, after, limit, operationId } = request;
+    if (
+      !["workspaces", "operations"].includes(kind) ||
+      (kind === "operations" && workspaceId === null) ||
+      (after !== null &&
+        (typeof after !== "string" || !/^[A-Za-z0-9_-]{1,128}(?![\s\S])/.test(after))) ||
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 100 ||
+      typeof scan !== "function"
+    )
+      throw new HeimdallError("invalid_argument");
+    const target = workspaceId ?? "inventory";
+    return this.runOperatorAction(
+      raw,
+      {
+        tenantId: workspaceId,
+        action: "managed.export." + kind,
+        targetEventId: target,
+        operationId,
+        modelId,
+        manifestVersion,
+      },
+      "managed_export",
+      policy,
+      async (scope, checkCurrent) => {
+        const started = this.now();
+        const readSignal = AbortSignal.any([
+          AbortSignal.timeout(5000),
+          ...(signal ? [signal] : []),
+        ]);
+        let page = "";
+        let failure: HeimdallError | undefined;
+        try {
+          page = await bounded(
+            (readSignal) => scan(kind, workspaceId, after, limit, readSignal),
+            readSignal,
+          );
+          checkCancellation(readSignal);
+          const header = JSON.parse(page);
+          if (
+            header?.schemaVersion !== 1 ||
+            header.productId !== scope.productId ||
+            header.environment !== scope.environment ||
+            header.kind !== kind ||
+            header.workspaceId !== workspaceId
+          )
+            throw new HeimdallError("unavailable");
+        } catch (error) {
+          failure = known(error);
+        }
+        await commitAuditEvent(
+          {
+            schemaVersion: 1,
+            eventId: randomUUID(),
+            eventType: "heimdall.export.completed",
+            eventVersion: 1,
+            occurredAt: started,
+            recordedAt: Math.max(started, this.now()),
+            productId: scope.productId,
+            environment: scope.environment,
+            tenantId: scope.tenantId,
+            actor: { kind: "user", ...scope.actor },
+            target: { type: "managed_export", id: target },
+            action: scope.action,
+            outcome: failure ? "failed" : "succeeded",
+            requestId: operationId,
+            operationId,
+            policyVersion: scope.policyVersion,
+            source: "sdk",
+            sdkVersion: "0.0.0",
+            attributes: {},
+            ...(failure ? { reasonCode: failure.code } : {}),
+          },
+          this.append,
+          validateAuditShape,
+        );
+        if (failure) throw failure;
+        await checkCurrent();
+        return page;
+      },
+      signal,
+    );
+  }
+
   async verify(raw: string, context: string, caller?: AbortSignal): Promise<Principal> {
     const operation = AbortSignal.any([AbortSignal.timeout(5000), ...(caller ? [caller] : [])]);
     let principal: Principal | undefined;
