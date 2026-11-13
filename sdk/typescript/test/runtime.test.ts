@@ -432,3 +432,40 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
     }
   },
 );
+
+test("public sessions persist browser-bound login through the custom store", async () => {
+  const s = setup();
+  const signal = new AbortController().signal;
+  const writes: string[] = [];
+  s.options.sessionStorage = {
+    activeKeyId: "k1",
+    keys: { k1: Buffer.alloc(32, 7) },
+    reserveKeyUsage: async () => {
+      writes.push("reserve");
+    },
+    store: {
+      async create(key, value) {
+        expect(key).toMatch(/^heimdall\.v1\|ledger\|production\|login\|[a-f0-9]{64}$/);
+        expect(Buffer.from(value).toString()).toMatch(/^hr1\.k1\./);
+        writes.push("create");
+        return "1";
+      },
+      read: async () => null,
+      compareAndSwap: async () => null,
+      delete: async () => {},
+    },
+  };
+  const runtime = await createHeimdall(
+    JSON.stringify(s.config),
+    JSON.stringify(base.manifest),
+    s.options,
+    { signal },
+  );
+  const callbackUrl = base.manifest.clients.web.redirectUris[0] as string;
+  const sessions = await runtime.createSessions(
+    { callbackUrl, returnTo: "/workspaces", zitadelAPIAudience: "zitadel" },
+    { signal },
+  );
+  expect((await sessions.start(new Request(new URL("/auth/start", callbackUrl)))).status).toBe(303);
+  expect(writes).toEqual(["reserve", "create"]);
+});

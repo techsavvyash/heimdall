@@ -157,7 +157,7 @@ func (r *Records) open(scope contract.RecordScope, revision, envelope, expiry, k
 	}
 	return &Record{revision, expires, value}, nil
 }
-func (r *Records) matchesScope(product, environment string) bool {
+func (r *Records) MatchesScope(product, environment string) bool {
 	return r.product == product && r.environment == environment
 }
 

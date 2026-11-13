@@ -47,7 +47,7 @@ type ClaimedLogin struct {
 }
 
 type loginStore interface {
-	matchesScope(string, string) bool
+	MatchesScope(string, string) bool
 	Create(context.Context, string, string, []byte, int64) (*Record, error)
 	Get(context.Context, string, string) (*Record, error)
 	CompareAndSwap(context.Context, string, string, string, []byte, int64) (*Record, error)
@@ -168,7 +168,7 @@ func (l *BrowserLoginRecords) Start(ctx context.Context, target LoginTarget) (St
 	created := l.now()
 	state, binding := loginSecret(), loginSecret()
 	scope := target.scope(binding)
-	if created < 0 || created > maxSafe-loginLifetimeMs || !validLoginScope(scope) || !l.store.matchesScope(target.ProductID, target.Environment) {
+	if created < 0 || created > maxSafe-loginLifetimeMs || !validLoginScope(scope) || !l.store.MatchesScope(target.ProductID, target.Environment) {
 		return StartedLogin{}, contract.ErrInvalidArgument
 	}
 	expires := created + loginLifetimeMs
@@ -208,7 +208,7 @@ func (l *BrowserLoginRecords) Claim(ctx context.Context, target LoginTarget, sta
 	if !validLoginScope(scope) {
 		return ClaimedLogin{}, contract.ErrInvalidArgument
 	}
-	if !l.store.matchesScope(target.ProductID, target.Environment) {
+	if !l.store.MatchesScope(target.ProductID, target.Environment) {
 		return ClaimedLogin{}, contract.ErrUnauthenticated
 	}
 	stored, err := l.store.Get(ctx, "login", state)

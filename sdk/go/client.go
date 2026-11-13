@@ -55,6 +55,7 @@ type Options struct {
 	IdentityFreshnessMs *int64
 	Credentials         Credentials
 	Storage             RuntimeStorage
+	SessionStorage      *SessionStoreOptions
 }
 type ManagedStorage struct {
 	Allows func(context.Context, string) (bool, error)
@@ -179,7 +180,38 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 	if err = contract.CheckCancellation(ctx); err != nil {
 		return nil, err
 	}
-	authentication, err := auditflow.NewAuthentication(identity.StatusConfig{Config: identity.Config{Issuer: cfg.Issuer, Audience: cfg.Audience, JWKSURI: metadata.JWKSURI, Profile: profile}, ProductID: cfg.ProductID, Environment: cfg.Environment, PolicyVersion: options.PolicyVersion, ClientID: cfg.ClientID, FreshnessMs: &freshness}, options.Credentials.ClientSecret, storage.Identity, storage.AppendAudit, nil)
+	var loginStore browserlogin.LoginRecords
+	var sessions browserlogin.SessionStore
+	if storage.Browser != nil && storage.Browser.Login != nil && storage.Browser.Sessions != nil {
+		loginStore, sessions = storage.Browser.Login, storage.Browser.Sessions
+	}
+	gate := storage.Identity
+	if options.SessionStorage != nil {
+		if storage.Browser != nil {
+			return nil, ErrInvalidArgument
+		}
+		custom, err := newSessionStore(cfg.ProductID, cfg.Environment, *options.SessionStorage)
+		if err != nil {
+			return nil, err
+		}
+		loginStore, sessions = postgres.NewBrowserLoginRecords(custom, nil), custom
+		gate.Invalidate = func(ctx context.Context, negative IdentityNegative) error {
+			session, err := identity.ParseIdentityContext(negative.Context)
+			if err != nil {
+				return err
+			}
+			if session != nil {
+				if negative.Reason == "token_inactive" {
+					if err := custom.invalidateSessionVersion(ctx, session, negative.Identity); err != nil {
+						return err
+					}
+				}
+				negative.Context = "bearer"
+			}
+			return storage.Identity.Invalidate(ctx, negative)
+		}
+	}
+	authentication, err := auditflow.NewAuthentication(identity.StatusConfig{Config: identity.Config{Issuer: cfg.Issuer, Audience: cfg.Audience, JWKSURI: metadata.JWKSURI, Profile: profile}, ProductID: cfg.ProductID, Environment: cfg.Environment, PolicyVersion: options.PolicyVersion, ClientID: cfg.ClientID, FreshnessMs: &freshness}, options.Credentials.ClientSecret, gate, storage.AppendAudit, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -262,8 +294,7 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 		}
 		return result, nil
 	}
-	if storage.Browser != nil && storage.Browser.Login != nil && storage.Browser.Sessions != nil {
-		browser := *storage.Browser
+	if loginStore != nil && sessions != nil {
 		redirects := deployment.Manifest().Clients[cfg.ClientKey].RedirectURIs
 		client.createSessions = func(ctx context.Context, session SessionOptions) (Sessions, error) {
 			if !slices.Contains(redirects, session.CallbackURL) || session.ZitadelAPIAudience == "" {
@@ -293,11 +324,11 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 			login, err := browserlogin.NewHTTP(ctx, identity.BrowserOIDCConfig{
 				Issuer: cfg.Issuer, Profile: profile, Audience: cfg.Audience, ClientID: cfg.ClientID, ClientSecret: credential,
 				RedirectURI: session.CallbackURL, ZitadelAPIAudience: session.ZitadelAPIAudience,
-			}, browser.Login, cfg.ProductID, cfg.Environment, "default")
+			}, loginStore, cfg.ProductID, cfg.Environment, "default")
 			if err != nil {
 				return nil, err
 			}
-			return browserlogin.NewSessions(login, authentication, browser.Sessions, session.ReturnTo, session.AbsoluteLifetime, session.IdleLifetime, nil)
+			return browserlogin.NewSessions(login, authentication, sessions, session.ReturnTo, session.AbsoluteLifetime, session.IdleLifetime, nil)
 		}
 	}
 	return client, nil

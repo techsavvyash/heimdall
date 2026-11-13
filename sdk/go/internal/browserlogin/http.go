@@ -13,14 +13,14 @@ import (
 	"github.com/techsavvyash/heimdall/sdk/go/internal/postgres"
 )
 
-type loginRecords interface {
+type LoginRecords interface {
 	Start(context.Context, postgres.LoginTarget) (postgres.StartedLogin, error)
 	Claim(context.Context, postgres.LoginTarget, string, string) (postgres.ClaimedLogin, error)
 }
 
 type HTTP struct {
 	oidc     *identity.BrowserOIDC
-	records  loginRecords
+	records  LoginRecords
 	callback *url.URL
 	target   postgres.LoginTarget
 	prefix   string
@@ -30,7 +30,7 @@ var scopeToken = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 var projectToken = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 var stateToken = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
 
-func NewHTTP(ctx context.Context, config identity.BrowserOIDCConfig, records loginRecords, product, environment, returnToKey string) (*HTTP, error) {
+func NewHTTP(ctx context.Context, config identity.BrowserOIDCConfig, records LoginRecords, product, environment, returnToKey string) (*HTTP, error) {
 	if ctx == nil || records == nil || !scopeToken.MatchString(product) || !scopeToken.MatchString(environment) || !scopeToken.MatchString(returnToKey) || !projectToken.MatchString(config.Audience) {
 		return nil, contract.ErrInvalidArgument
 	}

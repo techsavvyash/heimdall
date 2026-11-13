@@ -559,3 +559,43 @@ func TestPublicManagedRuntime(t *testing.T) {
 		t.Fatal("blocked workspace called OpenFGA")
 	}
 }
+
+type loginStartStore struct {
+	heimdall.SessionStore
+	create func(string, []byte) (string, error)
+}
+
+func (s loginStartStore) Create(_ context.Context, key string, value []byte, _ int64) (string, error) {
+	return s.create(key, value)
+}
+
+func TestPublicCustomSessionStore(t *testing.T) {
+	h := setupRuntime(t, "")
+	var reserved bool
+	h.options.SessionStorage = &heimdall.SessionStoreOptions{
+		ActiveKeyID: "k1", Keys: map[string][]byte{"k1": bytes.Repeat([]byte{7}, 32)},
+		ReserveKeyUsage: func(context.Context, string) error { reserved = true; return nil },
+		Store: loginStartStore{create: func(key string, value []byte) (string, error) {
+			if !reserved || !strings.HasPrefix(key, "heimdall.v1|ledger|production|login|") ||
+				!bytes.HasPrefix(value, []byte("hr1.k1.")) {
+				return "", errors.New("missing scope, encryption or usage reservation")
+			}
+			return "1", nil
+		}},
+	}
+	ctx := context.Background()
+	client, err := heimdall.New(ctx, h.config, h.manifest, h.options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions, err := client.NewSessions(ctx, heimdall.SessionOptions{
+		CallbackURL: "https://ledger.example.com/auth/callback", ReturnTo: "/workspaces", ZitadelAPIAudience: "zitadel",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	if err = sessions.Start(w, httptest.NewRequest("GET", "https://ledger.example.com/auth/start", nil)); err != nil || w.Code != 303 {
+		t.Fatal(w.Code, err)
+	}
+}

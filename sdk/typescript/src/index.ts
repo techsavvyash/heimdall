@@ -12,6 +12,11 @@ export type {
   Principal,
 } from "./runtime.js";
 export { HeimdallError } from "./internal/errors.js";
+export type {
+  SessionStore,
+  SessionStoreOptions,
+  StoredSessionRecord,
+} from "./internal/custom-session-store.js";
 export { auditDigest as auditEventDigest } from "./internal/audit-receipts.js";
 
 export type {

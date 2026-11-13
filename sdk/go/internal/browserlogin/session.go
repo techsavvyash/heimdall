@@ -20,7 +20,7 @@ type sessionAuth interface {
 	Verify(context.Context, string, string) (*identity.Principal, error)
 }
 
-type sessionStore interface {
+type SessionStore interface {
 	GetSession(context.Context, string) (*postgres.Record, error)
 	CompareAndSwapSession(context.Context, string, string, []byte, int64) (*postgres.Record, error)
 	DeleteSession(context.Context, string) error
@@ -30,7 +30,7 @@ type sessionStore interface {
 type Sessions struct {
 	login              *HTTP
 	auth               sessionAuth
-	store              sessionStore
+	store              SessionStore
 	returnTo, cookie   string
 	absoluteMs, idleMs int64
 	now                func() int64
@@ -38,7 +38,7 @@ type Sessions struct {
 
 var returnPath = regexp.MustCompile(`^/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]*$`)
 
-func NewSessions(login *HTTP, auth sessionAuth, store sessionStore, returnTo string, absolute, idle time.Duration, now func() int64) (*Sessions, error) {
+func NewSessions(login *HTTP, auth sessionAuth, store SessionStore, returnTo string, absolute, idle time.Duration, now func() int64) (*Sessions, error) {
 	if absolute == 0 {
 		absolute = 8 * time.Hour
 	}

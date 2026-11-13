@@ -7,6 +7,10 @@ import type {
 import { encodeIdentity } from "./internal/identity-encoding.js";
 import { browserSession } from "./internal/browser-session.js";
 import { createBrowserLoginHTTP } from "./internal/browser-login-http.js";
+import { BrowserLoginRecords } from "./internal/postgres/login.js";
+import { customSessionStore } from "./internal/custom-session-store.js";
+import type { SessionStoreOptions } from "./internal/custom-session-store.js";
+import { parseIdentityContext } from "./internal/identity-context.js";
 import { parseDeployment } from "./internal/configuration.js";
 import { discoverOIDC } from "./internal/oidc-discovery.js";
 import { PinnedModel } from "./internal/model-binding.js";
@@ -42,6 +46,7 @@ export type RuntimeOptions = {
     openfgaKey(signal: AbortSignal): Promise<string>;
   };
   storage: RuntimeStorage;
+  sessionStorage?: SessionStoreOptions;
 };
 declare const principalBrand: unique symbol;
 export type Principal = Awaited<ReturnType<AuditedAuthentication["verify"]>> & {
@@ -106,28 +111,41 @@ export async function createHeimdall(
   // Capture all ports before the first await; caller mutation cannot redirect this runtime.
   const ready = storage.ready.bind(storage);
   const append = storage.appendAudit.bind(storage);
-  const gate = {
+  if (storage.browser && options.sessionStorage) throw new HeimdallError("invalid_argument");
+  const custom =
+    options.sessionStorage &&
+    customSessionStore(config.productId, config.environment, options.sessionStorage);
+  const invalidate = storage.identity.invalidate.bind(storage.identity);
+  const gate: IdentityGate = {
     check: storage.identity.check.bind(storage.identity),
-    invalidate: storage.identity.invalidate.bind(storage.identity),
+    invalidate: async (negative, signal) => {
+      const session = custom && parseIdentityContext(negative.context);
+      if (session && negative.reason === "token_inactive") {
+        await custom.invalidateSessionVersion(session.key, session.revision, negative, signal);
+      }
+      await invalidate(session ? { ...negative, context: "bearer" } : negative, signal);
+    },
   };
   const managed = storage.managed && {
     allows: storage.managed.allows.bind(storage.managed),
     source: storage.managed.source.bind(storage.managed),
   };
-  const browser = storage.browser && {
-    login: {
-      start: storage.browser.login.start.bind(storage.browser.login),
-      claim: storage.browser.login.claim.bind(storage.browser.login),
-    },
-    sessions: {
-      createSession: storage.browser.sessions.createSession.bind(storage.browser.sessions),
-      getSession: storage.browser.sessions.getSession.bind(storage.browser.sessions),
-      compareAndSwapSession: storage.browser.sessions.compareAndSwapSession.bind(
-        storage.browser.sessions,
-      ),
-      deleteSession: storage.browser.sessions.deleteSession.bind(storage.browser.sessions),
-    },
-  };
+  const browser = custom
+    ? { login: new BrowserLoginRecords(custom), sessions: custom }
+    : storage.browser && {
+        login: {
+          start: storage.browser.login.start.bind(storage.browser.login),
+          claim: storage.browser.login.claim.bind(storage.browser.login),
+        },
+        sessions: {
+          createSession: storage.browser.sessions.createSession.bind(storage.browser.sessions),
+          getSession: storage.browser.sessions.getSession.bind(storage.browser.sessions),
+          compareAndSwapSession: storage.browser.sessions.compareAndSwapSession.bind(
+            storage.browser.sessions,
+          ),
+          deleteSession: storage.browser.sessions.deleteSession.bind(storage.browser.sessions),
+        },
+      };
   const secret = options.credentials.clientSecret.bind(options.credentials);
   const key = options.credentials.openfgaKey.bind(options.credentials);
   const policyVersion = options.policyVersion;

@@ -101,39 +101,41 @@ For tenant-specific login, an optional `tenantId` is resolved through a product-
 ### Minimal storage interface
 
 ```ts
-type StoredRecord = {
+type StoredSessionRecord = {
   value: Uint8Array
-  version: string
-  expiresAt: Date
+  revision: string
+  expiresAt: number
 }
 
 interface SessionStore {
-  create(key: string, value: Uint8Array, expiresAt: Date,
-    options: RequestOptions): Promise<boolean>
-  read(key: string, options: RequestOptions): Promise<StoredRecord | null>
-  compareAndSwap(key: string, expectedVersion: string,
-    value: Uint8Array, expiresAt: Date,
-    options: RequestOptions): Promise<boolean>
-  delete(key: string, options: RequestOptions): Promise<void>
+  create(key: string, value: Uint8Array, expiresAt: number,
+    signal: AbortSignal): Promise<string | null>
+  read(key: string, signal: AbortSignal): Promise<StoredSessionRecord | null>
+  compareAndSwap(key: string, revision: string, value: Uint8Array, expiresAt: number,
+    signal: AbortSignal): Promise<string | null>
+  delete(key: string, signal: AbortSignal): Promise<void>
 }
 ```
 
 ```go
-type StoredRecord struct {
+type StoredSessionRecord struct {
     Value []byte
-    Version string
-    ExpiresAt time.Time
+    Revision string
+    ExpiresAt int64
 }
-
 type SessionStore interface {
-    Create(context.Context, string, []byte, time.Time) (bool, error)
-    Read(context.Context, string) (*StoredRecord, error)
-    CompareAndSwap(context.Context, string, string, []byte, time.Time) (bool, error)
+    Create(context.Context, string, []byte, int64) (string, error)
+    Read(context.Context, string) (*StoredSessionRecord, error)
+    CompareAndSwap(context.Context, string, string, []byte, int64) (string, error)
     Delete(context.Context, string) error
 }
 ```
 
-`create` succeeds only for an absent key. `read` returns absent for expired records. `compareAndSwap` succeeds only against the current unexpired version and never recreates deleted records. Versions change on every write and cannot repeat for a reused key. `delete` is idempotent. All operations must be atomic across product replicas. The SDK encrypts opaque values and namespaces keys by product, environment and record type. The store owns TTL enforcement and eventual physical cleanup.
+Expiration is in Unix milliseconds. A successful write returns the committed revision as a canonical positive signed 64-bit decimal string. A definitive failed predicate returns null in TypeScript or an empty revision in Go. The write returns its revision directly so a concurrent writer cannot change which revision the caller observes. Store revisions never repeat for a key, including after deletion and expiry. An unknown write outcome returns `outcome_unknown`.
+
+Create succeeds only for an absent or expired key. Read returns absent for an expired record. Compare-and-swap succeeds only against the current unexpired revision and cannot recreate deleted records. Delete is idempotent. All operations are atomic across product replicas. The store owns TTL enforcement and eventual physical cleanup. Use a shared key ring and a deployment-wide key-usage reservation port that commits one reservation before each encryption. Use the runtime's durable identity gate for account-wide denials. Token inactivity conditionally tombstones the observed revision in the custom store and lets that record expire. The SDK scopes keys by product, environment and record type, authenticates the expiry in the encrypted payload, and gives the store opaque envelope bytes.
+
+Supply the TypeScript `sessionStorage` or Go `SessionStorage` option at runtime construction. Omit this option when using the bundled PostgreSQL session adapter. See [[evidence/phase-4-custom-session-store]] for wiring and verification.
 
 Login callback atomically claims its login record before exchanging the code. A second callback is rejected. The login record is also bound to a browser cookie so stolen state alone cannot complete another browser's login.
 
