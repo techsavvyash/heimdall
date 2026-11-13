@@ -18,7 +18,7 @@ import (
 type AuditDeliveryOptions struct {
 	ProductID, Environment, SinkID    string
 	Endpoint, Token, TransportProfile string
-	ValidateCustom                    func(string, int, map[string]any) bool
+	ValidateCustom                    CustomAuditValidator
 }
 
 type AuditDeliveryResult struct {
@@ -49,24 +49,7 @@ func NewAuditDelivery(pool *sql.DB, options AuditDeliveryOptions) (*AuditDeliver
 	if len(options.Token) > 4096 || !auditBearer.MatchString(options.Token) || contract.ValidateEndpoint(options.Endpoint, profile) != nil {
 		return nil, contract.ErrInvalidArgument
 	}
-	audit, err := internal.NewRetainedRuntimeAudit(pool, options.ProductID, options.Environment, []string{options.SinkID}, func(event map[string]any) error {
-		if err := contract.ValidateAuditShape(event); err != nil {
-			return err
-		}
-		raw, err := json.Marshal(event)
-		if err != nil {
-			return contract.ErrInvalidArgument
-		}
-		var typed contract.AuditEvent
-		if json.Unmarshal(raw, &typed) != nil {
-			return contract.ErrInvalidArgument
-		}
-		origin := "sdk"
-		if typed.Source == "product" {
-			origin = "product"
-		}
-		return contract.ValidateAuditEvent(typed, origin, options.ValidateCustom)
-	})
+	audit, err := internal.NewRetainedRuntimeAudit(pool, options.ProductID, options.Environment, []string{options.SinkID}, auditEventValidator(options.ValidateCustom, false))
 	if err != nil {
 		return nil, err
 	}

@@ -27,6 +27,8 @@ export { createDirectoryCleanup } from "./internal/postgres/directory-cleanup.js
 export { createDirectoryPolling } from "./internal/postgres/directory-polling.js";
 export { createDirectoryEnrollment } from "./internal/postgres/directory-enrollment.js";
 export { createAuditDelivery } from "./internal/postgres/audit-delivery.js";
+export { createCustomAuditWriter } from "./internal/postgres/custom-audit.js";
+export type { CustomAuditEvent, CustomAuditValidator } from "./internal/postgres/custom-audit.js";
 export {
   createDirectoryReactivation,
   createDirectoryReactivationRelease,

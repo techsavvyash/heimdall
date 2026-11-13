@@ -46,7 +46,14 @@ func BuildRetentionIdentities(scope RetentionScope, resolution string, sources [
 		}
 		var e map[string]any
 		var typed AuditEvent
-		if json.Unmarshal(raw, &e) != nil || ValidateAuditShape(e) != nil || json.Unmarshal(raw, &typed) != nil || ValidateAuditEvent(typed, "sdk", func(string, int, map[string]any) bool { return false }) != nil {
+		if json.Unmarshal(raw, &e) != nil || ValidateAuditShape(e) != nil || json.Unmarshal(raw, &typed) != nil {
+			return nil, bad
+		}
+		origin := "sdk"
+		if typed.Source == "product" {
+			origin = "product"
+		}
+		if ValidateAuditEvent(typed, origin, func(string, int, map[string]any) bool { return resolution == "ordinary" }) != nil {
 			return nil, bad
 		}
 		sameTenant := (scope.TenantID == nil && typed.TenantID == nil) || (scope.TenantID != nil && typed.TenantID != nil && *scope.TenantID == *typed.TenantID)

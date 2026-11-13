@@ -55,16 +55,20 @@ Required envelope: schema version, event ID, event type/version, occurred/record
 Built-in security types use a reserved heimdall.* namespace. Product events use registered product.* types with versioned attribute schemas. An authorized product/tenant administrator may configure enabled custom definitions through product-owned settings. Their permissions and changes are themselves audited. The backend supplies trusted actor/scope/outcome metadata; a browser cannot spoof them. Extensions cannot rename, suppress, sample, redact away mandatory identifiers or change outcomes of required security events. Unknown types, invalid attributes, sensitive fields and oversized payloads are rejected before persistence.
 
 ```ts
-// Contract sketch; schema registration is trusted configuration.
-await h.audit.record({
-  type: "product.invoice.approved", version: 1,
-  actor, tenantId, target: { type: "invoice", id: invoiceId },
-  outcome: "succeeded", correlationId,
+const writer = createCustomAuditWriter(pool, {
+  productId: "ledger", environment: "production", auditSinks: ["siem"],
+  validateCustom: approvedSchemas,
+});
+await writer.record({
+  eventId, eventType: "product.invoice.approved", eventVersion: 1,
+  occurredAt, recordedAt, actor, tenantId,
+  target: { type: "invoice", id: invoiceId },
+  action: "invoice.approve", outcome: "succeeded", requestId,
   attributes: { approvalTier: "standard" },
-}, { signal })
+}, signal);
 ```
 
-Go exposes the equivalent Audit().Record(ctx, Event) with the same validation and receipt. Use a transactional product outbox instead of this standalone call if the event must be atomic with a business commit. Product-defined audit events do not imply tenant-defined runtime authorization roles.
+Go exposes `postgres.NewCustomAuditWriter` and `Record(ctx, event)` with the same validation and receipt. The product resolves the actor, tenant and approved schema in trusted backend code. Reuse the same event ID and timestamps when retrying. Use a transactional product outbox if the event must be atomic with a business commit.
 
 ## Delivery, retention and failure policy
 

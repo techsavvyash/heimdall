@@ -2,13 +2,22 @@ import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { expect, test } from "vitest";
-import { createAuditDelivery, createPostgresStorage } from "../src/postgres.js";
+import {
+  createAuditDelivery,
+  createCustomAuditWriter,
+  createPostgresStorage,
+} from "../src/postgres.js";
 
 test.skipIf(!process.env.HEIMDALL_TEST_AUDIT_DELIVERY_DB)(
   "exports a durable batch and preserves pending IDs across failure",
   async () => {
     const pool = new Pool({ connectionString: process.env.HEIMDALL_TEST_AUDIT_DELIVERY_DB });
     const scope = { productId: "ledger", environment: "delivery-ts", sinkId: "siem" };
+    const validateCustom = (type: string, version: number, attributes: Record<string, unknown>) =>
+      type === "product.invoice.approved" &&
+      version === 1 &&
+      Object.keys(attributes).length === 1 &&
+      attributes.tier === "standard";
     let mode = "outage";
     const accepted: string[] = [];
     const server = createServer(async (request, response) => {
@@ -45,6 +54,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_AUDIT_DELIVERY_DB)(
         endpoint: "http://127.0.0.1:" + address.port,
         token: "test-token",
         transportProfile: "loopback",
+        validateCustom,
       });
       const store = createPostgresStorage(pool, { ...scope, auditSinks: [scope.sinkId] });
       const fixture = JSON.parse(
@@ -94,6 +104,45 @@ test.skipIf(!process.env.HEIMDALL_TEST_AUDIT_DELIVERY_DB)(
         { event_id: "z-request", state: "delivered", attempts: 5 },
       ]);
       expect(new Set(accepted)).toEqual(new Set(["a-terminal", "z-request"]));
+      const writer = createCustomAuditWriter(pool, {
+        ...scope,
+        auditSinks: ["siem"],
+        validateCustom,
+      });
+      const event = {
+        eventId: "custom-invoice",
+        eventType: "product.invoice.approved",
+        eventVersion: 1,
+        occurredAt: 1000,
+        recordedAt: 1001,
+        tenantId: "tenant-1",
+        actor: { kind: "system" as const, id: "ledger" },
+        target: { type: "invoice", id: "invoice-1" },
+        action: "invoice.approve",
+        outcome: "succeeded" as const,
+        requestId: "request-1",
+        attributes: { tier: "standard" },
+      };
+      await expect(
+        writer.record({ ...event, eventType: "heimdall.authentication.completed" }, signal),
+      ).rejects.toThrow("invalid_argument");
+      await expect(writer.record({ ...event, eventVersion: 2 }, signal)).rejects.toThrow(
+        "invalid_argument",
+      );
+      await expect(
+        writer.record({ ...event, attributes: { tier: "standard", token: "value" } }, signal),
+      ).rejects.toThrow("invalid_argument");
+      const receipt = await writer.record(event, signal);
+      await expect(writer.record(event, signal)).resolves.toEqual(receipt);
+      await expect(writer.record({ ...event, requestId: "other" }, signal)).rejects.toThrow(
+        "conflict",
+      );
+      expect(await delivery.deliver(10, signal)).toEqual({
+        attempted: 1,
+        delivered: 1,
+        quarantined: 0,
+      });
+      expect(accepted.at(-1)).toBe(event.eventId);
     } finally {
       server.close();
       await pool.end();

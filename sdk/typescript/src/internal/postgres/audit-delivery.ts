@@ -1,8 +1,7 @@
 import type { Pool } from "pg";
 import { randomInt } from "node:crypto";
 import { validateEndpoint } from "../endpoints.js";
-import { validateAuditShape } from "../audit-shape.js";
-import { validateAuditEvent } from "../audit.js";
+import { auditEventValidator, type CustomAuditValidator } from "./custom-audit.js";
 import { checkCancellation, HeimdallError } from "../errors.js";
 import { PostgresAudit } from "./audit.js";
 
@@ -15,7 +14,7 @@ export function createAuditDelivery(
     endpoint: string;
     token: string;
     transportProfile?: "production" | "loopback";
-    validateCustom?: Parameters<typeof validateAuditEvent>[2];
+    validateCustom?: CustomAuditValidator;
   },
 ) {
   const { productId, environment, sinkId, endpoint, token, validateCustom } = options;
@@ -31,14 +30,7 @@ export function createAuditDelivery(
     productId,
     environment,
     [sinkId],
-    (event) => {
-      validateAuditShape(event);
-      validateAuditEvent(
-        event as Parameters<typeof validateAuditEvent>[0],
-        event.source === "product" ? "product" : "sdk",
-        validateCustom ?? (() => false),
-      );
-    },
+    auditEventValidator(validateCustom),
   );
   const scope = { productId, environment, sinkId };
   return Object.freeze({

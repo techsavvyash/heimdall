@@ -14,7 +14,7 @@ type Source = {
 };
 const token = (s: unknown, max: number): s is string =>
   typeof s === "string" && s.length > 0 && s.length <= max && !/[^A-Za-z0-9_-]/.test(s);
-// Built-in history only. Call after decoding ha1; no storage mutation or purge authorization.
+// Custom schemas are checked by the writer. Historical integrity must survive schema retirement.
 export function buildRetentionIdentities(scope: Scope, resolution: string, sources: Source[]) {
   if (
     !scope ||
@@ -35,10 +35,11 @@ export function buildRetentionIdentities(scope: Scope, resolution: string, sourc
     const ids = new Set<string>();
     const identities = sources.map((source) => {
       validateAuditShape(source.event);
+      const productEvent = source.event.source === "product";
       validateAuditEvent(
         source.event as unknown as Parameters<typeof validateAuditEvent>[0],
-        "sdk",
-        () => false,
+        productEvent ? "product" : "sdk",
+        () => productEvent && resolution === "ordinary",
       );
       const e = source.event;
       if (

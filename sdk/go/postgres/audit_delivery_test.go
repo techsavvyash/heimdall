@@ -56,7 +56,11 @@ func TestAuditDeliveryPostgres(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(batch)
 	}))
 	defer server.Close()
-	delivery, err := NewAuditDelivery(pool, AuditDeliveryOptions{ProductID: "ledger", Environment: "delivery-go", SinkID: "siem", Endpoint: server.URL, Token: "test-token", TransportProfile: "loopback"})
+	validateCustom := func(kind string, version int, attributes map[string]any) bool {
+		tier, _ := attributes["tier"].(string)
+		return kind == "product.invoice.approved" && version == 1 && len(attributes) == 1 && tier == "standard"
+	}
+	delivery, err := NewAuditDelivery(pool, AuditDeliveryOptions{ProductID: "ledger", Environment: "delivery-go", SinkID: "siem", Endpoint: server.URL, Token: "test-token", TransportProfile: "loopback", ValidateCustom: validateCustom})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,5 +116,48 @@ func TestAuditDeliveryPostgres(t *testing.T) {
 	var count int
 	if err := pool.QueryRowContext(ctx, "SELECT count(*) FROM heimdall.audit_deliveries WHERE environment='delivery-go' AND state='delivered'").Scan(&count); err != nil || count != 2 {
 		t.Fatal(count, err)
+	}
+	writer, err := NewCustomAuditWriter(pool, CustomAuditOptions{
+		ProductID: "ledger", Environment: "delivery-go", AuditSinks: []string{"siem"}, ValidateCustom: validateCustom,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tenant := "tenant-1"
+	event := CustomAuditEvent{
+		EventID: "custom-invoice", EventType: "product.invoice.approved", EventVersion: 1,
+		OccurredAt: 1000, RecordedAt: 1001, TenantID: &tenant,
+		Actor: map[string]any{"kind": "system", "id": "ledger"}, Target: map[string]any{"type": "invoice", "id": "invoice-1"},
+		Action: "invoice.approve", Outcome: "succeeded", RequestID: "request-1", Attributes: map[string]any{"tier": "standard"},
+	}
+	invalid := event
+	invalid.EventType = "heimdall.authentication.completed"
+	if _, err := writer.Record(ctx, invalid); !errors.Is(err, contract.ErrInvalidArgument) {
+		t.Fatal(err)
+	}
+	invalid = event
+	invalid.EventVersion = 2
+	if _, err := writer.Record(ctx, invalid); !errors.Is(err, contract.ErrInvalidArgument) {
+		t.Fatal(err)
+	}
+	invalid = event
+	invalid.Attributes = map[string]any{"tier": "standard", "token": "value"}
+	if _, err := writer.Record(ctx, invalid); !errors.Is(err, contract.ErrInvalidArgument) {
+		t.Fatal(err)
+	}
+	receipt, err := writer.Record(ctx, event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again, err := writer.Record(ctx, event); err != nil || again != receipt {
+		t.Fatal(again, err)
+	}
+	invalid = event
+	invalid.RequestID = "other"
+	if _, err := writer.Record(ctx, invalid); !errors.Is(err, contract.ErrConflict) {
+		t.Fatal(err)
+	}
+	if result, err := delivery.Deliver(ctx, 10); err != nil || result != (AuditDeliveryResult{1, 1, 0}) {
+		t.Fatal(result, err)
 	}
 }
