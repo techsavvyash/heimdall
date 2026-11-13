@@ -190,7 +190,7 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 		if storage.Browser != nil {
 			return nil, ErrInvalidArgument
 		}
-		custom, err := newSessionStore(cfg.ProductID, cfg.Environment, *options.SessionStorage)
+		custom, err := browserlogin.NewCustomSessionStore(cfg.ProductID, cfg.Environment, *options.SessionStorage)
 		if err != nil {
 			return nil, err
 		}
@@ -202,7 +202,7 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 			}
 			if session != nil {
 				if negative.Reason == "token_inactive" {
-					if err := custom.invalidateSessionVersion(ctx, session, negative.Identity); err != nil {
+					if err := custom.InvalidateSessionVersion(ctx, session, negative.Identity); err != nil {
 						return err
 					}
 				}

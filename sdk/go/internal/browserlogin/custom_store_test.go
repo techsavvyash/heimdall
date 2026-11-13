@@ -1,4 +1,4 @@
-package heimdall
+package browserlogin
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/identity"
 )
 
@@ -68,7 +69,7 @@ func TestCustomSessionStore(t *testing.T) {
 		ProductID, Environment, AlternateEnvironment, RecordKey, LoginStorageKey, SessionStorageKey, Secret string
 		InvalidRevisions                                                                                    []string
 	}
-	raw, err := os.ReadFile("../../contracts/fixtures/custom-session-store.json")
+	raw, err := os.ReadFile("../../../../contracts/fixtures/custom-session-store.json")
 	if err != nil || json.Unmarshal(raw, &f) != nil {
 		t.Fatal("load fixture", err)
 	}
@@ -80,16 +81,16 @@ func TestCustomSessionStore(t *testing.T) {
 		Keys:            map[string][]byte{"old": bytes.Repeat([]byte{7}, 32), "next": bytes.Repeat([]byte{8}, 32)},
 		ReserveKeyUsage: func(context.Context, string) error { mu.Lock(); reservations++; mu.Unlock(); return nil },
 	}
-	first, err := newSessionStore(f.ProductID, f.Environment, options)
+	first, err := NewCustomSessionStore(f.ProductID, f.Environment, options)
 	if err != nil {
 		t.Fatal(err)
 	}
 	options.ActiveKeyID = "next"
-	second, err := newSessionStore(f.ProductID, f.Environment, options)
+	second, err := NewCustomSessionStore(f.ProductID, f.Environment, options)
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, err := newSessionStore(f.ProductID, f.AlternateEnvironment, options)
+	other, err := NewCustomSessionStore(f.ProductID, f.AlternateEnvironment, options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +133,7 @@ func TestCustomSessionStore(t *testing.T) {
 	}
 	for _, record := range corrupt {
 		backend.rows[f.SessionStorageKey] = record
-		if _, err := first.GetSession(ctx, key); !errors.Is(err, ErrUnavailable) {
+		if _, err := first.GetSession(ctx, key); !errors.Is(err, contract.ErrUnavailable) {
 			t.Fatal(err)
 		}
 	}
@@ -153,7 +154,7 @@ func TestCustomSessionStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	var sessions []struct{ Record map[string]any }
-	raw, err = os.ReadFile("../../contracts/fixtures/session-v1.json")
+	raw, err = os.ReadFile("../../../../contracts/fixtures/session-v1.json")
 	if err != nil || json.Unmarshal(raw, &sessions) != nil {
 		t.Fatal("load session fixture", err)
 	}
@@ -171,17 +172,21 @@ func TestCustomSessionStore(t *testing.T) {
 	if err != nil || updated == nil {
 		t.Fatal(err)
 	}
-	actor := Identity{Issuer: payload["issuer"].(string), Subject: payload["subject"].(string)}
-	if err := first.invalidateSessionVersion(ctx, &identity.SessionContext{Key: "invalidate", Revision: initial.Revision}, actor); err != nil {
+	actor := identity.Identity{Issuer: payload["issuer"].(string), Subject: payload["subject"].(string)}
+	if err := first.InvalidateSessionVersion(ctx, &identity.SessionContext{Key: "invalidate", Revision: initial.Revision}, actor); err != nil {
 		t.Fatal(err)
 	}
 	if r, err := second.GetSession(ctx, "invalidate"); err != nil || r == nil || r.Revision != updated.Revision {
 		t.Fatal("replacement lost", err)
 	}
-	if err := first.invalidateSessionVersion(ctx, &identity.SessionContext{Key: "invalidate", Revision: updated.Revision}, actor); err != nil {
+	if err := first.InvalidateSessionVersion(ctx, &identity.SessionContext{Key: "invalidate", Revision: updated.Revision}, actor); err != nil {
 		t.Fatal(err)
 	}
 	if r, err := second.GetSession(ctx, "invalidate"); err != nil || r != nil {
 		t.Fatal("invalidation failed", err)
 	}
+}
+
+func NewMemorySessionStoreForTest() AtomicSessionStore {
+	return &memorySessionStore{rows: make(map[string]StoredSessionRecord)}
 }

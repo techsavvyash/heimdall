@@ -13,6 +13,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./sessionstoretest": {
+      "types": "./dist/sessionstoretest.d.ts",
+      "import": "./dist/sessionstoretest.js"
+    },
     "./postgres": {
       "types": "./dist/postgres.d.ts",
       "import": "./dist/postgres.js"

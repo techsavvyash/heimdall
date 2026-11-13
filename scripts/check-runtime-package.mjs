@@ -57,6 +57,8 @@ void forged;
     join(work, "probe.mjs"),
     `import {createHeimdall,HeimdallError,auditEventDigest} from '@heimdall/sdk';
 import {createPostgresStorage} from '@heimdall/sdk/postgres';
+import {verifySessionStore} from '@heimdall/sdk/sessionstoretest';
+if (typeof verifySessionStore !== 'function') throw new Error('missing session store conformance export');
 const storage = createPostgresStorage({connect(){}},{productId:'ledger',environment:'production',auditSinks:[]});
 if(!Object.isFrozen(storage) || typeof storage.appendAudit !== 'function') throw new Error('Missing PostgreSQL factory');
 if(typeof createHeimdall !== 'function' || typeof auditEventDigest({}) !== 'string') throw new Error('Missing runtime exports');

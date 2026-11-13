@@ -40,15 +40,20 @@ func (a afterSessionVerify) Verify(ctx context.Context, token, scope string) (*i
 	return actor, err
 }
 
-type unknownSessionWrite struct{ *postgres.SessionRecords }
+type unknownSessionWrite struct{ SessionStore }
 
 func (unknownSessionWrite) CreateSession(context.Context, string, []byte, int64) (*postgres.Record, error) {
 	return nil, contract.ErrOutcomeUnknown
 }
 
 func TestBrowserLoginHTTP(t *testing.T) {
+	t.Run("custom", func(t *testing.T) { testBrowserLoginHTTP(t, false) })
+	t.Run("postgres", func(t *testing.T) { testBrowserLoginHTTP(t, true) })
+}
+
+func testBrowserLoginHTTP(t *testing.T, usePostgres bool) {
 	dsn := os.Getenv("HEIMDALL_TEST_DATABASE_URL")
-	if dsn == "" || os.Getenv("HEIMDALL_TEST_READ_PEER") != "" {
+	if usePostgres && (dsn == "" || os.Getenv("HEIMDALL_TEST_READ_PEER") != "") {
 		t.Skip("live PostgreSQL integration")
 	}
 	read := func(name string, dest any) {
@@ -151,22 +156,56 @@ func TestBrowserLoginHTTP(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	db, err := sql.Open("postgres", dsn)
-	if err != nil {
-		t.Fatal(err)
+	var db *sql.DB
+	var login LoginRecords
+	var sessionsStore SessionStore
+	gate := identity.Gate{
+		Check:      func(context.Context, identity.Identity) (bool, error) { return false, nil },
+		Invalidate: func(context.Context, identity.Negative) error { return nil },
 	}
-	defer db.Close()
-	cipher, err := contract.NewRecordCipher("k1", map[string][]byte{"k1": bytes.Repeat([]byte{7}, 32)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	store, err := postgres.NewRecords(db, db, cipher, f.ProductID, f.Environment, nil)
-	if err != nil {
-		t.Fatal(err)
+	var audit *postgres.Audit
+	keys := map[string][]byte{"k1": bytes.Repeat([]byte{7}, 32)}
+	if usePostgres {
+		db, err = sql.Open("postgres", dsn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+		cipher, err := contract.NewRecordCipher("k1", keys)
+		if err != nil {
+			t.Fatal(err)
+		}
+		store, err := postgres.NewRecords(db, db, cipher, f.ProductID, f.Environment, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		login = postgres.NewBrowserLoginRecords(store, nil)
+		pgSessions, err := postgres.NewSessionRecords(db, db, cipher, f.ProductID, f.Environment, SessionPrincipal, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sessionsStore = pgSessions
+		gate, err = pgSessions.IdentityGate(f.ProductID, f.Environment)
+		if err != nil {
+			t.Fatal(err)
+		}
+		audit, err = postgres.NewAudit(db, f.ProductID, f.Environment, []string{"siem"}, contract.ValidateAuditShape)
+		if err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		store, err := NewCustomSessionStore(f.ProductID, f.Environment, SessionStoreOptions{
+			Store:       &memorySessionStore{rows: make(map[string]StoredSessionRecord)},
+			ActiveKeyID: "k1", Keys: keys, ReserveKeyUsage: func(context.Context, string) error { return nil },
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		login, sessionsStore = postgres.NewBrowserLoginRecords(store, nil), store
 	}
 	h, err := NewHTTP(context.Background(), identity.BrowserOIDCConfig{
 		Issuer: server.URL, Profile: "loopback", ClientID: f.ClientID, ClientSecret: "fixture", Audience: f.Audience, RedirectURI: f.RedirectURI,
-	}, postgres.NewBrowserLoginRecords(store, nil), f.ProductID, f.Environment, f.ReturnToKey)
+	}, login, f.ProductID, f.Environment, f.ReturnToKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,22 +302,7 @@ func TestBrowserLoginHTTP(t *testing.T) {
 	if result, err := callback(a, http.MethodGet, f.RedirectURI, "", a.cookie); result != nil || !errors.Is(err, contract.ErrUnauthenticated) {
 		t.Fatal("replay accepted", err)
 	}
-	sessionsStore, err := postgres.NewSessionRecords(db, db, cipher, f.ProductID, f.Environment, func(value []byte) (postgres.SessionPrincipal, error) {
-		var principal postgres.SessionPrincipal
-		err := json.Unmarshal(value, &principal)
-		return principal, err
-	}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	gate, err := sessionsStore.IdentityGate(f.ProductID, f.Environment)
-	if err != nil {
-		t.Fatal(err)
-	}
-	audit, err := postgres.NewAudit(db, f.ProductID, f.Environment, []string{"siem"}, contract.ValidateAuditShape)
-	if err != nil {
-		t.Fatal(err)
-	}
+	var auditCount atomic.Int64
 	var failAudit atomic.Bool
 	failAudit.Store(true)
 	auth, err := auditflow.NewAuthentication(identity.StatusConfig{
@@ -288,7 +312,12 @@ func TestBrowserLoginHTTP(t *testing.T) {
 		if failAudit.Load() {
 			return contract.AuditReceipt{}, contract.ErrAuditUnavailable
 		}
-		return audit.Append(ctx, event)
+		if audit != nil {
+			return audit.Append(ctx, event)
+		}
+		auditCount.Add(1)
+		digest, err := contract.AuditDigest(event)
+		return contract.AuditReceipt{ProductID: f.ProductID, Environment: f.Environment, EventID: event["eventId"].(string), RecordedAt: int64(event["recordedAt"].(float64)), PayloadDigest: digest}, err
 	}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -311,8 +340,10 @@ func TestBrowserLoginHTTP(t *testing.T) {
 		t.Fatal("audit failure released a cookie", err)
 	}
 	var count int
-	if err = db.QueryRow("SELECT count(*) FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind='session'", f.ProductID, f.Environment).Scan(&count); err != nil || count != 0 {
-		t.Fatal("audit failure created a session", err)
+	if db != nil {
+		if err = db.QueryRow("SELECT count(*) FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND kind='session'", f.ProductID, f.Environment).Scan(&count); err != nil || count != 0 {
+			t.Fatal("audit failure created a session", err)
+		}
 	}
 	failAudit.Store(false)
 	uncertain, err := NewSessions(h, auth, unknownSessionWrite{sessionsStore}, "/workspaces", 0, 0, nil)
@@ -343,8 +374,12 @@ func TestBrowserLoginHTTP(t *testing.T) {
 	if err = json.Unmarshal(stored.Value, &payload); err != nil || payload["subject"] != "alice" || payload["policyVersion"] != "p1" || payload["state"] != "active" {
 		t.Fatal("invalid session payload", err)
 	}
-	if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_events WHERE product_id=$1 AND environment=$2", f.ProductID, f.Environment).Scan(&count); err != nil || count != 2 {
-		t.Fatal("expected two committed authentication events", err)
+	if db != nil {
+		if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_events WHERE product_id=$1 AND environment=$2", f.ProductID, f.Environment).Scan(&count); err != nil || count != 2 {
+			t.Fatal("expected two committed authentication events", err)
+		}
+	} else if auditCount.Load() != 2 {
+		t.Fatal("expected two authentication events")
 	}
 	sessionCookie := cookies[1].Name + "=" + opaque
 	recordKey := encode(digest[:])
