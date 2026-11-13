@@ -326,6 +326,9 @@ func testBrowserLoginHTTP(t *testing.T, usePostgres bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := NewSessions(h, auth, sessionsStore, "//other.example.test", 0, 0, nil); !errors.Is(err, contract.ErrInvalidArgument) {
+		t.Fatal("unsafe return path accepted", err)
+	}
 	finish := func(sessions *Sessions, fx flow) (*http.Response, error) {
 		query := url.Values{"code": {f.Code}, "state": {fx.state}}
 		r := httptest.NewRequest(http.MethodGet, f.RedirectURI+"?"+query.Encode(), nil)
@@ -385,6 +388,11 @@ func testBrowserLoginHTTP(t *testing.T, usePostgres bool) {
 	recordKey := encode(digest[:])
 	protected := httptest.NewRequest(http.MethodGet, "https://ledger.example.test/workspaces", nil)
 	protected.Header.Set("Cookie", sessionCookie)
+	tampered := protected.Clone(protected.Context())
+	tampered.Header.Set("Cookie", sessionCookie+"A")
+	if _, err := sessions.Authenticate(tampered); !errors.Is(err, contract.ErrUnauthenticated) {
+		t.Fatal("tampered cookie accepted", err)
+	}
 	if actor, err := sessions.Authenticate(protected); err != nil || actor.Identity().Subject != "alice" {
 		t.Fatal("session authentication failed", err)
 	}
@@ -395,10 +403,17 @@ func testBrowserLoginHTTP(t *testing.T, usePostgres bool) {
 	logout := func(origin string) (*http.Response, error) {
 		r := httptest.NewRequest(http.MethodPost, "https://ledger.example.test/auth/logout", nil)
 		r.Header.Set("Cookie", sessionCookie)
-		r.Header.Set("Origin", origin)
+		if origin != "" {
+			r.Header.Set("Origin", origin)
+		}
 		w := httptest.NewRecorder()
 		err := sessions.Logout(w, r)
 		return w.Result(), err
+	}
+	res, err = logout("")
+	res.Body.Close()
+	if !errors.Is(err, contract.ErrForbidden) || len(res.Cookies()) != 0 {
+		t.Fatal("logout without origin accepted", err)
 	}
 	res, err = logout("https://other.example.test")
 	res.Body.Close()

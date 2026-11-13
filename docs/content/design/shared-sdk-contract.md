@@ -53,50 +53,36 @@ A session manager runs inside the product backend. The browser receives an opaqu
 ### Public API
 
 ```ts
-const sessions = auth.createSessions({
-  store: postgresSessionStore,
-  encryptionKeys: sessionKeys,
-  callbackUrl: 'https://ledger.example.com/auth/callback',
-  allowedReturnTo: ['/workspaces', '/invoices'],
-  cookie: { name: '__Host-ledger', secure: true, sameSite: 'lax' },
-  absoluteLifetimeSeconds: 28_800,
-  idleLifetimeSeconds: 1_800,
-})
+const sessions = await auth.createSessions({
+  callbackUrl: "https://ledger.example.com/auth/callback",
+  returnTo: "/workspaces",
+  zitadelAPIAudience,
+}, { signal })
 
-// Fetch Request/Response adapter. The framework mounts these handlers.
-const loginResponse = await sessions.start(request, {
-  returnTo: '/workspaces',
-  signal,
-})
-const callbackResponse = await sessions.callback(request, { signal })
-const actor = await sessions.authenticate(request, { signal })
-const logoutResponse = await sessions.logout(request, { signal })
+// Mount these methods with the product's Fetch adapter.
+const loginResponse = await sessions.start(request)
+const callbackResponse = await sessions.callback(request)
+const actor = await sessions.authenticate(request)
+const logoutResponse = await sessions.logout(request)
 ```
 
 ```go
-sessions, err := auth.NewSessions(heimdall.SessionOptions{
-    Store: postgresSessionStore,
-    EncryptionKeys: sessionKeys,
+sessions, err := auth.NewSessions(ctx, heimdall.SessionOptions{
     CallbackURL: "https://ledger.example.com/auth/callback",
-    AllowedReturnTo: []string{"/workspaces", "/invoices"},
-    Cookie: heimdall.CookieOptions{
-        Name: "__Host-ledger", Secure: true, SameSite: http.SameSiteLaxMode,
-    },
-    AbsoluteLifetime: 8 * time.Hour,
-    IdleLifetime: 30 * time.Minute,
+    ReturnTo: "/workspaces", ZitadelAPIAudience: zitadelAPIAudience,
 })
 if err != nil { return err }
 
-// net/http adapter. Each handler is mounted by the product.
-err = sessions.Start(ctx, w, r, heimdall.LoginOptions{ReturnTo: "/workspaces"})
-err = sessions.Callback(ctx, w, r)
-actor, err := sessions.Authenticate(ctx, r)
-err = sessions.Logout(ctx, w, r)
+// Mount these methods with the product's net/http adapter.
+err = sessions.Start(w, r)
+err = sessions.Callback(w, r)
+actor, err := sessions.Authenticate(r)
+err = sessions.Logout(w, r)
 ```
 
-The route snippets show separate handler operations. TypeScript's adapter returns a response containing redirects or cookie changes. Go writes the equivalent response and returns an error for adapter handling. Cookie defaults require Secure, HttpOnly, Path=/ and no Domain for the proposed `__Host-` names. A return URL must match the configured allowlist. Logout requires a CSRF-protected POST. The product applies CSRF protection to its other cookie-authenticated state-changing routes.
+TypeScript returns responses containing redirects and cookie changes. Go writes those responses and returns errors for the product to handle. HTTPS cookies use Secure, HttpOnly, SameSite=Lax, Path=/ and the `__Host-` prefix. Session defaults are eight hours absolute and thirty minutes idle. Each mounted adapter uses one configured relative return path and a manifest-registered callback URL. Logout accepts a same-origin POST. The product applies CSRF protection to its other cookie-authenticated state-changing routes.
 
-For tenant-specific login, an optional `tenantId` is resolved through a product-supplied tenant-login resolver. The resolver returns a trusted organization mapping and allowed login policy. The SDK binds that policy to login state and validates the resulting authentication evidence. A browser-supplied organization ID cannot directly select privileged configuration. Strict SSO policy validation remains a live-service acceptance requirement.
+For tenant-specific login in Phase 6, an optional `tenantId` is resolved through a product-supplied tenant-login resolver. The resolver returns a trusted organization mapping and allowed login policy. The SDK binds that policy to login state and validates the resulting authentication evidence. A browser-supplied organization ID cannot directly select privileged configuration. Strict SSO policy validation remains a live-service acceptance requirement.
 
 ### Minimal storage interface
 

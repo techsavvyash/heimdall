@@ -196,6 +196,9 @@ async function browserLifecycle(usePostgres: boolean) {
     const sessions = browserSession(http, auth, store, {
       returnTo: "/workspaces",
     });
+    expect(() => browserSession(http, auth, store, { returnTo: "//other.example.test" })).toThrow(
+      "invalid_argument",
+    );
     const requestFor = ({ state, cookie }: typeof a) =>
       new Request(`${f.redirectUri}?code=${f.code}&state=${state}`, { headers: { cookie } });
     const denied = await start();
@@ -262,14 +265,17 @@ async function browserLifecycle(usePostgres: boolean) {
     const sessionCookie = cookies[1]!.split(";")[0]!;
     const protectedUrl = new URL("/workspaces", f.redirectUri);
     const authenticated = new Request(protectedUrl, { headers: { cookie: sessionCookie } });
+    const tampered = new Request(protectedUrl, { headers: { cookie: sessionCookie + "A" } });
+    await expect(sessions.authenticate(tampered)).rejects.toThrow("unauthenticated");
     expect((await sessions.authenticate(authenticated)).subject).toBe("alice");
     const touched = (await store.getSession(key))!;
     expect(touched.revision).not.toBe(stored.revision);
-    const logout = (origin: string) =>
+    const logout = (origin?: string) =>
       new Request(new URL("/auth/logout", f.redirectUri), {
         method: "POST",
-        headers: { cookie: sessionCookie, origin },
+        headers: { cookie: sessionCookie, ...(origin ? { origin } : {}) },
       });
+    await expect(sessions.logout(logout())).rejects.toThrow("forbidden");
     await expect(sessions.logout(logout("https://other.example.test"))).rejects.toThrow(
       "forbidden",
     );
