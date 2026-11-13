@@ -1,7 +1,7 @@
 import { managedReadQuery } from "./readiness.js";
-import type { Pool } from "pg";
-import { HeimdallError } from "../errors.js";
-import { query } from "./query.js";
+import type { Pool, PoolClient } from "pg";
+import { HeimdallError, checkCancellation } from "../errors.js";
+import { query, readSnapshot } from "./query.js";
 type Kind = "workspaces" | "operations";
 type Metadata = Record<string, string | number | boolean>;
 const token = (v: unknown, max = 128): v is string =>
@@ -134,6 +134,48 @@ export class ManagedExport {
     limit: number,
     signal?: AbortSignal,
   ): Promise<string> {
+    return this.scanPage(kind, workspaceId, after, limit, signal);
+  }
+
+  async withSnapshot<T>(
+    read: (scan: ManagedExport["scan"]) => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    if (!this.retainedRuntime || typeof read !== "function")
+      throw new HeimdallError("invalid_argument");
+    const snapshot = AbortSignal.any([AbortSignal.timeout(5000), ...(signal ? [signal] : [])]);
+    return readSnapshot(
+      this.pool,
+      async (client) => {
+        let active = true;
+        try {
+          return await read((kind, workspace, after, limit, caller) => {
+            if (!active) return Promise.reject(new HeimdallError("unavailable"));
+            return this.scanPage(
+              kind,
+              workspace,
+              after,
+              limit,
+              caller ? AbortSignal.any([snapshot, caller]) : snapshot,
+              client,
+            );
+          });
+        } finally {
+          active = false;
+        }
+      },
+      snapshot,
+    );
+  }
+
+  private async scanPage(
+    kind: Kind,
+    workspaceId: string | null,
+    after: string | null,
+    limit: number,
+    signal?: AbortSignal,
+    client?: PoolClient,
+  ): Promise<string> {
     if (
       !["workspaces", "operations"].includes(kind) ||
       (workspaceId !== null && !token(workspaceId)) ||
@@ -149,20 +191,21 @@ export class ManagedExport {
       kind === "workspaces"
         ? "'lifecycle',lifecycle,'mutationBlocked',mutation_blocked,'revision',revision::text"
         : "'operationId',operation_id,'kind',kind,'state',state,'dispatchCount',dispatch_count::text,'generation',generation::text,'nextAttemptAt',next_attempt_at::text,'storeId',store_id,'modelId',model_id,'modelHash',encode(model_hash,'hex'),'manifestVersion',manifest_version::text";
-    const rows = await query<{ primary: boolean; records: unknown[] }>(
-      this.pool,
-      ...managedReadQuery(
-        `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
+    const args = managedReadQuery(
+      `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
  COALESCE(jsonb_agg(record ORDER BY id COLLATE "C"),'[]'::jsonb) AS records FROM (
  SELECT ${id} AS id,jsonb_build_object('productId',product_id,'environment',environment,'workspaceId',workspace_id,'createdAt',created_at::text,'updatedAt',updated_at::text,${fields}) AS record
  FROM heimdall_managed.${kind} WHERE product_id=$1 AND environment=$2 AND ($3::text IS NULL OR workspace_id=$3)
  AND ($4::text IS NULL OR ${id} COLLATE "C">$4 COLLATE "C") ORDER BY ${id} COLLATE "C" LIMIT $5) page`,
-        [this.productId, this.environment, workspaceId, after, limit + 1],
-        this.retainedRuntime,
-      ),
-      false,
-      signal,
+      [this.productId, this.environment, workspaceId, after, limit + 1],
+      this.retainedRuntime,
     );
+    type Row = { primary: boolean; records: unknown[] };
+    if (signal) checkCancellation(signal);
+    const rows = client
+      ? (await client.query<Row>(...args)).rows
+      : await query<Row>(this.pool, ...args, false, signal);
+    if (signal) checkCancellation(signal);
     if (
       rows.length !== 1 ||
       rows[0]!.primary !== true ||

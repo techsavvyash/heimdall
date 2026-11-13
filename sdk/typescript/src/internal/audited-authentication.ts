@@ -23,6 +23,14 @@ export type MaintenanceContext = Readonly<
     actor: Readonly<{ issuer: string; subject: string }>;
   }
 >;
+type ExportKind = "workspaces" | "operations";
+type ManagedExportScan = (
+  kind: ExportKind,
+  workspaceId: string | null,
+  after: string | null,
+  limit: number,
+  signal: AbortSignal,
+) => Promise<string>;
 // Internal composition. Identity metadata comes only from this captured verifier.
 export class AuditedAuthentication {
   private readonly verifier: IdentityVerifier;
@@ -173,13 +181,7 @@ export class AuditedAuthentication {
     modelId: string,
     manifestVersion: number,
     policy: (scope: MaintenanceContext, signal: AbortSignal) => Promise<boolean>,
-    scan: (
-      kind: "workspaces" | "operations",
-      workspaceId: string | null,
-      after: string | null,
-      limit: number,
-      signal: AbortSignal,
-    ) => Promise<string>,
+    scan: ManagedExportScan,
     signal?: AbortSignal,
   ): Promise<string> {
     if (!request) throw new HeimdallError("invalid_argument");
@@ -264,6 +266,73 @@ export class AuditedAuthentication {
         await checkCurrent();
         return page;
       },
+      signal,
+    );
+  }
+
+  async runManagedInventory(
+    raw: string,
+    request: Parameters<AuditedAuthentication["runManagedExport"]>[1],
+    modelId: string,
+    manifestVersion: number,
+    policy: Parameters<AuditedAuthentication["runManagedExport"]>[4],
+    snapshot: (
+      read: (scan: ManagedExportScan) => Promise<string>,
+      signal: AbortSignal,
+    ) => Promise<string>,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    if (request?.after !== null || typeof snapshot !== "function")
+      throw new HeimdallError("invalid_argument");
+    return this.runManagedExport(
+      raw,
+      request,
+      modelId,
+      manifestVersion,
+      policy,
+      (kind, workspaceId, _after, limit, signal) =>
+        snapshot(async (scan) => {
+          const items: unknown[] = [];
+          let after: string | null = null;
+          let size = 0;
+          for (let index = 0; index < 100; index++) {
+            const page = await scan(kind, workspaceId, after, limit, signal);
+            size += Buffer.byteLength(page);
+            if (size > 4 * 1024 * 1024) throw new HeimdallError("unavailable");
+            const envelope = JSON.parse(page);
+            if (
+              envelope?.schemaVersion !== 1 ||
+              envelope.productId !== this.productId ||
+              envelope.environment !== this.environment ||
+              envelope.kind !== kind ||
+              envelope.workspaceId !== workspaceId ||
+              !Array.isArray(envelope.items) ||
+              envelope.items.length > limit
+            )
+              throw new HeimdallError("unavailable");
+            items.push(...envelope.items);
+            const next: unknown = envelope.nextId;
+            if (next === null)
+              return JSON.stringify({
+                schemaVersion: 1,
+                productId: this.productId,
+                environment: this.environment,
+                kind,
+                workspaceId,
+                items,
+                nextId: null,
+              });
+            if (
+              typeof next !== "string" ||
+              !/^[A-Za-z0-9_-]{1,128}(?![\s\S])/.test(next) ||
+              (after !== null && next <= after) ||
+              envelope.items.length !== limit
+            )
+              throw new HeimdallError("unavailable");
+            after = next;
+          }
+          throw new HeimdallError("unavailable");
+        }, signal),
       signal,
     );
   }

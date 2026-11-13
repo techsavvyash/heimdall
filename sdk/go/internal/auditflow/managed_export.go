@@ -21,7 +21,7 @@ type ManagedExportRequest struct {
 func (a *Authentication) RunManagedExport(
 	ctx context.Context, raw string, request ManagedExportRequest, modelID string, manifestVersion int,
 	policy func(context.Context, MaintenanceContext) (bool, error),
-	scan func(context.Context, string, *string, *string, int) ([]byte, error),
+	scan contract.ManagedExportScan,
 ) ([]byte, error) {
 	r := request
 	if (r.Kind != "workspaces" && r.Kind != "operations") || (r.Kind == "operations" && r.WorkspaceID == nil) ||

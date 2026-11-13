@@ -93,5 +93,6 @@ an in-memory database or waive commit-loss, accounting or concurrency checks.
 
 The storage port remains internal. The audited release path now authenticates
 the operator and commits a matching completion before returning a page.
-Consistent inventory orchestration and complete restore qualification remain
-open. [[phase-3-audited-managed-export]] · [[phase-3-readiness-audit]]
+The inventory runner can use one snapshot for multiple pages. Complete restore
+qualification remains open. [[phase-3-audited-managed-export]] ·
+[[phase-3-managed-inventory]] · [[phase-3-readiness-audit]]

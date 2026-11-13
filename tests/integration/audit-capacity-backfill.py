@@ -1,4 +1,5 @@
 """Bounded offline capacity accounting over real TS/Go history on pinned PostgreSQL."""
+import base64
 import concurrent.futures
 import json
 import hashlib
@@ -691,6 +692,9 @@ try:
   subprocess.run(['go','test','-race','-count=1','./internal/auditflow','-run','^TestAuditedMaintenance$/^live_managed_export$'],cwd=ROOT/'sdk/go',env=export_env,check=True)
   run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/audited-authentication.test.ts','-t','live audited managed export'],env=export_env)
   assert sql("SELECT count(*) FROM heimdall_retention.event_identities WHERE product_id='ledger' AND environment='production' AND tenant_id='export-probe'",'managed_operations_v4')=='6'
+  inventory_payloads=sql("SELECT event->>'payload' FROM heimdall.audit_events WHERE product_id='ledger' AND environment='production'",'managed_operations_v4').splitlines()
+  inventory_events=[json.loads(base64.urlsafe_b64decode(payload+'='*(-len(payload)%4))) for payload in inventory_payloads]
+  assert sorted(event['operationId'] for event in inventory_events if event['eventType']=='heimdall.export.completed' and event['outcome']=='succeeded' and event.get('operationId') in ('inventory-go','inventory-ts'))==['inventory-go','inventory-ts']
   print('Audited managed export passed in TS and Go with separate reader and writer roles',flush=True)
   operation_env=dict(env,HEIMDALL_TEST_MANAGED_DATABASE_URL=dsn('managed_operations_v4'),HEIMDALL_TEST_MANAGED_OPERATIONS_V4='1')
   go('^TestRetainedOperationsAdmission$',operation_env)

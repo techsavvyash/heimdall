@@ -116,7 +116,23 @@ still fail. Each retry is a fresh authorized read with its own audit records.
 
 The product supplies the operator grants, transport and artifact destination.
 See the deployment operator grants in `audit-retention.md`.
-For a consistent multi-page exit inventory, the product drains writers before
-the first page and keeps them drained until the final page. Page reads use the
-restricted export credential. Authorization and completion use the separate
-retained audit writer.
+Page reads use the restricted export credential. Authorization and completion
+use the separate retained audit writer. Use the inventory operation below for
+a single consistent result across multiple pages.
+
+## Consistent bounded inventory
+
+TS `runManagedInventory` and Go `RunManagedInventory` authorize the same scope
+as a page request and start from a null cursor. The retained reader opens a
+repeatable-read transaction and uses its existing allowlisted query for every
+page. The SDK assembles one version-1 document with a null next ID. It closes
+the snapshot before writing the export completion and checks identity again
+before returning any data.
+
+The invocation allows up to 100 pages, 4 MiB of page input and five seconds
+of snapshot time. An unfinished traversal, scope mismatch, read failure or
+invalid continuation fails the inventory without releasing partial data.
+The current bounds cover one workspace or operation inventory per invocation.
+Larger inventories require a separately controlled export with writers drained.
+The product still coordinates the broader exit procedure, including remote
+relationships and unresolved operations.

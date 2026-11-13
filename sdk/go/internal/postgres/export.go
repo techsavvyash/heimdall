@@ -102,6 +102,34 @@ func NewRetainedManagedExport(db *sql.DB, product, environment string) (*Managed
 
 // Scan returns a bounded portable JSON page, never a restorable journal or permission to replay.
 func (e *ManagedExport) Scan(ctx context.Context, kind string, workspace, after *string, limit int) ([]byte, error) {
+	return e.scan(ctx, e.db, kind, workspace, after, limit)
+}
+
+// WithSnapshot scopes the export reader to one bounded primary transaction.
+func (e *ManagedExport) WithSnapshot(ctx context.Context, read func(context.Context, contract.ManagedExportScan) error) error {
+	if ctx == nil || read == nil || !e.retainedRuntime {
+		return contract.ErrInvalidArgument
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	tx, err := e.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		return databaseError(ctx)
+	}
+	defer tx.Rollback()
+	err = read(ctx, func(ctx context.Context, kind string, workspace, after *string, limit int) ([]byte, error) {
+		return e.scan(ctx, tx, kind, workspace, after, limit)
+	})
+	if err != nil {
+		return err
+	}
+	if err = tx.Rollback(); err != nil {
+		return databaseError(ctx)
+	}
+	return contract.CheckCancellation(ctx)
+}
+
+func (e *ManagedExport) scan(ctx context.Context, reader retentionReader, kind string, workspace, after *string, limit int) ([]byte, error) {
 	if ctx == nil || (kind != "workspaces" && kind != "operations") || (workspace != nil && !valid(*workspace, 128)) || (kind == "operations" && workspace == nil) || (after != nil && !valid(*after, 128)) || limit < 1 || limit > 100 {
 		return nil, contract.ErrInvalidArgument
 	}
@@ -133,7 +161,7 @@ func (e *ManagedExport) Scan(ctx context.Context, kind string, workspace, after 
  FROM heimdall_managed.` + kind + ` WHERE product_id=$1 AND environment=$2 AND ($3::text IS NULL OR workspace_id=$3)
  AND ($4::text IS NULL OR ` + id + ` COLLATE "C">$4 COLLATE "C") ORDER BY ` + id + ` COLLATE "C" LIMIT $5) page`
 	statement, args := managedReadQuery(statement, []any{e.product, e.environment, workspace, after, limit + 1}, e.retainedRuntime)
-	err := e.db.QueryRowContext(ctx, statement, args...).Scan(&primary, &raw)
+	err := reader.QueryRowContext(ctx, statement, args...).Scan(&primary, &raw)
 	if err != nil {
 		return nil, databaseError(ctx)
 	}

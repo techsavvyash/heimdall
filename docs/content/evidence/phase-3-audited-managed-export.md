@@ -27,8 +27,8 @@ sequenceDiagram
   end
 ```
 
-The deployment owns the operator policy and the export destination. It must
-drain writers for a consistent exit inventory across multiple pages.
+The deployment owns the operator policy and the export destination.
+[[phase-3-managed-inventory]] assembles a bounded inventory in one snapshot.
 [[phase-3-retained-export]] describes the reader's column privileges and scope.
 
 Pinned PostgreSQL run `heimdall-capacity-backfill-850a298dbc394eab87d5972e17a40c1e`

@@ -579,6 +579,55 @@ test.skipIf(!process.env.HEIMDALL_TEST_AUDITED_EXPORT_READER)(
           updatedAt: 2,
         },
       ]);
+      await writer.query(
+        "INSERT INTO heimdall_managed.workspaces VALUES ('ledger','production','export-snapshot-z-ts','Private','suspended',true,1,1,2)",
+      );
+      let updated = false;
+      const inventory = await setup(audit.append).runManagedInventory(
+        raw,
+        {
+          kind: "workspaces",
+          workspaceId: null,
+          after: null,
+          limit: 1,
+          operationId: "inventory-ts",
+        },
+        "model",
+        1,
+        createOperatorPolicy({
+          ...config,
+          grants: [
+            {
+              issuer: f.issuer,
+              subject: f.subject,
+              tenantId: null,
+              action: "managed.export.workspaces",
+            },
+          ],
+        }),
+        (read, signal) =>
+          store.withSnapshot(
+            (scan) =>
+              read(async (...args) => {
+                const page = await scan(...args);
+                if (!updated) {
+                  await writer.query(
+                    "UPDATE heimdall_managed.workspaces SET lifecycle='tombstoned' WHERE product_id='ledger' AND environment='production' AND workspace_id='export-snapshot-z-ts'",
+                  );
+                  updated = true;
+                }
+                return page;
+              }),
+            signal,
+          ),
+      );
+      expect(updated).toBe(true);
+      expect(JSON.parse(inventory).items).toContainEqual(
+        expect.objectContaining({
+          workspaceId: "export-snapshot-z-ts",
+          lifecycle: "suspended",
+        }),
+      );
     } finally {
       await Promise.all([reader.end(), writer.end()]);
     }
@@ -639,4 +688,54 @@ test("retirement sweep persists stable proposals with the cursor", async () => {
       return true;
     },
   );
+});
+
+test.each(
+  read("fixtures/managed-inventory.json") as {
+    name: string;
+    nextIds: (string | null)[];
+    expected: string;
+    reads: number;
+  }[],
+)("managed inventory $name", async (c) => {
+  provider(cases.find((p) => p.expected === "active")!);
+  let reads = 0;
+  const events: Record<string, unknown>[] = [];
+  const result = await setup(async (event) => {
+    events.push(event);
+    return receipt(event);
+  })
+    .runManagedInventory(
+      raw,
+      { kind: "workspaces", workspaceId: null, after: null, limit: 1, operationId: "inventory" },
+      "model",
+      1,
+      async () => true,
+      (consume) =>
+        consume(async (kind, workspaceId) => {
+          const nextId = c.nextIds.length
+            ? c.nextIds[reads]
+            : `page-${String(reads).padStart(3, "0")}`;
+          reads++;
+          return JSON.stringify({
+            schemaVersion: 1,
+            productId: "ledger",
+            environment: "production",
+            kind,
+            workspaceId,
+            items: [{ workspaceId: `row-${reads}` }],
+            nextId,
+          });
+        }),
+    )
+    .then(
+      (page) => ({ status: "inventory", items: JSON.parse(page).items.length }),
+      (error: HeimdallError) => ({ status: error.code, items: 0 }),
+    );
+  expect({ ...result, reads }).toEqual({
+    status: c.expected,
+    items: c.expected === "inventory" ? 2 : 0,
+    reads: c.reads,
+  });
+  expect(events.at(-1)?.outcome).toBe(c.expected === "inventory" ? "succeeded" : "failed");
 });

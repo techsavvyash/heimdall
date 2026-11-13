@@ -134,4 +134,40 @@ func testLiveManagedExport(t *testing.T, bearer string, now int64, issuer, audie
 		t.Fatal("unexpected sanitized fields")
 	}
 
+	if _, err := writer.Exec("INSERT INTO heimdall_managed.workspaces VALUES ('ledger','production','export-snapshot-z-go','Private','suspended',true,1,1,2)"); err != nil {
+		t.Fatal(err)
+	}
+	inventoryPolicy, err := NewOperatorPolicy(OperatorPolicyConfig{ProductID: "ledger", Environment: "production", PolicyVersion: "p1",
+		Grants: []OperatorGrant{{Issuer: issuer, Subject: subject, Action: "managed.export.workspaces"}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := false
+	inventory, err := auth.RunManagedInventory(context.Background(), bearer, ManagedExportRequest{Kind: "workspaces", Limit: 1, OperationID: "inventory-go"}, "model", 1, inventoryPolicy,
+		func(ctx context.Context, read func(context.Context, contract.ManagedExportScan) error) error {
+			return store.WithSnapshot(ctx, func(ctx context.Context, scan contract.ManagedExportScan) error {
+				return read(ctx, func(ctx context.Context, kind string, workspace, after *string, limit int) ([]byte, error) {
+					page, err := scan(ctx, kind, workspace, after, limit)
+					if err == nil && !updated {
+						_, err = writer.ExecContext(ctx, "UPDATE heimdall_managed.workspaces SET lifecycle='tombstoned' WHERE product_id='ledger' AND environment='production' AND workspace_id='export-snapshot-z-go'")
+						updated = err == nil
+					}
+					return page, err
+				})
+			})
+		})
+	if err != nil || json.Unmarshal(inventory, &result) != nil || !updated {
+		t.Fatal("inventory failed", err)
+	}
+	found := false
+	for _, item := range result.Items {
+		if item["workspaceId"] == "export-snapshot-z-go" {
+			found = item["lifecycle"] == "suspended"
+		}
+	}
+	if !found {
+		t.Fatal("inventory lost the original workspace state")
+	}
+
 }
