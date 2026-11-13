@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { randomUUID, randomBytes, createHash, createPublicKey, verify } from "node:crypto";
+import { once } from "node:events";
+import { createServer } from "node:http";
 import { createBrowserBridge } from "./browser-bridge.mjs";
 
 const protocol = process.env.HEIMDALL_PROBE_FEDERATION_PROTOCOL ?? "oidc";
@@ -348,20 +350,22 @@ try {
   const complete = browserMode
     ? `${browserBridge.origin}/complete`
     : "https://heimdall-probe.example.invalid/complete";
-  async function authenticate(tamper = false) {
+  async function authenticate(tamper = false, authorizationUrl, destination = complete) {
     let capturedSamlFields;
-    const intent = await za(
-      "POST",
-      "/v2/idp_intents",
-      {
-        idpId: provider.id,
-        urls: {
-          successUrl: browserMode ? browserBridge.callbackUrl : complete,
-          failureUrl: "https://heimdall-probe.example.invalid/failure",
-        },
-      },
-      flowPat,
-    );
+    const intent = authorizationUrl
+      ? { authUrl: authorizationUrl }
+      : await za(
+          "POST",
+          "/v2/idp_intents",
+          {
+            idpId: provider.id,
+            urls: {
+              successUrl: browserMode ? browserBridge.callbackUrl : complete,
+              failureUrl: "https://heimdall-probe.example.invalid/failure",
+            },
+          },
+          flowPat,
+        );
     const upstreamAuthorization = new URL(intent.authUrl);
     assert(upstreamAuthorization.origin === k);
     if (protocol === "oidc") {
@@ -425,7 +429,7 @@ try {
     for (let i = 0; i < 12; i++) {
       if ([302, 303, 307].includes(response.status)) {
         target = new URL(response.headers.get("location"), target);
-        if (target.origin === new URL(complete).origin) break;
+        if (target.origin === new URL(destination).origin) break;
         response = await page(target.href);
         continue;
       }
@@ -870,6 +874,143 @@ try {
       checks.push({ language, matchedSignedBinding: "accepted", wrongSignedSession: "denied" });
     }
     observations.push({ sdkFederatedExchange: checks });
+  }
+  if (process.env.HEIMDALL_PROBE_SDK_FEDERATION_HTTP === "1") {
+    const bridgeKey = randomBytes(32).toString("hex");
+    const bridge = createServer(async (request, response) => {
+      try {
+        assert(
+          request.method === "POST" && request.headers.authorization === "Bearer " + bridgeKey,
+        );
+        let raw = "";
+        for await (const chunk of request) {
+          raw += chunk;
+          assert(raw.length <= 16384);
+        }
+        const payload = JSON.parse(raw);
+        if (request.url === "/session") {
+          assert(/^[A-Za-z0-9_-]{1,128}$/.test(payload.sessionId));
+          sessions.push(payload.sessionId);
+          response.writeHead(204);
+          response.end();
+          return;
+        }
+        assert.equal(request.url, "/upstream");
+        const { authorizationUrl } = payload;
+        assert.equal(new URL(authorizationUrl).origin, k);
+        const { target } = await authenticate(false, authorizationUrl, redirectUri);
+        assert.equal(target.origin + target.pathname, redirectUri);
+        response.writeHead(200, {
+          "content-type": "application/json",
+          "cache-control": "no-store",
+        });
+        response.end(JSON.stringify({ callback: target.href }));
+      } catch {
+        response.writeHead(400);
+        response.end();
+      }
+    });
+    bridge.listen(0, "127.0.0.1");
+    await once(bridge, "listening");
+    const commands = [
+      [
+        "typescript",
+        [
+          "pnpm",
+          "--filter",
+          "@heimdall/sdk",
+          "exec",
+          "vitest",
+          "run",
+          "test/browser-federation.live.test.ts",
+        ],
+      ],
+      [
+        "go",
+        [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./internal/browserlogin",
+          "-run",
+          "^TestLiveFederationHTTP$",
+        ],
+      ],
+    ];
+    const apiAudience = [idClaims.aud]
+      .flat()
+      .find((value) => value !== client.clientId && value !== project.projectId);
+    assert(apiAudience);
+    const input = {
+      config: {
+        issuer: z,
+        profile: "production",
+        clientId: client.clientId,
+        clientSecret: client.clientSecret,
+        audience: project.projectId,
+        zitadelAPIAudience: apiAudience,
+        redirectUri,
+      },
+      credential: flowPat,
+      fixtureOrigin: k,
+      subject: user.id,
+      policy: {
+        providerId: provider.id,
+        organizationId: orgId,
+        protocol,
+        policyVersion: "probe-v1",
+        maxAgeMs: 300000,
+      },
+      bridge: `http://127.0.0.1:${bridge.address().port}`,
+      bridgeKey,
+    };
+    try {
+      const checks = [];
+      for (const [language, command] of commands) {
+        const child = spawn(command[0], command.slice(1), {
+          cwd: new URL(language === "typescript" ? "../../" : "../../sdk/go/", import.meta.url),
+          env: { ...process.env, HEIMDALL_TEST_FEDERATION_HTTP: JSON.stringify(input) },
+          stdio: ["ignore", "pipe", "pipe"],
+          timeout: 60000,
+        });
+        let diagnostic = "";
+        for (const pipe of [child.stdout, child.stderr]) {
+          pipe.setEncoding("utf8");
+          pipe.on("data", (chunk) => {
+            diagnostic = (diagnostic + chunk).slice(-12000);
+          });
+        }
+        const [status] = await once(child, "close");
+        if (status !== 0) {
+          const codes = [
+            ...new Set(
+              diagnostic.match(
+                /\b(?:unauthenticated|invalid_argument|unavailable|deadline_exceeded|bridge rejected federation)\b/g,
+              ) ?? [],
+            ),
+          ];
+          const frames =
+            diagnostic.match(
+              /(?:browser-federation\.live\.test\.ts|browser-login-http\.ts|zitadel-federation\.ts|federation_live_test\.go):\d+(?::\d+)?/g,
+            ) ?? [];
+          console.error(JSON.stringify({ language, codes, frames }));
+        }
+        assert.equal(status, 0, `${language} browser federation failed`);
+        checks.push({
+          language,
+          exactIntent: "accepted",
+          missingCookie: "denied",
+          wrongIntent: "denied",
+          changedPolicy: "denied",
+          replay: "denied",
+        });
+      }
+      observations.push({ sdkBrowserFederation: checks });
+    } finally {
+      bridge.closeAllConnections();
+      bridge.close();
+    }
   }
   if (sharedClient)
     observations.push({

@@ -1,3 +1,9 @@
+import { zitadelFederation } from "./zitadel-federation.js";
+import {
+  readEnterpriseEvidence,
+  validateEnterpriseEvidence,
+  type TenantSSOPolicy,
+} from "./enterprise-evidence.js";
 import { createBrowserOIDC } from "./browser-oidc.js";
 import { checkCancellation, HeimdallError } from "./errors.js";
 import type { BrowserLoginRecords } from "./postgres/login.js";
@@ -13,7 +19,8 @@ const stateToken = (value: string) => /^[A-Za-z0-9_-]{43}(?![\s\S])/.test(value)
 
 export async function createBrowserLoginHTTP(
   config: OIDCConfig & Scope,
-  records: Pick<BrowserLoginRecords, "start" | "claim">,
+  records: Pick<BrowserLoginRecords, "start" | "claim"> &
+    Partial<Pick<BrowserLoginRecords, "startFederation" | "claimFederation">>,
   signal?: AbortSignal,
 ) {
   const { productId, environment, returnToKey, issuer, clientId, redirectUri } = config;
@@ -37,6 +44,45 @@ export async function createBrowserLoginHTTP(
     tenantPolicy: null,
   };
 
+  function bindingFor(request: Request, state: string) {
+    const name = prefix + state;
+    const cookies = request.headers.get("cookie") ?? "";
+    if (cookies.length > 16384) throw new HeimdallError("unauthenticated");
+    const binding = cookies
+      .split(";")
+      .map((cookie) => cookie.trim())
+      .filter((cookie) => cookie.startsWith(name + "="));
+    if (binding.length !== 1) throw new HeimdallError("unauthenticated");
+    return {
+      binding: binding[0]!.slice(name.length + 1),
+      clearBindingCookie: `${name}=; Max-Age=0; ${attributes}`,
+    };
+  }
+
+  const scoped = (tenantId: string, policy: TenantSSOPolicy) => ({
+    ...target,
+    tenantPolicy: {
+      tenantId,
+      providerId: policy.providerId,
+      protocol: policy.protocol,
+      organizationId: policy.organizationId,
+      policyVersion: policy.policyVersion,
+      strictSSO: true,
+    },
+  });
+
+  function startResponse(login: { state: string; browserBinding: string }, location: string) {
+    return new Response(null, {
+      status: 303,
+      headers: {
+        location,
+        "set-cookie": `${prefix}${login.state}=${login.browserBinding}; Max-Age=600; ${attributes}`,
+        "cache-control": "no-store",
+        "referrer-policy": "no-referrer",
+      },
+    });
+  }
+
   return {
     scope: Object.freeze({
       productId,
@@ -51,15 +97,126 @@ export async function createBrowserLoginHTTP(
       if (request.method !== "GET" || new URL(request.url).origin !== callback.origin)
         throw new HeimdallError("invalid_argument");
       const login = await records.start(target, request.signal);
-      return new Response(null, {
-        status: 303,
-        headers: {
-          location: oidc.authorizationURL(login.state, login.nonce, login.pkceChallenge),
-          "set-cookie": `${prefix}${login.state}=${login.browserBinding}; Max-Age=600; ${attributes}`,
-          "cache-control": "no-store",
-          "referrer-policy": "no-referrer",
+      return startResponse(
+        login,
+        oidc.authorizationURL(login.state, login.nonce, login.pkceChallenge),
+      );
+    },
+
+    async startFederation(
+      request: Request,
+      tenantId: string,
+      policy: TenantSSOPolicy,
+      credential: string,
+    ) {
+      if (
+        request.method !== "GET" ||
+        new URL(request.url).origin !== callback.origin ||
+        !records.startFederation
+      )
+        throw new HeimdallError("invalid_argument");
+      const federation = zitadelFederation(issuer, credential, request.signal);
+      const login = await records.startFederation(
+        scoped(tenantId, policy),
+        ({ state, nonce, pkceChallenge }) => {
+          const success = new URL(redirectUri);
+          success.searchParams.set("state", state);
+          success.searchParams.set("tenant", tenantId);
+          return federation.start(
+            oidc.authorizationURL(state, nonce, pkceChallenge, policy.organizationId),
+            success.href,
+            policy,
+          );
         },
+        request.signal,
+      );
+      return startResponse(login, login.authorizationUrl);
+    },
+
+    async federationCallback(
+      request: Request,
+      tenantId: string,
+      policy: TenantSSOPolicy,
+      credential: string,
+    ) {
+      const url = new URL(request.url);
+      const state = url.searchParams.getAll("state");
+      const intents = url.searchParams.getAll("id");
+      const tokens = url.searchParams.getAll("token");
+      const tenants = url.searchParams.getAll("tenant");
+      if (
+        request.method !== "GET" ||
+        url.origin !== callback.origin ||
+        url.pathname !== callback.pathname ||
+        url.search.length > 16384 ||
+        /;|%(?![\da-f]{2})/i.test(url.search) ||
+        state.length !== 1 ||
+        !stateToken(state[0]!) ||
+        intents.length !== 1 ||
+        tokens.length !== 1 ||
+        tenants.length !== 1 ||
+        tenants[0] !== tenantId ||
+        url.searchParams.has("error") ||
+        !records.claimFederation
+      )
+        throw new HeimdallError("unauthenticated");
+      const { binding, clearBindingCookie } = bindingFor(request, state[0]!);
+      const claimed = await records.claimFederation(
+        scoped(tenantId, policy),
+        state[0]!,
+        binding,
+        intents[0]!,
+        request.signal,
+      );
+      const operation = AbortSignal.any([
+        request.signal,
+        AbortSignal.timeout(Math.max(0, claimed.expiresAt - Date.now())),
+      ]);
+      const federation = zitadelFederation(issuer, credential, operation);
+      const verified = await federation.finish({
+        intentId: intents[0]!,
+        intentToken: tokens[0]!,
+        authRequestId: claimed.authRequestId,
+        state: state[0]!,
+        redirectUri,
+        policy,
       });
+      const productTokens = await oidc.exchange(
+        verified.code,
+        async () => ({ ...claimed, federation: verified.federation }),
+        operation,
+      );
+      checkCancellation(operation);
+      if (Date.now() >= claimed.expiresAt) throw new HeimdallError("unauthenticated");
+      const { subject, sessionId, verifiedAt } = verified.federation;
+      const scope = {
+        productId,
+        environment,
+        clientId,
+        issuer,
+        subject,
+        tenantId,
+        providerId: policy.providerId,
+        protocol: policy.protocol,
+        organizationId: policy.organizationId,
+        policyVersion: policy.policyVersion,
+      };
+      const evidence = readEnterpriseEvidence({
+        schemaVersion: 1,
+        ...scope,
+        upstreamSubject: verified.upstreamSubject,
+        providerSessionId: sessionId,
+        verifiedAt,
+        authTime: Math.floor(verifiedAt / 1000) * 1000,
+      });
+      validateEnterpriseEvidence(evidence, scope, Date.now(), policy.maxAgeMs);
+      return {
+        tokens: productTokens,
+        evidence,
+        expiresAt: claimed.expiresAt,
+        returnToKey,
+        clearBindingCookie,
+      };
     },
 
     async callback(request: Request) {
@@ -85,20 +242,13 @@ export async function createBrowserLoginHTTP(
         (responseIssuer.length === 1 && responseIssuer[0] !== issuer)
       )
         throw new HeimdallError("unauthenticated");
-      const name = prefix + state[0];
-      const cookies = request.headers.get("cookie") ?? "";
-      if (cookies.length > 16384) throw new HeimdallError("unauthenticated");
-      const binding = cookies
-        .split(";")
-        .map((cookie) => cookie.trim())
-        .filter((cookie) => cookie.startsWith(name + "="));
-      if (binding.length !== 1) throw new HeimdallError("unauthenticated");
+      const { binding, clearBindingCookie } = bindingFor(request, state[0]!);
       const tokens = await oidc.exchange(
         code[0]!,
-        () => records.claim(target, state[0]!, binding[0]!.slice(name.length + 1), request.signal),
+        () => records.claim(target, state[0]!, binding, request.signal),
         request.signal,
       );
-      return { tokens, returnToKey, clearBindingCookie: `${name}=; Max-Age=0; ${attributes}` };
+      return { tokens, returnToKey, clearBindingCookie };
     },
   };
 }

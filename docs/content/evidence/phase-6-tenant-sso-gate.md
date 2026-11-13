@@ -72,3 +72,32 @@ sequenceDiagram
 The shared tests exercise the store boundary with disposable PostgreSQL. Wrong intent, rotated policy and ordinary callbacks are rejected before claim. One of eight parallel claims gets the exchange material. A lost response after a committed claim yields an uncertain outcome and a replay cannot recover the exchange material. The HTTP adapter and provider calls shown in the diagram are the integration path for this storage change.
 
 Storage commit `247965c` passed the workspace checks and the pinned PostgreSQL regression run `heimdall-records-d9ae3b53311b49be8b4ec3890f929263`. Both SDKs passed the browser transaction tests against a disposable database on Railway PostgreSQL, `heimdall_intent_c5c7b091888a`, which was removed after the run. The remote Vitest invocation used a 30-second suite timeout after the default five-second test timeout elapsed over SSH. Each SDK operation kept its existing deadline.
+
+## SDK federation HTTP flow
+
+Both SDKs now run the internal HTTP federation flow from the provider redirect through verification of the product ID token. Each SDK starts a ZITADEL authorization request with the target organization, captures the exact provider intent, and issues a browser-binding cookie. After claiming that transaction, the SDK verifies the linked provider account, checks the ZITADEL session's organization and authentication factor, completes the original product authorization request, and exchanges the code using the saved nonce and PKCE verifier.
+
+```mermaid
+sequenceDiagram
+  participant B as Browser
+  participant SDK as SDK HTTP adapter
+  participant DB as Encrypted login store
+  participant Z as ZITADEL
+  participant IdP as Tenant identity provider
+  B->>SDK: Start tenant sign-in
+  SDK->>Z: Start organization-scoped request and provider intent
+  SDK->>DB: Store the request and intent with browser binding
+  SDK-->>B: Set cookie and redirect to provider
+  B->>IdP: Authenticate
+  IdP->>Z: Return SAML assertion or OIDC result
+  Z-->>B: Redirect to product callback
+  B->>SDK: Return intent, state and binding cookie
+  SDK->>DB: Claim exact attempt once under current policy
+  SDK->>Z: Verify intent and link verified session to original request
+  Z-->>SDK: Return product authorization code
+  SDK->>Z: Exchange code and verify signed session binding
+```
+
+Railway runs `2caed4cb-31c2-4dac-8f5d-77c7c298ac39` for SAML and `7c4e7781-8efe-49a7-95b7-d3cc402e5fff` for OIDC passed in both SDKs. The probe drove the upstream fixture forms over HTTP and exercised the real SDK redirect and callback handlers against ZITADEL. Both handlers rejected missing cookies, wrong intents, changed policy and replay. The first OIDC trial exposed HTTP 201 on ZITADEL session creation. Both SDKs now accept that success status.
+
+These runs verify the internal HTTP adapters through verified evidence. Public session entry points, atomic local account switching and session issuance remain part of Phase 6.
