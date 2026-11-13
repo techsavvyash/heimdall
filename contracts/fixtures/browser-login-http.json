@@ -3,7 +3,7 @@
   "environment": "login-http-test",
   "returnToKey": "workspaces",
   "redirectUri": "https://ledger.example.test/auth/callback",
-  "clientId": "ledger-web",
+  "clientId": "69629023906488334@ledger",
   "audience": "ledger-project",
   "code": "opaque-code",
   "cases": [

@@ -95,10 +95,9 @@ func ValidateDeploymentShape(value any) error {
 			return contract.ErrInvalidArgument
 		}
 	}
-	for _, k := range []string{"clientId", "zitadelProjectId"} {
-		if !text(c[k], 128, token) {
-			return contract.ErrInvalidArgument
-		}
+	clientID, ok := c["clientId"].(string)
+	if !ok || !contract.ValidClientID(clientID) || !text(c["zitadelProjectId"], 128, token) {
+		return contract.ErrInvalidArgument
 	}
 	p, ok := profile(c)
 	if !ok || !text(c["audience"], 2048, nil) || !version(c["manifestVersion"]) || !endpoint(c["issuer"], p) {

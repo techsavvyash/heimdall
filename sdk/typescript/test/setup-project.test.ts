@@ -1,5 +1,6 @@
 import { Pool } from "pg";
 import { expect, test, vi } from "vitest";
+import { provisionApplication } from "../src/provisioning/application.js";
 import { provisionProject } from "../src/provisioning/project.js";
 
 test.skipIf(!process.env.HEIMDALL_TEST_SETUP_DSN || !process.env.HEIMDALL_PROBE_ZITADEL_PAT)(
@@ -61,6 +62,51 @@ test.skipIf(!process.env.HEIMDALL_TEST_SETUP_DSN || !process.env.HEIMDALL_PROBE_
       expect(reservedId).toBeTruthy();
       expect(await provisionProject(pool, options, signal)).toBe(reservedId);
       expect(await provisionProject(pool, options, signal)).toBe(reservedId);
+      let saved = "";
+      let saves = 0;
+      const appOptions = {
+        ...options,
+        ordinal: 2,
+        projectId: reservedId,
+        name: "web",
+        redirectUris: ["https://ledger.example.invalid/callback"],
+        async saveSecret(_applicationId: string, clientId: string, secret: string) {
+          if (!secret) throw new Error("missing client secret");
+          saved = clientId;
+          saves++;
+        },
+        async hasSecret(_applicationId: string, clientId: string) {
+          return saved === clientId;
+        },
+      };
+      const app = await provisionApplication(pool, appOptions, signal);
+      expect(app.clientId).toBe(saved);
+      expect(await provisionApplication(pool, appOptions, signal)).toEqual(app);
+      expect(saves).toBe(1);
+      await expect(
+        provisionApplication(pool, { ...appOptions, hasSecret: async () => false }, signal),
+      ).rejects.toThrow("outcome_unknown");
+      await expect(
+        provisionApplication(
+          pool,
+          { ...appOptions, redirectUris: ["https://ledger.example.invalid/other"] },
+          signal,
+        ),
+      ).rejects.toThrow("conflict");
+      let lostApplicationCreates = 0;
+      vi.stubGlobal("fetch", async (input: string, init: RequestInit) => {
+        const response = await fetchReal(input, init);
+        if (!input.endsWith("/CreateApplication")) return response;
+        lostApplicationCreates++;
+        if (!response.ok) throw new Error("expected application creation");
+        await response.body?.cancel();
+        throw new Error("discarded response containing the one-time secret");
+      });
+      const lost = { ...appOptions, ordinal: 3, name: "lost", hasSecret: async () => false };
+      for (let retry = 0; retry < 2; retry++) {
+        await expect(provisionApplication(pool, lost, signal)).rejects.toThrow("outcome_unknown");
+      }
+      expect(lostApplicationCreates).toBe(1);
       const absent = {
         ...options,
         scope: { ...options.scope, environment: "provider-unresolved" },

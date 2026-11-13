@@ -74,7 +74,7 @@ func loginText(value string, max int) bool {
 
 func validLoginScope(s contract.LoginScope) bool {
 	if !valid(s.ProductID, 64) || !valid(s.Environment, 64) || !loginText(s.Issuer, 2048) ||
-		!valid(s.ClientID, 128) || !loginText(s.RedirectURI, 2048) || !valid(s.ReturnToKey, 64) {
+		!contract.ValidClientID(s.ClientID) || !loginText(s.RedirectURI, 2048) || !valid(s.ReturnToKey, 64) {
 		return false
 	}
 	p := s.TenantPolicy

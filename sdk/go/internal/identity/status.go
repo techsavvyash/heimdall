@@ -70,7 +70,10 @@ var configToken = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 var statusContext = regexp.MustCompile(`^[A-Za-z0-9:_-]{1,256}$`)
 
 func NewIdentityVerifier(config StatusConfig, secret func(context.Context) (string, error), gate Gate, now func() time.Time) (*IdentityVerifier, error) {
-	for _, v := range []string{config.ProductID, config.Environment, config.PolicyVersion, config.ClientID} {
+	if !contract.ValidClientID(config.ClientID) {
+		return nil, contract.ErrInvalidArgument
+	}
+	for _, v := range []string{config.ProductID, config.Environment, config.PolicyVersion} {
 		if !configToken.MatchString(v) {
 			return nil, contract.ErrInvalidArgument
 		}

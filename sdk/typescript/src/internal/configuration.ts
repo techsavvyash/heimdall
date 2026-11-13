@@ -1,5 +1,5 @@
 import { compileTenantModel } from "./tenant-model.js";
-import { validateEndpoint } from "./endpoints.js";
+import { validateEndpoint, validClientId } from "./endpoints.js";
 import { HeimdallError } from "./errors.js";
 
 type Obj = Record<string, unknown>;
@@ -91,7 +91,8 @@ export function validateDeploymentShape(value: unknown): void {
   );
   if (c.schemaVersion !== 1) invalid();
   for (const key of ["productId", "environment", "clientKey"]) string(c[key], 64, slug);
-  for (const key of ["clientId", "zitadelProjectId"]) string(c[key], 128, token);
+  if (!validClientId(c.clientId)) invalid();
+  string(c.zitadelProjectId, 128, token);
   string(c.audience, 2048);
   version(c.manifestVersion);
   const p = profile(c);

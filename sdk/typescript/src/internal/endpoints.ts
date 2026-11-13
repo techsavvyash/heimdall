@@ -68,3 +68,12 @@ export function validateConfigEndpoints(config: Config): void {
   validateEndpoint(config.issuer, profile);
   validateEndpoint(config.openfga.url, profile);
 }
+
+// ZITADEL may qualify the OAuth client identifier with its project name.
+export function validClientId(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length <= 128 &&
+    /^[A-Za-z0-9_-]+(?:@[A-Za-z0-9_-]+)?(?![\s\S])/.test(value)
+  );
+}

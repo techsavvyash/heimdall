@@ -94,3 +94,10 @@ func ValidateConfigEndpoints(c EndpointConfig) error {
 	}
 	return ValidateEndpoint(c.OpenFGA.URL, profile)
 }
+
+var oidcClientID = regexp.MustCompile(`^[A-Za-z0-9_-]+(@[A-Za-z0-9_-]+)?$`)
+
+// ValidClientID permits ZITADEL's project-qualified OAuth client identifiers.
+func ValidClientID(value string) bool {
+	return len(value) <= 128 && oidcClientID.MatchString(value)
+}

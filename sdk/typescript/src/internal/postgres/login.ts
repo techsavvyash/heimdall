@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { checkCancellation, HeimdallError } from "../errors.js";
+import { validClientId } from "../endpoints.js";
 import { validateLoginClaim } from "../login-contract.js";
 import type { LoginScope } from "../login-contract.js";
 import type { PostgresRecords } from "./records.js";
@@ -46,7 +47,7 @@ function validTarget(target: Target): boolean {
     token(target.productId, 64) &&
     token(target.environment, 64) &&
     bounded(target.issuer, 2048) &&
-    token(target.clientId, 128) &&
+    validClientId(target.clientId) &&
     bounded(target.redirectUri, 2048) &&
     token(target.returnToKey, 64) &&
     (policy === null ||

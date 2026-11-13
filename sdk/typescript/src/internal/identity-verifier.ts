@@ -1,3 +1,4 @@
+import { validClientId } from "./endpoints.js";
 import { createHash } from "node:crypto";
 import { TokenVerifier } from "./token-verifier.js";
 import { HeimdallError, checkCancellation } from "./errors.js";
@@ -50,9 +51,10 @@ export class IdentityVerifier {
     private readonly now: () => number = Date.now,
   ) {
     if (
-      ![config.productId, config.environment, config.policyVersion, config.clientId].every(
+      ![config.productId, config.environment, config.policyVersion].every(
         (v) => typeof v === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(v),
       ) ||
+      !validClientId(config.clientId) ||
       typeof secret !== "function" ||
       typeof gate?.check !== "function" ||
       typeof gate?.invalidate !== "function"

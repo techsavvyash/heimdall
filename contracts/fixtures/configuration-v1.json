@@ -43,6 +43,16 @@
       "valid": true
     },
     {
+      "name": "ZITADEL qualified client ID",
+      "config": [[["clientId"], "69629023906488334@ledger"]],
+      "valid": true
+    },
+    {
+      "name": "multiple client ID qualifiers",
+      "config": [[["clientId"], "69629023906488334@ledger@other"]],
+      "valid": false
+    },
+    {
       "name": "unknown config field",
       "config": [[["secret"], "do-not-log"]],
       "valid": false
