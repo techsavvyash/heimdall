@@ -122,6 +122,22 @@ sequenceDiagram
   SDK-->>B: Issue cookie for new session
 ```
 
-Live SAML and OIDC session issuance runs used Railway ZITADEL and an encrypted custom store, then authenticated the issued cookie and checked the saved evidence in both languages. SAML run `aa588074-3847-4b65-9631-b7ed9df2eb73` and OIDC run `ebd5ddd5-671e-4840-8c08-5befbf147ea3` passed. The PostgreSQL replacement tests exercise concurrent candidates, a stale revision, a denied target identity and use of the previous key after replacement. A two-directory switch through deployed public SDK routes, including membership and cursor checks, remains a Phase 6 acceptance run.
+Live SAML and OIDC session issuance runs used Railway ZITADEL and an encrypted custom store, then authenticated the issued cookie and checked the saved evidence in both languages. SAML run `aa588074-3847-4b65-9631-b7ed9df2eb73` and OIDC run `ebd5ddd5-671e-4840-8c08-5befbf147ea3` passed. The PostgreSQL replacement tests exercise concurrent candidates, a stale revision, a denied target identity and use of the previous key after replacement. The deployed two-directory switch is recorded below.
 
 Both languages passed the prior-session binding and atomic replacement tests against the disposable Railway PostgreSQL database `heimdall_switch_1c33e8f4d2c1`. The Go test now pairs each concurrent result with its requested key. The first Railway run had assumed channel receive order matched launch order. The rerun verified that the winner alone left a record and removed the test database.
+
+
+## Deployed two-directory switch
+
+Railway run `78bae401-deff-41d3-bb12-5cfd51d6df03` exercised Ledger and Support through their public browser session routes using ZITADEL, OpenFGA and PostgreSQL. Each product had a separate ZITADEL client and OpenFGA store. Acme SAML and Globex OIDC used different organization-owned subjects with the same fixture email. The previous Acme account had an OpenFGA membership in Globex, which made its pre-switch Globex denial a test of strict SSO enforcement.
+
+| Check | Ledger and Support |
+| --- | --- |
+| Initial discovery and protected read | Acme visible and allowed. Globex read returned 403. |
+| Discovery and effective roles after switching | Globex visible and owner. Acme roles empty. |
+| Protected read after switching | Acme returned 403. Globex returned 200. |
+| Previous session, unfinished callback and callback replay | Each returned 401. |
+| Acme discovery cursor presented with Globex cookie | Returned 400. |
+| Durable audit readback | Two distinct authenticated subjects and four paired resource decisions per product. Each request and result agreed on subject, tenant and permission. |
+
+Ledger deployment `decb30af-0e04-4447-981f-e7c9fe85f3b0` and Support deployment `4fc305e2-5924-4c2a-a859-78948a4a8a7a` ran implementation commit `a96936c`. Both GitHub workspace runs passed. The fixture removed the disposable provider organizations, OpenFGA stores and product organizations, revoked the temporary federation grants, and cleared the stored federation credentials. The test uses the provider redirect flow for SAML and explicitly linked fixture accounts. Enterprise provider setup, SCIM lifecycle and SIEM delivery remain Phase 6 work.
