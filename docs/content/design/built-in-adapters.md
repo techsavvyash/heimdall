@@ -143,6 +143,7 @@ if err != nil { return err }
 | Observe operation | operations.get / Operations().Get | Authorized caller sees status and sanitized reason |
 | Discover | workspaces.list / Workspaces().List | Bounded authorized page and continuation |
 | Enforce | tenant(id).require / Tenant(id).Require | Local lifecycle gate, then fresh permission check |
+| Change lifecycle | tenant(id).suspend or resume / Tenant(id).Suspend or Resume | Explicit product policy and an audited revision-checked update |
 | Effective roles | tenant(id).roles / Tenant(id).Roles | Same gate plus membership-gated roles |
 | Mutate membership | memberships.add/remove/assignRole / Memberships equivalents | Confirmed or pending; delegation checked before intent |
 | Recover | reconcile / Reconcile | Bounded summary of completed, retryable and blocked operations |

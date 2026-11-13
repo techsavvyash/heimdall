@@ -3,6 +3,7 @@ export type {
   Heimdall,
   Tenant,
   RuntimeOptions,
+  WorkspaceLifecyclePolicy,
   SessionOptions,
   Sessions,
   RuntimeStorage,

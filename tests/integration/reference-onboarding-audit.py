@@ -71,6 +71,17 @@ def verify(products, payloads):
                 if e["outcome"] != "requested":
                     assert all(e[key] == invitation_requests[e["decisionId"]][key]
                                for key in ("actor", "action", "tenantId"))
+        if "lifecycle" in item:
+            lifecycle_events = [e for e in scoped if e["tenantId"] == operation["workspaceId"]
+                                and e["action"] in ("workspace.suspend", "workspace.resume")]
+            assert Counter((e["action"], e["outcome"]) for e in lifecycle_events) == {
+                ("workspace.suspend", "requested"): 2, ("workspace.suspend", "deny"): 1,
+                ("workspace.suspend", "allow"): 1, ("workspace.suspend", "succeeded"): 1,
+                ("workspace.resume", "requested"): 3, ("workspace.resume", "allow"): 3,
+                ("workspace.resume", "succeeded"): 1,
+            }
+            assert all(e["actor"] == actor and e["eventType"] == "heimdall.policy.completed"
+                       for e in lifecycle_events if e["outcome"] == "succeeded")
         print(f"{product}: four lifecycle events, {len(requests)} matched authorization decisions")
 
 

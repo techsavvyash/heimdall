@@ -142,6 +142,9 @@ func main() {
 		AuthorizeWorkspaceCreation: func(_ context.Context, actor *heimdall.Principal, _ string) (bool, error) {
 			return actor.Identity().Subject == workspaceCreator, nil
 		},
+		AuthorizeWorkspaceLifecycle: func(_ context.Context, actor *heimdall.Principal, _, _ string) (bool, error) {
+			return actor.Identity().Subject == workspaceCreator, nil
+		},
 		Credentials: heimdall.Credentials{
 			ClientSecret: func(context.Context) (string, error) { return required("HEIMDALL_CLIENT_SECRET"), nil },
 			OpenFGAKey:   func(context.Context) (string, error) { return required("HEIMDALL_OPENFGA_KEY"), nil },
@@ -250,6 +253,27 @@ func main() {
 	invites := invitationHandler(auth, sessions, business, config.Environment, origin, workspaceCreator, eligibleMember, workspaceID)
 	mount("POST /workspaces/{workspace}/invitations", invites)
 	mount("POST /invitations/accept", invites)
+	for _, action := range []string{"suspend", "resume"} {
+		mount("POST /workspaces/{workspace}/"+action, func(w http.ResponseWriter, r *http.Request) error {
+			if len(r.Header.Values("Origin")) != 1 || r.Header.Get("Origin") != origin {
+				return heimdall.ErrForbidden
+			}
+			actor, err := sessions.Authenticate(r)
+			if err != nil {
+				return err
+			}
+			tenant := auth.Tenant(r.PathValue("workspace"))
+			change := tenant.Suspend
+			if action == "resume" {
+				change = tenant.Resume
+			}
+			if err := change(r.Context(), actor); err != nil {
+				return err
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return nil
+		})
+	}
 	mount("POST /workspaces/{workspace}/members/{action}", func(w http.ResponseWriter, r *http.Request) error {
 		workspace, action := r.PathValue("workspace"), r.PathValue("action")
 		takesRoles := action == "add" || action == "assign-roles"

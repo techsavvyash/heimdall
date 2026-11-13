@@ -252,6 +252,58 @@ export class OperationRecords {
       byKey,
     );
   }
+  async setWorkspaceLifecycle(
+    before: ManagedWorkspace,
+    lifecycle: "active" | "suspended",
+    actor: Identity,
+    metadata: Pick<Allocation, "eventId" | "requestId" | "policyVersion" | "recordedAt">,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const b = this.binding;
+    const action = lifecycle === "suspended" ? "workspace.suspend" : "workspace.resume";
+    const { workspaceId, revision } = before;
+    const event = {
+      schemaVersion: 1,
+      eventId: metadata.eventId,
+      eventType: "heimdall.policy.completed",
+      eventVersion: 1,
+      occurredAt: metadata.recordedAt,
+      recordedAt: metadata.recordedAt,
+      productId: b.productId,
+      environment: b.environment,
+      tenantId: workspaceId,
+      actor: { kind: "user", issuer: actor.issuer, subject: actor.subject },
+      target: { type: "workspace", id: workspaceId },
+      action,
+      outcome: "succeeded",
+      requestId: metadata.requestId,
+      source: "sdk",
+      sdkVersion: "0.0.0",
+      attributes: {},
+      modelId: b.modelId,
+      manifestVersion: b.manifestVersion,
+      policyVersion: metadata.policyVersion,
+    };
+    validateAudit(event);
+    await this.audit.appendWith(
+      event,
+      async (tx) => {
+        const changed = await tx.query(
+          `UPDATE heimdall_managed.workspaces SET lifecycle=$5,updated_at=$6
+         WHERE product_id=$1 AND environment=$2 AND workspace_id=$3 AND revision=$4::bigint
+         AND lifecycle IN ('active','suspended') AND updated_at<=$6
+         AND ($5='suspended' OR (NOT mutation_blocked AND NOT EXISTS (
+           SELECT 1 FROM heimdall_managed.operations o WHERE o.product_id=$1 AND o.environment=$2
+           AND o.workspace_id=$3 AND o.state NOT IN ('completed','cancelled')
+         )))`,
+          [b.productId, b.environment, workspaceId, revision, lifecycle, metadata.recordedAt],
+        );
+        if (changed.rowCount !== 1) throw new HeimdallError("conflict");
+      },
+      signal,
+    );
+  }
+
   // Trusted maintenance only: selection does not claim work or authorize remote replay.
   async scan(
     queue: "runnable" | "recovery" | "completion",

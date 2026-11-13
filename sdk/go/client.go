@@ -51,12 +51,13 @@ type Credentials struct {
 	ClientSecret, OpenFGAKey func(context.Context) (string, error)
 }
 type Options struct {
-	AuthorizeWorkspaceCreation WorkspaceCreationPolicy
-	PolicyVersion              string
-	IdentityFreshnessMs        *int64
-	Credentials                Credentials
-	Storage                    RuntimeStorage
-	SessionStorage             *SessionStoreOptions
+	AuthorizeWorkspaceCreation  WorkspaceCreationPolicy
+	AuthorizeWorkspaceLifecycle WorkspaceLifecyclePolicy
+	PolicyVersion               string
+	IdentityFreshnessMs         *int64
+	Credentials                 Credentials
+	Storage                     RuntimeStorage
+	SessionStorage              *SessionStoreOptions
 }
 type ManagedStorage struct {
 	Allows     func(context.Context, string) (bool, error)
@@ -83,13 +84,14 @@ type Sessions interface {
 }
 
 type Client struct {
-	onboarding     *WorkspaceOnboarding
-	membership     *membershipRuntime
-	discovery      *discoveryRuntime
-	authentication *auditflow.Authentication
-	createSessions func(context.Context, SessionOptions) (Sessions, error)
-	tenantCheck    func(context.Context, string, *Principal, string) (bool, error)
-	tenantRoles    func(context.Context, string, *Principal) ([]string, error)
+	onboarding         *WorkspaceOnboarding
+	membership         *membershipRuntime
+	workspaceLifecycle WorkspaceLifecyclePolicy
+	discovery          *discoveryRuntime
+	authentication     *auditflow.Authentication
+	createSessions     func(context.Context, SessionOptions) (Sessions, error)
+	tenantCheck        func(context.Context, string, *Principal, string) (bool, error)
+	tenantRoles        func(context.Context, string, *Principal) ([]string, error)
 }
 
 func (c *Client) NewSessions(ctx context.Context, options SessionOptions) (Sessions, error) {
@@ -229,7 +231,7 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 		snapshot := *storage.Managed
 		managed = &snapshot
 	}
-	client := &Client{authentication: authentication, discovery: &discoveryRuntime{
+	client := &Client{authentication: authentication, workspaceLifecycle: options.AuthorizeWorkspaceLifecycle, discovery: &discoveryRuntime{
 		scope:   contract.CursorScope{ProductID: cfg.ProductID, Environment: cfg.Environment, ModelID: cfg.OpenFGA.ModelID},
 		version: cfg.ManifestVersion, auth: authentication, model: model, managed: managed,
 	}}
@@ -253,6 +255,9 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 			policyVersion: options.PolicyVersion, key: options.Credentials.OpenFGAKey,
 		}
 	} else if options.AuthorizeWorkspaceCreation != nil {
+		return nil, ErrInvalidArgument
+	}
+	if options.AuthorizeWorkspaceLifecycle != nil && client.membership == nil {
 		return nil, ErrInvalidArgument
 	}
 	client.tenantCheck = func(ctx context.Context, tenant string, actor *Principal, permission string) (bool, error) {

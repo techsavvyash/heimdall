@@ -33,6 +33,7 @@ const auth = await createHeimdall(
   {
     policyVersion: required("HEIMDALL_POLICY_VERSION"),
     authorizeWorkspaceCreation: async (actor) => actor.subject === workspaceCreator,
+    authorizeWorkspaceLifecycle: async (actor) => actor.subject === workspaceCreator,
     credentials: {
       clientSecret: async () => required("HEIMDALL_CLIENT_SECRET"),
       openfgaKey: async () => required("HEIMDALL_OPENFGA_KEY"),
@@ -224,6 +225,15 @@ async function route(request) {
     return read(result, (create || resume) && result.status === "pending" ? 202 : 200);
   }
   if (request.method === "POST") {
+    const lifecycle = /^\/workspaces\/([A-Za-z0-9_-]{1,128})\/(suspend|resume)$/.exec(url.pathname);
+    if (lifecycle) {
+      if (request.headers.get("origin") !== origin) throw new HeimdallError("forbidden");
+      const actor = await sessions.authenticate(request);
+      const tenant = auth.tenant(lifecycle[1]);
+      const change = lifecycle[2] === "suspend" ? tenant.suspend : tenant.resume;
+      await change(actor, { signal: request.signal });
+      return new Response(null, { status: 204 });
+    }
     const issue = invitationRoute.exec(url.pathname);
     if (issue || url.pathname === "/invitations/accept") return invitation(request, issue?.[1]);
   }

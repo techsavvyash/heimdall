@@ -434,6 +434,45 @@ export async function verifyReferenceProduct(input, authorize) {
     const recipientResource = await request(resourcePath, { headers: recipientHeaders });
     assert.equal(recipientResource.status, 200);
     await recipientResource.body?.cancel();
+    const setLifecycle = (action, sessionCookie, source = origin) =>
+      request(`/workspaces/${workspace.workspaceId}/${action}`, {
+        method: "POST",
+        headers: { cookie: sessionCookie, origin: source },
+      });
+    const blocked = (value) =>
+      executeSQL(`UPDATE heimdall_managed.workspaces SET mutation_blocked=${value}
+      WHERE product_id='${schema}' AND environment='verification' AND workspace_id='${workspace.workspaceId}';`);
+    assert.match(workspace.workspaceId, /^[a-z0-9-]+$/);
+    await expectDenied(await setLifecycle("suspend", recipientCookie), 403);
+    await expectDenied(await setLifecycle("suspend", cookie, "https://unrelated.example"), 403);
+    await blocked(true);
+    await expectDenied(await setLifecycle("suspend", cookie), 204);
+    await expectDenied(await setLifecycle("resume", cookie), 409);
+    await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 403);
+    assert.deepEqual(await (await request(rolesPath, { headers: recipientHeaders })).json(), {
+      roles: [],
+    });
+    const suspendedList = await (
+      await request("/workspaces", { headers: recipientHeaders })
+    ).json();
+    assert(!suspendedList.items.some(({ id }) => id === workspace.workspaceId));
+    await blocked(false);
+    assert.match(transfer.operationId, /^[a-z0-9-]+$/);
+    const setTransferState = (state) =>
+      executeSQL(`UPDATE heimdall_managed.operations SET state='${state}'
+      WHERE product_id='${schema}' AND environment='verification' AND operation_id='${transfer.operationId}';`);
+    await setTransferState("uncertain");
+    try {
+      await expectDenied(await setLifecycle("resume", cookie), 409);
+    } finally {
+      await setTransferState("completed");
+    }
+    await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 403);
+    await expectDenied(await setLifecycle("resume", cookie), 204);
+    await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 200);
+    assert.deepEqual(await (await request(rolesPath, { headers: recipientHeaders })).json(), {
+      roles: [initialRole, manifest.ownerRole].sort(),
+    });
     await expectDenied(
       await request("/auth/logout", { method: "POST", headers: { ...recipientHeaders, origin } }),
       204,
@@ -472,6 +511,7 @@ export async function verifyReferenceProduct(input, authorize) {
         replay: 200,
         revokedInviter: 403,
       },
+      lifecycle: { suspended: 204, unauthorized: 403, blockedResume: 409, resumed: 204 },
       otherTenant: 403,
     };
   } finally {

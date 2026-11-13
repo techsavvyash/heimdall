@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { managedMemberships, type Memberships } from "./internal/managed-memberships.js";
-import type { WorkspaceRecords } from "./internal/postgres/workspaces.js";
+import type { ManagedWorkspace, WorkspaceRecords } from "./internal/postgres/workspaces.js";
 import { managedOnboarding } from "./internal/managed-onboarding.js";
 import type {
   WorkspaceCreationPolicy,
@@ -58,6 +59,7 @@ export type RuntimeStorage = {
 export type RuntimeOptions = {
   policyVersion: string;
   authorizeWorkspaceCreation?: WorkspaceCreationPolicy;
+  authorizeWorkspaceLifecycle?: WorkspaceLifecyclePolicy;
   identityFreshnessMs?: number;
   credentials: {
     clientSecret(signal: AbortSignal): Promise<string>;
@@ -80,8 +82,17 @@ export type Sessions = Readonly<{
   authenticate(request: Request): Promise<Principal>;
   logout(request: Request): Promise<Response>;
 }>;
+export type WorkspaceLifecyclePolicy = (
+  actor: Principal,
+  workspaceId: string,
+  action: "suspend" | "resume",
+  signal: AbortSignal,
+) => Promise<boolean>;
+type LifecycleChange = (actor: Principal, options: { signal: AbortSignal }) => Promise<void>;
 export type Tenant = Readonly<{
   memberships?: Memberships;
+  suspend?: LifecycleChange;
+  resume?: LifecycleChange;
   roles(actor: Principal, options: { signal: AbortSignal }): Promise<string[]>;
   can(actor: Principal, permission: string, options: { signal: AbortSignal }): Promise<boolean>;
   require(actor: Principal, permission: string, options: { signal: AbortSignal }): Promise<void>;
@@ -171,6 +182,7 @@ export async function createHeimdall(
   const key = options.credentials.openfgaKey.bind(options.credentials);
   const policyVersion = options.policyVersion;
   const authorize = options.authorizeWorkspaceCreation;
+  const authorizeLifecycle = options.authorizeWorkspaceLifecycle;
   const operations = storage.managed?.operations?.({
     productId: config.productId,
     environment: config.environment,
@@ -180,6 +192,11 @@ export async function createHeimdall(
     manifestVersion: config.manifestVersion,
   });
   if (authorize !== undefined && (!operations || typeof authorize !== "function"))
+    throw new HeimdallError("invalid_argument");
+  if (
+    authorizeLifecycle !== undefined &&
+    (!operations || !workspace || typeof authorizeLifecycle !== "function")
+  )
     throw new HeimdallError("invalid_argument");
   const freshnessMs = options.identityFreshnessMs ?? 60000;
   const profile = config.transportProfile ?? "production";
@@ -275,8 +292,62 @@ export async function createHeimdall(
             model,
             gate,
           );
+        const setLifecycle = async (
+          actor: Principal,
+          action: "suspend" | "resume",
+          call: { signal: AbortSignal },
+        ) => {
+          if (!operations || !workspace || !(call?.signal instanceof AbortSignal))
+            throw new HeimdallError("invalid_argument");
+          const signal = AbortSignal.any([call.signal, AbortSignal.timeout(30_000)]);
+          checkCancellation(signal);
+          const observed: { workspace?: ManagedWorkspace | null } = {};
+          const allowed = await authentication.checkPermission(
+            actor,
+            id,
+            "workspace." + action,
+            config.openfga.modelId,
+            config.manifestVersion,
+            async (operation) => {
+              if (!authorizeLifecycle) return false;
+              observed.workspace = await workspace(id, operation);
+              return (
+                (await bounded((s) => authorizeLifecycle(actor, id, action, s), operation)) === true
+              );
+            },
+            signal,
+          );
+          if (!allowed) throw new HeimdallError("forbidden");
+          const record = observed.workspace;
+          if (!record) throw new HeimdallError("not_found");
+          if (
+            !["active", "suspended"].includes(record.lifecycle) ||
+            (action === "resume" && record.mutationBlocked)
+          )
+            throw new HeimdallError("conflict");
+          await operations.setWorkspaceLifecycle(
+            record,
+            action === "suspend" ? "suspended" : "active",
+            actor,
+            {
+              eventId: randomUUID(),
+              requestId: randomUUID(),
+              policyVersion,
+              recordedAt: Math.max(Date.now(), record.updatedAt),
+            },
+            signal,
+          );
+        };
         return Object.freeze({
-          ...(memberships ? { memberships } : {}),
+          ...(memberships
+            ? {
+                memberships,
+                suspend: (actor: Principal, call: { signal: AbortSignal }) =>
+                  setLifecycle(actor, "suspend", call),
+                resume: (actor: Principal, call: { signal: AbortSignal }) =>
+                  setLifecycle(actor, "resume", call),
+              }
+            : {}),
           async roles(actor: Principal, options: { signal: AbortSignal }) {
             if (!(options?.signal instanceof AbortSignal))
               throw new HeimdallError("invalid_argument");
