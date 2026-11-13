@@ -15,7 +15,7 @@ type MaintenanceRequest = {
   modelId: string;
   manifestVersion: number;
 };
-type MaintenanceContext = Readonly<
+export type MaintenanceContext = Readonly<
   MaintenanceRequest & {
     productId: string;
     environment: string;

@@ -85,7 +85,7 @@ Public bearer storage supports activated v4 and v5 with retained audit writes.
 The product schedules bounded discovery and persists the original proposal before
 dispatch. An empty scan page can still advance the cursor. The authorized command
 rechecks identity, policy and current retention protections before removing
-payloads. Production policy setup and scale qualification remain open.
+payloads. The deployment supplies exact operator grants and evidence for retry hold release. Scheduling integration and scale qualification remain open. [[evidence/phase-3-operator-policy]]
 [[evidence/phase-3-public-retention]] · [[evidence/phase-3-retirement-discovery]]
 The detailed implementation protocol is `contracts/audit-retention.md` in the
 repository. [[audit-contract]] remains the product audit contract, and

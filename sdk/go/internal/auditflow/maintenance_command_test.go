@@ -115,9 +115,17 @@ func testMaintenanceCommand(t *testing.T, bearer string, now int64, issuer, audi
 	if e != nil {
 		t.Fatal(e)
 	}
-	command, e := NewMaintenanceCommand(auth, store, "pinned-model", 7, 1000, func(_ context.Context, s MaintenanceContext) (bool, error) {
-		return s.TenantID == nil && s.Actor.Issuer == issuer && s.Actor.Subject == subject && s.ModelID == "pinned-model" && s.ManifestVersion == 7 && s.TargetEventID == target, nil
+	grants := []OperatorGrant{}
+	for _, action := range []string{"audit.hold.administrative.acquire", "audit.hold.administrative.release", "audit.hold.retry.acquire", "audit.hold.retry.release", "audit.retention.retire"} {
+		grants = append(grants, OperatorGrant{Issuer: issuer, Subject: subject, Action: action})
+	}
+	policy, e := NewOperatorPolicy(OperatorPolicyConfig{ProductID: "ledger", Environment: "production", PolicyVersion: "p1", Grants: grants}, func(_ context.Context, s MaintenanceContext) (bool, error) {
+		return s.TargetEventID == target && s.OperationID == "hold-retry-go", nil
 	})
+	if e != nil {
+		t.Fatal(e)
+	}
+	command, e := NewMaintenanceCommand(auth, store, "pinned-model", 7, 1000, policy)
 	if e != nil {
 		t.Fatal(e)
 	}

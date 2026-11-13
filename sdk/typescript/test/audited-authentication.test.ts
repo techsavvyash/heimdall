@@ -1,3 +1,4 @@
+import { createOperatorPolicy } from "../src/internal/operator-policy.js";
 import { ManagedExport } from "../src/internal/postgres/export.js";
 import { MaintenanceCommand } from "../src/internal/maintenance-command.js";
 import { validateAuditHold } from "../src/internal/audit-hold.js";
@@ -366,13 +367,26 @@ test("bound maintenance command", async () => {
       "pinned-model",
       7,
       1000,
-      async (scope) =>
-        scope.tenantId === null &&
-        scope.actor.issuer === f.issuer &&
-        scope.actor.subject === f.subject &&
-        scope.modelId === "pinned-model" &&
-        scope.manifestVersion === 7 &&
-        scope.targetEventId === target,
+      createOperatorPolicy(
+        {
+          productId: config.productId,
+          environment: config.environment,
+          policyVersion: config.policyVersion,
+          grants: [
+            "audit.hold.administrative.acquire",
+            "audit.hold.administrative.release",
+            "audit.hold.retry.acquire",
+            "audit.hold.retry.release",
+            "audit.retention.retire",
+          ].map((action) => ({
+            issuer: f.issuer,
+            subject: f.subject,
+            tenantId: null,
+            action,
+          })),
+        },
+        async (scope) => scope.targetEventId === target && scope.operationId === "hold-retry-ts",
+      ),
       () => f.now,
     );
     const shared = read("fixtures/maintenance-command.json") as (Pick<
@@ -502,7 +516,19 @@ test.skipIf(!process.env.HEIMDALL_TEST_AUDITED_EXPORT_READER)(
         },
         "model",
         1,
-        async (scope) => scope.tenantId === "export-probe",
+        createOperatorPolicy({
+          productId: config.productId,
+          environment: config.environment,
+          policyVersion: config.policyVersion,
+          grants: [
+            {
+              issuer: f.issuer,
+              subject: f.subject,
+              tenantId: "export-probe",
+              action: "managed.export.workspaces",
+            },
+          ],
+        }),
         store.scan.bind(store),
       );
       expect(JSON.parse(page).items).toEqual([

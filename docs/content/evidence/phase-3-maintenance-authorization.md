@@ -46,8 +46,8 @@ tenant requirement.
 A new maintenance authorization needs room for its own durable decision.
 The v5 release reservation covers the release event after authorization.
 Authentication and policy failures keep the maintenance operation closed.
-Operator policy configuration and production scheduling remain open. The bound
-command below connects the authorization result to storage.
+The bound command below connects the authorization result to storage. Deployment
+grants are described in [[phase-3-operator-policy]].
 
 ## Verification
 
@@ -86,8 +86,8 @@ flowchart LR
 
 The shared command profile exercises both hold purposes, cross-tenant denial,
 future-time refusal and idempotent retirement. It can use the real v5 port
-with a dedicated PostgreSQL role. Production policy setup and scheduling remain
-deployment integrations.
+with a dedicated PostgreSQL role. The deployment can configure exact grants with
+the [[phase-3-operator-policy]] policy. The product schedules calls.
 
 Pinned PostgreSQL run `heimdall-capacity-backfill-5c9c0425023e43f18a40c566cc78091b`
 passed the bound command profile in both languages using a dedicated maintenance

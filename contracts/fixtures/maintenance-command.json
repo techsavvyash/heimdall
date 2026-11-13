@@ -28,6 +28,13 @@
     "expected": "receipt"
   },
   {
+    "name": "deny retry hold release without matching evidence",
+    "tenantId": null,
+    "action": "audit.hold.retry.release",
+    "operationId": "unknown-retry",
+    "expected": "forbidden"
+  },
+  {
     "name": "release retry hold",
     "tenantId": null,
     "action": "audit.hold.retry.release",

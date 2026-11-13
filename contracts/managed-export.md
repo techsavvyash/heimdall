@@ -114,7 +114,8 @@ passes a final local deny, expiry, freshness and cancellation check. A successfu
 completion records that a page was prepared for release. Transport delivery can
 still fail. Each retry is a fresh authorized read with its own audit records.
 
-The product owns the policy implementation, transport and artifact destination.
+The product supplies the operator grants, transport and artifact destination.
+See the deployment operator grants in `audit-retention.md`.
 For a consistent multi-page exit inventory, the product drains writers before
 the first page and keeps them drained until the final page. Page reads use the
 restricted export credential. Authorization and completion use the separate

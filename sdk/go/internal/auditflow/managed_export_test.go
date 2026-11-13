@@ -84,7 +84,7 @@ func testManagedExport(t *testing.T, bearer string, now int64, issuer, audience 
 	}
 }
 
-func testLiveManagedExport(t *testing.T, bearer string, now int64, issuer, audience string) {
+func testLiveManagedExport(t *testing.T, bearer string, now int64, issuer, audience, subject string) {
 	readerURL := os.Getenv("HEIMDALL_TEST_AUDITED_EXPORT_READER")
 	if readerURL == "" {
 		t.Skip("retained managed database required")
@@ -116,10 +116,13 @@ func testLiveManagedExport(t *testing.T, bearer string, now int64, issuer, audie
 		t.Fatal(err)
 	}
 	workspace := "export-probe"
-	page, err := auth.RunManagedExport(context.Background(), bearer, ManagedExportRequest{Kind: "workspaces", WorkspaceID: &workspace, Limit: 1, OperationID: "export-go"}, "model", 1,
-		func(_ context.Context, scope MaintenanceContext) (bool, error) {
-			return tenantValue(scope.TenantID) == workspace, nil
-		}, store.Scan)
+	policy, err := NewOperatorPolicy(OperatorPolicyConfig{ProductID: "ledger", Environment: "production", PolicyVersion: "p1",
+		Grants: []OperatorGrant{{Issuer: issuer, Subject: subject, TenantID: &workspace, Action: "managed.export.workspaces"}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := auth.RunManagedExport(context.Background(), bearer, ManagedExportRequest{Kind: "workspaces", WorkspaceID: &workspace, Limit: 1, OperationID: "export-go"}, "model", 1, policy, store.Scan)
 	var result struct{ Items []map[string]any }
 	want := map[string]any{"productId": "ledger", "environment": "production", "workspaceId": workspace, "lifecycle": "suspended", "mutationBlocked": true, "revision": "", "createdAt": float64(1), "updatedAt": float64(2)}
 	if err != nil || json.Unmarshal(page, &result) != nil || len(result.Items) != 1 {

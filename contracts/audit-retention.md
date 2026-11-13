@@ -826,3 +826,24 @@ the page cursor before dispatching the authorized command. Retry the same propos
 outcome. The command reauthorizes and storage reclassifies each group before
 any removal. A newly placed hold, retry obligation or other protection can
 block an earlier candidate. A scan does not itself modify audit history.
+
+## Deployment operator grants
+
+The internal TS `createOperatorPolicy` and Go `NewOperatorPolicy` accept typed
+configuration from the trusted deployment. Each policy fixes the product,
+environment and policy version. Each grant binds the verified issuer and subject
+to one reserved maintenance action and one exact nullable tenant. An empty list
+denies every action. A null tenant grant covers only the null scope for its
+action. For workspace inventory this means the explicit whole-product export.
+Operations export requires a named workspace.
+
+Construct the policy during deployment assembly and pass it to the maintenance
+command and managed export runner. Use the same policy version in the identity
+verifier configuration. Changes require constructing a new policy and deploying
+its version to all relevant replicas. In-flight calls use their captured policy.
+The policy reads no token claims directly and does not evaluate application roles.
+It operates on the verified actor and scope produced by audited authentication.
+
+Retry hold release requires both an exact grant and a read-only evidence check
+for the specific target event and hold operation. Missing evidence blocks the
+release. A dependency error propagates through the audited decision path.
