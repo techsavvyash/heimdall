@@ -98,6 +98,23 @@ try:
         input="GRANT USAGE ON SCHEMA heimdall_managed TO heimdall_public_runtime; GRANT SELECT ON ALL TABLES IN SCHEMA heimdall_managed TO heimdall_public_runtime; GRANT INSERT,UPDATE ON heimdall_managed.workspaces,heimdall_managed.operations,heimdall_managed.membership_candidates TO heimdall_public_runtime; GRANT DELETE ON heimdall_managed.membership_candidates TO heimdall_public_runtime; GRANT USAGE ON ALL SEQUENCES IN SCHEMA heimdall_managed TO heimdall_public_runtime;",
         capture_output=True, text=True)
     run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/runtime.test.ts"], env=runtime_env)
+    run(["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime",
+         "-v", "ON_ERROR_STOP=1", "--single-transaction", "-f", "-"],
+        input=(ROOT / "contracts/persistence/directory/0001.sql").read_text() +
+        "GRANT USAGE ON SCHEMA heimdall_directory TO heimdall_public_runtime; "
+        "GRANT SELECT,INSERT,UPDATE ON heimdall_directory.deactivations TO heimdall_public_runtime; "
+        "CREATE FUNCTION public.reject_directory_delete() RETURNS trigger LANGUAGE plpgsql AS $$ "
+        "BEGIN IF OLD.environment LIKE 'directory-rollback-%' THEN RAISE EXCEPTION 'injected session deletion failure'; END IF; RETURN OLD; END; $$; "
+        "CREATE TRIGGER reject_directory_delete BEFORE DELETE ON heimdall.records FOR EACH ROW EXECUTE FUNCTION public.reject_directory_delete();",
+        capture_output=True, text=True)
+    directory_env = dict(runtime_env, HEIMDALL_TEST_DIRECTORY_DB=runtime_dsn + "&options=-c%20role%3Dheimdall_public_runtime")
+    run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-directory-deactivation.test.ts"], env=directory_env)
+    subprocess.run(["go", "test", "-race", "-count=1", "./postgres", "-run", "^TestDirectoryDeactivationPostgres$"],
+                   cwd=ROOT / "sdk/go", env=directory_env, check=True)
+    run(["docker", "exec", name, "psql", "-U", "postgres", "-d", "public_runtime",
+         "-v", "ON_ERROR_STOP=1", "-c", "DROP TRIGGER reject_directory_delete ON heimdall.records; DROP FUNCTION public.reject_directory_delete();"],
+        capture_output=True, text=True)
+    print(json.dumps({"run": name, "directoryDeactivation": ["typescript", "go"], "result": "passed"}), flush=True)
     subprocess.run(["go", "test", "-race", "-count=1", ".", "-run", "TestPublicPostgresRuntime|TestPublicManagedRuntime|TestPublicManagedOnboarding|TestPostgresFactory"], cwd=ROOT / "sdk/go", env=runtime_env, check=True)
     if os.environ.get("HEIMDALL_PROBE_PINNED_ADMIN") == "1":
         from pinned_openfga import pinned_openfga

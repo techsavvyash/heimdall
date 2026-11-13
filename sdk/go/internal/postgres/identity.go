@@ -119,14 +119,49 @@ func (s *IdentityRecords) InvalidateIdentity(ctx context.Context, issuer, subjec
 	}
 	r := s
 	return identityTransaction(ctx, r.db, identityLock(r.product, r.environment, identity), r.retainedRuntime, func(ctx context.Context, tx *sql.Tx) (int64, error) {
-		if _, err := tx.ExecContext(ctx, "INSERT INTO heimdall.identity_denials(product_id,environment,identity_hash,observed_at,reason) VALUES($1,$2,$3,$4,$5) ON CONFLICT(product_id,environment,identity_hash) DO UPDATE SET observed_at=GREATEST(identity_denials.observed_at,EXCLUDED.observed_at),reason=CASE WHEN identity_denials.reason='deleted' OR EXCLUDED.reason='deleted' THEN 'deleted' ELSE 'inactive' END", r.product, r.environment, identity, observedAt, reason); err != nil {
-			return 0, err
-		}
-		result, err := tx.ExecContext(ctx, "DELETE FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND identity_hash=$3", r.product, r.environment, identity)
+		return r.invalidateLocked(ctx, tx, identity, observedAt, reason)
+	})
+}
+
+func (s *IdentityRecords) invalidateLocked(ctx context.Context, tx *sql.Tx, identity []byte, observedAt int64, reason string) (int64, error) {
+	if _, err := tx.ExecContext(ctx, "INSERT INTO heimdall.identity_denials(product_id,environment,identity_hash,observed_at,reason) VALUES($1,$2,$3,$4,$5) ON CONFLICT(product_id,environment,identity_hash) DO UPDATE SET observed_at=GREATEST(identity_denials.observed_at,EXCLUDED.observed_at),reason=CASE WHEN identity_denials.reason='deleted' OR EXCLUDED.reason='deleted' THEN 'deleted' ELSE 'inactive' END", s.product, s.environment, identity, observedAt, reason); err != nil {
+		return 0, err
+	}
+	result, err := tx.ExecContext(ctx, "DELETE FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND identity_hash=$3", s.product, s.environment, identity)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+func (s *IdentityRecords) RecordDirectoryDeactivation(ctx context.Context, issuer, subject, org, state string, at int64) (int64, error) {
+	if s == nil || ctx == nil || !valid(subject, 128) || !valid(org, 128) ||
+		at < 0 || at > maxSafe || (state != "inactive" && state != "missing") {
+		return 0, contract.ErrInvalidArgument
+	}
+	reason := "inactive"
+	if state == "missing" {
+		reason = "deleted"
+	}
+	binding, err := identityBinding(issuer, subject)
+	if err != nil {
+		return 0, err
+	}
+	return identityTransaction(ctx, s.db, identityLock(s.product, s.environment, binding), true, func(ctx context.Context, tx *sql.Tx) (int64, error) {
+		result, err := tx.ExecContext(ctx, `INSERT INTO heimdall_directory.deactivations(product_id,environment,identity_hash,issuer,subject,organization_id,observed_at,reason)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+ON CONFLICT(product_id,environment,identity_hash) DO UPDATE
+SET observed_at=GREATEST(deactivations.observed_at,EXCLUDED.observed_at),
+    reason=CASE WHEN deactivations.reason='deleted' OR EXCLUDED.reason='deleted' THEN 'deleted' ELSE 'inactive' END
+WHERE deactivations.issuer=EXCLUDED.issuer AND deactivations.subject=EXCLUDED.subject
+  AND deactivations.organization_id=EXCLUDED.organization_id`, s.product, s.environment, binding, issuer, subject, org, at, reason)
 		if err != nil {
 			return 0, err
 		}
-		return result.RowsAffected()
+		if rows, err := result.RowsAffected(); err != nil || rows != 1 {
+			return 0, contract.ErrConflict
+		}
+		return s.invalidateLocked(ctx, tx, binding, at, reason)
 	})
 }
 

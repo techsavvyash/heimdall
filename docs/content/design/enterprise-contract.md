@@ -63,6 +63,8 @@ Workers use verified events or bounded polling according to available service AP
 
 Once deactivation is observed, first persist a local identity deny/session invalidation in managed mode, then reconcile mapped memberships through the uncertainty-safe mutation path. Core consumers implement the equivalent identity gate interface. This prevents a delayed remote tuple removal from permitting new access in that product. The identity freshness contract in [[release-contract]] additionally covers requests before event ingestion catches up. Worker target under healthy dependencies is observation and deny propagation within 60 seconds; measure it in integration tests and expose lag. Outages do not have an invented bounded completion promise: stale authoritative identity status fails closed after its configured freshness, and pending remote changes retain their recovery gate.
 
+[[evidence/phase-6-scim-deactivation]] records the PostgreSQL transaction that persists the cleanup intent and local denial together.
+
 Reactivation does not resurrect all historical role tuples. Confirm cleanup and current approved enrollment rules, then grant only the selected roles under a new audited operation. Inactive/deleted principals cannot accept invitations. Directory deletion preserves required operation/audit tombstones under the configured privacy/retention policy; external IDs never replace issuer/subject as principal identity.
 
 ## SIEM and custom events

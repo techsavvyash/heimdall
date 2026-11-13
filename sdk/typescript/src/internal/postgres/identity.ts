@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { encodeIdentity } from "../identity-encoding.js";
 import type { IdentityVerifier } from "../identity-verifier.js";
 import { parseIdentityContext } from "../identity-context.js";
@@ -11,9 +11,13 @@ import { query, transaction } from "./query.js";
 export class IdentityRecords {
   private retainedRuntime = false;
   static forRetainedRuntime(pool: Pool, productId: string, environment: string) {
+    return this.retainedRecords(pool, productId, environment).identityGate(productId, environment);
+  }
+
+  static retainedRecords(pool: Pool, productId: string, environment: string) {
     const records = new IdentityRecords(pool, productId, environment);
     records.retainedRuntime = true;
-    return records.identityGate(productId, environment);
+    return records;
   }
 
   constructor(
@@ -141,15 +145,75 @@ export class IdentityRecords {
       async (client) => {
         if (this.retainedRuntime) await lockRetentionAdmission(client);
         await client.query("SELECT pg_advisory_xact_lock($1::bigint)", [this.lock(identity)]);
-        await client.query(
-          "INSERT INTO heimdall.identity_denials(product_id,environment,identity_hash,observed_at,reason) VALUES($1,$2,$3,$4,$5) ON CONFLICT(product_id,environment,identity_hash) DO UPDATE SET observed_at=GREATEST(identity_denials.observed_at,EXCLUDED.observed_at),reason=CASE WHEN identity_denials.reason='deleted' OR EXCLUDED.reason='deleted' THEN 'deleted' ELSE 'inactive' END",
-          [this.productId, this.environment, identity, observedAt, reason],
+        return this.invalidateLocked(client, identity, observedAt, reason);
+      },
+      signal,
+    );
+  }
+
+  private async invalidateLocked(
+    client: PoolClient,
+    identity: Buffer,
+    observedAt: number,
+    reason: "inactive" | "deleted",
+  ) {
+    await client.query(
+      "INSERT INTO heimdall.identity_denials(product_id,environment,identity_hash,observed_at,reason) VALUES($1,$2,$3,$4,$5) ON CONFLICT(product_id,environment,identity_hash) DO UPDATE SET observed_at=GREATEST(identity_denials.observed_at,EXCLUDED.observed_at),reason=CASE WHEN identity_denials.reason='deleted' OR EXCLUDED.reason='deleted' THEN 'deleted' ELSE 'inactive' END",
+      [this.productId, this.environment, identity, observedAt, reason],
+    );
+    const removed = await client.query(
+      "DELETE FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND identity_hash=$3",
+      [this.productId, this.environment, identity],
+    );
+    return removed.rowCount!;
+  }
+
+  async recordDirectoryDeactivation(
+    issuer: string,
+    subject: string,
+    organizationId: string,
+    state: "inactive" | "missing",
+    observedAt: number,
+    signal: AbortSignal,
+  ) {
+    if (
+      !(signal instanceof AbortSignal) ||
+      ![subject, organizationId].every(
+        (id) => typeof id === "string" && /^[A-Za-z0-9_-]{1,128}(?![\s\S])/.test(id),
+      ) ||
+      !Number.isSafeInteger(observedAt) ||
+      observedAt < 0 ||
+      (state !== "inactive" && state !== "missing")
+    )
+      throw new HeimdallError("invalid_argument");
+    const reason = state === "missing" ? "deleted" : "inactive";
+    const identity = this.identity(issuer, subject);
+    return transaction(
+      this.pool,
+      async (client) => {
+        await lockRetentionAdmission(client);
+        await client.query("SELECT pg_advisory_xact_lock($1::bigint)", [this.lock(identity)]);
+        const recorded = await client.query(
+          `INSERT INTO heimdall_directory.deactivations(product_id,environment,identity_hash,issuer,subject,organization_id,observed_at,reason)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT(product_id,environment,identity_hash) DO UPDATE
+         SET observed_at=GREATEST(deactivations.observed_at,EXCLUDED.observed_at),
+             reason=CASE WHEN deactivations.reason='deleted' OR EXCLUDED.reason='deleted' THEN 'deleted' ELSE 'inactive' END
+         WHERE deactivations.issuer=EXCLUDED.issuer AND deactivations.subject=EXCLUDED.subject
+           AND deactivations.organization_id=EXCLUDED.organization_id`,
+          [
+            this.productId,
+            this.environment,
+            identity,
+            issuer,
+            subject,
+            organizationId,
+            observedAt,
+            reason,
+          ],
         );
-        const removed = await client.query(
-          "DELETE FROM heimdall.records WHERE product_id=$1 AND environment=$2 AND identity_hash=$3",
-          [this.productId, this.environment, identity],
-        );
-        return removed.rowCount!;
+        if (recorded.rowCount !== 1) throw new HeimdallError("conflict");
+        return this.invalidateLocked(client, identity, observedAt, reason);
       },
       signal,
     );

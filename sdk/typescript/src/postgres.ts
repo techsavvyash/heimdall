@@ -22,6 +22,8 @@ import {
 import { validateAuditShape } from "./internal/audit-shape.js";
 import { validateAuditEvent } from "./internal/audit.js";
 
+export { createDirectoryDeactivation } from "./internal/postgres/directory-deactivations.js";
+
 export type PostgresStorageOptions = {
   productId: string;
   environment: string;
