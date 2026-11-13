@@ -31,6 +31,7 @@ import { PinnedModel } from "./internal/model-binding.js";
 import { AuditedAuthentication } from "./internal/audited-authentication.js";
 import { bounded, known } from "./internal/audited-decision.js";
 import { HeimdallError, checkCancellation } from "./internal/errors.js";
+import type { TenantSSOPolicy } from "./internal/enterprise-evidence.js";
 
 type AuthenticationArguments = ConstructorParameters<typeof AuditedAuthentication>;
 export type IdentityGate = AuthenticationArguments[2];
@@ -126,6 +127,12 @@ export type Heimdall = Readonly<{
   exportManagedInventory?: ExportCall;
   createWorkspaceDiscovery(options: DiscoveryOptions): WorkspaceDiscovery;
   createSessions(options: SessionOptions, request: { signal: AbortSignal }): Promise<Sessions>;
+  verifyEnterpriseProviderTest(
+    actor: Principal,
+    verificationWorkspaceId: string,
+    candidate: TenantSSOPolicy,
+    request: { signal: AbortSignal },
+  ): Promise<void>;
   tokens: Readonly<{
     verify(accessToken: string, options: { signal: AbortSignal }): Promise<Principal>;
   }>;
@@ -329,6 +336,33 @@ export async function createHeimdall(
           }
         : {}),
       ...(authorizeExport ? { exportManagedPage, exportManagedInventory } : {}),
+      async verifyEnterpriseProviderTest(
+        actor: Principal,
+        verificationWorkspaceId: string,
+        candidate: TenantSSOPolicy,
+        request: { signal: AbortSignal },
+      ) {
+        if (
+          !(request?.signal instanceof AbortSignal) ||
+          !candidate ||
+          ![
+            verificationWorkspaceId,
+            candidate.organizationId,
+            candidate.providerId,
+            candidate.policyVersion,
+          ].every((v) => typeof v === "string" && /^[A-Za-z0-9_-]{1,128}(?![\s\S])/.test(v)) ||
+          (candidate.protocol !== "saml" && candidate.protocol !== "oidc") ||
+          !Number.isSafeInteger(candidate.maxAgeMs) ||
+          candidate.maxAgeMs <= 0
+        )
+          throw new HeimdallError("invalid_argument");
+        await authentication.verifyEnterpriseProviderTest(
+          actor,
+          verificationWorkspaceId,
+          candidate,
+          request.signal,
+        );
+      },
       createWorkspaceDiscovery(options: DiscoveryOptions) {
         return workspaceDiscovery(
           options,

@@ -85,6 +85,32 @@ export class AuditedAuthentication {
     return copy;
   }
 
+  async verifyEnterpriseProviderTest(
+    actor: Principal,
+    tenantId: string,
+    policy: TenantSSOPolicy,
+    signal: AbortSignal,
+  ) {
+    if (!this.owns(actor)) throw new HeimdallError("unauthenticated");
+    const scope = {
+      ...policy,
+      productId: this.productId,
+      environment: this.environment,
+      clientId: this.clientId,
+      issuer: actor.issuer,
+      subject: actor.subject,
+      tenantId,
+    };
+    await this.verifier.checkCurrent(actor, signal);
+    checkCancellation(signal);
+    validateEnterpriseEvidence(
+      this.enterprise.get(actor) ?? null,
+      scope,
+      this.now(),
+      Math.min(scope.maxAgeMs, 300000),
+    );
+  }
+
   private async permitsTenant(actor: Principal, tenantId: string, signal: AbortSignal) {
     if (!this.tenantSSO) return true;
     let policy: TenantSSOPolicy | null;

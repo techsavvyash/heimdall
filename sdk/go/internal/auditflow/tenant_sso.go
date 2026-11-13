@@ -58,6 +58,30 @@ func (a *Authentication) permitsTenant(ctx context.Context, actor *identity.Prin
 
 var loginTenantID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 
+func (a *Authentication) VerifyEnterpriseProviderTest(ctx context.Context, actor *identity.Principal, tenant string, p TenantSSOPolicy) error {
+	if ctx == nil || !loginTenantID.MatchString(tenant) || !loginTenantID.MatchString(p.OrganizationID) ||
+		!loginTenantID.MatchString(p.ProviderID) || !loginTenantID.MatchString(p.PolicyVersion) ||
+		(p.Protocol != "oidc" && p.Protocol != "saml") || p.MaxAgeMS <= 0 || p.MaxAgeMS > 9007199254740991 {
+		return contract.ErrInvalidArgument
+	}
+	if !a.Owns(actor) {
+		return contract.ErrUnauthenticated
+	}
+	if err := a.verifier.CheckCurrent(ctx, actor); err != nil {
+		return err
+	}
+	if err := contract.CheckCancellation(ctx); err != nil {
+		return err
+	}
+	id := actor.Identity()
+	scope := contract.EnterpriseScope{
+		ProductID: a.writer.product, Environment: a.writer.environment, ClientID: a.clientID,
+		Issuer: id.Issuer, Subject: id.Subject, TenantID: tenant, OrganizationID: p.OrganizationID,
+		PolicyVersion: p.PolicyVersion, ProviderID: p.ProviderID, Protocol: p.Protocol,
+	}
+	return contract.ValidateEnterpriseEvidence(identity.EnterpriseEvidence(actor), scope, a.writer.now().UnixMilli(), min(p.MaxAgeMS, 300000))
+}
+
 func LoadLoginPolicy(ctx context.Context, tenant string, source TenantSSOPolicySource) (contract.LoginPolicy, int64, error) {
 	if !loginTenantID.MatchString(tenant) {
 		return contract.LoginPolicy{}, 0, contract.ErrInvalidArgument

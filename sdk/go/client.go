@@ -103,6 +103,15 @@ type Client struct {
 	tenantRoles        func(context.Context, string, *Principal) ([]string, error)
 }
 
+// VerifyEnterpriseProviderTest checks fresh login evidence for an administrator's candidate test.
+// The product authorizes the operator, owns the candidate policy and controls its publication.
+func (c *Client) VerifyEnterpriseProviderTest(ctx context.Context, actor *Principal, verificationWorkspaceID string, candidate TenantSSOPolicy) error {
+	if c == nil || c.authentication == nil {
+		return ErrInvalidArgument
+	}
+	return c.authentication.VerifyEnterpriseProviderTest(ctx, actor, verificationWorkspaceID, candidate)
+}
+
 func (c *Client) NewSessions(ctx context.Context, options SessionOptions) (Sessions, error) {
 	if c == nil || ctx == nil || c.createSessions == nil {
 		return nil, ErrInvalidArgument

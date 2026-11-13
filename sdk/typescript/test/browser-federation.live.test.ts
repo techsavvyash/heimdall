@@ -87,6 +87,21 @@ test.skipIf(!process.env.HEIMDALL_TEST_FEDERATION_HTTP)(
       new Request(input.config.redirectUri, { headers: { cookie: sessionCookie } }),
     );
     expect(principal.subject).toBe(input.subject);
+    const signal = AbortSignal.timeout(5000);
+    await expect(
+      auth.verifyEnterpriseProviderTest(principal, "acme", input.policy, signal),
+    ).resolves.toBeUndefined();
+    await expect(
+      auth.verifyEnterpriseProviderTest(principal, "globex", input.policy, signal),
+    ).rejects.toMatchObject({ code: "unauthenticated" });
+    await expect(
+      auth.verifyEnterpriseProviderTest(
+        principal,
+        "acme",
+        { ...input.policy, policyVersion: "rotated" },
+        signal,
+      ),
+    ).rejects.toMatchObject({ code: "unauthenticated" });
     const evidence = (await storage.getSession(
       createHash("sha256").update(sessionCookie.split("=")[1]!).digest("base64url"),
     ))!;

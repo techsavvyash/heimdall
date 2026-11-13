@@ -139,6 +139,20 @@ func TestLiveFederationHTTP(t *testing.T) {
 	if evidence == nil || evidence.TenantID != "acme" || evidence.ProviderID != input.Policy.ProviderID || evidence.Protocol != input.Policy.Protocol {
 		t.Fatal("unexpected saved evidence")
 	}
+	candidate := auditflow.TenantSSOPolicy{
+		OrganizationID: policy.OrganizationID, ProviderID: policy.ProviderID,
+		PolicyVersion: policy.PolicyVersion, Protocol: policy.Protocol, MaxAgeMS: 300000,
+	}
+	if err := auth.VerifyEnterpriseProviderTest(ctx, principal, "acme", candidate); err != nil {
+		t.Fatal("matching test login rejected", err)
+	}
+	if err := auth.VerifyEnterpriseProviderTest(ctx, principal, "globex", candidate); !errors.Is(err, contract.ErrUnauthenticated) {
+		t.Fatal("other workspace's login accepted", err)
+	}
+	candidate.PolicyVersion = "rotated"
+	if err := auth.VerifyEnterpriseProviderTest(ctx, principal, "acme", candidate); !errors.Is(err, contract.ErrUnauthenticated) {
+		t.Fatal("previous candidate version accepted", err)
+	}
 	body, _ = json.Marshal(map[string]string{"sessionId": evidence.ProviderSessionID})
 	cleanup, _ := http.NewRequestWithContext(ctx, http.MethodPost, input.Bridge+"/session", bytes.NewReader(body))
 	cleanup.Header.Set("Authorization", "Bearer "+input.BridgeKey)

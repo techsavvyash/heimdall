@@ -153,31 +153,129 @@ try {
     isAutoCreation: false,
     isAutoUpdate: false,
   };
-  const provider = await za(
-    "POST",
-    `/management/v1/idps/${protocol === "oidc" ? "generic_oidc" : "saml"}`,
-    protocol === "oidc"
-      ? {
-          name: `fixture-oidc-${runId}`,
-          issuer: `${k}/realms/${realm}`,
-          clientId: "heimdall-zitadel",
-          clientSecret,
-          scopes: ["openid", "profile", "email"],
-          usePkce: true,
-          providerOptions,
+  async function prepareProvider() {
+    const language = process.env.HEIMDALL_PROBE_ENTERPRISE_SETUP;
+    if (language) {
+      const name = `fixture-${protocol}-${runId}`;
+      const otherOrganization = (
+        await za("POST", "/v2/organizations", { name: "heimdall-wrong-org-" + runId })
+      ).organizationId;
+      try {
+        const metadataXml =
+          protocol === "saml"
+            ? Buffer.from(
+                await (
+                  await fetch(`${k}/realms/${realm}/protocol/saml/descriptor`, {
+                    redirect: "error",
+                    signal: AbortSignal.timeout(15000),
+                  })
+                ).arrayBuffer(),
+              )
+            : undefined;
+        const oidc = { issuer: `${k}/realms/${realm}`, clientId: "heimdall-zitadel", clientSecret };
+        if (language === "typescript") {
+          const { prepareEnterpriseProvider } =
+            await import("../../sdk/typescript/dist/provisioning/index.js");
+          const options = {
+            issuer: z,
+            organizationId: orgId,
+            name,
+            token: pat,
+            provider: protocol === "oidc" ? { protocol, ...oidc } : { protocol, metadataXml },
+          };
+          const candidate = await prepareEnterpriseProvider(
+            { ...options, claimDispatch: async () => {} },
+            AbortSignal.timeout(25000),
+          );
+          assert.deepEqual(
+            await prepareEnterpriseProvider(
+              { ...options, existingProviderId: candidate.providerId },
+              AbortSignal.timeout(25000),
+            ),
+            candidate,
+          );
+          await assert.rejects(
+            prepareEnterpriseProvider(
+              {
+                ...options,
+                organizationId: otherOrganization,
+                existingProviderId: candidate.providerId,
+              },
+              AbortSignal.timeout(25000),
+            ),
+            { code: "conflict" },
+          );
+          return { id: candidate.providerId };
         }
-      : {
-          name: `fixture-saml-${runId}`,
-          metadataUrl: `${k}/realms/${realm}/protocol/saml/descriptor`,
-          binding: "SAML_BINDING_REDIRECT",
-          withSignedRequest: true,
-          signatureAlgorithm: "SAML_SIGNATURE_RSA_SHA256",
-          nameIdFormat: "SAML_NAME_ID_FORMAT_PERSISTENT",
-          providerOptions,
-        },
-    pat,
-    { "x-zitadel-orgid": orgId },
-  );
+        assert.equal(language, "go");
+        const result = spawnSync(
+          "go",
+          [
+            "test",
+            "-race",
+            "-count=1",
+            "./provisioning",
+            "-run",
+            "^TestLiveEnterpriseProviderPreparation$",
+            "-v",
+          ],
+          {
+            cwd: new URL("../../sdk/go/", import.meta.url),
+            encoding: "utf8",
+            timeout: 90000,
+            env: {
+              ...process.env,
+              HEIMDALL_TEST_OTHER_ORGANIZATION: otherOrganization,
+              HEIMDALL_TEST_ENTERPRISE_PROVIDER: JSON.stringify({
+                issuer: z,
+                organizationId: orgId,
+                name,
+                token: pat,
+                ...(metadataXml ? { samlMetadataXML: metadataXml.toString("base64") } : { oidc }),
+              }),
+            },
+          },
+        );
+        if (result.status !== 0) {
+          console.error(
+            result.stdout.match(
+              /prepare candidate: (?:conflict|unavailable|outcome_unknown|invalid_argument)(?:; id=[A-Za-z0-9_-]*)?/,
+            )?.[0] ?? "Go provider setup failed",
+          );
+        }
+        assert.equal(result.status, 0);
+        return { id: result.stdout.match(/^ENTERPRISE_PROVIDER_ID ([A-Za-z0-9_-]+)$/m)?.[1] };
+      } finally {
+        await za("DELETE", `/v2/organizations/${otherOrganization}`);
+      }
+    }
+    return za(
+      "POST",
+      `/management/v1/idps/${protocol === "oidc" ? "generic_oidc" : "saml"}`,
+      protocol === "oidc"
+        ? {
+            name: `fixture-oidc-${runId}`,
+            issuer: `${k}/realms/${realm}`,
+            clientId: "heimdall-zitadel",
+            clientSecret,
+            scopes: ["openid", "profile", "email"],
+            usePkce: true,
+            providerOptions,
+          }
+        : {
+            name: `fixture-saml-${runId}`,
+            metadataUrl: `${k}/realms/${realm}/protocol/saml/descriptor`,
+            binding: "SAML_BINDING_REDIRECT",
+            withSignedRequest: true,
+            signatureAlgorithm: "SAML_SIGNATURE_RSA_SHA256",
+            nameIdFormat: "SAML_NAME_ID_FORMAT_PERSISTENT",
+            providerOptions,
+          },
+      pat,
+      { "x-zitadel-orgid": orgId },
+    );
+  }
+  const provider = await prepareProvider();
   assert(provider.id);
   const providerRead = await za("GET", `/v2/idps/${provider.id}`);
   assert.equal(providerRead.idp.id, provider.id);
@@ -189,6 +287,13 @@ try {
       ownerMatchesTargetOrganization: true,
       active: true,
       protocolMatches: true,
+      ...(process.env.HEIMDALL_PROBE_ENTERPRISE_SETUP
+        ? {
+            sdk: process.env.HEIMDALL_PROBE_ENTERPRISE_SETUP,
+            verifiedExistingProvider: true,
+            rejectedWrongOrganization: true,
+          }
+        : {}),
     },
   });
   let samlAcs;
@@ -1005,6 +1110,9 @@ try {
           wrongIntent: "denied",
           changedPolicy: "denied",
           replay: "denied",
+          matchingCandidateTest: "accepted",
+          wrongCandidateWorkspace: "denied",
+          wrongCandidateVersion: "denied",
         });
       }
       observations.push({ sdkBrowserFederation: checks });
@@ -1158,15 +1266,14 @@ console.log(
       cleanup: "owned organizations, realm and sessions deleted",
       limitations: [
         browserMode
-          ? "Loopback HTTP browser callback harness; not production SDK HTTP or durable storage"
+          ? "Loopback browser bridge for upstream authentication"
           : "protocol fixture form automation; not browser UI validation",
-        "strict tenant switching and policy-version invalidation still unverified",
-        browserMode
-          ? "Upstream login uses browser; downstream product OIDC exchange uses backend HTTP probe"
-          : "Browser callback binding unverified in this mode",
-        "SDK strict policy lifecycle not implemented",
+        ...(process.env.HEIMDALL_PROBE_SDK_FEDERATION_HTTP === "1"
+          ? ["SDK HTTP assertions use temporary session storage"]
+          : ["SDK HTTP callback binding is outside this run"]),
+        "Account switching and product policy publication are outside this run",
         narrowLogin
-          ? "Dedicated instance session role performs fixture authentication; production durable callback claims remain unverified"
+          ? "Dedicated instance session role performs fixture authentication"
           : "Login client performs fixture authentication; downstream session evidence also verified with user token",
       ],
     },

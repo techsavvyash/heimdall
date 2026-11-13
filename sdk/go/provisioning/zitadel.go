@@ -26,7 +26,7 @@ func zitadelCall(ctx context.Context, client *http.Client, issuer, token, path s
 	return providerCall(ctx, client, issuer, token, path, payload, result, true)
 }
 
-func providerCall(ctx context.Context, client *http.Client, base, token, path string, payload any, result any, connect bool) (bool, error) {
+func providerCall(ctx context.Context, client *http.Client, base, token, path string, payload any, result any, connect bool, organization ...string) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	raw, err := json.Marshal(payload)
@@ -45,6 +45,9 @@ func providerCall(ctx context.Context, client *http.Client, base, token, path st
 	req.Header.Set("Content-Type", "application/json")
 	if connect {
 		req.Header.Set("Connect-Protocol-Version", "1")
+	}
+	if len(organization) == 1 {
+		req.Header.Set("x-zitadel-orgid", organization[0])
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := client.Do(req)
