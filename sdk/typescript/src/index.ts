@@ -25,3 +25,10 @@ export type {
   WorkspaceSource,
   WorkspaceDiscovery,
 } from "./internal/workspace-discovery.js";
+
+export type {
+  WorkspaceOnboarding,
+  WorkspaceOnboardingStatus,
+  WorkspaceCreateInput,
+  WorkspaceCreationPolicy,
+} from "./internal/managed-onboarding.js";

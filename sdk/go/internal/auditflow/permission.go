@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"time"
 
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/identity"
@@ -49,4 +50,18 @@ func (a *Authentication) CheckLinkedPermission(ctx context.Context, principal *i
 		return false, err
 	}
 	return true, nil
+}
+
+// LoadCredential bounds a deployment-owned credential callback for managed provisioning.
+func LoadCredential(ctx context.Context, load func(context.Context) (string, error)) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	value, err := bounded(ctx, load)
+	if cancellation := contract.CheckCancellation(ctx); cancellation != nil {
+		return "", cancellation
+	}
+	if err != nil {
+		return "", contract.ErrUnavailable
+	}
+	return value, nil
 }

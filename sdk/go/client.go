@@ -51,15 +51,17 @@ type Credentials struct {
 	ClientSecret, OpenFGAKey func(context.Context) (string, error)
 }
 type Options struct {
-	PolicyVersion       string
-	IdentityFreshnessMs *int64
-	Credentials         Credentials
-	Storage             RuntimeStorage
-	SessionStorage      *SessionStoreOptions
+	AuthorizeWorkspaceCreation WorkspaceCreationPolicy
+	PolicyVersion              string
+	IdentityFreshnessMs        *int64
+	Credentials                Credentials
+	Storage                    RuntimeStorage
+	SessionStorage             *SessionStoreOptions
 }
 type ManagedStorage struct {
-	Allows func(context.Context, string) (bool, error)
-	Source func(Identity) WorkspaceSource
+	Allows     func(context.Context, string) (bool, error)
+	Source     func(Identity) WorkspaceSource
+	Operations func(postgres.OperationBinding) (*postgres.OperationRecords, error)
 }
 
 type BrowserStorage struct {
@@ -80,6 +82,7 @@ type Sessions interface {
 }
 
 type Client struct {
+	onboarding     *WorkspaceOnboarding
 	discovery      *discoveryRuntime
 	authentication *auditflow.Authentication
 	createSessions func(context.Context, SessionOptions) (Sessions, error)
@@ -119,6 +122,7 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 	if err := contract.CheckCancellation(ctx); err != nil {
 		return nil, err
 	}
+	configJSON, manifestJSON = append([]byte(nil), configJSON...), append([]byte(nil), manifestJSON...)
 	deployment, err := configuration.Parse(configJSON, manifestJSON)
 	if err != nil {
 		return nil, err
@@ -227,6 +231,25 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 		scope:   contract.CursorScope{ProductID: cfg.ProductID, Environment: cfg.Environment, ModelID: cfg.OpenFGA.ModelID},
 		version: cfg.ManifestVersion, auth: authentication, model: model, managed: managed,
 	}}
+	if managed != nil && managed.Operations != nil {
+		records, err := managed.Operations(postgres.OperationBinding{
+			ProductID: cfg.ProductID, Environment: cfg.Environment, StoreID: cfg.OpenFGA.StoreID,
+			ModelID: cfg.OpenFGA.ModelID, ModelHash: verified.ModelHash(), ManifestVersion: cfg.ManifestVersion,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if records == nil {
+			return nil, ErrInvalidArgument
+		}
+		client.onboarding = &WorkspaceOnboarding{
+			config: configJSON, manifest: manifestJSON,
+			cfg: cfg, records: records, auth: authentication, policy: options.AuthorizeWorkspaceCreation,
+			policyVersion: options.PolicyVersion, key: options.Credentials.OpenFGAKey,
+		}
+	} else if options.AuthorizeWorkspaceCreation != nil {
+		return nil, ErrInvalidArgument
+	}
 	client.tenantCheck = func(ctx context.Context, tenant string, actor *Principal, permission string) (bool, error) {
 		if _, err := verified.Permission(permission); err != nil {
 			return false, err

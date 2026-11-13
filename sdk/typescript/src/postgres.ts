@@ -1,3 +1,4 @@
+import { OperationRecords } from "./internal/postgres/operations.js";
 import { WorkspaceRecords } from "./internal/postgres/workspaces.js";
 import { CandidateRecords } from "./internal/postgres/candidates.js";
 import { workspaceGate } from "./internal/workspace-contract.js";
@@ -82,7 +83,13 @@ export function createManagedPostgresStorage(
   const { productId, environment } = storage;
   const workspaces = WorkspaceRecords.forRetainedRuntime(pool, productId, environment);
   const candidates = CandidateRecords.forRetainedRuntime(pool, productId, environment);
+  const auditSinks = [...options.auditSinks];
   const managed: NonNullable<RuntimeStorage["managed"]> = {
+    operations(binding) {
+      if (binding.productId !== productId || binding.environment !== environment)
+        throw new HeimdallError("invalid_argument");
+      return OperationRecords.forRetainedRuntime(pool, binding, auditSinks);
+    },
     async allows(workspaceId, signal) {
       return (
         workspaceGate(await workspaces.get(workspaceId, signal), {

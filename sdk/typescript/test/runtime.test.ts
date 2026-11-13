@@ -30,6 +30,8 @@ function setup(failure = "", environment = "production") {
   if (failure === "issuer") metadata.issuer += "/";
   if (failure === "introspection") metadata.introspection_endpoint = token.issuer + "/unexpected";
   const events: Record<string, unknown>[] = [];
+  const fga = { writes: 0, fault: "none" };
+  const tuples: { user: string; object: string; relation: string }[] = [];
   const order: string[] = [];
   const options: RuntimeOptions = {
     policyVersion: failure === "policy" ? "bad\n" : "p1",
@@ -78,6 +80,27 @@ function setup(failure = "", environment = "production") {
           },
         });
       }
+      if (url.endsWith("/read")) {
+        if (fga.fault === "before_dispatch") return Response.json({}, { status: 503 });
+        const { tuple_key: key, consistency } = JSON.parse(String(init?.body));
+        if (consistency !== "HIGHER_CONSISTENCY") return Response.json({}, { status: 400 });
+        return Response.json({
+          tuples: tuples
+            .filter(
+              (tuple) =>
+                tuple.object === key.object &&
+                tuple.relation === key.relation &&
+                (!key.user || tuple.user === key.user),
+            )
+            .map((key) => ({ key })),
+        });
+      }
+      if (url.endsWith("/write")) {
+        fga.writes++;
+        tuples.push(...JSON.parse(String(init?.body)).writes.tuple_keys);
+        if (fga.fault === "lost_response") throw new Error("simulated lost response");
+        return Response.json({});
+      }
       if (url.endsWith("/check")) {
         order.push("check");
         const check = JSON.parse(String(init?.body));
@@ -103,10 +126,14 @@ function setup(failure = "", environment = "production") {
           return new Response(null, { status: 503 });
         return Response.json({
           allowed:
-            check.tuple_key.object === "workspace:acme" &&
-            ["member", "p_0", artifact.roles.approver!.effective].includes(
-              check.tuple_key.relation,
-            ),
+            (check.tuple_key.object === "workspace:acme" &&
+              ["member", "p_0", artifact.roles.approver!.effective].includes(
+                check.tuple_key.relation,
+              )) ||
+            (check.tuple_key.relation === "member" &&
+              tuples.some(
+                (tuple) => tuple.object === check.tuple_key.object && tuple.relation === "member",
+              )),
         });
       }
       if (url.endsWith("/keys")) return Response.json(token.jwks);
@@ -114,7 +141,7 @@ function setup(failure = "", environment = "production") {
       return Response.json(status.user);
     }),
   );
-  return { config, options, events, order };
+  return { config, options, events, order, fga };
 }
 test.each(cases)("public runtime startup $name", async (c) => {
   const s = setup(c.failure);
@@ -469,3 +496,128 @@ test("public sessions persist browser-bound login through the custom store", asy
   expect((await sessions.start(new Request(new URL("/auth/start", callbackUrl)))).status).toBe(303);
   expect(writes).toEqual(["reserve", "create"]);
 });
+
+test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TEST_READ_PEER)(
+  "managed onboarding safely resumes across provider and activation faults",
+  async () => {
+    const s = setup("", "onboarding-ts");
+    const dsn = process.env.HEIMDALL_TEST_DATABASE_URL;
+    const pool = new Pool({ connectionString: dsn, options: "-c role=heimdall_public_runtime" });
+    const admin = new Pool({ connectionString: dsn });
+    const call = { signal: new AbortController().signal };
+    const fixture = read("workspace-onboarding.json");
+    let approvals = 0;
+    let permit = false;
+    try {
+      s.options.storage = createManagedPostgresStorage(pool, { ...s.config, auditSinks: ["siem"] });
+      s.options.authorizeWorkspaceCreation = async () => {
+        approvals++;
+        return permit;
+      };
+      const open = () =>
+        createHeimdall(JSON.stringify(s.config), JSON.stringify(base.manifest), s.options, call);
+      const runtime = await open();
+      const actor = await runtime.tokens.verify(raw, call);
+      const api = runtime.onboarding!;
+      const input = { name: fixture.name, idempotencyKey: fixture.idempotencyKey };
+      await expect(api.create(actor, input, call)).rejects.toThrow("forbidden");
+      expect(s.fga.writes).toBe(0);
+      permit = true;
+      const other = await open();
+      await expect(other.onboarding!.create(actor, input, call)).rejects.toThrow("unauthenticated");
+      const restartedActor = await other.tokens.verify(raw, call);
+      const expectedActive = [];
+      for (const item of fixture.cases) {
+        const request = { ...input, idempotencyKey: input.idempotencyKey + "-" + item.fault };
+        const before = s.fga.writes;
+        s.fga.fault = item.fault;
+        const activationFailure = item.fault === "activation_failure";
+        let creationError = "";
+        if (activationFailure) {
+          await admin.query(`CREATE FUNCTION public.fail_onboarding_ts() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN IF NEW.environment='onboarding-ts' AND NEW.lifecycle='active' THEN
+              RAISE EXCEPTION 'test activation failure'; END IF; RETURN NEW; END $$;
+            CREATE TRIGGER fail_onboarding_ts BEFORE UPDATE ON heimdall_managed.workspaces
+            FOR EACH ROW EXECUTE FUNCTION public.fail_onboarding_ts()`);
+          try {
+            creationError = await api.create(actor, request, call).then(
+              () => "",
+              (error: { code: string }) => error.code,
+            );
+          } finally {
+            await admin.query(
+              "DROP TRIGGER fail_onboarding_ts ON heimdall_managed.workspaces; DROP FUNCTION public.fail_onboarding_ts()",
+            );
+          }
+        }
+        expect(creationError).toMatch(
+          activationFailure ? /^(unavailable|audit_unavailable)$/ : /^$/,
+        );
+        const result = await api.create(actor, request, call);
+        expect(result.status).toBe(item.status);
+        expect(result.reason).toBe(item.reason);
+        expect(s.fga.writes - before).toBe(item.writes);
+        permit = false;
+        const count = approvals;
+        expect(await api.create(actor, request, call)).toEqual(result);
+        expect(approvals).toBe(count);
+        await expect(api.create(actor, { ...request, name: "Changed" }, call)).rejects.toThrow(
+          "conflict",
+        );
+        expect(await api.get(actor, result.operationId, call)).toEqual(result);
+        const stored = await admin.query(
+          "SELECT state FROM heimdall_managed.operations WHERE environment='onboarding-ts' AND operation_id=$1",
+          [result.operationId],
+        );
+        const uncertain = item.fault === "lost_response";
+        expect(stored.rows[0]?.state).toBe(
+          activationFailure
+            ? "confirmed"
+            : uncertain
+              ? "uncertain"
+              : item.fault === "before_dispatch"
+                ? "retryable"
+                : "completed",
+        );
+        expect(await s.options.storage.managed!.allows(result.workspaceId, call.signal)).toBe(
+          item.status === "active",
+        );
+        s.fga.fault = "none";
+        const resumed = await other.onboarding!.resume(restartedActor, result.operationId, call);
+        expect(resumed).toEqual(
+          uncertain
+            ? result
+            : {
+                operationId: result.operationId,
+                workspaceId: result.workspaceId,
+                status: "active",
+              },
+        );
+        if (!uncertain) expectedActive.push(result.workspaceId);
+        expect(s.fga.writes - before).toBe(item.fault === "before_dispatch" ? 1 : item.writes);
+        permit = true;
+      }
+      const race = { name: "Concurrent", idempotencyKey: "concurrent-create" };
+      const beforeRace = s.fga.writes;
+      const results = await Promise.all(
+        Array.from({ length: 4 }, () => api.create(actor, race, call)),
+      );
+      expect(new Set(results.map(({ operationId }) => operationId)).size).toBe(1);
+      expect(new Set(results.map(({ workspaceId }) => workspaceId)).size).toBe(1);
+      expect(s.fga.writes - beforeRace).toBe(1);
+      const winner = await api.get(actor, results[0]!.operationId, call);
+      expect(winner.status).toBe("active");
+      expectedActive.push(winner.workspaceId);
+      const page = await runtime
+        .createWorkspaceDiscovery({ activeKeyId: "cursor", keys: { cursor: Buffer.alloc(32, 9) } })
+        .list(actor, call);
+      expect(page.items.map(({ id }) => id)).toEqual(expectedActive);
+      const counts = await admin.query(
+        "SELECT count(*)::int AS count FROM heimdall.audit_deliveries WHERE environment='onboarding-ts' AND sink_id='siem'",
+      );
+      expect(counts.rows[0]?.count).toBeGreaterThan(20);
+    } finally {
+      await Promise.all([pool.end(), admin.end()]);
+    }
+  },
+);

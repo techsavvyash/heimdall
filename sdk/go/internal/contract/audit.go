@@ -133,7 +133,7 @@ func ValidateAuditEvent(e AuditEvent, origin string, custom func(string, int, ma
 		return ErrInvalidArgument
 	}
 	hasTenant := e.TenantID != nil && *e.TenantID != ""
-	if strings.HasPrefix(e.EventType, "heimdall.authorization.") && (e.DecisionID == "" || e.ModelID == "" || e.ManifestVersion == 0 || ((e.Outcome == "allow" || e.Outcome == "deny") && ((!hasTenant && !maintenanceAuditScope(e) && !discoveryAuditScope(e)) || e.Permission == ""))) {
+	if strings.HasPrefix(e.EventType, "heimdall.authorization.") && (e.DecisionID == "" || e.ModelID == "" || e.ManifestVersion == 0 || ((e.Outcome == "allow" || e.Outcome == "deny") && ((!hasTenant && !maintenanceAuditScope(e) && !productAuthorizationScope(e)) || e.Permission == ""))) {
 		return ErrInvalidArgument
 	}
 	if MaintenanceTargetType(e.Action) == "managed_export" &&
@@ -175,7 +175,12 @@ func maintenanceAuditScope(e AuditEvent) bool {
 		e.Permission == e.Action && e.Action != "managed.export.operations"
 }
 
-func discoveryAuditScope(e AuditEvent) bool {
+func productAuthorizationScope(e AuditEvent) bool {
+	switch e.Action {
+	case "workspaces.list", "workspace.create", "workspace.operation.read", "workspace.operation.resume":
+	default:
+		return false
+	}
 	return e.TenantID == nil && e.Source == "sdk" && e.Actor.Kind == "user" &&
-		e.Action == "workspaces.list" && e.Permission == e.Action && e.Target.Type == "product" && e.ProductID != "" && e.Target.ID == e.ProductID
+		e.Permission == e.Action && e.Target.Type == "product" && e.ProductID != "" && e.Target.ID == e.ProductID
 }

@@ -190,6 +190,21 @@ func (o *OperationRecords) Get(ctx context.Context, id string, actor contract.Id
 	}
 	return o.read(ctx, o.db, id, hash, false)
 }
+func (o *OperationRecords) FindCreate(ctx context.Context, intent contract.Intent, key string) (*ManagedOperation, error) {
+	digests, err := contract.IntentDigests(intent, key)
+	if err != nil {
+		return nil, err
+	}
+	hash, err := identityBinding(intent.Actor.Issuer, intent.Actor.Subject)
+	if err != nil {
+		return nil, err
+	}
+	record, err := o.read(ctx, o.db, digests.KeyDigest, hash, true)
+	if record != nil && record.Fingerprint != digests.Fingerprint {
+		return nil, contract.ErrConflict
+	}
+	return record, err
+}
 func (o *OperationRecords) Create(ctx context.Context, intentJSON []byte, key string, a OperationAllocation) (*ManagedOperation, error) {
 	return o.begin(ctx, intentJSON, key, a, true, "")
 }

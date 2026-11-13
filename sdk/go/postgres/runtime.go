@@ -151,7 +151,14 @@ func NewManagedStorage(db *sql.DB, options StorageOptions) (heimdall.RuntimeStor
 		}
 		return internal.CheckManagedRetentionReadiness(ctx, db)
 	}
+	sinks := append([]string{}, options.AuditSinks...)
 	storage.Managed = &heimdall.ManagedStorage{
+		Operations: func(binding internal.OperationBinding) (*internal.OperationRecords, error) {
+			if binding.ProductID != options.ProductID || binding.Environment != options.Environment {
+				return nil, heimdall.ErrInvalidArgument
+			}
+			return internal.NewRetainedOperationRecords(db, binding, sinks)
+		},
 		Allows: func(ctx context.Context, id string) (bool, error) {
 			record, err := workspaces.Get(ctx, id)
 			if err != nil || record == nil {

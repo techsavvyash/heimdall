@@ -146,7 +146,7 @@ export function validateAuditEvent(
       !event.modelId ||
       !event.manifestVersion ||
       (["allow", "deny"].includes(event.outcome) &&
-        ((!event.tenantId && !maintenanceAuditScope(event) && !discoveryAuditScope(event)) ||
+        ((!event.tenantId && !maintenanceAuditScope(event) && !productAuthorizationScope(event)) ||
           !event.permission)))
   )
     invalid();
@@ -177,12 +177,17 @@ export function validateAuditEvent(
   if (event.eventType === "heimdall.policy.completed" && !event.policyVersion) invalid();
 }
 
-function discoveryAuditScope(event: AuditEvent): boolean {
+function productAuthorizationScope(event: AuditEvent): boolean {
   return (
     event.tenantId === null &&
     event.source === "sdk" &&
     event.actor.kind === "user" &&
-    event.action === "workspaces.list" &&
+    [
+      "workspaces.list",
+      "workspace.create",
+      "workspace.operation.read",
+      "workspace.operation.resume",
+    ].includes(event.action ?? "") &&
     event.permission === event.action &&
     typeof event.productId === "string" &&
     event.target?.type === "product" &&

@@ -27,6 +27,8 @@ import (
 
 type runtimeHarness struct {
 	checks           atomic.Int64
+	writes           atomic.Int64
+	providerFault    atomic.Value
 	config, manifest []byte
 	options          heimdall.Options
 	token            string
@@ -60,6 +62,9 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 		t.Fatal(e)
 	}
 	h := &runtimeHarness{}
+	h.providerFault.Store("none")
+	var tupleMu sync.Mutex
+	var tuples []map[string]string
 	// Introspection reports this token's expiry, not a sliding response-time expiry.
 	expiresAt := time.Now().Add(time.Hour).Unix()
 	var issuer string
@@ -75,6 +80,47 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 			body = discovery.Metadata
 		case "/stores/store-1/authorization-models/model-1":
 			body = map[string]any{"authorization_model": model}
+		case "/stores/store-1/read":
+			if h.providerFault.Load() == "before_dispatch" {
+				w.WriteHeader(503)
+				return
+			}
+			var read struct {
+				Key         map[string]string `json:"tuple_key"`
+				Consistency string            `json:"consistency"`
+			}
+			if json.NewDecoder(r.Body).Decode(&read) != nil || read.Consistency != "HIGHER_CONSISTENCY" {
+				w.WriteHeader(400)
+				return
+			}
+			matching := []map[string]any{}
+			tupleMu.Lock()
+			for _, tuple := range tuples {
+				if tuple["object"] == read.Key["object"] && tuple["relation"] == read.Key["relation"] &&
+					(read.Key["user"] == "" || tuple["user"] == read.Key["user"]) {
+					matching = append(matching, map[string]any{"key": tuple})
+				}
+			}
+			tupleMu.Unlock()
+			body = map[string]any{"tuples": matching}
+		case "/stores/store-1/write":
+			var write struct {
+				Writes struct {
+					Tuples []map[string]string `json:"tuple_keys"`
+				} `json:"writes"`
+			}
+			if json.NewDecoder(r.Body).Decode(&write) != nil {
+				w.WriteHeader(400)
+				return
+			}
+			tupleMu.Lock()
+			tuples = append(tuples, write.Writes.Tuples...)
+			tupleMu.Unlock()
+			h.writes.Add(1)
+			if h.providerFault.Load() == "lost_response" {
+				panic(http.ErrAbortHandler)
+			}
+			body = map[string]any{}
 		case "/stores/store-1/check":
 			h.checks.Add(1)
 			var check struct {
@@ -92,7 +138,14 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 				w.WriteHeader(503)
 				return
 			}
-			body = map[string]any{"allowed": check.Tuple["object"] == "workspace:acme" && slices.Contains([]string{"member", "p_0", "e_1"}, check.Tuple["relation"])}
+			allowed := check.Tuple["object"] == "workspace:acme" && slices.Contains([]string{"member", "p_0", "e_1"}, check.Tuple["relation"])
+			tupleMu.Lock()
+			for _, tuple := range tuples {
+				allowed = allowed || check.Tuple["object"] == tuple["object"] &&
+					check.Tuple["relation"] == "member" && tuple["relation"] == "member"
+			}
+			tupleMu.Unlock()
+			body = map[string]any{"allowed": allowed}
 		case "/oauth/v2/keys":
 			body = map[string]any{"keys": []any{map[string]any{"kty": "RSA", "kid": "runtime", "alg": "RS256", "n": base64.RawURLEncoding.EncodeToString(key.N.Bytes()), "e": "AQAB"}}}
 		case "/oauth/v2/introspect":
@@ -597,5 +650,192 @@ func TestPublicCustomSessionStore(t *testing.T) {
 	w := httptest.NewRecorder()
 	if err = sessions.Start(w, httptest.NewRequest("GET", "https://ledger.example.com/auth/start", nil)); err != nil || w.Code != 303 {
 		t.Fatal(w.Code, err)
+	}
+}
+
+func TestPublicManagedOnboarding(t *testing.T) {
+	dsn := os.Getenv("HEIMDALL_TEST_DATABASE_URL")
+	if dsn == "" || os.Getenv("HEIMDALL_TEST_READ_PEER") != "" {
+		t.Skip("managed PostgreSQL runtime")
+	}
+	h := setupRuntime(t, "", "onboarding-go")
+	db, err := sql.Open("postgres", dsn+"&options=-c%20role%3Dheimdall_public_runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	admin, err := sql.Open("postgres", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer admin.Close()
+	h.options.Storage, err = postgres.NewManagedStorage(db, postgres.StorageOptions{ProductID: "ledger", Environment: "onboarding-go", AuditSinks: []string{"siem"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var permit atomic.Bool
+	var approvals atomic.Int64
+	h.options.AuthorizeWorkspaceCreation = func(context.Context, *heimdall.Principal, string) (bool, error) {
+		approvals.Add(1)
+		return permit.Load(), nil
+	}
+	ctx := context.Background()
+	client, err := heimdall.New(ctx, h.config, h.manifest, h.options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor, err := client.Tokens().Verify(ctx, h.token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Name, IdempotencyKey string
+		Cases                []struct {
+			Fault, Status, Reason string
+			Writes                int64
+		}
+	}
+	raw, err := os.ReadFile("../../contracts/fixtures/workspace-onboarding.json")
+	if err != nil || json.Unmarshal(raw, &fixture) != nil {
+		t.Fatal("onboarding fixture")
+	}
+	api := client.Onboarding()
+	input := heimdall.WorkspaceCreateInput{Name: fixture.Name, IdempotencyKey: fixture.IdempotencyKey}
+	if _, err := api.Create(ctx, actor, input); !errors.Is(err, heimdall.ErrForbidden) || h.writes.Load() != 0 {
+		t.Fatal("creation policy denial", err)
+	}
+	permit.Store(true)
+	other, err := heimdall.New(ctx, h.config, h.manifest, h.options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.Onboarding().Create(ctx, actor, input); !errors.Is(err, heimdall.ErrUnauthenticated) {
+		t.Fatal("accepted an actor from a different runtime", err)
+	}
+	restartedActor, err := other.Tokens().Verify(ctx, h.token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var active []string
+	for _, item := range fixture.Cases {
+		input.IdempotencyKey = fixture.IdempotencyKey + "-" + item.Fault
+		before := h.writes.Load()
+		h.providerFault.Store(item.Fault)
+		if item.Fault == "activation_failure" {
+			_, err := admin.Exec(`CREATE FUNCTION public.fail_onboarding_go() RETURNS trigger LANGUAGE plpgsql AS $$
+			BEGIN IF NEW.environment='onboarding-go' AND NEW.lifecycle='active' THEN
+			  RAISE EXCEPTION 'test activation failure'; END IF; RETURN NEW; END $$;
+			CREATE TRIGGER fail_onboarding_go BEFORE UPDATE ON heimdall_managed.workspaces
+			FOR EACH ROW EXECUTE FUNCTION public.fail_onboarding_go()`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, createErr := api.Create(ctx, actor, input)
+			_, cleanupErr := admin.Exec("DROP TRIGGER fail_onboarding_go ON heimdall_managed.workspaces; DROP FUNCTION public.fail_onboarding_go()")
+			if createErr == nil || cleanupErr != nil {
+				t.Fatal("activation failure", createErr, cleanupErr)
+			}
+		}
+		result, err := api.Create(ctx, actor, input)
+		if err != nil || result.Status != item.Status || result.Reason != item.Reason || h.writes.Load()-before != item.Writes {
+			t.Fatal(item.Fault, result, err, h.writes.Load()-before)
+		}
+		permit.Store(false)
+		count := approvals.Load()
+		if again, err := api.Create(ctx, actor, input); err != nil || again != result || approvals.Load() != count {
+			t.Fatal("idempotent status", again, err)
+		}
+		if _, err := api.Create(ctx, actor, heimdall.WorkspaceCreateInput{Name: "Changed", IdempotencyKey: input.IdempotencyKey}); !errors.Is(err, heimdall.ErrConflict) {
+			t.Fatal("changed input", err)
+		}
+		if got, err := api.Get(ctx, actor, result.OperationID); err != nil || got != result {
+			t.Fatal("operation status", got, err)
+		}
+		var state string
+		if err := admin.QueryRow("SELECT state FROM heimdall_managed.operations WHERE environment='onboarding-go' AND operation_id=$1", result.OperationID).Scan(&state); err != nil {
+			t.Fatal(err)
+		}
+		if item.Fault == "activation_failure" && state != "confirmed" {
+			t.Fatal(state)
+		}
+		if item.Fault == "lost_response" {
+			allowed, err := h.options.Storage.Managed.Allows(ctx, result.WorkspaceID)
+			if state != "uncertain" || allowed || err != nil {
+				t.Fatal("uncertain gate", state, allowed, err)
+			}
+		}
+		h.providerFault.Store("none")
+		resumed, err := other.Onboarding().Resume(ctx, restartedActor, result.OperationID)
+		if err != nil {
+			t.Fatal(item.Fault, err)
+		}
+		if item.Fault == "lost_response" {
+			if resumed != result {
+				t.Fatal("uncertain dispatch was resumed", resumed)
+			}
+		} else {
+			if resumed.Status != "active" {
+				t.Fatal(item.Fault, resumed)
+			}
+			active = append(active, resumed.WorkspaceID)
+		}
+		writes := item.Writes
+		if item.Fault == "before_dispatch" {
+			writes++
+		}
+		if h.writes.Load()-before != writes {
+			t.Fatal("unexpected remote replay", item.Fault)
+		}
+		permit.Store(true)
+	}
+	race := heimdall.WorkspaceCreateInput{Name: "Concurrent", IdempotencyKey: "concurrent-create"}
+	beforeRace := h.writes.Load()
+	type concurrentResult struct {
+		status heimdall.WorkspaceOnboardingStatus
+		err    error
+	}
+	out := make(chan concurrentResult, 4)
+	for range 4 {
+		go func() {
+			status, err := api.Create(ctx, actor, race)
+			out <- concurrentResult{status, err}
+		}()
+	}
+	var opID, workspaceID string
+	for range 4 {
+		result := <-out
+		if result.err != nil {
+			t.Fatal(result.err)
+		}
+		if opID == "" {
+			opID, workspaceID = result.status.OperationID, result.status.WorkspaceID
+		}
+		if opID != result.status.OperationID || workspaceID != result.status.WorkspaceID {
+			t.Fatal("concurrent requests did not converge")
+		}
+	}
+	winner, err := api.Get(ctx, actor, opID)
+	if err != nil || winner.Status != "active" || h.writes.Load()-beforeRace != 1 {
+		t.Fatal("concurrent dispatch", winner, err)
+	}
+	active = append(active, workspaceID)
+	discovery, err := client.NewWorkspaceDiscovery(heimdall.DiscoveryOptions{ActiveKeyID: "cursor", Keys: map[string][]byte{"cursor": make([]byte, 32)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := discovery.List(ctx, actor, heimdall.WorkspaceListOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var discovered []string
+	for _, workspace := range page.Items {
+		discovered = append(discovered, workspace.ID)
+	}
+	if !slices.Equal(discovered, active) {
+		t.Fatal("candidate state", discovered, active)
+	}
+	var count int
+	if err := admin.QueryRow("SELECT count(*) FROM heimdall.audit_deliveries WHERE environment='onboarding-go' AND sink_id='siem'").Scan(&count); err != nil || count <= 20 {
+		t.Fatal("audit routing", count, err)
 	}
 }

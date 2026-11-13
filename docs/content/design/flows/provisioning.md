@@ -72,3 +72,5 @@ stateDiagram-v2
 ```
 
 The product schedules bounded recovery through its existing job mechanism. Known pre-dispatch failures can retry; uncertain dispatched writes require verified quiescence before reconciliation, not a blind request replay. In managed mode the workspace stays blocked under [[design/built-in-adapters]]. API operations reject inactive tenants before authorization. Suspension is an application gate that every entry point must honor. Deletion prevents new operations first, then removes data and relationships with retryable cleanup. Tenant IDs are never reused. See [[operations]].
+
+[[evidence/phase-5-managed-onboarding]] shows the current managed PostgreSQL API in both SDKs and records the provider and database fault tests.

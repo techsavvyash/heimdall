@@ -1,3 +1,9 @@
+import { managedOnboarding } from "./internal/managed-onboarding.js";
+import type {
+  WorkspaceCreationPolicy,
+  WorkspaceOnboarding,
+} from "./internal/managed-onboarding.js";
+import type { OperationRecords } from "./internal/postgres/operations.js";
 import { workspaceDiscovery } from "./internal/workspace-discovery.js";
 import type {
   DiscoveryOptions,
@@ -32,6 +38,14 @@ export type RuntimeStorage = {
   managed?: {
     allows(id: string, signal: AbortSignal): Promise<boolean>;
     source(actor: Principal): WorkspaceSource;
+    operations?: (binding: {
+      productId: string;
+      environment: string;
+      modelId: string;
+      storeId: string;
+      modelHash: string;
+      manifestVersion: number;
+    }) => OperationRecords;
   };
   browser?: {
     login: Parameters<typeof createBrowserLoginHTTP>[1];
@@ -40,6 +54,7 @@ export type RuntimeStorage = {
 };
 export type RuntimeOptions = {
   policyVersion: string;
+  authorizeWorkspaceCreation?: WorkspaceCreationPolicy;
   identityFreshnessMs?: number;
   credentials: {
     clientSecret(signal: AbortSignal): Promise<string>;
@@ -69,6 +84,7 @@ export type Tenant = Readonly<{
 }>;
 export type Heimdall = Readonly<{
   tenant(id: string): Tenant;
+  onboarding?: WorkspaceOnboarding;
   createWorkspaceDiscovery(options: DiscoveryOptions): WorkspaceDiscovery;
   createSessions(options: SessionOptions, request: { signal: AbortSignal }): Promise<Sessions>;
   tokens: Readonly<{
@@ -149,6 +165,17 @@ export async function createHeimdall(
   const secret = options.credentials.clientSecret.bind(options.credentials);
   const key = options.credentials.openfgaKey.bind(options.credentials);
   const policyVersion = options.policyVersion;
+  const authorize = options.authorizeWorkspaceCreation;
+  const operations = storage.managed?.operations?.({
+    productId: config.productId,
+    environment: config.environment,
+    storeId: config.openfga.storeId,
+    modelId: config.openfga.modelId,
+    modelHash: artifact.modelHash,
+    manifestVersion: config.manifestVersion,
+  });
+  if (authorize !== undefined && (!operations || typeof authorize !== "function"))
+    throw new HeimdallError("invalid_argument");
   const freshnessMs = options.identityFreshnessMs ?? 60000;
   const profile = config.transportProfile ?? "production";
   try {
@@ -179,7 +206,20 @@ export async function createHeimdall(
       gate,
       append,
     );
+    const onboarding =
+      operations &&
+      managedOnboarding(
+        configJSON,
+        manifestJSON,
+        config,
+        policyVersion,
+        operations,
+        authentication,
+        key,
+        authorize,
+      );
     return Object.freeze({
+      ...(onboarding ? { onboarding } : {}),
       createWorkspaceDiscovery(options: DiscoveryOptions) {
         return workspaceDiscovery(
           options,
