@@ -1360,4 +1360,47 @@ VALUES('ledger',$1,sha256(convert_to($2,'UTF8')),$3,$4,'org-a',1,'inactive') RET
 	if h.writes.Load()-beforeCleanup != 1 {
 		t.Fatal("directory replay duplicated the remote removal")
 	}
+	readerOptions := provisioning.DirectoryReaderOptions{Issuer: target.Issuer, OrganizationID: "org-a", Token: "viewer", TransportProfile: "loopback"}
+	prepare, err := postgres.NewDirectoryReactivation(db, "ledger", environment, readerOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := prepare(ctx, target.Subject, revision); err != nil {
+		t.Fatal("prepare reactivation", err)
+	}
+	release, err := postgres.NewDirectoryReactivationRelease(db, "ledger", environment, readerOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approved := []postgres.DirectoryReactivationEnrollment{{WorkspaceID: workspaceID, RuleID: enrollment.RuleID}}
+	if err := release(ctx, target.Subject, revision, approved); !errors.Is(err, heimdall.ErrConflict) {
+		t.Fatal("release before enrollment", err)
+	}
+	enrollment.ReactivationRevision = revision
+	restored, err := enroll(ctx, client, actor, enrollment)
+	if err != nil || restored.Status != "confirmed" || restored.OperationID == granted.OperationID {
+		t.Fatal("new reactivation enrollment", restored, err)
+	}
+	if err := release(ctx, target.Subject, revision, nil); !errors.Is(err, heimdall.ErrConflict) {
+		t.Fatal("release with incomplete approval set", err)
+	}
+	if denied, err := h.options.Storage.Identity.Check(ctx, target); err != nil || !denied {
+		t.Fatal("identity denial missing before release", denied, err)
+	}
+	for range 2 {
+		if err := release(ctx, target.Subject, revision, approved); err != nil {
+			t.Fatal("release", err)
+		}
+	}
+	if denied, err := h.options.Storage.Identity.Check(ctx, target); err != nil || denied {
+		t.Fatal("identity denial remained after release", denied, err)
+	}
+	if err := h.options.Storage.Identity.Invalidate(ctx, heimdall.IdentityNegative{
+		Identity: target, Context: "bearer", TokenDigest: strings.Repeat("0", 64), Reason: "identity_inactive",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := release(ctx, target.Subject, revision, approved); !errors.Is(err, heimdall.ErrConflict) {
+		t.Fatal("release replay accepted newer denial", err)
+	}
 }

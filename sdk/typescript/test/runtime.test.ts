@@ -7,6 +7,8 @@ import { Pool } from "pg";
 import {
   createDirectoryCleanup,
   createDirectoryEnrollment,
+  createDirectoryReactivation,
+  createDirectoryReactivationRelease,
   createManagedPostgresStorage,
   createPostgresStorage,
 } from "../src/postgres.js";
@@ -1182,6 +1184,46 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       });
       expect(await directory.pending(null, 1, call.signal)).toEqual([]);
       expect(s.fga.writes - beforeCleanup).toBe(1);
+      const readerOptions = { ...s.config, organizationId: "org-a", token: "viewer" };
+      const reactivation = {
+        subject: target.subject,
+        revision: plan.revision,
+        enrollments: [{ workspaceId: winner.workspaceId, ruleId: enrollment.ruleId }],
+      };
+      // Move past the earlier local observation on the deterministic runtime clock.
+      vi.mocked(Date.now).mockReturnValue(token.now + 1);
+      await createDirectoryReactivation(pool, readerOptions)(
+        target.subject,
+        plan.revision,
+        call.signal,
+      );
+      const release = createDirectoryReactivationRelease(pool, readerOptions);
+      await expect(release(reactivation, call.signal)).rejects.toThrow("conflict");
+      const restored = await enroll(
+        runtime,
+        actor,
+        { ...enrollment, reactivationRevision: plan.revision },
+        call.signal,
+      );
+      expect(restored.status).toBe("confirmed");
+      expect(restored.operationId).not.toBe(granted.operationId);
+      await expect(release({ ...reactivation, enrollments: [] }, call.signal)).rejects.toThrow(
+        "conflict",
+      );
+      await expect(s.options.storage.identity.check(target, call.signal)).resolves.toBe(true);
+      await release(reactivation, call.signal);
+      await release(reactivation, call.signal);
+      await expect(s.options.storage.identity.check(target, call.signal)).resolves.toBe(false);
+      await s.options.storage.identity.invalidate(
+        {
+          ...target,
+          context: "bearer",
+          tokenDigest: "0".repeat(64),
+          reason: "identity_inactive",
+        },
+        call.signal,
+      );
+      await expect(release(reactivation, call.signal)).rejects.toThrow("conflict");
     } finally {
       await Promise.all([pool.end(), admin.end()]);
     }

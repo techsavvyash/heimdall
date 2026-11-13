@@ -11,6 +11,7 @@ import type { Heimdall, Principal } from "../../runtime.js";
 import { transaction } from "./query.js";
 import { lockRetentionAdmission } from "./readiness.js";
 import { IdentityRecords } from "./identity.js";
+import { validReactivationRevision } from "./directory-reactivation.js";
 
 export function createDirectoryEnrollment(
   pool: Pool,
@@ -34,10 +35,12 @@ export function createDirectoryEnrollment(
       ruleId: string;
       roles: readonly string[];
       expectedDirectRoles?: readonly string[];
+      reactivationRevision?: string;
     },
     signal: AbortSignal,
   ) {
     const { subject, workspaceId, ruleId } = input;
+    const revision = input.reactivationRevision;
     const validRoles = (values: readonly string[]) =>
       Array.isArray(values) &&
       values.length <= 128 &&
@@ -49,6 +52,7 @@ export function createDirectoryEnrollment(
       !(signal instanceof AbortSignal) ||
       ![subject, workspaceId, ruleId].every(providerId) ||
       !validRoles(input.roles) ||
+      (revision !== undefined && !validReactivationRevision(revision)) ||
       (input.expectedDirectRoles !== undefined && !validRoles(input.expectedDirectRoles))
     )
       throw new HeimdallError("invalid_argument");
@@ -74,7 +78,10 @@ export function createDirectoryEnrollment(
       expected === undefined ? [actorKey, ...roles] : [actorKey, roles, expected],
     );
     const idempotencyKey =
-      "directory-enroll:" + createHash("sha256").update(JSON.stringify(key)).digest("hex");
+      "directory-enroll:" +
+      createHash("sha256")
+        .update(JSON.stringify(revision === undefined ? key : [...key, revision]))
+        .digest("hex");
     const observed = await reader.read(subject, signal);
     if (observed.state !== "active" || observed.externalId === undefined)
       throw new HeimdallError("forbidden");
@@ -85,12 +92,18 @@ export function createDirectoryEnrollment(
         await lockRetentionAdmission(client);
         await client.query("SELECT pg_advisory_xact_lock($1::bigint)", [records.lock(hash)]);
         const result = await client.query(
-          `INSERT INTO heimdall_directory.enrollments(product_id,environment,issuer,organization_id,subject,workspace_id,rule_id,plan)
-        SELECT $1,$2,$3,$4,$5,$6,$7,$8::jsonb WHERE NOT EXISTS (
-          SELECT 1 FROM heimdall.identity_denials WHERE product_id=$1 AND environment=$2 AND identity_hash=$9)
-        ON CONFLICT(product_id,environment,issuer,organization_id,subject,workspace_id,rule_id)
+          `INSERT INTO heimdall_directory.enrollments(product_id,environment,issuer,organization_id,subject,workspace_id,rule_id,plan,reactivation_revision)
+        SELECT $1,$2,$3,$4,$5,$6,$7,$8::jsonb,$10::bigint
+        WHERE ($10::bigint=0 AND NOT EXISTS (
+          SELECT 1 FROM heimdall.identity_denials WHERE product_id=$1 AND environment=$2 AND identity_hash=$9))
+        OR EXISTS (
+          SELECT 1 FROM heimdall_directory.deactivations d JOIN heimdall.identity_denials n USING(product_id,environment,identity_hash)
+          WHERE d.product_id=$1 AND d.environment=$2 AND d.issuer=$3 AND d.organization_id=$4 AND d.identity_hash=$9
+            AND d.revision=$10::bigint AND d.completed AND NOT d.reactivation_released
+            AND n.reason='inactive' AND n.observed_at<d.reactivation_started_at)
+        ON CONFLICT(product_id,environment,issuer,organization_id,subject,workspace_id,rule_id,reactivation_revision)
         DO UPDATE SET plan=EXCLUDED.plan WHERE enrollments.plan=EXCLUDED.plan`,
-          [...key, plan, hash],
+          [...key, plan, hash, revision ?? "0"],
         );
         if (result.rowCount !== 1) throw new HeimdallError("conflict");
       },
@@ -114,8 +127,9 @@ export function createDirectoryEnrollment(
           const update = await client.query(
             `UPDATE heimdall_directory.enrollments SET operation_id=$8
           WHERE product_id=$1 AND environment=$2 AND issuer=$3 AND organization_id=$4
-            AND subject=$5 AND workspace_id=$6 AND rule_id=$7 AND (operation_id IS NULL OR operation_id=$8)`,
-            [...key, result.operationId],
+            AND subject=$5 AND workspace_id=$6 AND rule_id=$7 AND (operation_id IS NULL OR operation_id=$8)
+            AND reactivation_revision=$9::bigint`,
+            [...key, result.operationId, revision ?? "0"],
           );
           if (update.rowCount !== 1) throw new HeimdallError("conflict");
         },

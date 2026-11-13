@@ -110,6 +110,29 @@ sequenceDiagram
   S->>D: Invalidate preparation and queue a fresh cleanup revision
 ```
 
-Preparation keeps the identity denied and leaves sessions and roles untouched. A subsequent inactive or deleted directory observation invalidates the preparation and opens a fresh cleanup revision. A newer local denial also prevents reuse of the prepared record. The release step still needs to apply current approved enrollment rules through audited membership operations and release the denial only once the new state is confirmed.
+Preparation keeps the identity denied and leaves sessions and roles untouched. A subsequent inactive or deleted directory observation invalidates the preparation and opens a fresh cleanup revision. A newer local denial also prevents reuse of the prepared record.
 
 PostgreSQL run `heimdall-records-4db02028f58f40a092bb543575667a09` exercised both SDKs. The tests covered pending cleanup rejection, preparation replay, retained denial, invalidation by a new deactivation, and rejection of a deleted identity.
+
+## Applying approved grants and releasing the denial
+
+Install directory migration `0007.sql` and give the trusted lifecycle worker delete permission on the identity-denial table. The product supplies its current approved rules, calls the audited enrollment API with the preparation's reactivation revision, and then calls `createDirectoryReactivationRelease` in TypeScript or `NewDirectoryReactivationRelease` in Go. The product must complete cleanup of stale directory grants before preparation and keep approvals stable while applying the plan. Rule identifiers must identify the approved rule version.
+
+```mermaid
+sequenceDiagram
+  participant W as Product lifecycle worker
+  participant S as Heimdall SDK
+  participant D as PostgreSQL
+  participant F as OpenFGA
+  W->>S: Enroll using approved rule and prepared revision
+  S->>D: Check preparation while identity stays denied
+  S->>F: Apply audited membership change
+  F-->>S: Confirm change
+  S->>D: Record enrollment operation for this revision
+  W->>S: Release with the exact approved enrollment set
+  S->>D: Verify completed operations and delete the older denial atomically
+```
+
+Enrollment for a prepared revision uses new operation keys, including when a rule was used previously. Release rechecks active status and directory provenance with ZITADEL. The transaction compares the approved workspace and rule pairs to the exact enrollment set for that revision, verifies the completed managed operations, and removes only the inactive denial that predates preparation. A replay leaves a later denial intact. Sessions revoked during deactivation remain revoked.
+
+PostgreSQL run `heimdall-records-e4b609d8190e4fe2b1357746524a362a` exercised revision-bound enrollment, refusal before confirmation and with an incomplete approval set, retained denial until release, release replay, and rejection after a newer local denial in both SDKs.

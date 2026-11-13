@@ -202,6 +202,7 @@ export class IdentityRecords {
              completed=deactivations.completed AND NOT (deactivations.reactivation_started_at IS NOT NULL OR (deactivations.reason='inactive' AND EXCLUDED.reason='deleted')),
              cleanup_plan=CASE WHEN deactivations.reactivation_started_at IS NOT NULL OR (deactivations.reason='inactive' AND EXCLUDED.reason='deleted') THEN NULL ELSE deactivations.cleanup_plan END,
              reactivation_started_at=NULL,
+             reactivation_released=false,
              reason=CASE WHEN deactivations.reason='deleted' OR EXCLUDED.reason='deleted' THEN 'deleted' ELSE 'inactive' END
          WHERE deactivations.issuer=EXCLUDED.issuer AND deactivations.subject=EXCLUDED.subject
            AND deactivations.organization_id=EXCLUDED.organization_id`,

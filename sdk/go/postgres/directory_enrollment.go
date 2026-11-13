@@ -20,7 +20,8 @@ type DirectoryEnrollmentInput struct {
 	Subject, WorkspaceID, RuleID string
 	Roles                        []string
 	// ExpectedDirectRoles opts into enrollment of an existing member.
-	ExpectedDirectRoles []string
+	ExpectedDirectRoles  []string
+	ReactivationRevision string
 }
 
 var directoryRole = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
@@ -89,10 +90,19 @@ func NewDirectoryEnrollment(db *sql.DB, product, environment string, options pro
 		if err != nil {
 			return empty, err
 		}
+		var revision int64
+		fields := []string{product, environment, issuer, org, input.Subject, input.WorkspaceID, input.RuleID}
+		if input.ReactivationRevision != "" {
+			revision, err = cleanupRevision(input.ReactivationRevision)
+			if err != nil {
+				return empty, err
+			}
+			fields = append(fields, input.ReactivationRevision)
+		}
 		var key bytes.Buffer
 		encoder := json.NewEncoder(&key)
 		encoder.SetEscapeHTML(false)
-		if err := encoder.Encode([]string{product, environment, issuer, org, input.Subject, input.WorkspaceID, input.RuleID}); err != nil {
+		if err := encoder.Encode(fields); err != nil {
 			return empty, contract.ErrInvalidArgument
 		}
 		digest := sha256.Sum256(bytes.TrimSuffix(key.Bytes(), []byte("\n")))
@@ -111,7 +121,7 @@ func NewDirectoryEnrollment(db *sql.DB, product, environment string, options pro
 		} else {
 			plan = append(plan, roles, expected)
 		}
-		if err := records.RecordDirectoryEnrollment(ctx, issuer, org, input.Subject, input.WorkspaceID, input.RuleID, plan); err != nil {
+		if err := records.RecordDirectoryEnrollment(ctx, issuer, org, input.Subject, input.WorkspaceID, input.RuleID, plan, revision); err != nil {
 			return empty, err
 		}
 		mutation := heimdall.MembershipRolesInput{
@@ -131,7 +141,7 @@ func NewDirectoryEnrollment(db *sql.DB, product, environment string, options pro
 			return empty, err
 		}
 		if result.Status == "confirmed" {
-			if err := records.ConfirmDirectoryEnrollment(ctx, issuer, org, input.Subject, input.WorkspaceID, input.RuleID, result.OperationID); err != nil {
+			if err := records.ConfirmDirectoryEnrollment(ctx, issuer, org, input.Subject, input.WorkspaceID, input.RuleID, result.OperationID, revision); err != nil {
 				return empty, err
 			}
 		}

@@ -26,7 +26,10 @@ export { createDirectoryDeactivation } from "./internal/postgres/directory-deact
 export { createDirectoryCleanup } from "./internal/postgres/directory-cleanup.js";
 export { createDirectoryPolling } from "./internal/postgres/directory-polling.js";
 export { createDirectoryEnrollment } from "./internal/postgres/directory-enrollment.js";
-export { createDirectoryReactivation } from "./internal/postgres/directory-reactivation.js";
+export {
+  createDirectoryReactivation,
+  createDirectoryReactivationRelease,
+} from "./internal/postgres/directory-reactivation.js";
 
 export type PostgresStorageOptions = {
   productId: string;
