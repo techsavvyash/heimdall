@@ -45,4 +45,4 @@ flowchart LR
   FGA --> PG[OpenFGA PostgreSQL]
 ```
 
-Run `HEIMDALL_PROBE_PINNED_ADMIN=1 python3 tests/integration/postgres-records.py` from the repository root with Node, pnpm, Go, Docker Compose, and a free loopback port 8080. The probe uses fixture identities and operator evidence callbacks. The earlier [[phase-5-workspace-recovery|workspace creation drill]] exercises actual service stop, drain and credential retirement. Reference product administration and invitation acceptance remain open.
+Run `HEIMDALL_PROBE_PINNED_ADMIN=1 python3 tests/integration/postgres-records.py` from the repository root with Node, pnpm, Go, Docker Compose, and a free loopback port 8080. The probe uses fixture identities and operator evidence callbacks. The earlier [[phase-5-workspace-recovery|workspace creation drill]] exercises actual service stop, drain and credential retirement. [[phase-5-reference-administration]] records the two-product HTTP verification. Invitation acceptance remains open.
