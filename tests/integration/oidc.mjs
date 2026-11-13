@@ -21,6 +21,7 @@ assert(
 );
 assert(new URL(issuer).origin === issuer && issuer.startsWith("https://"));
 const runId = randomUUID();
+const railwayReference = process.env.HEIMDALL_REFERENCE_RAILWAY === "1";
 console.error(`OIDC probe run: ${runId}`);
 let orgId;
 const sessions = [];
@@ -161,7 +162,7 @@ async function sdkRuntime(client, c) {
       },
     });
   } finally {
-    await api(`/stores/${store.id}`, undefined, "DELETE");
+    if (!railwayReference) await api(`/stores/${store.id}`, undefined, "DELETE");
   }
 }
 async function req(method, path, body, credential = pat) {
@@ -306,7 +307,9 @@ try {
       organizationId: orgId,
       name: `heimdall-${product}-${runId}`,
     });
-    const redirectUri = `https://${product}.example.invalid/callback`;
+    const redirectUri = railwayReference
+      ? `https://reference-${product}-verification.up.railway.app/callback`
+      : `https://${product}.example.invalid/callback`;
     const app = await ok("POST", "/zitadel.application.v2.ApplicationService/CreateApplication", {
       projectId: project.projectId,
       name: product,
@@ -538,7 +541,7 @@ try {
     };
     statusCases.push(statusCase);
     sdkStatus(statusCase, "human", "active");
-    if (process.env.HEIMDALL_REFERENCE_DATABASE_URL) {
+    if (railwayReference || process.env.HEIMDALL_REFERENCE_DATABASE_URL) {
       const audiences = [apiID.aud]
         .flat()
         .filter((value) => value !== client.clientId && value !== client.projectId);
@@ -862,7 +865,7 @@ try {
   const cleanup = await Promise.allSettled(
     sessions.map((sessionId) => ok("DELETE", `/v2/sessions/${sessionId}`, undefined, loginPat)),
   );
-  if (orgId) await ok("DELETE", `/v2/organizations/${orgId}`);
+  if (orgId && !railwayReference) await ok("DELETE", `/v2/organizations/${orgId}`);
   assert(
     cleanup.every((r) => r.status === "fulfilled"),
     `Session cleanup failed for run ${runId}`,
@@ -877,7 +880,9 @@ console.log(
       issuer,
       observations,
       wrongPKCE: "invalid_grant",
-      cleanedUpOrganization: orgId,
+      ...(railwayReference
+        ? { retainedReferenceOrganization: orgId }
+        : { cleanedUpOrganization: orgId }),
       limitations: [
         "Login client API performs password check; browser Login UI not exercised",
         "strict upstream SAML/OIDC evidence not verified",
