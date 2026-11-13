@@ -76,3 +76,52 @@ export function setupJournal(pool: Pool, scope: Scope) {
     },
   };
 }
+
+export async function readSetupStatus(
+  pool: Pool,
+  productId: string,
+  environment: string,
+  signal: AbortSignal,
+) {
+  if (
+    ![productId, environment].every(
+      (value) => typeof value === "string" && /^[a-z][a-z0-9_-]{0,63}(?![\s\S])/.test(value),
+    )
+  )
+    throw new HeimdallError("invalid_argument");
+  const rows = await query<{
+    ready: boolean;
+    stepCount: number | null;
+    ordinal: number | null;
+    dispatchId: string | null;
+    resourceId: string | null;
+  }>(
+    pool,
+    `SELECT r.ready,p.step_count AS "stepCount",s.ordinal,s.dispatch_id::text AS "dispatchId",s.resource_id AS "resourceId"
+      FROM (${readiness}) r
+      LEFT JOIN heimdall_setup.plans p ON p.product_id=$2 AND p.environment=$3
+      LEFT JOIN heimdall_setup.steps s ON s.product_id=p.product_id AND s.environment=p.environment
+      ORDER BY s.ordinal`,
+    [checksum, productId, environment],
+    false,
+    signal,
+  );
+  if (!rows[0]?.ready) throw new HeimdallError("unavailable");
+  return {
+    productId,
+    environment,
+    stepCount: rows[0].stepCount ?? 0,
+    steps: rows.flatMap(({ ordinal, dispatchId, resourceId }) =>
+      ordinal === null
+        ? []
+        : [
+            {
+              ordinal,
+              dispatchId,
+              resourceId,
+              state: resourceId === null ? ("unresolved" as const) : ("confirmed" as const),
+            },
+          ],
+    ),
+  };
+}

@@ -10,7 +10,7 @@ type Options = {
   name: string;
   token: string;
   transportProfile?: "production" | "loopback";
-  existingProjectId?: string;
+  existingProjectId?: string | undefined;
 };
 
 export async function provisionProject(pool: Pool, options: Options, signal: AbortSignal) {

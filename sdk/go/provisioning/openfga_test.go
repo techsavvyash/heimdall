@@ -61,28 +61,30 @@ func TestProvisionOpenFGALive(t *testing.T) {
 	if err != nil {
 		t.Fatal("OpenFGA setup failed", err)
 	}
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, base+"/stores/"+binding.StoreID, nil)
-		if err != nil {
-			t.Error("cleanup request")
-			return
-		}
-		req.Header.Set("Authorization", "Bearer "+token)
-		client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-		res, err := client.Do(req)
-		if err != nil {
-			t.Error("cleanup failed")
-			return
-		}
-		defer res.Body.Close()
-		if res.StatusCode != http.StatusNoContent {
-			t.Error("cleanup status", res.StatusCode)
-		}
-	})
+	t.Cleanup(func() { deleteVerificationStore(t, base, token, binding.StoreID) })
 	again, err := provisionOpenFGA(ctx, db, o)
 	if err != nil || again != binding {
 		t.Fatal("resume failed", err)
+	}
+}
+
+func deleteVerificationStore(t *testing.T, base, token, store string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, base+"/stores/"+store, nil)
+	if err != nil {
+		t.Error("cleanup request")
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	res, err := client.Do(req)
+	if err != nil {
+		t.Error("cleanup failed")
+		return
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Error("cleanup status", res.StatusCode)
 	}
 }

@@ -104,3 +104,40 @@ func RequireSetupDispatch(ctx context.Context, db *sql.DB, scope SetupScope, ord
 	}
 	return nil
 }
+
+// ReadSetupStatus reads readiness and ordered setup progress in a single snapshot.
+func ReadSetupStatus(ctx context.Context, db *sql.DB, product, environment string) (int, []SetupStep, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	rows, err := db.QueryContext(ctx, `SELECT r.ready,COALESCE(p.step_count,0),
+		COALESCE(s.dispatch_id::text,''),COALESCE(s.resource_id,'')
+		FROM (`+setupReadinessSQL+`) r
+		LEFT JOIN heimdall_setup.plans p ON p.product_id=$2 AND p.environment=$3
+		LEFT JOIN heimdall_setup.steps s ON s.product_id=p.product_id AND s.environment=p.environment
+		ORDER BY s.ordinal`, setupChecksum, product, environment)
+	if err != nil {
+		return 0, nil, databaseError(ctx)
+	}
+	defer rows.Close()
+	steps := make([]SetupStep, 0)
+	var count int
+	for rows.Next() {
+		var ready bool
+		var step SetupStep
+		if err := rows.Scan(&ready, &count, &step.DispatchID, &step.ResourceID); err != nil || !ready {
+			return 0, nil, databaseError(ctx)
+		}
+		if step.DispatchID == "" {
+			continue
+		}
+		step.State = "unresolved"
+		if step.ResourceID != "" {
+			step.State = "confirmed"
+		}
+		steps = append(steps, step)
+	}
+	if rows.Err() != nil {
+		return 0, nil, databaseError(ctx)
+	}
+	return count, steps, nil
+}

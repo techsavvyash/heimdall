@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "description": "Heimdall TypeScript SDK development runtime",
+  "bin": {
+    "heimdall-setup": "./dist/cli.js"
+  },
   "files": [
     "dist"
   ],
@@ -16,6 +19,10 @@
     "./sessionstoretest": {
       "types": "./dist/sessionstoretest.d.ts",
       "import": "./dist/sessionstoretest.js"
+    },
+    "./provisioning": {
+      "types": "./dist/provisioning/index.d.ts",
+      "import": "./dist/provisioning/index.js"
     },
     "./postgres": {
       "types": "./dist/postgres.d.ts",

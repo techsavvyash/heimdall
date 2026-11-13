@@ -2,7 +2,9 @@ import { defineConfig } from "rolldown";
 
 export default defineConfig({
   input: {
+    cli: "src/cli.ts",
     index: "src/index.ts",
+    "provisioning/index": "src/provisioning/index.ts",
     postgres: "src/postgres.ts",
     sessionstoretest: "src/sessionstoretest.ts",
   },

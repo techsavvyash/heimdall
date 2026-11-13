@@ -10,10 +10,10 @@ type Options = {
   configJSON: string;
   manifestJSON: string;
   token: string;
-  existingStoreId?: string;
-  existingModelId?: string;
-  recoverStoreId?: string;
-  recoverModelId?: string;
+  existingStoreId?: string | undefined;
+  existingModelId?: string | undefined;
+  recoverStoreId?: string | undefined;
+  recoverModelId?: string | undefined;
 };
 
 export async function provisionOpenFGA(pool: Pool, options: Options, signal: AbortSignal) {

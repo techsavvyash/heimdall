@@ -21,7 +21,7 @@ type Options = {
   name: string;
   redirectUris: readonly string[];
   transportProfile?: "production" | "loopback";
-  existingApplicationId?: string;
+  existingApplicationId?: string | undefined;
   saveSecret(
     applicationId: string,
     clientId: string,
