@@ -194,3 +194,5 @@ export type { DiscoveryRebuildCheckpoint, DiscoveryRebuildOptions } from "./disc
 
 export { prepareEnterpriseProvider } from "./enterprise-provider.js";
 export type { EnterpriseProviderOptions } from "./enterprise-provider.js";
+export { createDirectoryReader } from "./directory-reader.js";
+export type { DirectoryReaderOptions } from "./directory-reader.js";

@@ -69,7 +69,8 @@ func providerCall(ctx context.Context, client *http.Client, base, token, path st
 	}
 	const limit = 1 << 20
 	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
-	if err != nil || len(data) > limit || json.Unmarshal(data, result) != nil {
+	if err != nil || len(data) > limit || bytes.Equal(bytes.TrimSpace(data), []byte("null")) ||
+		json.Unmarshal(data, result) != nil {
 		return false, contract.ErrUnavailable
 	}
 	return true, nil

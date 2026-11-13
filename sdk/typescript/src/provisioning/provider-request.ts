@@ -56,7 +56,9 @@ export function providerRequest(
       } finally {
         await reader.cancel();
       }
-      return JSON.parse(Buffer.concat(chunks, bytes).toString("utf8")) as T;
+      const data = JSON.parse(Buffer.concat(chunks, bytes).toString("utf8")) as T;
+      if (data === null) throw new Error();
+      return data;
     } catch (error) {
       checkCancellation(operation);
       if (error instanceof ProviderThrottled) throw error;

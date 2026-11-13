@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { probeLifecycleEvents } from "./lifecycle-events.mjs";
 
 const issuer = process.env.HEIMDALL_PROBE_ZITADEL_ISSUER;
@@ -14,6 +15,43 @@ const observations = [];
 const scopedTokens = new Map();
 const credentialChecks = [];
 const scimUserPath = (organizationId) => `/scim/v2/${organizationId}/Users`;
+const useSDK = process.env.HEIMDALL_PROBE_SCIM_SDK === "true";
+async function checkDirectorySDK(options, subject, state, externalId) {
+  if (!useSDK) return;
+  const { createDirectoryReader } = await import("../../sdk/typescript/dist/provisioning/index.js");
+  const reader = createDirectoryReader(options);
+  const signal = AbortSignal.timeout(15000);
+  const observed = await reader.read(subject, signal);
+  assert.equal(observed.state, state);
+  assert.equal(observed.externalId, externalId);
+  const page = await reader.list(1, 1, signal);
+  if (state === "active") {
+    assert.equal(page.nextStartIndex, 2);
+    assert.deepEqual(page.users, [{ id: subject, externalId }]);
+  }
+  if (state === "missing") assert.deepEqual(page, { users: [], nextStartIndex: null });
+  const go = spawnSync(
+    "go",
+    ["test", "-race", "-count=1", "./provisioning", "-run", "^TestLiveDirectoryReader$"],
+    {
+      cwd: new URL("../../sdk/go/", import.meta.url),
+      env: {
+        ...process.env,
+        HEIMDALL_TEST_DIRECTORY_READER: JSON.stringify({ ...options, subject, state, externalId }),
+      },
+      encoding: "utf8",
+      timeout: 60000,
+    },
+  );
+  if (go.status !== 0)
+    console.error(
+      go.stdout?.match(
+        /(?:unexpected live identity result|live listing failed)(?: (?:unavailable|conflict|<nil>))?/,
+      )?.[0] ?? "Go directory read failed",
+    );
+  assert.equal(go.status, 0);
+  observations.push({ sdkDirectoryRead: { state, matched: ["typescript", "go"] } });
+}
 async function request(method, path, body, credential) {
   credential ??=
     (path.startsWith("/scim/") ? scopedTokens.get(path.split("/")[3]) : undefined) ?? pat;
@@ -104,6 +142,7 @@ try {
   }
   assert.notEqual(users[0], users[1]);
   const acmeToken = scopedTokens.get(orgs[0]);
+  let readerToken = acmeToken;
   for (const [method, path, body] of [
     ["GET", `${paths[1]}/${users[1]}`],
     [
@@ -179,7 +218,7 @@ try {
       unfilteredListIncludesUserOutsideCallerProvisioningDomain: true,
     },
   });
-  if (process.env.HEIMDALL_PROBE_SCIM_READER === "true") {
+  if (useSDK || process.env.HEIMDALL_PROBE_SCIM_READER === "true") {
     const viewer = await ok("POST", "/v2/users/new", {
       organizationId: orgs[0],
       username: `scim-reader-${runId}`,
@@ -203,6 +242,7 @@ try {
     const { token } = await ok("POST", `/v2/users/${viewer.id}/pats`, {
       expirationDate: new Date(Date.now() + 3600000).toISOString(),
     });
+    readerToken = token;
     const ownList = await ok("GET", paths[0] + "?startIndex=1&count=10", undefined, token);
     assert.equal(
       ownList.Resources.find((user) => user.id === users[0])?.externalId,
@@ -235,6 +275,9 @@ try {
       },
     });
   }
+  const reader = { issuer, organizationId: orgs[0], token: readerToken };
+  await checkDirectorySDK(reader, users[0], "active", `employee-${runId}`);
+  let inactiveReadChecked = false;
   for (const active of [false, false, true, false]) {
     const start = performance.now();
     await ok("PATCH", `${paths[0]}/${users[0]}`, {
@@ -252,6 +295,10 @@ try {
       authoritativeReadMs: readMs,
       mutationAndObservationMs: Math.round(performance.now() - start),
     });
+    if (useSDK && !inactiveReadChecked && !active) {
+      await checkDirectorySDK(reader, users[0], "inactive");
+      inactiveReadChecked = true;
+    }
   }
   await ok("DELETE", `${paths[0]}/${users[0]}`);
   assert.equal((await request("GET", `${paths[0]}/${users[0]}`)).status, 404);
@@ -259,6 +306,7 @@ try {
     deleted: true,
     authoritativeReadMs: await stateWithin(users[0], "deleted", acmeToken),
   });
+  await checkDirectorySDK(reader, users[0], "missing");
   assert.equal((await ok("GET", `${paths[1]}/${users[1]}`)).active, true);
   if (process.env.HEIMDALL_PROBE_EVENTS === "true")
     observations.push({
