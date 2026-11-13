@@ -130,3 +130,105 @@ func TestIdentityCollectorPostgres(t *testing.T) {
 		t.Fatal("missing delivery row", err)
 	}
 }
+
+func TestIdentityCollectorCommitLoss(t *testing.T) {
+	dsn := os.Getenv("HEIMDALL_TEST_COLLECTOR_COMMIT_LOSS")
+	if dsn == "" {
+		t.Skip("requires collector COMMIT response-loss proxy")
+	}
+	fault, err := sql.Open("postgres", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fault.Close()
+	fault.SetMaxOpenConns(1)
+	db, err := sql.Open("postgres", os.Getenv("HEIMDALL_TEST_AUDIT_DELIVERY_DB"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	data, err := os.ReadFile("../../../contracts/fixtures/identity-collector.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		NextMicros, UntilMicros int64
+		Events                  json.RawMessage
+	}
+	if err := json.Unmarshal(data, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	var reads, deliveries atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/admin/v1/events/_search":
+			reads.Add(1)
+			_ = json.NewEncoder(w).Encode(map[string]json.RawMessage{"events": fixture.Events})
+		case "/audit":
+			deliveries.Add(1)
+			var batch auditBatch
+			if r.Header.Get("Authorization") != "Bearer sink-token" ||
+				json.NewDecoder(r.Body).Decode(&batch) != nil || batch.ProductID != "ledger" ||
+				batch.Environment != "collector-loss-go" || batch.SinkID != "siem" ||
+				len(batch.EventIDs) != 1 || len(batch.Events) != 1 {
+				t.Error("unexpected batch scope")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			event := batch.Events[0]
+			attributes, _ := event["attributes"].(map[string]any)
+			target, _ := event["target"].(map[string]any)
+			if event["eventId"] != batch.EventIDs[0] || event["source"] != "zitadel" ||
+				event["tenantId"] != "tenant-a" || attributes["sequence"] != "18446744073709551615" ||
+				target["type"] != "zitadel_aggregate" || target["id"] != "assigned" {
+				t.Error("unexpected imported event")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			batch.Events = nil
+			_ = json.NewEncoder(w).Encode(batch)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	o := IdentityCollectorOptions{
+		IdentityEventReaderOptions: provisioning.IdentityEventReaderOptions{
+			Issuer: server.URL, OrganizationID: "org", Token: "provider-token", TransportProfile: "loopback",
+		},
+		ProductID: "ledger", Environment: "collector-loss-go", TenantID: "tenant-a",
+		AuditSinks: []string{"siem"}, StartMicros: fixture.NextMicros,
+		Aggregates: []IdentityAggregate{{"user", "assigned"}},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	coverage := IdentityEventCoverage{VisibleBeforeMicros: fixture.UntilMicros, ValidUntilMs: time.Now().Add(15 * time.Second).UnixMilli()}
+	collector, err := NewIdentityCollector(fault, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := collector.Collect(ctx, coverage); !errors.Is(err, contract.ErrOutcomeUnknown) {
+		t.Fatal("loss of commit response must be uncertain", err)
+	}
+	restarted, err := NewIdentityCollector(db, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result, err := restarted.Collect(ctx, coverage); err != nil || result != (IdentityCollection{fixture.UntilMicros, 0}) || reads.Load() != 1 {
+		t.Fatal("restart did not resume committed checkpoint", result, err)
+	}
+	delivery, err := NewAuditDelivery(db, AuditDeliveryOptions{
+		ProductID: o.ProductID, Environment: o.Environment, SinkID: "siem", Endpoint: server.URL + "/audit",
+		Token: "sink-token", TransportProfile: "loopback",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result, err := delivery.Deliver(ctx, 10); err != nil || result.Delivered != 1 || result.Quarantined != 0 {
+		t.Fatal("imported event was not delivered", result, err)
+	}
+	if result, err := delivery.Deliver(ctx, 10); err != nil || result.Delivered != 0 || deliveries.Load() != 1 {
+		t.Fatal("acknowledged event was redelivered", result, err)
+	}
+}

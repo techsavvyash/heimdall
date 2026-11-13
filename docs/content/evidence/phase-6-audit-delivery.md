@@ -123,3 +123,23 @@ The SDK records only sanitized event metadata for assigned aggregate IDs. An org
 PostgreSQL run `heimdall-records-1edae3aaae274a6aac06d4052f88ab92` used the same provider fixture in both SDKs. It verified that a retention gap makes no upstream call, an upstream outage leaves the checkpoint unset, an injected delivery insert failure rolls back the checkpoint and event, and restart after commit does not re-read the completed window. Only the mapped event received a delivery row and the exact uint64 sequence survived storage.
 
 Historical collection takes trusted coverage bounds as an input. Establishing automatic live coverage, qualifying mapping changes and discovering new aggregates safely remain Phase 6 work.
+
+### Collector recovery and delivery after a lost commit response
+
+PostgreSQL run `heimdall-records-7821ff13a104496e84210d432f95b412` used a wire proxy to withhold the response after PostgreSQL confirmed the collector commit. Both SDKs returned `outcome_unknown`. On a new connection they resumed at the committed checkpoint without reading the provider window again. Each exporter delivered the original mapped tenant event and its exact sequence to an authenticated HTTP receipt fixture. After the fixture acknowledged the event ID, another delivery pass sent no event. The shared provider fixture included an unmapped aggregate and a synthetic sensitive payload. The receiver got only the mapped event and its sanitized metadata.
+
+```mermaid
+sequenceDiagram
+  participant W as Product worker
+  participant D as PostgreSQL
+  participant R as HTTP receipt test receiver
+  W->>D: Commit mapped event, delivery row and checkpoint
+  Note over W,D: PostgreSQL commits and the proxy drops the response
+  W->>D: Restart and read the committed checkpoint
+  D-->>W: Resume beyond the committed window
+  W->>R: Deliver the original event ID and mapped metadata
+  R-->>W: Acknowledge the event ID
+  W->>D: Persist sink acknowledgement
+```
+
+The provider and receiver in this fault test are fixtures. Production visibility and retention bounds and a compatible SIEM deployment still require qualification.

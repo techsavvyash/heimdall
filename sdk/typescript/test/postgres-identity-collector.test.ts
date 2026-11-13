@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { expect, test } from "vitest";
-import { createIdentityCollector } from "../src/postgres.js";
+import { createAuditDelivery, createIdentityCollector } from "../src/postgres.js";
 
 test.skipIf(!process.env.HEIMDALL_TEST_AUDIT_DELIVERY_DB)(
   "retains mapped source events and advances once",
@@ -115,6 +115,109 @@ test.skipIf(!process.env.HEIMDALL_TEST_AUDIT_DELIVERY_DB)(
     } finally {
       server.close();
       await pool.end();
+    }
+  },
+);
+
+test.skipIf(!process.env.HEIMDALL_TEST_COLLECTOR_COMMIT_LOSS)(
+  "delivers the original mapped event after the collector loses its commit response",
+  async () => {
+    const fixture = JSON.parse(
+      readFileSync(
+        new URL("../../../contracts/fixtures/identity-collector.json", import.meta.url),
+        "utf8",
+      ),
+    );
+    const pool = new Pool({ connectionString: process.env.HEIMDALL_TEST_AUDIT_DELIVERY_DB });
+    const fault = new Pool({
+      connectionString: process.env.HEIMDALL_TEST_COLLECTOR_COMMIT_LOSS,
+      max: 1,
+    });
+    let reads = 0;
+    const batches: unknown[] = [];
+    const server = createServer(async (request, response) => {
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/admin/v1/events/_search") {
+        reads++;
+        response.end(JSON.stringify({ events: fixture.events }));
+        return;
+      }
+      if (request.url !== "/audit" || request.headers.authorization !== "Bearer sink-token") {
+        response.writeHead(403).end();
+        return;
+      }
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(chunk);
+      const { events, ...receipt } = JSON.parse(Buffer.concat(chunks).toString());
+      batches.push({ ...receipt, events });
+      response.end(JSON.stringify(receipt));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const { port } = server.address() as { port: number };
+      const issuer = "http://127.0.0.1:" + port;
+      const scope = {
+        productId: "ledger",
+        environment: "collector-loss-ts",
+        transportProfile: "loopback" as const,
+      };
+      const options = {
+        ...scope,
+        issuer,
+        organizationId: "org",
+        tenantId: "tenant-a",
+        token: "provider-token",
+        auditSinks: ["siem"],
+        startMicros: BigInt(fixture.nextMicros),
+        aggregates: [{ type: "user", id: "assigned" }],
+      };
+      const coverage = {
+        retainedFromMicros: 0n,
+        visibleBeforeMicros: BigInt(fixture.untilMicros),
+        validUntilMs: Date.now() + 15000,
+      };
+      const signal = AbortSignal.timeout(15000);
+      await expect(
+        createIdentityCollector(fault, options).collect(coverage, signal),
+      ).rejects.toMatchObject({ code: "outcome_unknown" });
+      await expect(
+        createIdentityCollector(pool, options).collect(coverage, signal),
+      ).resolves.toEqual({
+        nextMicros: coverage.visibleBeforeMicros,
+        recorded: 0,
+      });
+      expect(reads).toBe(1);
+      const delivery = createAuditDelivery(pool, {
+        ...scope,
+        sinkId: "siem",
+        endpoint: issuer + "/audit",
+        token: "sink-token",
+      });
+      await expect(delivery.deliver(10, signal)).resolves.toMatchObject({
+        delivered: 1,
+        quarantined: 0,
+      });
+      await expect(delivery.deliver(10, signal)).resolves.toMatchObject({ delivered: 0 });
+      expect(batches).toEqual([
+        {
+          productId: "ledger",
+          environment: "collector-loss-ts",
+          sinkId: "siem",
+          eventIds: [expect.stringMatching(/^[a-f0-9]{64}$/)],
+          events: [
+            expect.objectContaining({
+              source: "zitadel",
+              tenantId: "tenant-a",
+              target: { type: "zitadel_aggregate", id: "assigned" },
+              attributes: expect.objectContaining({ sequence: "18446744073709551615" }),
+            }),
+          ],
+        },
+      ]);
+      expect(JSON.stringify(batches)).not.toContain("discard");
+    } finally {
+      server.close();
+      await Promise.all([fault.end(), pool.end()]);
     }
   },
 );

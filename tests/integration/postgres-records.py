@@ -134,6 +134,22 @@ try:
     subprocess.run(["go", "test", "-race", "-count=1", "./postgres", "-run", "^Test(AuditDelivery|IdentityCollector)Postgres$"],
                    cwd=ROOT / "sdk/go", env=delivery_env, check=True)
     print(json.dumps({"run": name, "auditDelivery": ["typescript", "go"], "result": "passed"}), flush=True)
+    for language in ("ts", "go"):
+        with CommitLossProxy(int(port)) as proxy:
+            fault_env = dict(delivery_env, HEIMDALL_TEST_COLLECTOR_COMMIT_LOSS=(
+                f"postgres://postgres:{password}@127.0.0.1:{proxy.port}/public_runtime"
+                "?sslmode=disable&options=-c%20role%3Dheimdall_public_runtime"
+            ))
+            if language == "ts":
+                run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run",
+                     "test/postgres-identity-collector.test.ts", "-t", "loses its commit response"], env=fault_env)
+            else:
+                subprocess.run(["go", "test", "-race", "-count=1", "./postgres", "-run",
+                                "^TestIdentityCollectorCommitLoss$"],
+                               cwd=ROOT / "sdk/go", env=fault_env, check=True)
+            if not proxy.dropped.is_set() or proxy.errors:
+                raise RuntimeError(language + " identity collector COMMIT fault was not verified")
+    print(json.dumps({"run": name, "identityCollectorCommitLossAndDelivery": ["typescript", "go"], "result": "passed"}), flush=True)
     directory_env = dict(runtime_env, HEIMDALL_TEST_DIRECTORY_DB=runtime_dsn + "&options=-c%20role%3Dheimdall_public_runtime")
     run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-directory-deactivation.test.ts"], env=directory_env)
     subprocess.run(["go", "test", "-race", "-count=1", "./postgres", "-run", "^TestDirectoryDeactivationPostgres$"],
