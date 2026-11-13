@@ -173,6 +173,9 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         http,
         auth,
         {
+          getSession: store.getSession.bind(store),
+          compareAndSwapSession: store.compareAndSwapSession.bind(store),
+          deleteSession: store.deleteSession.bind(store),
           createSession: async () => {
             throw new HeimdallError("outcome_unknown");
           },
@@ -212,6 +215,39 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
           ).rows[0].count,
         ),
       ).toBe(2);
+      const sessionCookie = cookies[1]!.split(";")[0]!;
+      const protectedUrl = new URL("/workspaces", f.redirectUri);
+      const authenticated = new Request(protectedUrl, { headers: { cookie: sessionCookie } });
+      expect((await sessions.authenticate(authenticated)).subject).toBe("alice");
+      const touched = (await store.getSession(key))!;
+      expect(touched.revision).not.toBe(stored.revision);
+      const logout = (origin: string) =>
+        new Request(new URL("/auth/logout", f.redirectUri), {
+          method: "POST",
+          headers: { cookie: sessionCookie, origin },
+        });
+      await expect(sessions.logout(logout("https://other.example.test"))).rejects.toThrow(
+        "forbidden",
+      );
+      expect(await store.getSession(key)).not.toBeNull();
+      const race = browserSession(
+        http,
+        {
+          verify: async (...args) => {
+            const actor = await auth.verify(...args);
+            const cleared = await sessions.logout(logout(protectedUrl.origin));
+            expect(cleared.status).toBe(204);
+            expect(cleared.headers.get("set-cookie")).toContain("Max-Age=0");
+            return actor;
+          },
+        },
+        store,
+        { returnTo: "/workspaces" },
+      );
+      await expect(race.authenticate(authenticated)).rejects.toThrow("unauthenticated");
+      expect(await store.getSession(key)).toBeNull();
+      await expect(sessions.authenticate(authenticated)).rejects.toThrow("unauthenticated");
+      expect((await sessions.logout(logout(protectedUrl.origin))).status).toBe(204);
     } finally {
       vi.unstubAllGlobals();
       await pool.end();

@@ -27,7 +27,20 @@ import (
 	"github.com/techsavvyash/heimdall/sdk/go/internal/postgres"
 )
 
-type unknownSessionWrite struct{}
+type afterSessionVerify struct {
+	sessionAuth
+	action func()
+}
+
+func (a afterSessionVerify) Verify(ctx context.Context, token, scope string) (*identity.Principal, error) {
+	actor, err := a.sessionAuth.Verify(ctx, token, scope)
+	if err == nil {
+		a.action()
+	}
+	return actor, err
+}
+
+type unknownSessionWrite struct{ *postgres.SessionRecords }
 
 func (unknownSessionWrite) CreateSession(context.Context, string, []byte, int64) (*postgres.Record, error) {
 	return nil, contract.ErrOutcomeUnknown
@@ -281,7 +294,7 @@ func TestBrowserLoginHTTP(t *testing.T) {
 		t.Fatal("audit failure created a session", err)
 	}
 	failAudit.Store(false)
-	uncertain, err := NewSessions(h, auth, unknownSessionWrite{}, "/workspaces", 0, 0, nil)
+	uncertain, err := NewSessions(h, auth, unknownSessionWrite{sessionsStore}, "/workspaces", 0, 0, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,4 +325,53 @@ func TestBrowserLoginHTTP(t *testing.T) {
 	if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_events WHERE product_id=$1 AND environment=$2", f.ProductID, f.Environment).Scan(&count); err != nil || count != 2 {
 		t.Fatal("expected two committed authentication events", err)
 	}
+	sessionCookie := cookies[1].Name + "=" + opaque
+	recordKey := encode(digest[:])
+	protected := httptest.NewRequest(http.MethodGet, "https://ledger.example.test/workspaces", nil)
+	protected.Header.Set("Cookie", sessionCookie)
+	if actor, err := sessions.Authenticate(protected); err != nil || actor.Identity().Subject != "alice" {
+		t.Fatal("session authentication failed", err)
+	}
+	touched, err := sessionsStore.GetSession(context.Background(), recordKey)
+	if err != nil || touched == nil || touched.Revision == stored.Revision {
+		t.Fatal("session activity did not advance", err)
+	}
+	logout := func(origin string) (*http.Response, error) {
+		r := httptest.NewRequest(http.MethodPost, "https://ledger.example.test/auth/logout", nil)
+		r.Header.Set("Cookie", sessionCookie)
+		r.Header.Set("Origin", origin)
+		w := httptest.NewRecorder()
+		err := sessions.Logout(w, r)
+		return w.Result(), err
+	}
+	res, err = logout("https://other.example.test")
+	res.Body.Close()
+	if !errors.Is(err, contract.ErrForbidden) || len(res.Cookies()) != 0 {
+		t.Fatal("cross-origin logout accepted", err)
+	}
+	race, err := NewSessions(h, afterSessionVerify{auth, func() {
+		res, err := logout("https://ledger.example.test")
+		res.Body.Close()
+		if err != nil || res.StatusCode != 204 || len(res.Cookies()) != 1 || res.Cookies()[0].MaxAge != -1 {
+			t.Fatal("logout failed", err)
+		}
+	}}, sessionsStore, "/workspaces", 0, 0, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actor, err := race.Authenticate(protected); actor != nil || !errors.Is(err, contract.ErrUnauthenticated) {
+		t.Fatal("authentication survived logout race", err)
+	}
+	if current, err := sessionsStore.GetSession(context.Background(), recordKey); current != nil || err != nil {
+		t.Fatal("logout did not delete session", err)
+	}
+	if actor, err := sessions.Authenticate(protected); actor != nil || !errors.Is(err, contract.ErrUnauthenticated) {
+		t.Fatal("logged out cookie authenticated", err)
+	}
+	res, err = logout("https://ledger.example.test")
+	res.Body.Close()
+	if err != nil || res.StatusCode != 204 {
+		t.Fatal("logout was not idempotent", err)
+	}
+
 }
