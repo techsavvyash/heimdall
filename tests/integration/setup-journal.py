@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 import uuid
+import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
 IMAGE = "postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac"
@@ -112,6 +113,28 @@ try:
                        env=runtime, cwd=ROOT, check=True, timeout=45)
         subprocess.run(["go", "test", "-race", "-count=1", "./internal/postgres", "-run", "^TestSetupJournal$"],
                        env=runtime, cwd=ROOT / "sdk/go", check=True, timeout=45)
+        if runtime.get("HEIMDALL_PROBE_ZITADEL_PAT"):
+            issuer = runtime["HEIMDALL_PROBE_ZITADEL_ISSUER"]
+            assert issuer.startswith("https://")
+            def provider(path, method, body=None):
+                request = urllib.request.Request(issuer + path, method=method,
+                    headers={"Authorization": "Bearer " + runtime["HEIMDALL_PROBE_ZITADEL_PAT"],
+                             "Content-Type": "application/json"},
+                    data=json.dumps(body).encode() if body else None)
+                class NoRedirect(urllib.request.HTTPRedirectHandler):
+                    def redirect_request(self, *args, **kwargs):
+                        return None
+                with urllib.request.build_opener(NoRedirect).open(request, timeout=15) as response:
+                    return json.loads(response.read() or b"{}")
+            org = provider("/v2/organizations", "POST", {"name": NAME})["organizationId"]
+            try:
+                runtime["HEIMDALL_TEST_SETUP_ZITADEL_ORG"] = org
+                subprocess.run(["go", "test", "-race", "-count=1", "./provisioning"],
+                               env=runtime, cwd=ROOT / "sdk/go", check=True, timeout=60)
+                subprocess.run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/setup-project.test.ts"],
+                               env=runtime, cwd=ROOT, check=True, timeout=60)
+            finally:
+                provider("/v2/organizations/" + org, "DELETE")
     print(json.dumps({"run": RUN, "railway": railway, "result": "passed",
                       "checks": ["standalone schema", "concurrent claim", "restart preserves dispatch",
                                  "ordered steps", "fingerprint conflicts", "exact confirmation replay",
