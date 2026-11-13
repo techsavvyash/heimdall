@@ -1,7 +1,13 @@
-import { randomUUID } from "node:crypto";
-import type { Principal } from "../runtime.js";
+import { randomInt, randomUUID } from "node:crypto";
+import type { IdentityGate, Principal } from "../runtime.js";
+import { ProviderThrottled } from "./provider-backoff.js";
 import { ensureTenantOwner } from "../provisioning/tenant-owner.js";
 import type { AuditedAuthentication } from "./audited-authentication.js";
+import {
+  reconcileOperations,
+  type ReconcileOptions,
+  type ReconcileResult,
+} from "./reconcile-operations.js";
 import { bounded, known } from "./audited-decision.js";
 import type { parseDeployment } from "./configuration.js";
 import { checkCancellation, HeimdallError } from "./errors.js";
@@ -29,6 +35,7 @@ export type WorkspaceOnboarding = Readonly<{
     call: Call,
   ): Promise<WorkspaceOnboardingStatus>;
   get(actor: Principal, operationId: string, call: Call): Promise<WorkspaceOnboardingStatus>;
+  reconcile(options: ReconcileOptions): Promise<ReconcileResult>;
   resume(actor: Principal, operationId: string, call: Call): Promise<WorkspaceOnboardingStatus>;
 }>;
 
@@ -54,6 +61,7 @@ export function managedOnboarding(
   records: OperationRecords,
   auth: AuditedAuthentication,
   key: (signal: AbortSignal) => Promise<string>,
+  gate: IdentityGate,
   policy?: WorkspaceCreationPolicy,
 ): WorkspaceOnboarding {
   function request(actor: Principal, call: Call) {
@@ -73,20 +81,27 @@ export function managedOnboarding(
       nextAttemptAt: at,
     };
   }
-  async function drive(op: ManagedOperation, signal: AbortSignal) {
+  async function drive(op: ManagedOperation, signal: AbortSignal, scheduler?: true) {
     const requestId = randomUUID();
     const actor = op.intent.actor;
-    async function advance(transition: string, operation: AbortSignal) {
-      op = await records.advance(
-        op.operationId,
-        actor,
-        op.generation,
-        transition,
-        metadata(requestId, op.updatedAt),
-        operation,
-      );
+    async function advance(transition: string, operation: AbortSignal, retryAfter = 0) {
+      const meta = { ...metadata(requestId, op.updatedAt), ...(scheduler ? { scheduler } : {}) };
+      if (transition === "pre_dispatch_failure") {
+        const base = Math.min(60000, 1000 * 2 ** Math.min(6, Math.floor((op.generation - 1) / 2)));
+        meta.nextAttemptAt += Math.max(
+          retryAfter,
+          Math.min(60000, base + randomInt(Math.floor(base / 4) + 1)),
+        );
+      }
+      op = await records.advance(op.operationId, actor, op.generation, transition, meta, operation);
     }
     try {
+      if (
+        op.intent.kind === "create_workspace" &&
+        (op.state === "retryable" || op.state === "pending") &&
+        (await gate.check(actor, signal)) !== false
+      )
+        throw new HeimdallError("forbidden");
       if (op.state === "retryable") {
         if (Date.now() < op.nextAttemptAt) return status(op);
         await advance("retry", signal);
@@ -96,6 +111,7 @@ export function managedOnboarding(
         let dispatchCommitted = false;
         async function dispatch(operation: AbortSignal) {
           dispatchStarted = true;
+          if ((await gate.check(actor, operation)) !== false) throw new HeimdallError("forbidden");
           await advance("dispatch", operation);
           dispatchCommitted = true;
         }
@@ -125,7 +141,11 @@ export function managedOnboarding(
             !signal.aborted &&
             (code === "unavailable" || code === "deadline_exceeded")
           ) {
-            await advance("pre_dispatch_failure", signal);
+            await advance(
+              "pre_dispatch_failure",
+              signal,
+              error instanceof ProviderThrottled ? error.retryDelay : 0,
+            );
             return status(op);
           }
           throw error;
@@ -165,6 +185,9 @@ export function managedOnboarding(
     return { record, signal };
   }
   return Object.freeze({
+    reconcile(options: ReconcileOptions) {
+      return reconcileOperations(records, options, (op, signal) => drive(op, signal, true));
+    },
     async create(actor: Principal, input: WorkspaceCreateInput, call: Call) {
       const { signal, identity } = request(actor, call);
       const intent: Intent = {

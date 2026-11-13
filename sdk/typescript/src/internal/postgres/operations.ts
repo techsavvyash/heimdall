@@ -306,7 +306,7 @@ export class OperationRecords {
 
   // Trusted maintenance only: selection does not claim work or authorize remote replay.
   async scan(
-    queue: "runnable" | "recovery" | "completion",
+    queue: "runnable" | "recovery" | "completion" | "reconcile",
     after: string | null,
     now: number,
     limit: number,
@@ -316,6 +316,7 @@ export class OperationRecords {
       runnable: ["pending", "retryable"],
       recovery: ["dispatching", "uncertain"],
       completion: ["confirmed"],
+      reconcile: ["pending", "retryable", "dispatching", "uncertain", "confirmed"],
     };
     if (
       !Object.hasOwn(states, queue) ||
@@ -338,7 +339,7 @@ export class OperationRecords {
         `
       WITH selected AS MATERIALIZED (
         SELECT * FROM heimdall_managed.operations WHERE product_id=$1 AND environment=$2 AND state=ANY($3::text[])
-         AND ($4::text IS NULL OR operation_id COLLATE "C">$4 COLLATE "C") AND (NOT $5::boolean OR next_attempt_at<=$6)
+         AND ($4::text IS NULL OR operation_id COLLATE "C">$4 COLLATE "C") AND (NOT $5::boolean OR state NOT IN ('pending','retryable') OR next_attempt_at<=$6)
          ORDER BY operation_id COLLATE "C" LIMIT $7
       ), encoded AS MATERIALIZED (
         SELECT o.operation_id, ${columns} AS record FROM selected o
@@ -347,7 +348,15 @@ export class OperationRecords {
       ) SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
         COALESCE(jsonb_agg(o.record ORDER BY o.operation_id COLLATE "C"),'[]'::jsonb) AS records,
         (SELECT count(*)::int FROM selected) AS selected_count FROM sized o WHERE size<=4194304`,
-        [b.productId, b.environment, states[queue], after, queue === "runnable", now, limit + 1],
+        [
+          b.productId,
+          b.environment,
+          states[queue],
+          after,
+          queue === "runnable" || queue === "reconcile",
+          now,
+          limit + 1,
+        ],
       ),
       false,
       signal,
@@ -369,7 +378,9 @@ export class OperationRecords {
       if (
         record.operationId <= previous ||
         !states[queue].includes(record.state) ||
-        (queue === "runnable" && record.nextAttemptAt > now)
+        ((queue === "runnable" || queue === "reconcile") &&
+          ["pending", "retryable"].includes(record.state) &&
+          record.nextAttemptAt > now)
       )
         throw new HeimdallError("unavailable");
       previous = record.operationId;
@@ -402,6 +413,7 @@ export class OperationRecords {
     metadata: Omit<Allocation, "workspaceId" | "operationId"> & {
       nextAttemptAt: number;
       recoveryOperator?: string;
+      scheduler?: true;
     },
     caller?: AbortSignal,
   ): Promise<ManagedOperation> {
@@ -431,6 +443,17 @@ export class OperationRecords {
         "cancel",
         "recover",
       ].includes(transition) ||
+      (m.scheduler !== undefined &&
+        (m.scheduler !== true ||
+          m.recoveryOperator !== undefined ||
+          ![
+            "retry",
+            "dispatch",
+            "pre_dispatch_failure",
+            "uncertain",
+            "confirm",
+            "complete",
+          ].includes(transition))) ||
       (transition === "recover" && !token(m.recoveryOperator, 128)) ||
       (m.recoveryOperator !== undefined &&
         (!token(m.recoveryOperator, 128) ||
@@ -481,7 +504,9 @@ export class OperationRecords {
       tenantId: before.workspaceId,
       actor: m.recoveryOperator
         ? { kind: "system", id: m.recoveryOperator }
-        : { kind: "user", ...before.intent.actor },
+        : m.scheduler
+          ? { kind: "system", id: "workspace-reconcile" }
+          : { kind: "user", ...before.intent.actor },
       target: { type: "workspace", id: before.workspaceId },
       action: `${before.intent.kind}.${transition}`,
       outcome: transition === "recover" ? "succeeded" : outcome,

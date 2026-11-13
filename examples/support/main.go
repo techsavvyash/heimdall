@@ -248,6 +248,24 @@ func main() {
 	}
 	mount("POST /workspaces", workspaceOperation)
 	mount("GET /workspace-operations/{operation}", workspaceOperation)
+	mount("POST /workspace-operations/reconcile", func(w http.ResponseWriter, r *http.Request) error {
+		if len(r.Header.Values("Origin")) != 1 || r.Header.Get("Origin") != origin {
+			return heimdall.ErrForbidden
+		}
+		actor, err := sessions.Authenticate(r)
+		if err != nil {
+			return err
+		}
+		if actor.Identity().Subject != workspaceCreator {
+			return heimdall.ErrForbidden
+		}
+		result, err := auth.Reconcile(r.Context(), heimdall.ReconcileOptions{})
+		if err != nil {
+			return err
+		}
+		writeJSON(w, http.StatusOK, result)
+		return nil
+	})
 	mount("POST /workspace-operations/{operation}", workspaceOperation)
 	eligibleMember := os.Getenv("HEIMDALL_REFERENCE_MEMBER_SUBJECT")
 	invites := invitationHandler(auth, sessions, business, config.Environment, origin, workspaceCreator, eligibleMember, workspaceID)

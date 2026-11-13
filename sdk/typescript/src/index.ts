@@ -39,3 +39,5 @@ export type {
   MembershipStatus,
   Memberships,
 } from "./internal/managed-memberships.js";
+
+export type { ReconcileOptions, ReconcileResult } from "./internal/reconcile-operations.js";

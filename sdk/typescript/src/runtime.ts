@@ -100,6 +100,7 @@ export type Tenant = Readonly<{
 export type Heimdall = Readonly<{
   tenant(id: string): Tenant;
   onboarding?: WorkspaceOnboarding;
+  reconcile?: WorkspaceOnboarding["reconcile"];
   createWorkspaceDiscovery(options: DiscoveryOptions): WorkspaceDiscovery;
   createSessions(options: SessionOptions, request: { signal: AbortSignal }): Promise<Sessions>;
   tokens: Readonly<{
@@ -238,10 +239,11 @@ export async function createHeimdall(
         operations,
         authentication,
         key,
+        gate,
         authorize,
       );
     return Object.freeze({
-      ...(onboarding ? { onboarding } : {}),
+      ...(onboarding ? { onboarding, reconcile: onboarding.reconcile } : {}),
       createWorkspaceDiscovery(options: DiscoveryOptions) {
         return workspaceDiscovery(
           options,

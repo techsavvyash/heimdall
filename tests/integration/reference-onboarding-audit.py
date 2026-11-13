@@ -20,10 +20,14 @@ def verify(products, payloads):
             ("workspace.create", "requested"): 1,
             ("create_workspace.dispatch", "attempted"): 1,
             ("create_workspace.confirm", "succeeded"): 1,
-            ("create_workspace.complete", "succeeded"): 1,
+            ("create_workspace.complete", "succeeded"): 2 if "reconcile" in item else 1,
         }
         actor = lifecycle[0]["actor"]
-        assert all(e["actor"] == actor for e in lifecycle)
+        scheduler = {"kind": "system", "id": "workspace-reconcile"}
+        assert all(e["actor"] == actor or
+                   (e["actor"] == scheduler and e["action"] == "create_workspace.complete")
+                   for e in lifecycle)
+        assert sum(e["actor"] == scheduler for e in lifecycle) == int("reconcile" in item)
         decisions = [e for e in scoped if e["actor"] == actor and e["eventType"].startswith("heimdall.authorization.")]
         requests = {e["decisionId"]: e for e in decisions if e["outcome"] == "requested"}
         results = {e["decisionId"]: e for e in decisions if e["eventType"] == "heimdall.authorization.completed"}

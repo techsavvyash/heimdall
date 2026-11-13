@@ -588,6 +588,37 @@ export async function verifyReferenceProduct(input, authorize) {
         await pool.end();
       }
     }
+    const reconcile = (sessionCookie) =>
+      request("/workspace-operations/reconcile", {
+        method: "POST",
+        headers: { cookie: sessionCookie, origin },
+      });
+    await expectDenied(await reconcile(recipientCookie), 403);
+    assert.match(workspace.operationId, /^[a-z0-9-]+$/);
+    // Recreate the local state after provider confirmation and before activation.
+    await executeSQL(`BEGIN;
+      UPDATE heimdall_managed.operations SET state='confirmed'
+        WHERE product_id='${schema}' AND environment='verification' AND operation_id='${workspace.operationId}';
+      UPDATE heimdall_managed.workspaces SET lifecycle='pending',mutation_blocked=true
+        WHERE product_id='${schema}' AND environment='verification' AND workspace_id='${workspace.workspaceId}';
+      COMMIT;`);
+    const swept = await reconcile(cookie);
+    assert.equal(swept.status, 200);
+    const summary = await swept.json();
+    assert(
+      summary.operations.some(
+        ({ operationId, disposition }) =>
+          operationId === workspace.operationId && disposition === "completed",
+      ),
+    );
+    await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 200);
+    const sweptAgain = await reconcile(cookie);
+    assert.equal(sweptAgain.status, 200);
+    assert(
+      !(await sweptAgain.json()).operations.some(
+        ({ operationId }) => operationId === workspace.operationId,
+      ),
+    );
     await expectDenied(
       await request("/auth/logout", { method: "POST", headers: { ...recipientHeaders, origin } }),
       204,
@@ -628,6 +659,12 @@ export async function verifyReferenceProduct(input, authorize) {
       },
       lifecycle: { suspended: 204, unauthorized: 403, blockedResume: 409, resumed: 204 },
       ...(discoveryRebuild ? { discoveryRebuild } : {}),
+      reconcile: {
+        operator: 200,
+        unauthorized: 403,
+        confirmedCompleted: true,
+        terminalExcluded: true,
+      },
       otherTenant: 403,
     };
   } finally {

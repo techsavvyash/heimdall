@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	mrand "math/rand/v2"
 	"sync/atomic"
 	"time"
 
@@ -33,6 +34,7 @@ type WorkspaceOnboarding struct {
 	policy           WorkspaceCreationPolicy
 	policyVersion    string
 	key              func(context.Context) (string, error)
+	gate             IdentityGate
 }
 
 // Onboarding exposes tenant creation for managed PostgreSQL runtimes.
@@ -125,7 +127,7 @@ func (w *WorkspaceOnboarding) Create(ctx context.Context, actor *Principal, inpu
 	if op.OperationID != idempotentID {
 		return onboardingStatus(op), nil
 	}
-	return w.drive(ctx, op)
+	return w.drive(ctx, op, false)
 }
 
 func (w *WorkspaceOnboarding) observe(ctx context.Context, actor *Principal, operationID, action string) (*postgres.ManagedOperation, error) {
@@ -165,16 +167,22 @@ func (w *WorkspaceOnboarding) Resume(ctx context.Context, actor *Principal, oper
 	if err != nil {
 		return WorkspaceOnboardingStatus{}, err
 	}
-	return w.drive(ctx, record)
+	return w.drive(ctx, record, false)
 }
 
-func (w *WorkspaceOnboarding) drive(ctx context.Context, op *postgres.ManagedOperation) (WorkspaceOnboardingStatus, error) {
+func (w *WorkspaceOnboarding) drive(ctx context.Context, op *postgres.ManagedOperation, scheduler bool) (WorkspaceOnboardingStatus, error) {
 	actor, requestID := op.Intent.Actor, onboardingID()
+	var retryDelay int64
 	advance := func(operation context.Context, before *postgres.ManagedOperation, transition string) (*postgres.ManagedOperation, error) {
 		at := max(time.Now().UnixMilli(), before.UpdatedAt)
+		due := at
+		if transition == "pre_dispatch_failure" {
+			base := min(int64(60000), int64(1000)<<min(6, (before.Generation-1)/2))
+			due += max(retryDelay, min(60000, base+mrand.Int64N(base/4+1)))
+		}
 		return w.records.Advance(operation, before.OperationID, actor, before.Generation, transition, postgres.OperationTransitionMetadata{
 			EventID: onboardingID(), RequestID: requestID, PolicyVersion: w.policyVersion,
-			OccurredAt: at, RecordedAt: at, NextAttemptAt: at,
+			OccurredAt: at, RecordedAt: at, NextAttemptAt: due, Scheduler: scheduler,
 		})
 	}
 	change := func(transition string) error {
@@ -196,6 +204,15 @@ func (w *WorkspaceOnboarding) drive(ctx context.Context, op *postgres.ManagedOpe
 		}
 		return WorkspaceOnboardingStatus{}, err
 	}
+	if op.Intent.Kind == "create_workspace" && (op.State == "retryable" || op.State == "pending") {
+		denied, err := w.gate.Check(ctx, Identity{Issuer: actor.Issuer, Subject: actor.Subject})
+		if err != nil {
+			return WorkspaceOnboardingStatus{}, err
+		}
+		if denied {
+			return WorkspaceOnboardingStatus{}, ErrForbidden
+		}
+	}
 	if op.State == "retryable" {
 		if time.Now().UnixMilli() < op.NextAttemptAt {
 			return onboardingStatus(op), nil
@@ -210,6 +227,13 @@ func (w *WorkspaceOnboarding) drive(ctx context.Context, op *postgres.ManagedOpe
 		var dispatched atomic.Pointer[postgres.ManagedOperation]
 		dispatch := func(operation context.Context) error {
 			started.Store(true)
+			denied, err := w.gate.Check(operation, Identity{Issuer: actor.Issuer, Subject: actor.Subject})
+			if err != nil {
+				return err
+			}
+			if denied {
+				return ErrForbidden
+			}
 			next, err := advance(operation, before, "dispatch")
 			if err == nil {
 				dispatched.Store(next)
@@ -236,6 +260,10 @@ func (w *WorkspaceOnboarding) drive(ctx context.Context, op *postgres.ManagedOpe
 				return onboardingStatus(op), nil
 			}
 			if !started.Load() && ctx.Err() == nil && (errors.Is(err, ErrUnavailable) || errors.Is(err, ErrDeadlineExceeded)) {
+				var throttled *contract.ProviderThrottled
+				if errors.As(err, &throttled) {
+					retryDelay = throttled.Delay.Milliseconds()
+				}
 				if err := change("pre_dispatch_failure"); err != nil {
 					return resolve(err)
 				}
@@ -245,9 +273,10 @@ func (w *WorkspaceOnboarding) drive(ctx context.Context, op *postgres.ManagedOpe
 		}
 		// A verification-only attempt still needs its own generation before confirmation.
 		if !started.Load() {
-			if err := change("dispatch"); err != nil {
+			if err := dispatch(ctx); err != nil {
 				return resolve(err)
 			}
+			op = dispatched.Load()
 		}
 		if err := change("confirm"); err != nil {
 			return resolve(err)

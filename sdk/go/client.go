@@ -252,7 +252,7 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 		client.onboarding = &WorkspaceOnboarding{
 			config: configJSON, manifest: manifestJSON,
 			cfg: cfg, records: records, auth: authentication, policy: options.AuthorizeWorkspaceCreation,
-			policyVersion: options.PolicyVersion, key: options.Credentials.OpenFGAKey,
+			policyVersion: options.PolicyVersion, key: options.Credentials.OpenFGAKey, gate: gate,
 		}
 	} else if options.AuthorizeWorkspaceCreation != nil {
 		return nil, ErrInvalidArgument

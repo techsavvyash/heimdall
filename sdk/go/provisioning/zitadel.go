@@ -55,6 +55,9 @@ func providerCall(ctx context.Context, client *http.Client, base, token, path st
 		return false, contract.ErrUnavailable
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return false, contract.Throttled(resp.Header.Get("Retry-After"))
+	}
 	if resp.StatusCode == http.StatusNotFound {
 		return false, nil
 	}

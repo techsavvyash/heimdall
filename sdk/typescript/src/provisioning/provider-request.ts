@@ -1,3 +1,4 @@
+import { ProviderThrottled } from "../internal/provider-backoff.js";
 import { validateEndpoint } from "../internal/endpoints.js";
 import { checkCancellation, HeimdallError } from "../internal/errors.js";
 
@@ -35,6 +36,8 @@ export function providerRequest(
       });
       if (!response.ok) {
         await response.body?.cancel();
+        if (response.status === 429)
+          throw new ProviderThrottled(response.headers.get("retry-after"));
         if (response.status === 404) return null;
         throw new Error();
       }
@@ -54,8 +57,9 @@ export function providerRequest(
         await reader.cancel();
       }
       return JSON.parse(Buffer.concat(chunks, bytes).toString("utf8")) as T;
-    } catch {
+    } catch (error) {
       checkCancellation(operation);
+      if (error instanceof ProviderThrottled) throw error;
       throw new HeimdallError("unavailable");
     }
   };

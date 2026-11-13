@@ -317,6 +317,9 @@ func (p *PinnedModel) request(ctx context.Context, method, path string, body []b
 		return nil, failure(ctx)
 	}
 	defer response.Body.Close()
+	if response.StatusCode == http.StatusTooManyRequests {
+		return nil, contract.Throttled(response.Header.Get("Retry-After"))
+	}
 	if response.StatusCode != 200 {
 		return nil, contract.ErrUnavailable
 	}

@@ -1,3 +1,4 @@
+import { ProviderThrottled } from "./provider-backoff.js";
 import { bounded } from "./audited-decision.js";
 import { isDeepStrictEqual } from "node:util";
 import { compileTenantModel } from "./tenant-model.js";
@@ -132,8 +133,9 @@ export class PinnedModel {
         modelId: this.config.modelId,
         ...this.compiled,
       });
-    } catch {
+    } catch (error) {
       checkCancellation(bounded);
+      if (error instanceof ProviderThrottled) throw error;
       throw new HeimdallError("unavailable");
     }
   }
@@ -287,6 +289,8 @@ export class PinnedModel {
       );
       if (response.status !== 200 || !response.body) {
         await response.body?.cancel();
+        if (response.status === 429)
+          throw new ProviderThrottled(response.headers.get("retry-after"));
         throw new Error();
       }
       const parts: Uint8Array[] = [];
@@ -309,8 +313,9 @@ export class PinnedModel {
           new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(Buffer.concat(parts)),
         ),
       );
-    } catch {
+    } catch (error) {
       checkCancellation(signal);
+      if (error instanceof ProviderThrottled) throw error;
       throw new HeimdallError("unavailable");
     }
   }

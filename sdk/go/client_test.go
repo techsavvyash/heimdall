@@ -87,7 +87,8 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 		if pinned.URL != "" && strings.HasPrefix(r.URL.Path, "/stores/") {
 			fault := h.providerFault.Load()
 			if strings.HasSuffix(r.URL.Path, "/read") && fault == "before_dispatch" {
-				w.WriteHeader(503)
+				w.Header().Set("Retry-After", "5")
+				w.WriteHeader(429)
 				return
 			}
 			isWrite := strings.HasSuffix(r.URL.Path, "/write")
@@ -165,7 +166,8 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 			body = map[string]any{"authorization_model": model}
 		case "/stores/store-1/read":
 			if h.providerFault.Load() == "before_dispatch" {
-				w.WriteHeader(503)
+				w.Header().Set("Retry-After", "5")
+				w.WriteHeader(429)
 				return
 			}
 			var read struct {
@@ -898,6 +900,33 @@ func TestPublicManagedOnboarding(t *testing.T) {
 			}
 		}
 		h.providerFault.Store("none")
+		if item.Fault == "before_dispatch" {
+			early, err := other.Reconcile(ctx, heimdall.ReconcileOptions{MaxOperations: 1})
+			if err != nil || len(early.Operations) != 0 {
+				t.Fatal("early reconcile", early, err)
+			}
+			var delay int64
+			if err := admin.QueryRow("SELECT next_attempt_at-updated_at FROM heimdall_managed.operations WHERE operation_id=$1", result.OperationID).Scan(&delay); err != nil || delay != 5000 {
+				t.Fatal("missing backoff", delay, err)
+			}
+			if _, err := admin.Exec("UPDATE heimdall_managed.operations SET next_attempt_at=updated_at WHERE operation_id=$1", result.OperationID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		reconciled, err := other.Reconcile(ctx, heimdall.ReconcileOptions{MaxOperations: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if state != "completed" {
+			disposition, reason, attempted := "completed", "", 1
+			if state == "uncertain" {
+				disposition, reason, attempted = "blocked", "recovery_required", 0
+			}
+			want := heimdall.ReconcileOperation{OperationID: result.OperationID, Disposition: disposition, Reason: reason}
+			if len(reconciled.Operations) != 1 || reconciled.Operations[0] != want || reconciled.Attempted != attempted {
+				t.Fatal("reconcile", reconciled)
+			}
+		}
 		resumed, err := other.Onboarding().Resume(ctx, restartedActor, result.OperationID)
 		if err != nil {
 			t.Fatal(item.Fault, err)

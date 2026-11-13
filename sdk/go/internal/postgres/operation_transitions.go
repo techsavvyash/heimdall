@@ -11,6 +11,7 @@ import (
 type OperationTransitionMetadata struct {
 	EventID, RequestID, PolicyVersion, RecoveryOperator string
 	OccurredAt, RecordedAt, NextAttemptAt               int64
+	Scheduler                                           bool
 }
 
 // Advance commits local state only. Trusted orchestration must verify remote outcomes.
@@ -22,6 +23,16 @@ func (o *OperationRecords) Advance(ctx context.Context, id string, actor contrac
 	case "dispatch", "pre_dispatch_failure", "retry", "confirm", "uncertain", "rejected", "complete", "cancel", "recover":
 	default:
 		return nil, contract.ErrInvalidArgument
+	}
+	if m.Scheduler {
+		switch transition {
+		case "retry", "dispatch", "pre_dispatch_failure", "uncertain", "confirm", "complete":
+		default:
+			return nil, contract.ErrInvalidArgument
+		}
+		if m.RecoveryOperator != "" {
+			return nil, contract.ErrInvalidArgument
+		}
 	}
 	if transition == "recover" && m.RecoveryOperator == "" ||
 		m.RecoveryOperator != "" && (!valid(m.RecoveryOperator, 128) ||
@@ -74,6 +85,9 @@ func (o *OperationRecords) Advance(ctx context.Context, id string, actor contrac
 	event := map[string]any{"schemaVersion": float64(1), "eventId": m.EventID, "eventType": "heimdall." + family + "." + stage, "eventVersion": float64(1), "occurredAt": float64(m.OccurredAt), "recordedAt": float64(m.RecordedAt), "productId": b.ProductID, "environment": b.Environment, "tenantId": before.WorkspaceID, "actor": map[string]any{"kind": "user", "issuer": before.Intent.Actor.Issuer, "subject": before.Intent.Actor.Subject}, "target": map[string]any{"type": "workspace", "id": before.WorkspaceID}, "action": before.Intent.Kind + "." + transition, "outcome": outcome, "requestId": m.RequestID, "source": "sdk", "sdkVersion": "0.0.0", "attributes": map[string]any{}, "operationId": id, "modelId": b.ModelID, "manifestVersion": float64(b.ManifestVersion), "policyVersion": m.PolicyVersion}
 	if m.RecoveryOperator != "" {
 		event["actor"] = map[string]any{"kind": "system", "id": m.RecoveryOperator}
+	}
+	if m.Scheduler {
+		event["actor"] = map[string]any{"kind": "system", "id": "workspace-reconcile"}
 	}
 	if transition == "recover" {
 		event["eventType"], event["outcome"] = "heimdall.recovery.completed", "succeeded"

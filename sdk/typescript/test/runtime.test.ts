@@ -100,7 +100,7 @@ function setup(failure = "", environment = "production") {
             ...(body ? { method: "POST", body: JSON.stringify(body) } : {}),
           });
         if (url.endsWith("/read") && fga.fault === "before_dispatch")
-          return Response.json({}, { status: 503 });
+          return Response.json({}, { status: 429, headers: { "retry-after": "5" } });
         if (!url.endsWith("/write"))
           return forward(
             new URL(url).pathname,
@@ -140,7 +140,8 @@ function setup(failure = "", environment = "production") {
         });
       }
       if (url.endsWith("/read")) {
-        if (fga.fault === "before_dispatch") return Response.json({}, { status: 503 });
+        if (fga.fault === "before_dispatch")
+          return Response.json({}, { status: 429, headers: { "retry-after": "5" } });
         const { tuple_key: key, consistency } = JSON.parse(String(init?.body));
         if (consistency !== "HIGHER_CONSISTENCY") return Response.json({}, { status: 400 });
         return Response.json({
@@ -680,6 +681,33 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
           item.status === "active",
         );
         s.fga.fault = "none";
+        const backoff = item.fault === "before_dispatch";
+        const due = await admin.query(
+          "SELECT next_attempt_at-updated_at AS delay FROM heimdall_managed.operations WHERE operation_id=$1",
+          [result.operationId],
+        );
+        expect(Number(due.rows[0]?.delay)).toBe(backoff ? 5000 : 0);
+        const early = backoff ? await other.reconcile!({ ...call, maxOperations: 1 }) : undefined;
+        expect(early?.operations).toEqual(backoff ? [] : undefined);
+        if (backoff) {
+          await admin.query(
+            "UPDATE heimdall_managed.operations SET next_attempt_at=updated_at WHERE operation_id=$1",
+            [result.operationId],
+          );
+        }
+        const reconciled = await other.reconcile!({ ...call, maxOperations: 1 });
+        expect(reconciled.operations).toEqual(
+          item.fault === "none"
+            ? []
+            : [
+                {
+                  operationId: result.operationId,
+                  disposition: uncertain ? "blocked" : "completed",
+                  ...(uncertain ? { reason: "recovery_required" } : {}),
+                },
+              ],
+        );
+        expect(reconciled.attempted).toBe(uncertain || item.fault === "none" ? 0 : 1);
         const resumed = await other.onboarding!.resume(restartedActor, result.operationId, call);
         expect(resumed).toEqual(
           uncertain

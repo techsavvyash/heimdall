@@ -209,6 +209,12 @@ async function route(request) {
   if (url.pathname === "/auth/start") return sessions.start(request);
   if (url.pathname === new URL(callbackUrl).pathname) return sessions.callback(request);
   if (url.pathname === "/auth/logout") return sessions.logout(request);
+  if (request.method === "POST" && url.pathname === "/workspace-operations/reconcile") {
+    if (request.headers.get("origin") !== origin) throw new HeimdallError("forbidden");
+    const actor = await sessions.authenticate(request);
+    if (actor.subject !== workspaceCreator) throw new HeimdallError("forbidden");
+    return read(await auth.reconcile({ signal: request.signal }));
+  }
   const operation = /^\/workspace-operations\/([A-Za-z0-9_-]{1,128})$/.exec(url.pathname);
   const create = request.method === "POST" && url.pathname === "/workspaces";
   const resume = request.method === "POST" && operation;
