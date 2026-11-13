@@ -52,3 +52,9 @@ sequenceDiagram
 The product supplies the store, the shared key ring and an atomic key-usage ledger. Its durable identity gate handles account-wide denials. The SDK handles version-bound token invalidation in the session store, so an old token cannot erase a newer session revision. The store implements expiry, revision allocation, bounded cancellation and atomic create, compare-and-swap and delete across replicas. The SDK binds the ciphertext to its product, environment, record type and record key, and authenticates the expiry.
 
 Shared fixtures exercise key scope, revision syntax, expiry tampering, record substitution and rotation. Both languages also verify single-winner writes, delete/recreate, conditional token invalidation and public login-start wiring. The custom-store tests use in-memory stores. The deployed [[phase-4-reference-backends|Ledger and Support reference backends]] use the bundled PostgreSQL adapter.
+
+## Verification record
+
+Source revision `190bc8d` passed `pnpm run check` and the pinned PostgreSQL regression runner `python3 tests/integration/postgres-records.py` (`heimdall-records-acb155508d024ec2b8d61a5a18028721`). Both [push](https://github.com/techsavvyash/heimdall/actions/runs/43460227417) and [pull request](https://github.com/techsavvyash/heimdall/actions/runs/43460237595) checks passed. Chromium rendered the diagram from Railway docs deployment `5f915de0-438a-4e7f-a8f8-b1484163f374`.
+
+Railway probe `b1ea029c-3db6-448c-ab3f-890cb4a36bd4` repeated the deployed login, discovery, roles, scoped read and logout flows after the SDK change. Ledger deployment `fd2d8d04-f991-49b1-b0be-b6ccdff20b44` committed 15 matching authorization requests and outcomes. Support deployment `5dda5501-705b-4028-acf1-65ae95c2422c` committed 13. The custom path still needs a reusable store conformance suite for product implementers and a complete custom-store browser lifecycle test in both SDKs.
