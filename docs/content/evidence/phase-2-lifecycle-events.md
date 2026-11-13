@@ -73,3 +73,24 @@ An initial attempt created the marker while holding the barrier; queued service 
 Reproduce with tests/integration/event-visibility-railway.py --execute-verification-event-visibility, the protected bootstrap PAT in HEIMDALL_PROBE_ZITADEL_PAT, authenticated Railway CLI and the existing verification SSH identity. The script pins project, environment, database service and API origin. Sanitized output is recorded in tests/integration/evidence/event-visibility-railway-2026-11-11.json.
 
 The evidence proves advisory-lock waiting and release, not every concurrent writer interleaving or database clock behavior. Production collection must choose a provider-time boundary with the verified reader barrier, retain incomplete windows, detect retention gaps, and commit ingestion before advancing its checkpoint. SDK durable checkpoint implementation and fault qualification remain later-phase work; this probe is not a running exporter or a SIEM vendor integration.
+
+## Writer timestamps in the fully migrated pinned deployment
+
+The installed `eventstore.commands_to_events` function uses PostgreSQL statement start time for `created_at` and wall clock time for position. The earlier setup step assigned both using transaction start time. Setup migration 77 replaces that function. The current v3 write path acquires its shared instance lock before issuing the event write statement. [Migration 77](https://github.com/zitadel/zitadel/blob/v4.19.4/cmd/setup/77.sql) · [v3 write path](https://github.com/zitadel/zitadel/blob/v4.19.4/internal/eventstore/v3/push.go)
+
+```mermaid
+sequenceDiagram
+  participant W as Writer transaction
+  participant P as ZITADEL PostgreSQL
+  participant R as Event reader
+  W->>P: Begin and wait before the instance writer lock
+  R->>P: Read a bounded historical window
+  P-->>R: Return after draining writers already holding the lock
+  W->>P: Take the shared instance lock
+  W->>P: Issue the event insert statement
+  Note over W,P: Current v3 stamps the insert after taking the lock
+```
+
+Railway run `58a2a8ac-53c2-4423-8e6c-fa183b27f52b` verified the installed function and the following interleaving. The synthetic writer starts before a database-clock cutoff and acquires the shared instance lock after the reader returns. Its transaction timestamp remains before the cutoff. In a separate live write, a machine user created through the provider after the cutoff appears in the unrestricted query and stays outside the bounded window. The probe writes markers through the provider API and makes no direct event table writes. The database default for `transaction_timeout` was disabled. Evidence is in `tests/integration/evidence/event-visibility-cutoff-railway-2026-11-14.json`.
+
+The reader still applies a position cap. A write can begin its statement before the chosen time boundary and assign its position later. The event response omits that position, and its audit retention filter can silently raise the lower bound. A collector needs a verified provider-time safety margin for both timestamp and position, and an effective retention bound that covers the entire read including its retries. One path to qualify is a deployment-enforced PostgreSQL writer transaction duration, bounded clock skew and a known minimum Events API retention period. A timeout reported by the probe connection alone cannot establish the production writer bound. An empty page alone cannot establish either condition. [Position predicate](https://github.com/zitadel/zitadel/blob/v4.19.4/internal/eventstore/repository/sql/postgres.go) · [Retention filter](https://github.com/zitadel/zitadel/blob/v4.19.4/internal/query/event.go)

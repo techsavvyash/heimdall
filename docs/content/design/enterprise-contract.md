@@ -106,6 +106,8 @@ Provider intent expiry must not substitute for the local browser-transaction dea
 
 Bounded time-window scans can discover multiple aggregates, as measured in the same evidence page, but short pages alone do not certify a complete moving time watermark. The pinned reader drains instance writers through an advisory lock and applies a transaction-time position cap; retention and unsupported time boundaries still require explicit handling. Export must retain its checkpoint on incomplete/saturated windows and require a verified visibility strategy before claiming complete delivery.
 
+For the fully migrated pinned database, use the installed writer behavior when validating a moving cutoff. Creation time is assigned at the write statement and position at the wall clock. The API still omits positions and may apply a stricter retention floor than the request. [[evidence/phase-2-lifecycle-events#writer-timestamps-in-the-fully-migrated-pinned-deployment]] records what the Railway verification environment establishes and where collection must fail closed.
+
 The SDK provisioning packages expose an organization-scoped historical reader with explicit time bounds. See [[evidence/phase-6-audit-delivery#zitadel-historical-event-reader]] for its API and observed behavior.
 
 ## Account-switch acceptance scenarios

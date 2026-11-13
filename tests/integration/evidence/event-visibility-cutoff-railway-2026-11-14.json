@@ -1,0 +1,20 @@
+{
+  "suite": "railway-event-visibility-v2",
+  "runId": "58a2a8ac-53c2-4423-8e6c-fa183b27f52b",
+  "observations": {
+    "unrelatedOpenTransactionReadCompleted": true,
+    "readerObservedWaitingForWriterBarrier": true,
+    "committedMarkerVisibleAfterDrain": true,
+    "returnedEvents": 5,
+    "readerFinishedBeforePreCutoffTransactionAcquiredWriterLock": true,
+    "writerTransactionTimestampPredatesCutoffAfterTakingWriterLock": true,
+    "installedEventMappingUsesStatementTimeAndWallClockPosition": true,
+    "postCutoffProviderWriteExcludedFromHistoricalWindow": true,
+    "databaseDefaultTransactionTimeout": "0"
+  },
+  "cleanup": "owned database sessions terminated and organization deleted",
+  "limitations": [
+    "synthetic transaction follows lock and timestamp ordering; no direct event table writes",
+    "does not measure maximum writer transaction duration, clock skew or effective audit retention"
+  ]
+}
