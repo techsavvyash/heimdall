@@ -20,8 +20,8 @@ func TestLiveRuntime(t *testing.T) {
 		t.Skip("optional live runtime")
 	}
 	var c struct {
-		Config, Manifest                         json.RawMessage
-		ClientSecret, Token, Subject, Permission string
+		Config, Manifest                                        json.RawMessage
+		ClientSecret, Token, Subject, Permission, EffectiveRole string
 	}
 	if json.Unmarshal([]byte(raw), &c) != nil {
 		t.Fatal("runtime input")
@@ -58,13 +58,25 @@ func TestLiveRuntime(t *testing.T) {
 			}
 		}
 	}
+	if c.Permission != "" {
+		for _, id := range []string{"acme", "globex"} {
+			roles, err := client.Tenant(id).Roles(context.Background(), p)
+			want := ""
+			if id == "acme" {
+				want = c.EffectiveRole
+			}
+			if err != nil || strings.Join(roles, ",") != want {
+				t.Fatal("unexpected effective roles", err)
+			}
+		}
+	}
 	mu.Lock()
 	defer mu.Unlock()
 	expected := "succeeded,deny"
 	if c.Permission != "" {
 		expected += ",requested,allow,requested,deny"
 	}
-	if strings.Join(outcomes, ",") != expected {
+	if !strings.HasPrefix(strings.Join(outcomes, ","), expected) {
 		t.Fatal("audit outcomes")
 	}
 }

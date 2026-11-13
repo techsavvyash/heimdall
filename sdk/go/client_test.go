@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -80,7 +81,7 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 			}
 			user := "user:" + base64.RawURLEncoding.EncodeToString([]byte(`["`+issuer+`","runtime-user"]`))
 			if json.NewDecoder(r.Body).Decode(&check) != nil || check.Model != "model-1" ||
-				check.Consistency != "HIGHER_CONSISTENCY" || check.Tuple["user"] != user || check.Tuple["relation"] != "p_0" {
+				check.Consistency != "HIGHER_CONSISTENCY" || check.Tuple["user"] != user || !slices.Contains([]string{"p_0", "e_0", "e_1", "e_2", "e_3"}, check.Tuple["relation"]) {
 				w.WriteHeader(400)
 				return
 			}
@@ -88,7 +89,7 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 				w.WriteHeader(503)
 				return
 			}
-			body = map[string]any{"allowed": check.Tuple["object"] == "workspace:acme"}
+			body = map[string]any{"allowed": check.Tuple["object"] == "workspace:acme" && slices.Contains([]string{"p_0", "e_1"}, check.Tuple["relation"])}
 		case "/oauth/v2/keys":
 			body = map[string]any{"keys": []any{map[string]any{"kty": "RSA", "kid": "runtime", "alg": "RS256", "n": base64.RawURLEncoding.EncodeToString(key.N.Bytes()), "e": "AQAB"}}}
 		case "/oauth/v2/introspect":
@@ -363,6 +364,55 @@ func TestPublicPostgresRuntime(t *testing.T) {
 	if _, err = client.Tokens().Verify(ctx, "invalid"); !errors.Is(err, heimdall.ErrUnauthenticated) {
 		t.Fatal(err)
 	}
+	if roles, err := client.Tenant("acme").Roles(ctx, actor); err != nil || !slices.Equal(roles, []string{"approver"}) {
+		t.Fatal(roles, err)
+	}
+	if roles, err := client.Tenant("globex").Roles(ctx, actor); err != nil || len(roles) != 0 {
+		t.Fatal(roles, err)
+	}
+	if roles, err := client.Tenant("outage").Roles(ctx, actor); !errors.Is(err, heimdall.ErrUnavailable) || roles != nil {
+		t.Fatal(roles, err)
+	}
+	rows, err := db.Query("SELECT event->>'payload' FROM heimdall.audit_events WHERE environment='public-go'")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parent string
+	var children []string
+	for rows.Next() {
+		var encoded string
+		var event struct{ TenantID, Action, Outcome, DecisionID, ParentDecisionID string }
+		if err := rows.Scan(&encoded); err != nil {
+			rows.Close()
+			t.Fatal(err)
+		}
+		payload, err := base64.RawURLEncoding.DecodeString(encoded)
+		if err != nil || json.Unmarshal(payload, &event) != nil {
+			rows.Close()
+			t.Fatal("invalid audit envelope")
+		}
+		if event.TenantID != "acme" {
+			continue
+		}
+		if event.Action == "roles.list" && event.Outcome == "requested" {
+			parent = event.DecisionID
+		}
+		if event.ParentDecisionID != "" {
+			children = append(children, event.ParentDecisionID)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	rows.Close()
+	if parent == "" || len(children) != 8 {
+		t.Fatal("missing linked role decisions")
+	}
+	for _, child := range children {
+		if child != parent {
+			t.Fatal("incorrect parent decision ID")
+		}
+	}
 	err = storage.Identity.Invalidate(ctx, heimdall.IdentityNegative{Identity: actor.Identity(), Context: "bearer", TokenDigest: strings.Repeat("a", 64), Reason: "identity_inactive"})
 	if err != nil {
 		t.Fatal(err)
@@ -371,10 +421,10 @@ func TestPublicPostgresRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_events WHERE product_id='ledger' AND environment='public-go'").Scan(&count); err != nil || count != 9 {
+	if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_events WHERE product_id='ledger' AND environment='public-go'").Scan(&count); err != nil || count != 33 {
 		t.Fatal(count, err)
 	}
-	if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_deliveries WHERE product_id='ledger' AND environment='public-go' AND sink_id='siem'").Scan(&count); err != nil || count != 9 {
+	if err = db.QueryRow("SELECT count(*) FROM heimdall.audit_deliveries WHERE product_id='ledger' AND environment='public-go' AND sink_id='siem'").Scan(&count); err != nil || count != 33 {
 		t.Fatal(count, err)
 	}
 	if _, err = storage.AppendAudit(ctx, map[string]any{}); !errors.Is(err, heimdall.ErrInvalidArgument) {

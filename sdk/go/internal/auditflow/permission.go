@@ -10,6 +10,10 @@ import (
 )
 
 func (a *Authentication) CheckPermission(ctx context.Context, principal *identity.Principal, tenant, permission, model string, version int, evaluate func(context.Context) (bool, error)) (bool, error) {
+	return a.CheckLinkedPermission(ctx, principal, tenant, permission, model, version, "", func(ctx context.Context, _ string) (bool, error) { return evaluate(ctx) })
+}
+
+func (a *Authentication) CheckLinkedPermission(ctx context.Context, principal *identity.Principal, tenant, permission, model string, version int, parent string, evaluate func(context.Context, string) (bool, error)) (bool, error) {
 	if !a.Owns(principal) {
 		return false, contract.ErrUnauthenticated
 	}
@@ -25,11 +29,14 @@ func (a *Authentication) CheckPermission(ctx context.Context, principal *identit
 		"outcome": "requested", "requestId": hex.EncodeToString(request[:]), "source": "sdk", "sdkVersion": "0.0.0",
 		"attributes": map[string]any{}, "decisionId": "pending", "modelId": model, "manifestVersion": float64(version), "policyVersion": a.policy,
 	}
-	allowed, err := a.writer.Run(ctx, event, func(ctx context.Context) (bool, error) {
+	if parent != "" {
+		event["parentDecisionId"] = parent
+	}
+	allowed, err := a.writer.run(ctx, event, func(ctx context.Context, decisionID string) (bool, error) {
 		if err := a.verifier.CheckCurrent(ctx, principal); err != nil {
 			return false, err
 		}
-		return evaluate(ctx)
+		return evaluate(ctx, decisionID)
 	})
 	if err != nil || !allowed {
 		return false, err

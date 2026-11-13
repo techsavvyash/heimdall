@@ -10,6 +10,7 @@ import (
 	"github.com/techsavvyash/heimdall/sdk/go/internal/identity"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/modelbinding"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/postgres"
+	"maps"
 	"net/http"
 	"regexp"
 	"slices"
@@ -75,6 +76,7 @@ type Client struct {
 	authentication *auditflow.Authentication
 	createSessions func(context.Context, SessionOptions) (Sessions, error)
 	tenantCheck    func(context.Context, string, *Principal, string) (bool, error)
+	tenantRoles    func(context.Context, string, *Principal) ([]string, error)
 }
 
 func (c *Client) NewSessions(ctx context.Context, options SessionOptions) (Sessions, error) {
@@ -188,6 +190,33 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 			return model.Check(ctx, user, tenant, permission)
 		})
 	}
+	roleNames := slices.Sorted(maps.Keys(deployment.Manifest().Roles))
+	client.tenantRoles = func(ctx context.Context, tenant string, actor *Principal) ([]string, error) {
+		result := make([]string, 0)
+		_, err := authentication.CheckLinkedPermission(ctx, actor, tenant, "roles.list", cfg.OpenFGA.ModelID, cfg.ManifestVersion, "", func(ctx context.Context, parent string) (bool, error) {
+			id := actor.Identity()
+			user, err := contract.EncodeIdentity(id.Issuer, id.Subject)
+			if err != nil {
+				return false, err
+			}
+			for _, role := range roleNames {
+				allowed, err := authentication.CheckLinkedPermission(ctx, actor, tenant, "role."+role, cfg.OpenFGA.ModelID, cfg.ManifestVersion, parent, func(ctx context.Context, _ string) (bool, error) {
+					return model.CheckRole(ctx, user, tenant, role)
+				})
+				if err != nil {
+					return false, err
+				}
+				if allowed {
+					result = append(result, role)
+				}
+			}
+			return len(result) > 0, nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
+	}
 	if storage.Browser != nil && storage.Browser.Login != nil && storage.Browser.Sessions != nil {
 		browser := *storage.Browser
 		redirects := deployment.Manifest().Clients[cfg.ClientKey].RedirectURIs
@@ -256,4 +285,11 @@ func (t *Tenant) Require(ctx context.Context, actor *Principal, permission strin
 		return ErrForbidden
 	}
 	return nil
+}
+
+func (t *Tenant) Roles(ctx context.Context, actor *Principal) ([]string, error) {
+	if ctx == nil || t == nil || t.client == nil || t.client.tenantRoles == nil || !tenantID.MatchString(t.id) {
+		return nil, ErrInvalidArgument
+	}
+	return t.client.tenantRoles(ctx, t.id, actor)
 }

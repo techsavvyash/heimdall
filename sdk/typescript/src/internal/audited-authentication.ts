@@ -72,8 +72,9 @@ export class AuditedAuthentication {
     permission: string,
     modelId: string,
     manifestVersion: number,
-    evaluate: (signal: AbortSignal) => Promise<boolean>,
+    evaluate: (signal: AbortSignal, decisionId: string) => Promise<boolean>,
     signal: AbortSignal,
+    parentDecisionId?: string,
   ) {
     if (!this.owns(principal)) throw new HeimdallError("unauthenticated");
     const at = this.now();
@@ -105,13 +106,14 @@ export class AuditedAuthentication {
         sdkVersion: "0.0.0",
         attributes: {},
         decisionId: "pending",
+        ...(parentDecisionId ? { parentDecisionId } : {}),
         modelId,
         manifestVersion,
         policyVersion: this.policyVersion,
       },
-      async (operation) => {
+      async (operation, decisionId) => {
         await this.verifier.checkCurrent(principal, operation);
-        return evaluate(operation);
+        return evaluate(operation, decisionId);
       },
       signal,
     );

@@ -50,7 +50,15 @@ test.skipIf(!process.env.HEIMDALL_TEST_RUNTIME || !!process.env.HEIMDALL_TEST_RU
       tenants.map((id) => runtime.tenant(id).can(principal, c.permission, { signal })),
     );
     expect(decisions).toEqual(c.permission ? [true, false] : []);
-    expect(events.map((e) => e.outcome).sort()).toEqual(
+    const roleLists = await Promise.all(
+      tenants.map((id) => runtime.tenant(id).roles(principal, { signal })),
+    );
+    expect(roleLists).toEqual(c.permission ? [[c.effectiveRole], []] : []);
+    const outcomes = events
+      .map((e) => e.outcome)
+      .slice(0, c.permission ? 6 : 2)
+      .sort();
+    expect(outcomes).toEqual(
       c.permission
         ? ["allow", "deny", "deny", "requested", "requested", "succeeded"]
         : ["deny", "succeeded"],

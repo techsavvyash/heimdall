@@ -140,12 +140,24 @@ export class PinnedModel {
   async check(user: string, workspace: string, permission: string, signal: AbortSignal) {
     if (!Object.hasOwn(this.compiled.permissions, permission))
       throw new HeimdallError("invalid_argument");
+    return this.checkRelation(user, workspace, this.compiled.permissions[permission]!, signal);
+  }
+  async checkRole(user: string, workspace: string, role: string, signal: AbortSignal) {
+    if (!Object.hasOwn(this.compiled.roles, role)) throw new HeimdallError("invalid_argument");
+    return this.checkRelation(user, workspace, this.compiled.roles[role]!.effective, signal);
+  }
+  private async checkRelation(
+    user: string,
+    workspace: string,
+    relation: string,
+    signal: AbortSignal,
+  ) {
     const result = await this.request("/check", signal, {
       authorization_model_id: this.config.modelId,
       tuple_key: {
         user,
         object: "workspace:" + workspace,
-        relation: this.compiled.permissions[permission],
+        relation,
       },
       consistency: "HIGHER_CONSISTENCY",
     });

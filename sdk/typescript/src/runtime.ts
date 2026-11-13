@@ -48,6 +48,7 @@ export type Sessions = Readonly<{
   logout(request: Request): Promise<Response>;
 }>;
 export type Tenant = Readonly<{
+  roles(actor: Principal, options: { signal: AbortSignal }): Promise<string[]>;
   can(actor: Principal, permission: string, options: { signal: AbortSignal }): Promise<boolean>;
   require(actor: Principal, permission: string, options: { signal: AbortSignal }): Promise<void>;
 }>;
@@ -168,6 +169,37 @@ export async function createHeimdall(
           );
         };
         return Object.freeze({
+          async roles(actor: Principal, options: { signal: AbortSignal }) {
+            if (!(options?.signal instanceof AbortSignal))
+              throw new HeimdallError("invalid_argument");
+            const result: string[] = [];
+            await authentication.checkPermission(
+              actor,
+              id,
+              "roles.list",
+              config.openfga.modelId,
+              config.manifestVersion,
+              async (operation, parent) => {
+                const user = encodeIdentity(actor.issuer, actor.subject);
+                for (const role of Object.keys(artifact.roles).sort()) {
+                  const allowed = await authentication.checkPermission(
+                    actor,
+                    id,
+                    "role." + role,
+                    config.openfga.modelId,
+                    config.manifestVersion,
+                    (signal) => model.checkRole(user, id, role, signal),
+                    operation,
+                    parent,
+                  );
+                  if (allowed) result.push(role);
+                }
+                return result.length > 0;
+              },
+              options.signal,
+            );
+            return result;
+          },
           can,
           async require(actor: Principal, permission: string, options: { signal: AbortSignal }) {
             if (!(await can(actor, permission, options))) throw new HeimdallError("forbidden");

@@ -242,6 +242,18 @@ func (p *PinnedModel) Check(ctx context.Context, user, workspace, permission str
 	if !ok {
 		return false, contract.ErrInvalidArgument
 	}
+	return p.checkRelation(ctx, user, workspace, relation)
+}
+
+func (p *PinnedModel) CheckRole(ctx context.Context, user, workspace, role string) (bool, error) {
+	relations, err := contract.ResolveRoleRelations(p.compiled, role)
+	if err != nil {
+		return false, err
+	}
+	return p.checkRelation(ctx, user, workspace, relations.Effective)
+}
+
+func (p *PinnedModel) checkRelation(ctx context.Context, user, workspace, relation string) (bool, error) {
 	body, err := json.Marshal(map[string]any{
 		"authorization_model_id": p.config.ModelID,
 		"tuple_key":              map[string]string{"user": user, "object": "workspace:" + workspace, "relation": relation},

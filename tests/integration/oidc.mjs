@@ -61,9 +61,10 @@ async function sdkRuntime(client, c) {
       manifestVersion: manifest.version,
       openfga: { url: base, storeId: store.id, modelId: model.authorization_model_id },
     };
-    let permission;
+    let permission, effectiveRole;
     if (process.env.HEIMDALL_PROBE_TENANT_CHECK === "1") {
       const role = fixture.manifest.ownerRole;
+      effectiveRole = role;
       [permission] = fixture.manifest.roles[role];
       const canonical = JSON.stringify([issuer, c.subject]).replace(
         /[\u007f-\uffff]/g,
@@ -91,6 +92,7 @@ async function sdkRuntime(client, c) {
         token: c.token,
         subject: c.subject,
         permission,
+        effectiveRole,
       }),
     };
     for (const language of ["ts", "go"]) {

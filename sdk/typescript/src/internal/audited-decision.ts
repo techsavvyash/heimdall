@@ -69,7 +69,7 @@ export class AuditedDecision {
   }
   async run(
     input: Requested,
-    evaluate: (signal: AbortSignal) => Promise<boolean>,
+    evaluate: (signal: AbortSignal, decisionId: string) => Promise<boolean>,
     signal?: AbortSignal,
   ): Promise<boolean> {
     const operation = AbortSignal.any([AbortSignal.timeout(5000), ...(signal ? [signal] : [])]);
@@ -95,12 +95,13 @@ export class AuditedDecision {
       throw new HeimdallError("invalid_argument");
     }
     request.eventId = randomUUID();
-    request.decisionId = randomUUID();
+    const decisionId = randomUUID();
+    request.decisionId = decisionId;
     await this.commit(request);
     let result = false;
     let failure: HeimdallError | undefined;
     try {
-      result = await bounded(evaluate, operation);
+      result = await bounded((signal) => evaluate(signal, decisionId), operation);
       if (typeof result !== "boolean") throw new HeimdallError("unavailable");
       checkCancellation(operation);
     } catch (error) {

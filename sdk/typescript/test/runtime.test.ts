@@ -91,12 +91,19 @@ function setup(failure = "", environment = "production") {
                   (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"),
                 ),
               ).toString("base64url") ||
-          check.tuple_key.relation !== artifact.permissions["invoice.approve"]
+          ![
+            artifact.permissions["invoice.approve"],
+            ...Object.values(artifact.roles).map((r) => r.effective),
+          ].includes(check.tuple_key.relation)
         )
           return new Response(null, { status: 400 });
         if (check.tuple_key.object === "workspace:outage")
           return new Response(null, { status: 503 });
-        return Response.json({ allowed: check.tuple_key.object === "workspace:acme" });
+        return Response.json({
+          allowed:
+            check.tuple_key.object === "workspace:acme" &&
+            ["p_0", artifact.roles.approver!.effective].includes(check.tuple_key.relation),
+        });
       }
       if (url.endsWith("/keys")) return Response.json(token.jwks);
       if (url.endsWith("/introspect")) return Response.json(status.introspection);
@@ -278,6 +285,26 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         runtime.tenant("acme").can({ ...actor }, "invoice.approve", { signal }),
       ).rejects.toThrow("unauthenticated");
       await expect(runtime.tokens.verify("invalid", { signal })).rejects.toThrow("unauthenticated");
+      expect(await runtime.tenant("acme").roles(actor, { signal })).toEqual(["approver"]);
+      expect(await runtime.tenant("globex").roles(actor, { signal })).toEqual([]);
+      await expect(runtime.tenant("outage").roles(actor, { signal })).rejects.toThrow(
+        "unavailable",
+      );
+      const roleAudit = await pool.query(
+        "SELECT event FROM heimdall.audit_events WHERE environment='public-ts'",
+      );
+      const eventsForRoles = roleAudit.rows.map(({ event }) =>
+        JSON.parse(Buffer.from(event.payload, "base64url").toString()),
+      );
+      const parent = eventsForRoles.find(
+        (event) =>
+          event.tenantId === "acme" &&
+          event.action === "roles.list" &&
+          event.outcome === "requested",
+      );
+      expect(
+        eventsForRoles.filter((event) => event.parentDecisionId === parent.decisionId),
+      ).toHaveLength(8);
       await storage.identity.invalidate(
         {
           issuer: token.issuer,
@@ -292,11 +319,11 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       const events = await pool.query(
         "SELECT count(*)::int AS count FROM heimdall.audit_events WHERE product_id='ledger' AND environment='public-ts'",
       );
-      expect(events.rows[0].count).toBe(9);
+      expect(events.rows[0].count).toBe(33);
       const delivery = await pool.query(
         "SELECT sink_id, count(*)::int AS count FROM heimdall.audit_deliveries WHERE product_id='ledger' AND environment='public-ts' GROUP BY sink_id",
       );
-      expect(delivery.rows).toEqual([{ sink_id: "siem", count: 9 }]);
+      expect(delivery.rows).toEqual([{ sink_id: "siem", count: 33 }]);
       await expect(storage.appendAudit({}, signal)).rejects.toThrow("invalid_argument");
       expect((await pool.query("SELECT 1 AS alive")).rows[0].alive).toBe(1);
     } finally {

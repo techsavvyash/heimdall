@@ -104,6 +104,13 @@ func (d *Decision) commit(event map[string]any) error {
 
 // Run accepts trusted SDK metadata, never a browser-supplied actor. Evaluate must be read-only.
 func (d *Decision) Run(ctx context.Context, input map[string]any, evaluate func(context.Context) (bool, error)) (bool, error) {
+	if evaluate == nil {
+		return false, contract.ErrInvalidArgument
+	}
+	return d.run(ctx, input, func(ctx context.Context, _ string) (bool, error) { return evaluate(ctx) })
+}
+
+func (d *Decision) run(ctx context.Context, input map[string]any, evaluate func(context.Context, string) (bool, error)) (bool, error) {
 	operation, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	request, e := snapshot(input)
@@ -118,11 +125,12 @@ func (d *Decision) Run(ctx context.Context, input map[string]any, evaluate func(
 		return false, contract.ErrAuditUnavailable
 	}
 	request["eventId"] = hex.EncodeToString(requestID[:16])
-	request["decisionId"] = hex.EncodeToString(requestID[16:])
+	decisionID := hex.EncodeToString(requestID[16:])
+	request["decisionId"] = decisionID
 	if e = d.commit(request); e != nil {
 		return false, e
 	}
-	value, failure := bounded(operation, evaluate)
+	value, failure := bounded(operation, func(ctx context.Context) (bool, error) { return evaluate(ctx, decisionID) })
 	if failure == nil {
 		failure = contract.CheckCancellation(operation)
 	}
