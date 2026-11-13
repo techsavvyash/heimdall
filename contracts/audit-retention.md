@@ -879,3 +879,14 @@ and duration. Configuration drift returns conflict before authorization. Each
 dispatch verifies the current operator, records the decision and rechecks
 eligibility. After an unknown execution outcome, keep the original proposal
 and retry with the same operator identity and pinned configuration.
+
+## Retained outbox storage
+
+The retained v4/v5 ports expose pending reads, attempt claims, retry deferral,
+quarantine and acknowledgement. Pending reads use a repeatable-read snapshot for
+both readiness and event selection. Mutations acquire the shared migration lock
+and check readiness before taking delivery row locks. A database still migrating,
+an incompatible schema or a read-only connection fails unavailable even when a
+requested delivery does not exist. Delivery updates change only the outbox state;
+they do not release event, delivery or retained metadata capacity. The product
+owns scheduling and the SIEM transport.

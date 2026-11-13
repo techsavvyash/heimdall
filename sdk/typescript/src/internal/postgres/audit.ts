@@ -75,6 +75,11 @@ export class PostgresAudit {
     audit.retainedRuntime = true;
     return Object.freeze({
       append: audit.appendRetained.bind(audit),
+      pending: audit.pending.bind(audit),
+      beginAttempt: audit.beginAttempt.bind(audit),
+      deferAttempt: audit.deferAttempt.bind(audit),
+      quarantine: audit.quarantine.bind(audit),
+      acknowledge: audit.acknowledge.bind(audit),
       retire: audit.retire.bind(audit),
       applyHold: audit.applyHold.bind(audit),
       appendWith: audit.appendRetainedWith.bind(audit),
@@ -910,26 +915,33 @@ WITH selected AS MATERIALIZED (
       limit > 100
     )
       throw new HeimdallError("invalid_argument");
-    const rows = await query<{
+    type PendingRow = {
       event_id: string;
       attempts: number;
       recorded_at: string;
       payload_digest: Buffer;
       event: Record<string, unknown>;
-    }>(
-      this.pool,
-      `WITH candidates AS MATERIALIZED (
+    };
+    const statement = `WITH candidates AS MATERIALIZED (
       SELECT d.event_id,d.attempts,d.next_attempt_at,e.recorded_at,e.payload_digest,e.event
       FROM heimdall.audit_deliveries d JOIN heimdall.audit_events e USING(product_id,environment,event_id)
       WHERE d.product_id=$1 AND d.environment=$2 AND d.sink_id=$3 AND d.state='pending' AND d.next_attempt_at<=$4
       ORDER BY d.next_attempt_at,d.event_id COLLATE "C" LIMIT $5
     ), sized AS (
       SELECT *,sum(octet_length(event::text)) OVER(ORDER BY next_attempt_at,event_id COLLATE "C") AS size FROM candidates
-    ) SELECT event_id,attempts,recorded_at::text,payload_digest,event FROM sized WHERE size<=4194304 ORDER BY next_attempt_at,event_id COLLATE "C"`,
-      [this.productId, this.environment, sink, now, limit],
-      false,
-      signal,
-    );
+    ) SELECT event_id,attempts,recorded_at::text,payload_digest,event FROM sized WHERE size<=4194304 ORDER BY next_attempt_at,event_id COLLATE "C"`;
+    const args = [this.productId, this.environment, sink, now, limit];
+    const rows = this.retainedRuntime
+      ? await readSnapshot(
+          this.pool,
+          async (client) => {
+            const ready = await client.query<{ ready: boolean }>(retentionSQL, retentionArgs);
+            if (ready.rows[0]?.ready !== true) throw new HeimdallError("unavailable");
+            return (await client.query<PendingRow>(statement, args)).rows;
+          },
+          signal,
+        )
+      : await query<PendingRow>(this.pool, statement, args, false, signal);
     return rows.map((row) => {
       let event: Record<string, unknown> | null = null;
       try {
@@ -1800,6 +1812,7 @@ WITH selected AS MATERIALIZED (
     await transaction(
       this.pool,
       async (client) => {
+        if (this.retainedRuntime) await lockRetentionAdmission(client);
         const parameters = [this.productId, this.environment, sink, ids];
         const rows = await client.query<{ state: string }>(
           "SELECT state FROM heimdall.audit_deliveries WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=ANY($4::text[]) ORDER BY event_id FOR UPDATE",
@@ -1852,6 +1865,7 @@ WITH selected AS MATERIALIZED (
     return transaction(
       this.pool,
       async (client) => {
+        if (this.retainedRuntime) await lockRetentionAdmission(client);
         const rows = await client.query<{ attempts: number }>(
           "UPDATE heimdall.audit_deliveries SET attempts=attempts+1,next_attempt_at=$7 WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=$4 AND attempts=$5 AND state='pending' AND next_attempt_at<=$6 RETURNING attempts",
           [...args, now, retryAt],
@@ -1874,6 +1888,7 @@ WITH selected AS MATERIALIZED (
     return transaction(
       this.pool,
       async (client) => {
+        if (this.retainedRuntime) await lockRetentionAdmission(client);
         const rows = await client.query(
           "UPDATE heimdall.audit_deliveries SET next_attempt_at=GREATEST(next_attempt_at,$6) WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=$4 AND attempts=$5 AND state='pending' RETURNING attempts",
           [...args, retryAt],
@@ -1893,6 +1908,7 @@ WITH selected AS MATERIALIZED (
     return transaction(
       this.pool,
       async (client) => {
+        if (this.retainedRuntime) await lockRetentionAdmission(client);
         const rows = await client.query(
           "UPDATE heimdall.audit_deliveries SET state='quarantined' WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=$4 AND attempts=$5 AND state IN ('pending','quarantined') RETURNING attempts",
           args,

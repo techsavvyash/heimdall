@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// RetainedRuntimeAudit exposes only retained operations under strict v4 admission.
+// RetainedRuntimeAudit exposes only retained operations under v4/v5 admission.
 // Legacy Audit primitives remain available separately to offline migration tools.
 type RetainedRuntimeAudit struct{ audit *Audit }
 
@@ -50,6 +50,35 @@ func (a *RetainedRuntimeAudit) ResolveReceipt(ctx context.Context, event map[str
 }
 func (a *RetainedRuntimeAudit) Eligibility(ctx context.Context, tenant *string, id string, now, duration int64) (string, error) {
 	return a.audit.InspectRetentionEligibility(ctx, tenant, id, now, duration)
+}
+
+func (a *RetainedRuntimeAudit) Pending(ctx context.Context, sink string, now int64, limit int) ([]PendingAudit, error) {
+	return a.audit.Pending(ctx, sink, now, limit)
+}
+func (a *RetainedRuntimeAudit) BeginAttempt(ctx context.Context, sink, id string, attempts int, now, retryAt int64) (*int, error) {
+	return a.audit.BeginAttempt(ctx, sink, id, attempts, now, retryAt)
+}
+func (a *RetainedRuntimeAudit) DeferAttempt(ctx context.Context, sink, id string, attempt int, retryAt int64) (bool, error) {
+	return a.audit.DeferAttempt(ctx, sink, id, attempt, retryAt)
+}
+func (a *RetainedRuntimeAudit) Quarantine(ctx context.Context, sink, id string, attempts int) (bool, error) {
+	return a.audit.Quarantine(ctx, sink, id, attempts)
+}
+func (a *RetainedRuntimeAudit) Acknowledge(ctx context.Context, batch, receipt contract.AuditDelivery, at int64) error {
+	return a.audit.Acknowledge(ctx, batch, receipt, at)
+}
+
+var retainedDeliveryReadinessSQL = "SELECT ready AND current_setting('default_transaction_read_only')='off' FROM (" + retentionReadinessSQL + ") admission"
+
+func lockRetainedDelivery(ctx context.Context, tx *sql.Tx) error {
+	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock_shared(74162401)"); err != nil {
+		return databaseError(ctx)
+	}
+	var ready bool
+	if err := tx.QueryRowContext(ctx, retainedDeliveryReadinessSQL, retentionReadinessArgs()...).Scan(&ready); err != nil || !ready {
+		return databaseError(ctx)
+	}
+	return nil
 }
 
 func lockRetainedRuntime(ctx context.Context, tx *sql.Tx) error {

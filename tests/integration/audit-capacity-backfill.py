@@ -519,6 +519,22 @@ try:
   subprocess.run(['go','test','-race','-count=1','.', '-run','^TestPublicCapacity$'],cwd=ROOT/'sdk/go',env=public_v5,check=True)
   assert sql("SELECT database_version FROM heimdall.schema_metadata",database)=='5'
   print('v5 public factory proof passed in TS and Go',flush=True)
+  for template in ['retention_activation','hold_release_public_v5']:
+   delivery_db='retained_delivery_'+template
+   sql('CREATE DATABASE '+delivery_db+' TEMPLATE '+template)
+   sql(runtime_grants+"; GRANT UPDATE(state,attempts,next_attempt_at,delivered_at) ON heimdall.audit_deliveries TO retained_runtime_profile",delivery_db)
+   selected=dict(env,HEIMDALL_TEST_RETAINED_DELIVERY_URL=dsn(delivery_db)+'&options=-c%20role%3Dretained_runtime_profile')
+   def delivery_test(settings):
+    go('^TestRetainedDelivery$',settings)
+    run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-delivery.test.ts'],env=settings)
+   delivery_test(selected)
+   rejected=dict(selected,HEIMDALL_TEST_RETAINED_DELIVERY_REJECT='1')
+   sql("UPDATE heimdall.schema_metadata SET state='migrating'",delivery_db)
+   delivery_test(rejected)
+   sql("UPDATE heimdall.schema_metadata SET state='ready'",delivery_db)
+   delivery_test(dict(rejected,HEIMDALL_TEST_RETAINED_DELIVERY_URL=selected['HEIMDALL_TEST_RETAINED_DELIVERY_URL']+'%20-c%20default_transaction_read_only%3Don'))
+   assert sql("SELECT count(*) FROM heimdall.audit_deliveries WHERE environment IN ('delivery-ts','delivery-go') AND state='delivered' AND attempts=1 AND next_attempt_at=4000 AND delivered_at=5000",delivery_db)=='2'
+  print('Retained outbox passed: v4 and v5 readiness refusal and scoped delivery transitions in TS and Go',flush=True)
   # END v5 public factory proof
   # Exercise the authorization boundary with the real v5 append port.
   database='maintenance_authorization_v5'

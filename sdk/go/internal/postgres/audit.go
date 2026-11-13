@@ -145,6 +145,11 @@ func (a *Audit) Acknowledge(ctx context.Context, batch, receipt contract.AuditDe
 	if _, err = tx.ExecContext(ctx, "SET LOCAL synchronous_commit='on'"); err != nil {
 		return databaseError(ctx)
 	}
+	if a.retainedRuntime {
+		if err = lockRetainedDelivery(ctx, tx); err != nil {
+			return err
+		}
+	}
 	rows, err := tx.QueryContext(ctx, "SELECT state FROM heimdall.audit_deliveries WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=ANY($4::text[]) ORDER BY event_id FOR UPDATE", a.product, a.environment, batch.SinkID, pq.Array(ids))
 	if err != nil {
 		return databaseError(ctx)
@@ -228,7 +233,7 @@ type PendingAudit struct {
 
 // Pending is a read, not a lease. Duplicates from concurrent workers are expected.
 func (a *Audit) Pending(ctx context.Context, sink string, now int64, limit int) ([]PendingAudit, error) {
-	if !valid(sink, 128) || now < 0 || now > maxSafe || limit < 1 || limit > 100 {
+	if ctx == nil || !valid(sink, 128) || now < 0 || now > maxSafe || limit < 1 || limit > 100 {
 		return nil, contract.ErrInvalidArgument
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -236,7 +241,20 @@ func (a *Audit) Pending(ctx context.Context, sink string, now int64, limit int) 
 	if err := contract.CheckCancellation(ctx); err != nil {
 		return nil, err
 	}
-	rows, err := a.db.QueryContext(ctx, `WITH candidates AS MATERIALIZED (
+	query := a.db.QueryContext
+	if a.retainedRuntime {
+		tx, err := a.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+		if err != nil {
+			return nil, databaseError(ctx)
+		}
+		defer tx.Rollback()
+		var ready bool
+		if err = tx.QueryRowContext(ctx, retainedDeliveryReadinessSQL, retentionReadinessArgs()...).Scan(&ready); err != nil || !ready {
+			return nil, databaseError(ctx)
+		}
+		query = tx.QueryContext
+	}
+	rows, err := query(ctx, `WITH candidates AS MATERIALIZED (
  SELECT d.event_id,d.attempts,d.next_attempt_at,e.recorded_at,e.payload_digest,e.event
  FROM heimdall.audit_deliveries d JOIN heimdall.audit_events e USING(product_id,environment,event_id)
  WHERE d.product_id=$1 AND d.environment=$2 AND d.sink_id=$3 AND d.state='pending' AND d.next_attempt_at<=$4
@@ -287,6 +305,11 @@ func (a *Audit) deliveryTransition(ctx context.Context, query string, args []any
 	defer tx.Rollback()
 	if _, err = tx.ExecContext(ctx, "SET LOCAL synchronous_commit='on'"); err != nil {
 		return nil, databaseError(ctx)
+	}
+	if a.retainedRuntime {
+		if err = lockRetainedDelivery(ctx, tx); err != nil {
+			return nil, err
+		}
 	}
 	var attempt int
 	var result *int
