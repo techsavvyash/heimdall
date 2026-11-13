@@ -15,12 +15,22 @@ import (
 	"github.com/techsavvyash/heimdall/sdk/go/internal/postgres"
 )
 
+func mustSetupPlanJSON(t *testing.T, plan ProductSetupPlan) []byte {
+	t.Helper()
+	raw, err := json.Marshal(map[string]string{"productId": plan.ProductID, "environment": plan.Environment,
+		"issuer": plan.Issuer, "organizationId": plan.OrganizationID, "projectName": plan.ProjectName, "openfgaUrl": plan.OpenFGAURL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
 func TestSetupProductCrossLanguage(t *testing.T) {
 	dsn, org := os.Getenv("HEIMDALL_TEST_SETUP_DSN"), os.Getenv("HEIMDALL_TEST_SETUP_ZITADEL_ORG")
 	if dsn == "" || org == "" {
 		t.Skip("requires a disposable setup journal and ZITADEL organization")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
 	defer cancel()
 	issuer, base := os.Getenv("HEIMDALL_PROBE_ZITADEL_ISSUER"), os.Getenv("HEIMDALL_PROBE_OPENFGA_URL")
 	zToken, fToken := os.Getenv("HEIMDALL_PROBE_ZITADEL_PAT"), os.Getenv("HEIMDALL_PROBE_OPENFGA_KEY")
@@ -117,5 +127,66 @@ func TestSetupProductCrossLanguage(t *testing.T) {
 	goConfig, err := configuration.Parse(result["web"], input.Manifest)
 	if err != nil || !reflect.DeepEqual(goConfig.Config(), config) {
 		t.Fatal("configuration differs", err)
+	}
+	// A second product shares the provider deployment and journal, with independent pins.
+	modelFixture, err := os.ReadFile("../../../contracts/fixtures/tenant-model-v1.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var models []struct {
+		Name     string
+		Manifest json.RawMessage
+	}
+	if json.Unmarshal(modelFixture, &models) != nil {
+		t.Fatal("invalid product manifests")
+	}
+	var supportManifest json.RawMessage
+	for _, model := range models {
+		if model.Name == "support" {
+			supportManifest = model.Manifest
+		}
+	}
+	supportPlan := plan
+	supportPlan.ProductID, supportPlan.ProjectName = "support", "Support setup verification"
+	supportOptions := options
+	var secretSaved bool
+	supportOptions.SaveSecret = func(_ context.Context, id, client, secret string) error {
+		secretSaved = secret != ""
+		return os.WriteFile(filepath.Join(secretDir, id+"."+client+".secret"), []byte(secret), 0600)
+	}
+	supportOptions.HasSecret = func(context.Context, string, string) (bool, error) { return secretSaved, nil }
+	support, err := SetupProduct(ctx, db, supportPlan, supportManifest, supportOptions)
+	if err != nil {
+		t.Fatal("Support setup failed", err)
+	}
+	supportConfig, err := configuration.Parse(support["web"], supportManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc := supportConfig.Config()
+	t.Cleanup(func() { deleteVerificationStore(t, base, fToken, sc.OpenFGA.StoreID) })
+	if !secretSaved || sc.Audience == config.Audience || sc.ClientID == config.ClientID ||
+		sc.OpenFGA.StoreID == config.OpenFGA.StoreID || sc.OpenFGA.ModelID == config.OpenFGA.ModelID {
+		t.Fatal("products must have independent configuration")
+	}
+	if err := os.WriteFile(planPath, mustSetupPlanJSON(t, supportPlan), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manifestPath, supportManifest, 0600); err != nil {
+		t.Fatal(err)
+	}
+	resume := exec.CommandContext(ctx, "node", "../../typescript/dist/cli.js", planPath, manifestPath)
+	resume.Env = command.Env
+	tsSupport, err := resume.Output()
+	if err != nil {
+		t.Fatal("TypeScript CLI did not resume the Go plan", err)
+	}
+	var supportConfigs map[string]json.RawMessage
+	if json.Unmarshal(tsSupport, &supportConfigs) != nil {
+		t.Fatal("invalid Support configuration")
+	}
+	resumed, err := configuration.Parse(supportConfigs["web"], supportManifest)
+	if err != nil || !reflect.DeepEqual(resumed.Config(), sc) {
+		t.Fatal("Support configuration differs across languages", err)
 	}
 }

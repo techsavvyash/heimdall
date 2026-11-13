@@ -136,3 +136,15 @@ The current bounds cover one workspace or operation inventory per invocation.
 Larger inventories require a separately controlled export with writers drained.
 The product still coordinates the broader exit procedure, including remote
 relationships and unresolved operations.
+
+## Public SDK composition
+
+The managed runtime exposes `exportManagedPage` / `ExportManagedPage` and
+`exportManagedInventory` / `ExportManagedInventory` when configured with a retained
+export reader and an explicit export policy. Supply the separate connection as
+`exportPool` in TypeScript or `ExportDB` in Go, and set the runtime's
+`authorizeManagedExport` or `AuthorizeManagedExport` callback. The runtime uses
+its pinned model and policy version. Callers provide the bearer token, export
+kind, nullable workspace and cursor, page limit and audit operation ID. A
+snapshot inventory starts with a null cursor. A product should use a fresh
+operation ID per request for audit correlation.

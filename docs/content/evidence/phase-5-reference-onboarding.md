@@ -47,6 +47,6 @@ Probe `7620818d-bcc9-4416-bf7b-99ec43957c8b` ran the complete HTTP flow with the
 | Ledger | `31d4456b-9376-4b80-9851-172bbb61f079` | One intent, dispatch, confirmation and activation. 30 matched decision pairs. |
 | Support | `7802c1cf-18a7-4638-8a87-12a80a570a21` | One intent, dispatch, confirmation and activation. 29 matched decision pairs. |
 
-The repeat includes the Ledger request cancellation fix in `fa223c0`. Readback used the exact operation IDs and initiating actors from this run. The probe used ZITADEL's Login API for the synthetic user and the products' normal session callbacks. [[phase-5-managed-onboarding]] covers fault injection for retryable and uncertain outcomes. Operator recovery and membership administration are still open in Phase 5.
+The repeat includes the Ledger request cancellation fix in `fa223c0`. Readback used the exact operation IDs and initiating actors from this run. The probe used ZITADEL's Login API for the synthetic user and the products' normal session callbacks. [[phase-5-managed-onboarding]] covers fault injection for retryable and uncertain outcomes. [[phase-5-workspace-recovery]] records the subsequent operator recovery implementation and verification.
 
 [[phase-5-reference-administration]] covers member grants, role replacement, removal and ownership transfer in both products.
