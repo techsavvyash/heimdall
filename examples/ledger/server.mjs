@@ -73,7 +73,7 @@ const read = (value, status = 200) =>
     headers: { "cache-control": "no-store", "referrer-policy": "no-referrer" },
   });
 
-async function workspaceInput(request) {
+async function mutationInput(request) {
   if (request.headers.get("content-type")?.split(";")[0]?.trim() !== "application/json")
     throw new HeimdallError("invalid_argument");
   const chunks = [];
@@ -90,16 +90,23 @@ async function workspaceInput(request) {
   } catch {
     throw new HeimdallError("invalid_argument");
   }
-  if (
-    !input ||
-    typeof input.name !== "string" ||
-    Object.keys(input).some((field) => field !== "name")
-  )
+  if (!input || typeof input !== "object" || Array.isArray(input))
     throw new HeimdallError("invalid_argument");
   const idempotencyKey = request.headers.get("idempotency-key") ?? "";
   if (idempotencyKey.includes(", ")) throw new HeimdallError("invalid_argument");
+  return { input, idempotencyKey };
+}
+
+async function workspaceInput(request) {
+  const { input, idempotencyKey } = await mutationInput(request);
+  if (typeof input.name !== "string" || Object.keys(input).length !== 1)
+    throw new HeimdallError("invalid_argument");
   return { name: input.name, idempotencyKey };
 }
+
+const memberRoute =
+  /^\/workspaces\/([A-Za-z0-9_-]{1,128})\/members\/(add|assign-roles|remove|transfer-ownership)$/;
+const eligibleSubjects = new Set([workspaceCreator, process.env.HEIMDALL_REFERENCE_MEMBER_SUBJECT]);
 
 async function route(request) {
   const url = new URL(request.url);
@@ -128,6 +135,40 @@ async function route(request) {
         ? await auth.onboarding.resume(actor, operation[1], call)
         : await auth.onboarding.get(actor, operation[1], call);
     return read(result, (create || resume) && result.status === "pending" ? 202 : 200);
+  }
+  const administration = request.method === "POST" && memberRoute.exec(url.pathname);
+  if (administration) {
+    if (request.headers.get("origin") !== origin) throw new HeimdallError("forbidden");
+    const actor = await sessions.authenticate(request);
+    const { input, idempotencyKey } = await mutationInput(request);
+    const [, workspace, action] = administration;
+    const takesRoles = action === "add" || action === "assign-roles";
+    if (
+      typeof input.subject !== "string" ||
+      Object.keys(input).length !== (takesRoles ? 2 : 1) ||
+      (takesRoles &&
+        (!Array.isArray(input.roles) || input.roles.some((role) => typeof role !== "string")))
+    )
+      throw new HeimdallError("invalid_argument");
+    if (!eligibleSubjects.has(input.subject)) throw new HeimdallError("forbidden");
+    const options = { target: { issuer: config.issuer, subject: input.subject }, idempotencyKey };
+    const members = auth.tenant(workspace).memberships;
+    const call = { signal: request.signal };
+    let result;
+    switch (action) {
+      case "add":
+        result = await members.add(actor, { ...options, roles: input.roles }, call);
+        break;
+      case "assign-roles":
+        result = await members.assignRoles(actor, { ...options, roles: input.roles }, call);
+        break;
+      case "remove":
+        result = await members.remove(actor, options, call);
+        break;
+      default:
+        result = await members.transferOwnership(actor, options, call);
+    }
+    return read(result, result.status === "pending" ? 202 : 200);
   }
   if (request.method !== "GET") return read({ code: "not_found" }, 404);
   const scoped = /^\/workspaces\/([A-Za-z0-9_-]{1,128})\/(invoices|roles)$/.exec(url.pathname);
@@ -174,7 +215,8 @@ createServer(async (incoming, outgoing) => {
       response = await route(
         new Request(target, {
           method: incoming.method,
-          ...(incoming.method === "POST" && target.pathname === "/workspaces"
+          ...(incoming.method === "POST" &&
+          (target.pathname === "/workspaces" || memberRoute.test(target.pathname))
             ? { body: addAbortSignal(signal, incoming), duplex: "half" }
             : {}),
           headers: Object.entries(incoming.headers).flatMap(([name, value]) =>

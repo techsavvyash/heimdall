@@ -6,7 +6,8 @@ import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 
 export async function verifyReferenceProduct(input, authorize) {
-  const { config, manifest, clientSecret, apiAudience, user, runId, otherWorkspace } = input;
+  const { config, manifest, clientSecret, apiAudience, user, recipient, runId, otherWorkspace } =
+    input;
   const ledger = config.productId === "ledger";
   const port = ledger ? 18640 : 18641;
   const remote = process.env.HEIMDALL_REFERENCE_RAILWAY === "1";
@@ -94,6 +95,7 @@ export async function verifyReferenceProduct(input, authorize) {
     HEIMDALL_CALLBACK_URL: callback,
     HEIMDALL_POLICY_VERSION: "reference-v1",
     HEIMDALL_WORKSPACE_CREATOR_SUBJECT: user,
+    HEIMDALL_REFERENCE_MEMBER_SUBJECT: recipient,
     HEIMDALL_CLIENT_SECRET: clientSecret,
     HEIMDALL_OPENFGA_KEY: process.env.HEIMDALL_PROBE_OPENFGA_KEY,
     HEIMDALL_RECORD_KEY_ID: "fixture",
@@ -207,18 +209,25 @@ export async function verifyReferenceProduct(input, authorize) {
       await new Promise((resolve) => setTimeout(resolve, remote ? 2000 : 200));
     }
     assert(ready, "Reference backend failed readiness");
-    const start = await request("/auth/start");
-    assert.equal(start.status, 303, `Reference ${schema} login start returned ${start.status}`);
-    const binding = start.headers.getSetCookie()[0].split(";")[0];
-    const target = await authorize(start.headers.get("location"));
-    const complete = await request(target.pathname + target.search, {
-      headers: { cookie: binding },
-    });
-    assert.equal(complete.status, 303, `Reference ${schema} callback returned ${complete.status}`);
-    const cookie = complete.headers
-      .getSetCookie()
-      .find((value) => value.includes("-session="))
-      .split(";")[0];
+    async function signIn(recipient = false) {
+      const start = await request("/auth/start");
+      assert.equal(start.status, 303, `Reference ${schema} login start returned ${start.status}`);
+      const binding = start.headers.getSetCookie()[0].split(";")[0];
+      const target = await authorize(start.headers.get("location"), recipient);
+      const complete = await request(target.pathname + target.search, {
+        headers: { cookie: binding },
+      });
+      assert.equal(
+        complete.status,
+        303,
+        `Reference ${schema} callback returned ${complete.status}`,
+      );
+      return complete.headers
+        .getSetCookie()
+        .find((value) => value.includes("-session="))
+        .split(";")[0];
+    }
+    const cookie = await signIn();
     const headers = { cookie };
     const page = await request("/workspaces", { headers });
     assert.equal(page.status, 200);
@@ -312,6 +321,85 @@ export async function verifyReferenceProduct(input, authorize) {
     const owned = await request(`/workspaces/${workspace.workspaceId}/${collection}`, { headers });
     assert.equal(owned.status, 200);
     assert.deepEqual(await owned.json(), { [collection]: [] });
+    const recipientCookie = await signIn(true);
+    const memberPath = `/workspaces/${workspace.workspaceId}/members/`;
+    const initialRole = ledger ? "viewer" : "reader";
+    const replacementRole = ledger ? "approver" : "agent";
+    const memberRequest = (action, subject, key, roles, sessionCookie = cookie, source = origin) =>
+      request(memberPath + action, {
+        method: "POST",
+        headers: {
+          cookie: sessionCookie,
+          origin: source,
+          "content-type": "application/json",
+          "idempotency-key": key,
+        },
+        body: JSON.stringify({ subject, ...(roles ? { roles } : {}) }),
+      });
+    const add = () => memberRequest("add", recipient, runId, [initialRole]);
+    const rolesPath = `/workspaces/${workspace.workspaceId}/roles`;
+    const resourcePath = `/workspaces/${workspace.workspaceId}/${collection}`;
+    const recipientHeaders = { cookie: recipientCookie };
+    const expectDenied = async (response, status) => {
+      assert.equal(response.status, status);
+      await response.body?.cancel();
+    };
+    await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 403);
+    await expectDenied(
+      await memberRequest(
+        "add",
+        recipient,
+        runId,
+        [initialRole],
+        cookie,
+        "https://unrelated.example",
+      ),
+      403,
+    );
+    await expectDenied(
+      await memberRequest("add", recipient, runId, [initialRole], recipientCookie),
+      403,
+    );
+    const added = await add();
+    assert.equal(added.status, 200, `Reference ${schema} member add returned ${added.status}`);
+    const grant = await added.json();
+    assert.equal(grant.status, "confirmed");
+    const repeated = await add();
+    assert.equal(repeated.status, 200);
+    assert.deepEqual(await repeated.json(), grant);
+    await expectDenied(await memberRequest("add", recipient, runId, [replacementRole]), 409);
+    assert.deepEqual(await (await request(rolesPath, { headers: recipientHeaders })).json(), {
+      roles: [initialRole],
+    });
+    const changed = await memberRequest("assign-roles", recipient, runId, [replacementRole]);
+    assert.equal(changed.status, 200);
+    const assignment = await changed.json();
+    assert.deepEqual(await (await request(rolesPath, { headers: recipientHeaders })).json(), {
+      roles: [replacementRole],
+    });
+    const removed = await memberRequest("remove", recipient, runId);
+    assert.equal(removed.status, 200);
+    const removal = await removed.json();
+    await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 403);
+    const readded = await memberRequest("add", recipient, runId + "-readd", [initialRole]);
+    assert.equal(readded.status, 200);
+    const regrant = await readded.json();
+    const transferred = await memberRequest("transfer-ownership", recipient, runId);
+    assert.equal(transferred.status, 200);
+    const transfer = await transferred.json();
+    assert.equal(transfer.status, "confirmed");
+    assert.deepEqual(await (await request(rolesPath, { headers: recipientHeaders })).json(), {
+      roles: [initialRole, manifest.ownerRole].sort(),
+    });
+    assert.deepEqual(await (await request(rolesPath, { headers })).json(), { roles: [] });
+    await expectDenied(await request(resourcePath, { headers }), 403);
+    const recipientResource = await request(resourcePath, { headers: recipientHeaders });
+    assert.equal(recipientResource.status, 200);
+    await recipientResource.body?.cancel();
+    await expectDenied(
+      await request("/auth/logout", { method: "POST", headers: { ...recipientHeaders, origin } }),
+      204,
+    );
     const logout = await request("/auth/logout", { method: "POST", headers: { cookie, origin } });
     assert.equal(logout.status, 204);
     const replay = await request("/workspaces", { headers });
@@ -336,6 +424,7 @@ export async function verifyReferenceProduct(input, authorize) {
         roles: [manifest.ownerRole],
         emptyScopedRead: 200,
       },
+      administration: { grant, assignment, removal, regrant, transfer },
       otherTenant: 403,
     };
   } finally {

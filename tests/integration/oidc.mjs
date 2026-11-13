@@ -94,6 +94,7 @@ async function sdkRuntime(client, c) {
             clientSecret: client.clientSecret,
             apiAudience: c.reference.apiAudience,
             user: c.subject,
+            recipient: c.reference.recipient,
             runId,
             otherWorkspace: observations.find((entry) => entry.onboarding)?.onboarding,
           },
@@ -550,7 +551,9 @@ try {
       assert.equal(audiences.length, 1);
       statusCase.reference = {
         apiAudience: audiences[0],
-        authorize: async (location) => {
+        recipient: otherUser.id,
+        authorize: async (location, recipient = false) => {
+          const selected = recipient ? otherSession : session;
           const login = await redirect(location);
           const id = login.searchParams.get("authRequest");
           assert(id);
@@ -558,7 +561,7 @@ try {
             "POST",
             `/v2/oidc/auth_requests/${id}`,
             {
-              session: { sessionId: session.sessionId, sessionToken: session.sessionToken },
+              session: { sessionId: selected.sessionId, sessionToken: selected.sessionToken },
             },
             loginPat,
           );

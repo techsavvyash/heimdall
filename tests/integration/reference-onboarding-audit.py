@@ -41,7 +41,19 @@ def verify(products, payloads):
         permission = {"ledger": "invoice.read", "support": "ticket.read"}[product]
         for action in ("roles.list", permission):
             assert sum(e["action"] == action and e["outcome"] == "allow" and
-                       e["tenantId"] == operation["workspaceId"] for e in results.values()) == 1
+                       e["tenantId"] == operation["workspaceId"] for e in results.values()) >= 1
+        if "administration" in item:
+            for step, kind in (("grant", "add_member"), ("assignment", "assign_roles"),
+                               ("removal", "remove_member"), ("regrant", "add_member"),
+                               ("transfer", "transfer_owner")):
+                receipt = item["administration"][step]
+                assert receipt["status"] == "confirmed" and receipt["workspaceId"] == operation["workspaceId"]
+                events_for_step = [e for e in scoped if e.get("operationId") == receipt["operationId"]]
+                assert all(e["tenantId"] == operation["workspaceId"] and e["actor"] == actor for e in events_for_step)
+                assert Counter((e["action"], e["outcome"]) for e in events_for_step) == {
+                    (kind, "requested"): 1, (kind + ".dispatch", "attempted"): 1,
+                    (kind + ".confirm", "succeeded"): 1, (kind + ".complete", "succeeded"): 1,
+                }
         print(f"{product}: four lifecycle events, {len(requests)} matched authorization decisions")
 
 

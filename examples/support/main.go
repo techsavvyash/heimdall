@@ -73,27 +73,35 @@ func respondError(w http.ResponseWriter, err error) {
 	writeJSON(w, status, body)
 }
 
-func workspaceInput(w http.ResponseWriter, r *http.Request) (heimdall.WorkspaceCreateInput, error) {
+func mutationInput(w http.ResponseWriter, r *http.Request) (map[string]json.RawMessage, string, error) {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	keys := r.Header.Values("Idempotency-Key")
 	if err != nil || mediaType != "application/json" || len(keys) != 1 || strings.Contains(keys[0], ", ") {
-		return heimdall.WorkspaceCreateInput{}, heimdall.ErrInvalidArgument
+		return nil, "", heimdall.ErrInvalidArgument
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
-	if err != nil || !utf8.Valid(body) {
-		return heimdall.WorkspaceCreateInput{}, heimdall.ErrInvalidArgument
-	}
 	var fields map[string]json.RawMessage
+	if err != nil || !utf8.Valid(body) || json.Unmarshal(body, &fields) != nil || fields == nil {
+		return nil, "", heimdall.ErrInvalidArgument
+	}
+	return fields, keys[0], nil
+}
+
+func workspaceInput(w http.ResponseWriter, r *http.Request) (heimdall.WorkspaceCreateInput, error) {
+	fields, key, err := mutationInput(w, r)
+	if err != nil {
+		return heimdall.WorkspaceCreateInput{}, err
+	}
 	var name string
-	if json.Unmarshal(body, &fields) != nil || len(fields) != 1 || json.Unmarshal(fields["name"], &name) != nil {
+	if len(fields) != 1 || json.Unmarshal(fields["name"], &name) != nil {
 		return heimdall.WorkspaceCreateInput{}, heimdall.ErrInvalidArgument
 	}
-	return heimdall.WorkspaceCreateInput{Name: name, IdempotencyKey: keys[0]}, nil
+	return heimdall.WorkspaceCreateInput{Name: name, IdempotencyKey: key}, nil
 }
 
 func main() {
 	configJSON, manifestJSON := []byte(required("HEIMDALL_CONFIG")), []byte(required("HEIMDALL_MANIFEST"))
-	var config struct{ ProductID, Environment string }
+	var config struct{ ProductID, Environment, Issuer string }
 	if json.Unmarshal(configJSON, &config) != nil || config.ProductID != "support" {
 		log.Fatal("Expected the Support product")
 	}
@@ -230,6 +238,65 @@ func main() {
 	mount("POST /workspaces", workspaceOperation)
 	mount("GET /workspace-operations/{operation}", workspaceOperation)
 	mount("POST /workspace-operations/{operation}", workspaceOperation)
+	eligibleMember := os.Getenv("HEIMDALL_REFERENCE_MEMBER_SUBJECT")
+	mount("POST /workspaces/{workspace}/members/{action}", func(w http.ResponseWriter, r *http.Request) error {
+		workspace, action := r.PathValue("workspace"), r.PathValue("action")
+		takesRoles := action == "add" || action == "assign-roles"
+		if !workspaceID.MatchString(workspace) || (!takesRoles && action != "remove" && action != "transfer-ownership") {
+			return heimdall.ErrNotFound
+		}
+		if len(r.Header.Values("Origin")) != 1 || r.Header.Get("Origin") != origin {
+			return heimdall.ErrForbidden
+		}
+		actor, err := sessions.Authenticate(r)
+		if err != nil {
+			return err
+		}
+		fields, key, err := mutationInput(w, r)
+		if err != nil {
+			return err
+		}
+		var subject string
+		if json.Unmarshal(fields["subject"], &subject) != nil || subject == "" {
+			return heimdall.ErrInvalidArgument
+		}
+		if subject != workspaceCreator && subject != eligibleMember {
+			return heimdall.ErrForbidden
+		}
+		input := heimdall.MembershipInput{Target: heimdall.Identity{Issuer: config.Issuer, Subject: subject}, IdempotencyKey: key}
+		var result heimdall.MembershipStatus
+		members := auth.Tenant(workspace).Memberships()
+		if takesRoles {
+			var roles []string
+			if len(fields) != 2 || json.Unmarshal(fields["roles"], &roles) != nil || roles == nil {
+				return heimdall.ErrInvalidArgument
+			}
+			withRoles := heimdall.MembershipRolesInput{MembershipInput: input, Roles: roles}
+			if action == "add" {
+				result, err = members.Add(r.Context(), actor, withRoles)
+			} else {
+				result, err = members.AssignRoles(r.Context(), actor, withRoles)
+			}
+		} else {
+			if len(fields) != 1 {
+				return heimdall.ErrInvalidArgument
+			}
+			if action == "remove" {
+				result, err = members.Remove(r.Context(), actor, input)
+			} else {
+				result, err = members.TransferOwnership(r.Context(), actor, input)
+			}
+		}
+		if err != nil {
+			return err
+		}
+		status := http.StatusOK
+		if result.Status == "pending" {
+			status = http.StatusAccepted
+		}
+		writeJSON(w, status, result)
+		return nil
+	})
 	mount("GET /workspaces/{workspace}/roles", func(w http.ResponseWriter, r *http.Request) error {
 		workspace := r.PathValue("workspace")
 		if !workspaceID.MatchString(workspace) {
