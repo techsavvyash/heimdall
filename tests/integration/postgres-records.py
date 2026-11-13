@@ -82,12 +82,64 @@ try:
     run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/runtime.test.ts"], env=runtime_env)
     subprocess.run(["go", "test", "-race", "-count=1", ".", "-run", "TestPublicPostgresRuntime|TestPostgresFactory"], cwd=ROOT / "sdk/go", env=runtime_env, check=True)
     if os.environ.get("HEIMDALL_PROBE_DURABLE_RUNTIME") == "1":
+        for args in (
+            ["--prepare-hold-release-upgrade", "--writers-drained", "--sql-directory", str(ROOT / "contracts/persistence/session")],
+            ["--activate-hold-release-upgrade", "--writers-drained"],
+            ["--status", "audit-v5"],
+        ):
+            subprocess.run(["go", "run", "./cmd/heimdall-migrate", *args],
+                           cwd=ROOT / "sdk/go", env=runtime_env, check=True)
+        run(["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime", "-v", "ON_ERROR_STOP=1"],
+            input="GRANT SELECT ON ALL TABLES IN SCHEMA heimdall_retention TO heimdall_public_runtime",
+            capture_output=True, text=True)
+        def audit_snapshot():
+            result = run(["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime",
+                          "-XAtq", "-v", "ON_ERROR_STOP=1"], input="""
+                SELECT jsonb_build_object(
+                    'version', (SELECT database_version FROM heimdall.schema_metadata),
+                    'events', (SELECT used_events FROM heimdall_capacity.policy),
+                    'bytes', (SELECT used_bytes FROM heimdall_capacity.policy),
+                    'deliveries', (SELECT used_deliveries FROM heimdall_capacity.policy),
+                    'retainedRows', (SELECT used_rows FROM heimdall_retention.capacity),
+                    'scopes', coalesce((
+                        SELECT jsonb_object_agg(product_id || '/' || environment, to_jsonb(s))
+                        FROM (
+                            SELECT e.product_id, e.environment, count(*) AS events,
+                                sum(octet_length(e.event::text)) AS bytes,
+                                count(*) FILTER (WHERE i.kind = 'ordinary'
+                                    AND i.payload_digest = e.payload_digest AND i.recorded_at = e.recorded_at
+                                    AND i.routing = '["siem"]'::jsonb
+                                    AND c.envelope_bytes = octet_length(e.event::text) AND c.delivery_rows = 1
+                                    AND d.sink_id = 'siem' AND d.state = 'pending') AS matched
+                            FROM heimdall.audit_events e
+                            LEFT JOIN heimdall_retention.event_identities i USING(product_id,environment,event_id)
+                            LEFT JOIN heimdall_capacity.event_charges c USING(product_id,environment,event_id)
+                            LEFT JOIN heimdall.audit_deliveries d USING(product_id,environment,event_id)
+                            WHERE e.environment IN ('verification-ts', 'verification-go')
+                            GROUP BY e.product_id,e.environment
+                        ) s
+                    ), '{}'::jsonb)
+                )
+                """, capture_output=True, text=True)
+            return json.loads(result.stdout)
+
+        before = audit_snapshot()
         live_env = dict(env, HEIMDALL_PROBE_SDK_RUNTIME="1", HEIMDALL_TEST_RUNTIME_DATABASE_URL=runtime_dsn)
         live = subprocess.run(["node", "tests/integration/oidc.mjs"], cwd=ROOT, env=live_env, capture_output=True, text=True, timeout=240)
         if live.returncode != 0:
             # Never emit child assertions or environment containing tokens/credentials.
             raise RuntimeError("combined live runtime verification failed")
-        print(json.dumps({"liveRuntime": json.loads(live.stdout)}), flush=True)
+        after = audit_snapshot()
+        scopes = {f"{product}/verification-{language}" for product in ("ledger", "support") for language in ("ts", "go")}
+        if (before["version"] != 5 or after["version"] != 5 or before["scopes"]
+                or set(after["scopes"]) != scopes
+                or any(scope["events"] != 3 or scope["matched"] != 3 for scope in after["scopes"].values())):
+            raise RuntimeError("unexpected v5 audit history")
+        deltas = {key: after[key] - before[key] for key in ("events", "bytes", "deliveries", "retainedRows")}
+        if deltas != {"events": 12, "bytes": sum(s["bytes"] for s in after["scopes"].values()),
+                      "deliveries": 12, "retainedRows": 12}:
+            raise RuntimeError("v5 accounting differs from committed events")
+        print(json.dumps({"liveRuntime": json.loads(live.stdout), "auditV5": {"scopes": sorted(scopes), **deltas}}), flush=True)
     env["HEIMDALL_TEST_AUDIT_ROLE"] = "heimdall_audit_runtime"
     for peer in (False, True):
         if peer:

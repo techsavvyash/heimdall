@@ -181,3 +181,37 @@ This closes the combined provider/storage evidence gap described above. It does
 not deploy a product backend, exercise browser session routes, establish SIEM
 transport compatibility, or complete Phase 3. See [[phase-3-readiness-audit]] for
 remaining requirements.
+
+## Audit v5 accounting with live providers
+
+The combined probe now explicitly migrates its application database to audit v5
+before running the live bearer tests. Both SDKs still use the restricted runtime
+role. The harness independently joins each committed event to its compact
+identity, charged bytes and pending SIEM delivery, then compares database-wide
+counter deltas with the committed rows for all four product and SDK scopes.
+
+```mermaid
+flowchart LR
+  Token[Real ZITADEL token] --> Runtime[Ledger and Support in TS and Go]
+  Model[Pinned Railway OpenFGA models] --> Runtime
+  Runtime --> Commit[Commit the bearer outcome to audit v5]
+  Commit --> Event[Audit event and retained identity]
+  Commit --> Charge[Capacity charge]
+  Commit --> Delivery[Pending SIEM delivery]
+  Event --> Verify[Verify all four scope totals]
+  Charge --> Verify
+  Delivery --> Verify
+```
+
+The probe uses disposable local PostgreSQL and the existing Railway provider
+services. The local identity invalidation tests the SDK's warm-cache denial
+path. SCIM processing, SIEM transport and deployed product routes remain
+separate acceptance work.
+
+Run `73dbee26-1946-49e7-b5ee-53491f639bfb` verified 12 events, 12 compact
+identities, 12 pending deliveries and 10,793 charged envelope bytes. Each
+product and language pair contributed one success and two denials. ZITADEL
+deployment `7ef5c76d-4911-4326-97dc-50d5614f2a55` and OpenFGA deployment
+`cfd87a9f-da43-493c-b659-72ce4a5ba98e` served the verification run. The
+sanitized record is
+`tests/integration/evidence/durable-live-runtime-v5-2026-11-13.json`.
