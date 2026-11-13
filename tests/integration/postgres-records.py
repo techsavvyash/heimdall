@@ -118,6 +118,15 @@ try:
         "CREATE TRIGGER reject_directory_delete BEFORE DELETE ON heimdall.records FOR EACH ROW EXECUTE FUNCTION public.reject_directory_delete();",
         capture_output=True, text=True)
     run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/runtime.test.ts"], env=runtime_env)
+    run(["docker", "exec", name, "psql", "-U", "postgres", "-d", "public_runtime",
+         "-v", "ON_ERROR_STOP=1", "-c",
+         "GRANT UPDATE(state,attempts,next_attempt_at,delivered_at) ON heimdall.audit_deliveries TO heimdall_public_runtime;"],
+        capture_output=True, text=True)
+    delivery_env = dict(runtime_env, HEIMDALL_TEST_AUDIT_DELIVERY_DB=runtime_dsn + "&options=-c%20role%3Dheimdall_public_runtime")
+    run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-audit-delivery.test.ts"], env=delivery_env)
+    subprocess.run(["go", "test", "-race", "-count=1", "./postgres", "-run", "^TestAuditDeliveryPostgres$"],
+                   cwd=ROOT / "sdk/go", env=delivery_env, check=True)
+    print(json.dumps({"run": name, "auditDelivery": ["typescript", "go"], "result": "passed"}), flush=True)
     directory_env = dict(runtime_env, HEIMDALL_TEST_DIRECTORY_DB=runtime_dsn + "&options=-c%20role%3Dheimdall_public_runtime")
     run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-directory-deactivation.test.ts"], env=directory_env)
     subprocess.run(["go", "test", "-race", "-count=1", "./postgres", "-run", "^TestDirectoryDeactivationPostgres$"],

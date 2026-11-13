@@ -73,6 +73,8 @@ Reactivation does not resurrect all historical role tuples. Confirm cleanup and 
 
 [[audit-contract]] is mandatory for all decisions, role changes and transfers. Product/user-configured event types are supported extensions, not an exemption to this coverage. The product operates durable storage and a scheduled exporter; the SDK supplies adapters and bounded delivery/reconciliation APIs. Existing customer SIEM/collector infrastructure receives events. No companion Heimdall service is introduced.
 
+[[evidence/phase-6-audit-delivery]] describes the PostgreSQL exporter and the authenticated HTTP receipt protocol.
+
 Correlate ZITADEL identity/configuration events with product audit using verified organization mappings, issuer/subject and trace identifiers where available. Do not invent a common request ID for unrelated upstream events. Identity collector and product exporter have separate checkpoints. Shared organizations may require authorized fan-out to several products, with explicit filtering of unrelated tenant data.
 
 ## Required dry runs

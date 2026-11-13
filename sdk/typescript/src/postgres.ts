@@ -26,6 +26,7 @@ export { createDirectoryDeactivation } from "./internal/postgres/directory-deact
 export { createDirectoryCleanup } from "./internal/postgres/directory-cleanup.js";
 export { createDirectoryPolling } from "./internal/postgres/directory-polling.js";
 export { createDirectoryEnrollment } from "./internal/postgres/directory-enrollment.js";
+export { createAuditDelivery } from "./internal/postgres/audit-delivery.js";
 export {
   createDirectoryReactivation,
   createDirectoryReactivationRelease,
