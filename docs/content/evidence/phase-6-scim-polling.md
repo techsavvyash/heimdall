@@ -51,6 +51,10 @@ sequenceDiagram
 
 The adapter checks the exact active user and provisioning-domain external ID. The product stores the enrollment policy and determines when to call the adapter. A local identity denial blocks a new enrollment attempt. The audited managed add operation checks administrator delegation and rejects the owner role. A second rule cannot claim an existing membership. Retrying the same plan uses the original operation and records its ID after confirmation.
 
-This implements initial enrollment for a new membership. Applying directory roles to existing members, reconciling overlapping grant sources, selective revocation, reactivation and unattended scheduling remain Phase 6 work. A recorded rule identifies what the enrollment operation granted at the time. Later membership changes can alter the user's current roles.
+For an existing member, supply `expectedDirectRoles` in TypeScript or a non-nil `ExpectedDirectRoles` slice in Go. The SDK binds the supplied snapshot to the rule's enrollment intent and uses the managed membership path to add the rule's roles while preserving the current direct roles. A stale snapshot conflicts before dispatch. The enrollment record preserves the roles contributed by the rule separately from the direct role snapshot. Products serialize provenance changes and keep independent grants in their own source records.
+
+A recorded rule identifies what the enrollment operation contributed at the time. Later membership changes can alter the user's current roles. See [[phase-6-scim-deactivation]] for selective revocation. Reactivation and unattended scheduling remain Phase 6 work.
 
 PostgreSQL run `heimdall-records-b131c24daa464b13914279eaa4c9177b` exercised both public SDKs. The integration tests confirmed enrollment, checked the stored operation ID, retried the same request and rejected a changed role plan or an attempt by another rule to adopt the membership.
+
+PostgreSQL run `heimdall-records-55c7f432d717454d8f0d3661e7e6bcff` exercised the existing-member path. The second rule added an approver role alongside the existing viewer role. Both SDKs rejected a stale snapshot, replayed the enrollment, and preserved the shared viewer role when the first rule was revoked.

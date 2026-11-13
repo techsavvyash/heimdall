@@ -1080,6 +1080,28 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
           )
         ).rows,
       ).toEqual([{ operation_id: granted.operationId }]);
+      const overlapping = {
+        ...enrollment,
+        ruleId: "auditors-v1",
+        roles: ["approver", "viewer"],
+        expectedDirectRoles: ["viewer"],
+      };
+      await expect(
+        enroll(
+          runtime,
+          actor,
+          { ...overlapping, ruleId: "stale-rule", expectedDirectRoles: [] },
+          call.signal,
+        ),
+      ).rejects.toThrow("conflict");
+      const shared = await enroll(runtime, actor, overlapping, call.signal);
+      expect(shared.status).toBe("confirmed");
+      await expect(enroll(runtime, actor, overlapping, call.signal)).resolves.toEqual(shared);
+      const recorded = await admin.query(
+        "SELECT plan->1 AS roles,plan->2 AS baseline FROM heimdall_directory.enrollments WHERE environment=$1 AND operation_id=$2",
+        [s.config.environment, shared.operationId],
+      );
+      expect(recorded.rows).toEqual([{ roles: ["approver", "viewer"], baseline: ["viewer"] }]);
       await expect(directory.reconcile(runtime, actor, plan, call.signal)).rejects.toThrow(
         "conflict",
       );
@@ -1098,7 +1120,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         idempotencyKey: "revoke-directory-roles",
         ruleId: "employee-v1",
         ownerRole: base.manifest.ownerRole,
-        currentRoles: fixtureMembership.initialRoles,
+        currentRoles: ["approver", "viewer"],
         sources: [
           {
             kind: "directory" as const,
@@ -1106,6 +1128,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
             roles: fixtureMembership.initialRoles,
           },
           { kind: "independent" as const, roles: [] },
+          { kind: "directory" as const, ruleId: "auditors-v1", roles: overlapping.roles },
         ],
       };
       await expect(

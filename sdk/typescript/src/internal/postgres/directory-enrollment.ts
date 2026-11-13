@@ -28,19 +28,28 @@ export function createDirectoryEnrollment(
   return async function enroll(
     runtime: Pick<Heimdall, "tenant">,
     actor: Principal,
-    input: { subject: string; workspaceId: string; ruleId: string; roles: readonly string[] },
+    input: {
+      subject: string;
+      workspaceId: string;
+      ruleId: string;
+      roles: readonly string[];
+      expectedDirectRoles?: readonly string[];
+    },
     signal: AbortSignal,
   ) {
     const { subject, workspaceId, ruleId } = input;
+    const validRoles = (values: readonly string[]) =>
+      Array.isArray(values) &&
+      values.length <= 128 &&
+      values.every(
+        (role) => typeof role === "string" && /^[a-z][a-z0-9_]{0,63}(?![\s\S])/.test(role),
+      ) &&
+      new Set(values).size === values.length;
     if (
       !(signal instanceof AbortSignal) ||
       ![subject, workspaceId, ruleId].every(providerId) ||
-      !Array.isArray(input.roles) ||
-      input.roles.length > 128 ||
-      !input.roles.every(
-        (role) => typeof role === "string" && /^[a-z][a-z0-9_]{0,63}(?![\s\S])/.test(role),
-      ) ||
-      new Set(input.roles).size !== input.roles.length
+      !validRoles(input.roles) ||
+      (input.expectedDirectRoles !== undefined && !validRoles(input.expectedDirectRoles))
     )
       throw new HeimdallError("invalid_argument");
     if (
@@ -53,10 +62,17 @@ export function createDirectoryEnrollment(
     const memberships = runtime.tenant(workspaceId).memberships;
     if (!memberships) throw new HeimdallError("unavailable");
     const roles = [...input.roles].sort();
+    const expected =
+      input.expectedDirectRoles === undefined ? undefined : [...input.expectedDirectRoles].sort();
+    const desired = [...new Set([...(expected ?? []), ...roles])].sort();
+    if (desired.length > 128) throw new HeimdallError("invalid_argument");
     const identity = encodeIdentity(issuer, subject);
     const hash = createHash("sha256").update(identity).digest();
     const key = [productId, environment, issuer, organizationId, subject, workspaceId, ruleId];
-    const plan = JSON.stringify([encodeIdentity(issuer, actor.subject), ...roles]);
+    const actorKey = encodeIdentity(issuer, actor.subject);
+    const plan = JSON.stringify(
+      expected === undefined ? [actorKey, ...roles] : [actorKey, roles, expected],
+    );
     const idempotencyKey =
       "directory-enroll:" + createHash("sha256").update(JSON.stringify(key)).digest("hex");
     const observed = await reader.read(subject, signal);
@@ -81,11 +97,15 @@ export function createDirectoryEnrollment(
       signal,
     );
 
-    const result = await memberships.add(
-      actor,
-      { target: { issuer, subject }, roles, idempotencyKey },
-      { signal },
-    );
+    const mutation = { target: { issuer, subject }, roles: desired, idempotencyKey };
+    const result =
+      expected === undefined
+        ? await memberships.add(actor, mutation, { signal })
+        : await memberships.assignRoles(
+            actor,
+            { ...mutation, expectedDirectRoles: expected },
+            { signal },
+          );
     if (result.status === "confirmed") {
       await transaction(
         pool,

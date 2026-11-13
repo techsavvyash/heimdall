@@ -19,9 +19,25 @@ import (
 type DirectoryEnrollmentInput struct {
 	Subject, WorkspaceID, RuleID string
 	Roles                        []string
+	// ExpectedDirectRoles opts into enrollment of an existing member.
+	ExpectedDirectRoles []string
 }
 
 var directoryRole = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+
+func enrollmentRoles(roles []string) ([]string, error) {
+	if len(roles) > 128 {
+		return nil, contract.ErrInvalidArgument
+	}
+	sorted := append([]string{}, roles...)
+	slices.Sort(sorted)
+	for i, role := range sorted {
+		if !directoryRole.MatchString(role) || (i > 0 && sorted[i-1] == role) {
+			return nil, contract.ErrInvalidArgument
+		}
+	}
+	return sorted, nil
+}
 
 func NewDirectoryEnrollment(db *sql.DB, product, environment string, options provisioning.DirectoryReaderOptions) (func(context.Context, *heimdall.Client, *heimdall.Principal, DirectoryEnrollmentInput) (heimdall.MembershipStatus, error), error) {
 	reader, err := provisioning.NewDirectoryReader(options)
@@ -40,10 +56,21 @@ func NewDirectoryEnrollment(db *sql.DB, product, environment string, options pro
 			len(input.Roles) > 128 {
 			return empty, contract.ErrInvalidArgument
 		}
-		roles := append([]string{}, input.Roles...)
-		slices.Sort(roles)
-		for i, role := range roles {
-			if !directoryRole.MatchString(role) || (i > 0 && roles[i-1] == role) {
+		roles, err := enrollmentRoles(input.Roles)
+		if err != nil {
+			return empty, err
+		}
+		var expected []string
+		desired := roles
+		if input.ExpectedDirectRoles != nil {
+			expected, err = enrollmentRoles(input.ExpectedDirectRoles)
+			if err != nil {
+				return empty, err
+			}
+			desired = append(slices.Clone(roles), expected...)
+			slices.Sort(desired)
+			desired = slices.Compact(desired)
+			if len(desired) > 128 {
 				return empty, contract.ErrInvalidArgument
 			}
 		}
@@ -76,15 +103,30 @@ func NewDirectoryEnrollment(db *sql.DB, product, environment string, options pro
 		if observed.State != "active" || observed.ExternalID == "" {
 			return empty, contract.ErrForbidden
 		}
-		if err := records.RecordDirectoryEnrollment(ctx, issuer, org, input.Subject, input.WorkspaceID, input.RuleID, append([]string{actorKey}, roles...)); err != nil {
+		plan := []any{actorKey}
+		if expected == nil {
+			for _, role := range roles {
+				plan = append(plan, role)
+			}
+		} else {
+			plan = append(plan, roles, expected)
+		}
+		if err := records.RecordDirectoryEnrollment(ctx, issuer, org, input.Subject, input.WorkspaceID, input.RuleID, plan); err != nil {
 			return empty, err
 		}
-		result, err := memberships.Add(ctx, actor, heimdall.MembershipRolesInput{
+		mutation := heimdall.MembershipRolesInput{
 			MembershipInput: heimdall.MembershipInput{
-				Target:         heimdall.Identity{Issuer: issuer, Subject: input.Subject},
-				IdempotencyKey: "directory-enroll:" + hex.EncodeToString(digest[:]),
-			}, Roles: roles,
-		})
+				Target:              heimdall.Identity{Issuer: issuer, Subject: input.Subject},
+				IdempotencyKey:      "directory-enroll:" + hex.EncodeToString(digest[:]),
+				ExpectedDirectRoles: expected,
+			}, Roles: desired,
+		}
+		var result heimdall.MembershipStatus
+		if expected == nil {
+			result, err = memberships.Add(ctx, actor, mutation)
+		} else {
+			result, err = memberships.AssignRoles(ctx, actor, mutation)
+		}
 		if err != nil {
 			return empty, err
 		}

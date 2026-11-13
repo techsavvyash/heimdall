@@ -1268,6 +1268,23 @@ VALUES('ledger',$1,sha256(convert_to($2,'UTF8')),$3,$4,'org-a',1,'inactive') RET
 	if err := admin.QueryRow("SELECT operation_id FROM heimdall_directory.enrollments WHERE environment=$1 AND operation_id IS NOT NULL", environment).Scan(&operation); err != nil || operation != granted.OperationID {
 		t.Fatal("directory provenance missing", err)
 	}
+	overlapping := postgres.DirectoryEnrollmentInput{Subject: target.Subject, WorkspaceID: workspaceID, RuleID: "auditors-v1", Roles: []string{"approver", "viewer"}, ExpectedDirectRoles: []string{"viewer"}}
+	stale := overlapping
+	stale.RuleID, stale.ExpectedDirectRoles = "stale-rule", []string{}
+	if _, err := enroll(ctx, client, actor, stale); !errors.Is(err, heimdall.ErrConflict) {
+		t.Fatal("directory enrollment accepted stale direct roles", err)
+	}
+	shared, err := enroll(ctx, client, actor, overlapping)
+	if err != nil || shared.Status != "confirmed" {
+		t.Fatal("overlapping directory enrollment", shared, err)
+	}
+	if again, err := enroll(ctx, client, actor, overlapping); err != nil || again != shared {
+		t.Fatal("overlapping directory enrollment replay", again, err)
+	}
+	var contribution, baseline string
+	if err := admin.QueryRow("SELECT (plan->1)::text,(plan->2)::text FROM heimdall_directory.enrollments WHERE environment=$1 AND operation_id=$2", environment, shared.OperationID).Scan(&contribution, &baseline); err != nil || contribution != `["approver", "viewer"]` || baseline != `["viewer"]` {
+		t.Fatal("overlapping directory enrollment provenance", contribution, baseline, err)
+	}
 	if _, err := directory.Reconcile(ctx, client, actor, target.Subject, revision, []string{workspaceID}); !errors.Is(err, heimdall.ErrConflict) {
 		t.Fatal("directory removal without local denial", err)
 	}
@@ -1286,13 +1303,14 @@ VALUES('ledger',$1,sha256(convert_to($2,'UTF8')),$3,$4,'org-a',1,'inactive') RET
 			Sources: []provisioning.DirectoryGrantSource{
 				{Kind: "directory", RuleID: "employee-v1", Roles: mutation.InitialRoles},
 				{Kind: "independent", Roles: []string{}},
+				{Kind: "directory", RuleID: "auditors-v1", Roles: overlapping.Roles},
 			},
 		},
 	}
 	if _, err := members.RevokeDirectoryGrant(ctx, actor, revoke); !errors.Is(err, heimdall.ErrConflict) {
 		t.Fatal("stale directory roles", err)
 	}
-	revoke.CurrentRoles = mutation.InitialRoles
+	revoke.CurrentRoles = []string{"approver", "viewer"}
 	revoked, err := members.RevokeDirectoryGrant(ctx, actor, revoke)
 	if err != nil || revoked.Status != "confirmed" {
 		t.Fatal("directory role revocation", revoked, err)

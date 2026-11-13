@@ -8,7 +8,7 @@ import (
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 )
 
-func (s *IdentityRecords) RecordDirectoryEnrollment(ctx context.Context, issuer, org, subject, workspace, rule string, plan []string) error {
+func (s *IdentityRecords) RecordDirectoryEnrollment(ctx context.Context, issuer, org, subject, workspace, rule string, plan []any) error {
 	binding, err := identityBinding(issuer, subject)
 	if err != nil {
 		return err
