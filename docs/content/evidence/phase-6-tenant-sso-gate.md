@@ -123,3 +123,5 @@ sequenceDiagram
 ```
 
 Live SAML and OIDC session issuance runs used Railway ZITADEL and an encrypted custom store, then authenticated the issued cookie and checked the saved evidence in both languages. SAML run `aa588074-3847-4b65-9631-b7ed9df2eb73` and OIDC run `ebd5ddd5-671e-4840-8c08-5befbf147ea3` passed. The PostgreSQL replacement tests exercise concurrent candidates, a stale revision, a denied target identity and use of the previous key after replacement. A two-directory switch through deployed public SDK routes, including membership and cursor checks, remains a Phase 6 acceptance run.
+
+Both languages passed the prior-session binding and atomic replacement tests against the disposable Railway PostgreSQL database `heimdall_switch_1c33e8f4d2c1`. The Go test now pairs each concurrent result with its requested key. The first Railway run had assumed channel receive order matched launch order. The rerun verified that the winner alone left a record and removed the test database.

@@ -117,18 +117,22 @@ func TestSessionReplacement(t *testing.T) {
 	if result, err := s.ReplaceSession(ctx, "previous", old.Revision, "stale", newValue, f.ExpiresAt); err != nil || result != nil {
 		t.Fatal("stale switch applied", err)
 	}
-	results := make(chan *Record, 2)
+	type replacement struct {
+		key    string
+		record *Record
+	}
+	results := make(chan replacement, 2)
 	for _, key := range []string{"next-a", "next-b"} {
 		go func() {
 			result, err := s.ReplaceSession(ctx, "previous", refreshed.Revision, key, newValue, f.ExpiresAt)
 			if err != nil {
 				t.Error(err)
 			}
-			results <- result
+			results <- replacement{key, result}
 		}()
 	}
 	a, b := <-results, <-results
-	if (a == nil) == (b == nil) {
+	if (a.record == nil) == (b.record == nil) {
 		t.Fatal("expected one replacement")
 	}
 	if result, err := s.GetSession(ctx, "previous"); err != nil || result != nil {
@@ -137,11 +141,14 @@ func TestSessionReplacement(t *testing.T) {
 	if result, err := s.CompareAndSwapSession(ctx, "previous", refreshed.Revision, oldValue, f.ExpiresAt); err != nil || result != nil {
 		t.Fatal("old activity restored the replaced session", err)
 	}
-	winner := "next-a"
-	if a == nil {
-		winner = "next-b"
+	winner, loser := a, b
+	if winner.record == nil {
+		winner, loser = b, a
 	}
-	result, err := s.GetSession(ctx, winner)
+	if result, err := s.GetSession(ctx, loser.key); err != nil || result != nil {
+		t.Fatal("losing replacement left a session", err)
+	}
+	result, err := s.GetSession(ctx, winner.key)
 	if err != nil || result == nil || !bytes.Equal(result.Value, newValue) {
 		t.Fatal("replacement payload was lost", err)
 	}
