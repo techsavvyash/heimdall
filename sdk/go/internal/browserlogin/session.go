@@ -190,10 +190,45 @@ func (s *Sessions) Authenticate(r *http.Request) (*identity.Principal, error) {
 		return nil, err
 	}
 	switch status {
-	case "refreshing", "refresh_required":
+	case "refreshing":
 		return nil, contract.ErrUnavailable
 	case "reauth_required":
 		return nil, contract.ErrUnauthenticated
+	}
+	refreshDeadline := int64(9007199254740991)
+	if status == "refresh_required" {
+		refreshDeadline = min(record.IdleExpiresAt, s.now()+15000)
+		var id [16]byte
+		rand.Read(id[:])
+		payload["state"] = "refreshing"
+		payload["refreshAttempt"] = map[string]any{"id": base64.RawURLEncoding.EncodeToString(id[:]), "expiresAt": refreshDeadline}
+		pending, err := json.Marshal(payload)
+		if err != nil {
+			return nil, contract.ErrUnavailable
+		}
+		claimed, err := s.store.CompareAndSwapSession(ctx, key, stored.Revision, pending, record.IdleExpiresAt)
+		if err != nil {
+			return nil, err
+		}
+		if claimed == nil {
+			return nil, contract.ErrUnavailable
+		}
+		stored = claimed
+		remaining := refreshDeadline - s.now()
+		if remaining <= 0 {
+			return nil, contract.ErrUnauthenticated
+		}
+		refreshCtx, cancel := context.WithTimeout(ctx, time.Duration(remaining)*time.Millisecond)
+		defer cancel()
+		ctx = refreshCtx
+		newAccess, replacement, err := s.login.oidc.Refresh(ctx, record.RefreshToken)
+		if err != nil {
+			return nil, err
+		}
+		access = newAccess
+		record.AccessTokenExpiresAt = 9007199254740991
+		payload["accessToken"], payload["refreshToken"], payload["state"] = newAccess, replacement, "active"
+		delete(payload, "refreshAttempt")
 	}
 	authContext, err := identity.SessionIdentityContext(key, stored.Revision)
 	if err != nil {
@@ -212,7 +247,7 @@ func (s *Sessions) Authenticate(r *http.Request) (*identity.Principal, error) {
 	at := s.now()
 	expires := min(record.AbsoluteExpiresAt, at+s.idleMs)
 	accessExpires := min(record.AccessTokenExpiresAt, actor.ExpiresAt())
-	if at >= min(record.IdleExpiresAt, accessExpires) || at < max(record.LastActivityAt, actor.ValidatedAt()) {
+	if at >= min(record.IdleExpiresAt, accessExpires, refreshDeadline) || at < max(record.LastActivityAt, actor.ValidatedAt()) {
 		return nil, contract.ErrUnauthenticated
 	}
 	payload["lastActivityAt"], payload["idleExpiresAt"], payload["accessTokenExpiresAt"], payload["identityValidatedAt"] = at, expires, accessExpires, actor.ValidatedAt()
@@ -237,7 +272,7 @@ func (s *Sessions) Authenticate(r *http.Request) (*identity.Principal, error) {
 		}
 		return nil, contract.ErrUnauthenticated
 	}
-	if s.now() >= min(expires, accessExpires) {
+	if s.now() >= min(expires, accessExpires, refreshDeadline) {
 		return nil, contract.ErrUnauthenticated
 	}
 	return actor, nil

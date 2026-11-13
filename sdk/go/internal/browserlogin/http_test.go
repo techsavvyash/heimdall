@@ -79,7 +79,9 @@ func TestBrowserLoginHTTP(t *testing.T) {
 	encode := base64.RawURLEncoding.EncodeToString
 	jwks := map[string]any{"keys": []map[string]string{{"kty": "RSA", "kid": "login-http", "n": encode(key.N.Bytes()), "e": "AQAB"}}}
 	var pending sync.Map
-	var exchanges atomic.Int64
+	var exchanges, refreshes atomic.Int64
+	var duringRefresh atomic.Value
+	duringRefresh.Store(func() bool { return true })
 	exp := time.Now().Unix() + 300
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		issuer := "http://" + r.Host
@@ -100,14 +102,24 @@ func TestBrowserLoginHTTP(t *testing.T) {
 		case "/v2/users/alice":
 			_, _ = w.Write([]byte(`{"user":{"userId":"alice","state":"USER_STATE_ACTIVE","human":{}}}`))
 		case "/oauth/v2/token":
-			exchanges.Add(1)
-			if r.ParseForm() != nil || r.Form.Get("redirect_uri") != f.RedirectURI {
-				t.Error("incorrect exchange request")
+			if r.ParseForm() != nil {
+				t.Error("invalid form")
 			}
-			challenge := sha256.Sum256([]byte(r.Form.Get("code_verifier")))
-			nonce, ok := pending.Load(encode(challenge[:]))
-			if !ok {
-				t.Error("missing PKCE challenge")
+			refreshing := r.Form.Get("grant_type") == "refresh_token"
+			if refreshing {
+				refreshes.Add(1)
+				if r.Form.Get("refresh_token") != "original-refresh" {
+					t.Error("wrong refresh token")
+				}
+				if !duringRefresh.Load().(func() bool)() {
+					w.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
+			} else {
+				exchanges.Add(1)
+				if r.Form.Get("redirect_uri") != f.RedirectURI {
+					t.Error("incorrect exchange request")
+				}
 			}
 			sign := func(audience string, claims jwt.MapClaims) string {
 				claims["iss"], claims["sub"], claims["aud"] = issuer, "alice", audience
@@ -120,10 +132,19 @@ func TestBrowserLoginHTTP(t *testing.T) {
 				}
 				return raw
 			}
-			_ = json.NewEncoder(w).Encode(map[string]string{
-				"token_type": "Bearer", "access_token": sign(f.Audience, jwt.MapClaims{}),
-				"id_token": sign(f.ClientID, jwt.MapClaims{"nonce": nonce}),
-			})
+			response := map[string]string{"token_type": "Bearer", "access_token": sign(f.Audience, jwt.MapClaims{})}
+			if refreshing {
+				response["refresh_token"] = "replacement-refresh"
+			} else {
+				challenge := sha256.Sum256([]byte(r.Form.Get("code_verifier")))
+				nonce, ok := pending.Load(encode(challenge[:]))
+				if !ok {
+					t.Error("missing PKCE challenge")
+				}
+				response["id_token"] = sign(f.ClientID, jwt.MapClaims{"nonce": nonce})
+				response["refresh_token"] = "original-refresh"
+			}
+			_ = json.NewEncoder(w).Encode(response)
 		default:
 			t.Error("unexpected OIDC request")
 			w.WriteHeader(http.StatusNotFound)
@@ -372,6 +393,83 @@ func TestBrowserLoginHTTP(t *testing.T) {
 	res.Body.Close()
 	if err != nil || res.StatusCode != 204 {
 		t.Fatal("logout was not idempotent", err)
+	}
+
+	expiredSession := func() (string, *http.Request, *http.Request) {
+		t.Helper()
+		res, err := finish(sessions, start())
+		res.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		cookie := res.Cookies()[1]
+		key := sessionKey(cookie.Value)
+		ctx := context.Background()
+		stored, err := sessionsStore.GetSession(ctx, key)
+		if err != nil || stored == nil {
+			t.Fatal("missing session", err)
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(stored.Value, &payload); err != nil {
+			t.Fatal(err)
+		}
+		payload["accessTokenExpiresAt"] = time.Now().UnixMilli() - 1
+		value, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := sessionsStore.CompareAndSwapSession(ctx, key, stored.Revision, value, stored.ExpiresAt); err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodGet, "https://ledger.example.test/workspaces", nil)
+		req.AddCookie(cookie)
+		logout := httptest.NewRequest(http.MethodPost, "https://ledger.example.test/auth/logout", nil)
+		logout.AddCookie(cookie)
+		logout.Header.Set("Origin", "https://ledger.example.test")
+		return key, req, logout
+	}
+	rotated, request, _ := expiredSession()
+	duringRefresh.Store(func() bool {
+		if actor, err := sessions.Authenticate(request); actor != nil || !errors.Is(err, contract.ErrUnavailable) {
+			t.Error("concurrent refresh did not wait", err)
+		}
+		return true
+	})
+	if actor, err := sessions.Authenticate(request); err != nil || actor.Identity().Subject != "alice" {
+		t.Fatal("refresh failed", err)
+	}
+	current, err := sessionsStore.GetSession(context.Background(), rotated)
+	if err != nil || current == nil {
+		t.Fatal("missing rotated record", err)
+	}
+	_, record, _, err := readSession(current)
+	if err != nil || record.State != "active" || record.RefreshToken != "replacement-refresh" || refreshes.Load() != 1 {
+		t.Fatal("unexpected rotation", err)
+	}
+	removed, request, logoutRequest := expiredSession()
+	duringRefresh.Store(func() bool {
+		if err := sessions.Logout(httptest.NewRecorder(), logoutRequest); err != nil {
+			t.Error(err)
+		}
+		return true
+	})
+	if actor, err := sessions.Authenticate(request); actor != nil || !errors.Is(err, contract.ErrUnauthenticated) {
+		t.Fatal("refresh survived logout", err)
+	}
+	if record, err := sessionsStore.GetSession(context.Background(), removed); record != nil || err != nil {
+		t.Fatal("session resurrected", err)
+	}
+	_, request, _ = expiredSession()
+	duringRefresh.Store(func() bool { return false })
+	if _, err := sessions.Authenticate(request); !errors.Is(err, contract.ErrUnavailable) {
+		t.Fatal(err)
+	}
+	later, err := NewSessions(h, auth, sessionsStore, "/workspaces", 0, 0, func() int64 { return time.Now().UnixMilli() + 16000 })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := later.Authenticate(request); !errors.Is(err, contract.ErrUnauthenticated) || refreshes.Load() != 3 {
+		t.Fatal("uncertain refresh did not require reauthentication", err)
 	}
 
 }

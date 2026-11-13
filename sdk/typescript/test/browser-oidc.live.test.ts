@@ -27,6 +27,9 @@ test.skipIf(!process.env.HEIMDALL_TEST_BROWSER_EXCHANGE)(
       { check: async () => false, invalidate: async () => {} },
     );
     expect((await status.verify(result.accessToken)).subject === subject).toBe(true);
+    const refreshed = await browser.refresh(result.refreshToken!);
+    expect((await status.verify(refreshed.accessToken)).subject === subject).toBe(true);
+    expect(refreshed.refreshToken !== result.refreshToken).toBe(true);
   },
   30000,
 );

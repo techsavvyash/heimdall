@@ -121,22 +121,47 @@ export function browserSession(
         throw new HeimdallError("unauthenticated");
       const key = sessionKey(request);
       if (!key) throw new HeimdallError("unauthenticated");
-      const stored = await store.getSession(key, request.signal);
+      let stored = await store.getSession(key, request.signal);
       if (!stored) throw new HeimdallError("unauthenticated");
-      const payload = readSession(stored.value, stored.expiresAt);
+      let payload = readSession(stored.value, stored.expiresAt);
       const status = sessionStatus(
         payload,
         { ...payload, productId, environment, issuer: login.scope.issuer },
         now(),
         0,
       );
-      if (status === "refreshing" || status === "refresh_required")
-        throw new HeimdallError("unavailable");
+      if (status === "refreshing") throw new HeimdallError("unavailable");
       if (status === "reauth_required") throw new HeimdallError("unauthenticated");
+      let refreshDeadline = Infinity;
+      let operation = request.signal;
+      if (status === "refresh_required") {
+        refreshDeadline = Math.min(payload.idleExpiresAt, now() + 15_000);
+        const pending = {
+          ...payload,
+          state: "refreshing",
+          refreshAttempt: { id: randomBytes(16).toString("hex"), expiresAt: refreshDeadline },
+        } as const;
+        const claimed = await store.compareAndSwapSession(
+          key,
+          stored.revision,
+          Buffer.from(JSON.stringify(pending)),
+          payload.idleExpiresAt,
+          request.signal,
+        );
+        if (!claimed) throw new HeimdallError("unavailable");
+        stored = claimed;
+        operation = AbortSignal.any([
+          request.signal,
+          AbortSignal.timeout(Math.max(0, refreshDeadline - now())),
+        ]);
+        if (now() >= refreshDeadline) throw new HeimdallError("unauthenticated");
+        const tokens = await login.refresh(payload.refreshToken!, operation);
+        payload = { ...payload, ...tokens, accessTokenExpiresAt: Number.MAX_SAFE_INTEGER };
+      }
       const actor = await auth.verify(
         payload.accessToken,
         sessionIdentityContext(key, stored.revision),
-        request.signal,
+        operation,
       );
       if (
         actor.productId !== productId ||
@@ -150,7 +175,7 @@ export function browserSession(
       const expires = Math.min(payload.absoluteExpiresAt, at + idleLifetimeMs);
       const accessExpires = Math.min(payload.accessTokenExpiresAt, actor.expiresAt);
       if (
-        at >= Math.min(payload.idleExpiresAt, accessExpires) ||
+        at >= Math.min(payload.idleExpiresAt, accessExpires, refreshDeadline) ||
         at < Math.max(payload.lastActivityAt, actor.identityValidatedAt)
       )
         throw new HeimdallError("unauthenticated");
@@ -167,14 +192,15 @@ export function browserSession(
           }),
         ),
         expires,
-        request.signal,
+        operation,
       );
       checkCancellation(request.signal);
       if (!updated) {
         if (await store.getSession(key, request.signal)) throw new HeimdallError("unavailable");
         throw new HeimdallError("unauthenticated");
       }
-      if (now() >= Math.min(expires, accessExpires)) throw new HeimdallError("unauthenticated");
+      if (now() >= Math.min(expires, accessExpires, refreshDeadline))
+        throw new HeimdallError("unauthenticated");
       return actor;
     },
 

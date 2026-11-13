@@ -83,9 +83,15 @@ func (b *BrowserOIDC) Exchange(ctx context.Context, code string, claim func() (n
 	if err != nil {
 		return nil, err
 	}
-	tokens, err := b.requestTokens(ctx, code, verifier)
+	tokens, err := b.requestTokens(ctx, url.Values{
+		"grant_type": {"authorization_code"}, "code": {code},
+		"redirect_uri": {b.config.RedirectURI}, "code_verifier": {verifier},
+	})
 	if err != nil {
 		return nil, err
+	}
+	if !visibleToken(tokens.IDToken, 16384) {
+		return nil, contract.ErrUnavailable
 	}
 	identity, err := b.verifier.verifyIDToken(ctx, tokens.IDToken, b.config.ClientID, nonce, tokens.AccessToken, b.config.ZitadelAPIAudience)
 	if err != nil {
@@ -108,17 +114,29 @@ type tokenResponse struct {
 	TokenType    string `json:"token_type"`
 }
 
-func (b *BrowserOIDC) requestTokens(ctx context.Context, code, verifier string) (tokenResponse, error) {
+// Refresh returns rotating token material. The session layer verifies and audits
+// the new access token against the original session identity before persisting it.
+func (b *BrowserOIDC) Refresh(ctx context.Context, refreshToken string) (access, replacement string, err error) {
+	if !visibleToken(refreshToken, 16384) {
+		return "", "", contract.ErrUnauthenticated
+	}
+	tokens, err := b.requestTokens(ctx, url.Values{"grant_type": {"refresh_token"}, "refresh_token": {refreshToken}})
+	if err != nil {
+		return "", "", err
+	}
+	if tokens.RefreshToken == "" || tokens.RefreshToken == refreshToken {
+		return "", "", contract.ErrUnauthenticated
+	}
+	return tokens.AccessToken, tokens.RefreshToken, nil
+}
+
+func (b *BrowserOIDC) requestTokens(ctx context.Context, form url.Values) (tokenResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := contract.CheckCancellation(ctx); err != nil {
 		return tokenResponse{}, err
 	}
-	body := url.Values{
-		"grant_type": {"authorization_code"}, "code": {code},
-		"redirect_uri": {b.config.RedirectURI}, "code_verifier": {verifier},
-	}.Encode()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.tokenEndpoint, strings.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.tokenEndpoint, strings.NewReader(form.Encode()))
 	if err != nil {
 		return tokenResponse{}, contract.ErrUnavailable
 	}
@@ -158,7 +176,7 @@ func (b *BrowserOIDC) requestTokens(ctx context.Context, code, verifier string) 
 	if response.StatusCode != http.StatusOK || fields["error"] != nil ||
 		json.Unmarshal(fields["token_type"], &tokens.TokenType) != nil || !strings.EqualFold(tokens.TokenType, "bearer") ||
 		json.Unmarshal(fields["access_token"], &tokens.AccessToken) != nil || !visibleToken(tokens.AccessToken, 16384) ||
-		json.Unmarshal(fields["id_token"], &tokens.IDToken) != nil || !visibleToken(tokens.IDToken, 16384) ||
+		(form.Get("grant_type") == "authorization_code" && json.Unmarshal(fields["id_token"], &tokens.IDToken) != nil) ||
 		(fields["refresh_token"] != nil &&
 			(json.Unmarshal(fields["refresh_token"], &tokens.RefreshToken) != nil || !visibleToken(tokens.RefreshToken, 16384))) {
 		return tokenResponse{}, contract.ErrUnavailable

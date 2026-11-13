@@ -206,4 +206,13 @@ func TestLiveBrowserExchange(t *testing.T) {
 	if err != nil || principal.Identity().Subject != f.Subject {
 		t.Fatal("live identity status failed", err)
 	}
+	access, replacement, err := browser.Refresh(ctx, result.RefreshToken)
+	if err != nil || replacement == result.RefreshToken {
+		t.Fatal("live refresh failed", err)
+	}
+	refreshed, err := status.Verify(ctx, access, "bearer")
+	if err != nil || refreshed.Identity().Subject != f.Subject {
+		t.Fatal("refreshed identity status failed", err)
+	}
+
 }

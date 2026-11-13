@@ -33,6 +33,8 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
     );
     const pending = new Map<string, string>();
     let exchanges = 0;
+    let refreshes = 0;
+    let duringRefresh = async () => {};
     const exp = Math.floor(Date.now() / 1000) + 300;
     vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
       if (url.endsWith("/.well-known/openid-configuration")) return Response.json(metadata);
@@ -42,12 +44,23 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       if (url === issuer + "/v2/users/alice")
         return Response.json({ user: { userId: "alice", state: "USER_STATE_ACTIVE", human: {} } });
       expect(url).toBe(metadata.token_endpoint);
-      exchanges++;
       const body = init!.body as URLSearchParams;
-      expect(body.get("redirect_uri")).toBe(f.redirectUri);
-      const challenge = createHash("sha256").update(body.get("code_verifier")!).digest("base64url");
-      const nonce = pending.get(challenge);
-      expect(Boolean(nonce)).toBe(true);
+      const refreshing = body.get("grant_type") === "refresh_token";
+      expect(refreshing ? body.get("refresh_token") : body.get("redirect_uri")).toBe(
+        refreshing ? "original-refresh" : f.redirectUri,
+      );
+      if (refreshing) {
+        refreshes++;
+        await duringRefresh();
+      } else exchanges++;
+      let nonce;
+      if (!refreshing) {
+        const challenge = createHash("sha256")
+          .update(body.get("code_verifier")!)
+          .digest("base64url");
+        nonce = pending.get(challenge);
+      }
+      expect(refreshing || Boolean(nonce)).toBe(true);
       const sign = (aud: string, claims: Record<string, unknown>) =>
         new SignJWT(claims)
           .setProtectedHeader({ alg: "RS256", kid: "login-http" })
@@ -60,7 +73,8 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       return Response.json({
         token_type: "Bearer",
         access_token: await sign(f.audience, {}),
-        id_token: await sign(f.clientId, { nonce }),
+        ...(refreshing ? {} : { id_token: await sign(f.clientId, { nonce }) }),
+        refresh_token: refreshing ? "replacement-refresh" : "original-refresh",
       });
     });
     try {
@@ -248,6 +262,61 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       expect(await store.getSession(key)).toBeNull();
       await expect(sessions.authenticate(authenticated)).rejects.toThrow("unauthenticated");
       expect((await sessions.logout(logout(protectedUrl.origin))).status).toBe(204);
+      const expiredSession = async () => {
+        const response = await sessions.callback(requestFor(await start()));
+        const cookie = response.headers.getSetCookie()[1]!.split(";")[0]!;
+        const key = createHash("sha256").update(cookie.split("=")[1]!).digest("base64url");
+        const stored = (await store.getSession(key))!;
+        const payload = JSON.parse(stored.value.toString());
+        payload.accessTokenExpiresAt = Date.now() - 1;
+        await store.compareAndSwapSession(
+          key,
+          stored.revision,
+          Buffer.from(JSON.stringify(payload)),
+          stored.expiresAt,
+        );
+        return {
+          key,
+          request: new Request(protectedUrl, { headers: { cookie } }),
+          logout: new Request(new URL("/auth/logout", protectedUrl), {
+            method: "POST",
+            headers: { cookie, origin: protectedUrl.origin },
+          }),
+        };
+      };
+      const rotated = await expiredSession();
+      duringRefresh = async () => {
+        await expect(sessions.authenticate(rotated.request)).rejects.toThrow("unavailable");
+      };
+      expect((await sessions.authenticate(rotated.request)).subject).toBe("alice");
+      expect(JSON.parse((await store.getSession(rotated.key))!.value.toString())).toMatchObject({
+        state: "active",
+        refreshToken: "replacement-refresh",
+      });
+      expect(refreshes).toBe(1);
+
+      const removed = await expiredSession();
+      duringRefresh = async () => {
+        await sessions.logout(removed.logout);
+      };
+      await expect(sessions.authenticate(removed.request)).rejects.toThrow("unauthenticated");
+      expect(await store.getSession(removed.key)).toBeNull();
+      expect(refreshes).toBe(2);
+
+      const lost = await expiredSession();
+      duringRefresh = async () => {
+        throw new Error("lost");
+      };
+      await expect(sessions.authenticate(lost.request)).rejects.toThrow("unavailable");
+      const later = browserSession(
+        http,
+        auth,
+        store,
+        { returnTo: "/workspaces" },
+        () => Date.now() + 16_000,
+      );
+      await expect(later.authenticate(lost.request)).rejects.toThrow("unauthenticated");
+      expect(refreshes).toBe(3);
     } finally {
       vi.unstubAllGlobals();
       await pool.end();

@@ -46,6 +46,7 @@ export async function createBrowserLoginHTTP(
       origin: callback.origin,
       issuer,
     }),
+    refresh: oidc.refresh,
     async start(request: Request) {
       if (request.method !== "GET" || new URL(request.url).origin !== callback.origin)
         throw new HeimdallError("invalid_argument");
