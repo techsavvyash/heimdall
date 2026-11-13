@@ -61,6 +61,7 @@ type Options struct {
 type ManagedStorage struct {
 	Allows     func(context.Context, string) (bool, error)
 	Source     func(Identity) WorkspaceSource
+	Workspace  func(context.Context, string) (*postgres.ManagedWorkspace, error)
 	Operations func(postgres.OperationBinding) (*postgres.OperationRecords, error)
 }
 
@@ -83,6 +84,7 @@ type Sessions interface {
 
 type Client struct {
 	onboarding     *WorkspaceOnboarding
+	membership     *membershipRuntime
 	discovery      *discoveryRuntime
 	authentication *auditflow.Authentication
 	createSessions func(context.Context, SessionOptions) (Sessions, error)
@@ -241,6 +243,9 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 		}
 		if records == nil {
 			return nil, ErrInvalidArgument
+		}
+		if managed.Workspace != nil {
+			client.membership = &membershipRuntime{deployment.Manifest().OwnerRole, model, managed.Workspace}
 		}
 		client.onboarding = &WorkspaceOnboarding{
 			config: configJSON, manifest: manifestJSON,

@@ -95,7 +95,7 @@ try:
                     "--sql", str(ROOT / "contracts/persistence/managed/0001.sql")],
                    cwd=ROOT / "sdk/go", env=runtime_env, check=True)
     run(["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime", "-v", "ON_ERROR_STOP=1"],
-        input="GRANT USAGE ON SCHEMA heimdall_managed TO heimdall_public_runtime; GRANT SELECT ON ALL TABLES IN SCHEMA heimdall_managed TO heimdall_public_runtime; GRANT INSERT,UPDATE ON heimdall_managed.workspaces,heimdall_managed.operations,heimdall_managed.membership_candidates TO heimdall_public_runtime; GRANT USAGE ON ALL SEQUENCES IN SCHEMA heimdall_managed TO heimdall_public_runtime;",
+        input="GRANT USAGE ON SCHEMA heimdall_managed TO heimdall_public_runtime; GRANT SELECT ON ALL TABLES IN SCHEMA heimdall_managed TO heimdall_public_runtime; GRANT INSERT,UPDATE ON heimdall_managed.workspaces,heimdall_managed.operations,heimdall_managed.membership_candidates TO heimdall_public_runtime; GRANT DELETE ON heimdall_managed.membership_candidates TO heimdall_public_runtime; GRANT USAGE ON ALL SEQUENCES IN SCHEMA heimdall_managed TO heimdall_public_runtime;",
         capture_output=True, text=True)
     run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/runtime.test.ts"], env=runtime_env)
     subprocess.run(["go", "test", "-race", "-count=1", ".", "-run", "TestPublicPostgresRuntime|TestPublicManagedRuntime|TestPublicManagedOnboarding|TestPostgresFactory"], cwd=ROOT / "sdk/go", env=runtime_env, check=True)

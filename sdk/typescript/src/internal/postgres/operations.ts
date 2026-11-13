@@ -335,7 +335,7 @@ export class OperationRecords {
     if (!token(operationId, 128)) throw new HeimdallError("invalid_argument");
     return this.read(operationId, hash(actor), false, signal);
   }
-  async findCreate(intent: Intent, key: string, signal: AbortSignal) {
+  async findIntent(intent: Intent, key: string, signal: AbortSignal) {
     const { fingerprint, keyDigest } = intentDigests(intent, key);
     const record = await this.read(keyDigest, hash(intent.actor), true, signal);
     if (record && record.fingerprint !== fingerprint) throw new HeimdallError("conflict");

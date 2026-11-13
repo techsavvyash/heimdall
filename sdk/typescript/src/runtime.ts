@@ -1,3 +1,5 @@
+import { managedMemberships, type Memberships } from "./internal/managed-memberships.js";
+import type { WorkspaceRecords } from "./internal/postgres/workspaces.js";
 import { managedOnboarding } from "./internal/managed-onboarding.js";
 import type {
   WorkspaceCreationPolicy,
@@ -38,6 +40,7 @@ export type RuntimeStorage = {
   managed?: {
     allows(id: string, signal: AbortSignal): Promise<boolean>;
     source(actor: Principal): WorkspaceSource;
+    workspace?: WorkspaceRecords["get"];
     operations?: (binding: {
       productId: string;
       environment: string;
@@ -78,6 +81,7 @@ export type Sessions = Readonly<{
   logout(request: Request): Promise<Response>;
 }>;
 export type Tenant = Readonly<{
+  memberships?: Memberships;
   roles(actor: Principal, options: { signal: AbortSignal }): Promise<string[]>;
   can(actor: Principal, permission: string, options: { signal: AbortSignal }): Promise<boolean>;
   require(actor: Principal, permission: string, options: { signal: AbortSignal }): Promise<void>;
@@ -146,6 +150,7 @@ export async function createHeimdall(
     allows: storage.managed.allows.bind(storage.managed),
     source: storage.managed.source.bind(storage.managed),
   };
+  const workspace = storage.managed?.workspace?.bind(storage.managed);
   const browser = custom
     ? { login: new BrowserLoginRecords(custom), sessions: custom }
     : storage.browser && {
@@ -256,7 +261,21 @@ export async function createHeimdall(
             options.signal,
           );
         };
+        const memberships =
+          operations &&
+          workspace &&
+          managedMemberships(
+            id,
+            config,
+            manifest.ownerRole,
+            policyVersion,
+            operations,
+            { get: workspace },
+            authentication,
+            model,
+          );
         return Object.freeze({
+          ...(memberships ? { memberships } : {}),
           async roles(actor: Principal, options: { signal: AbortSignal }) {
             if (!(options?.signal instanceof AbortSignal))
               throw new HeimdallError("invalid_argument");

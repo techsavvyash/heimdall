@@ -95,7 +95,7 @@ func (w *WorkspaceOnboarding) Create(ctx context.Context, actor *Principal, inpu
 	allowed, err := w.auth.CheckPermission(ctx, actor, "", "workspace.create", w.cfg.OpenFGA.ModelID, w.cfg.ManifestVersion,
 		func(operation context.Context) (bool, error) {
 			var err error
-			existing, err = w.records.FindCreate(operation, intent, input.IdempotencyKey)
+			existing, err = w.records.FindIntent(operation, intent, input.IdempotencyKey)
 			if err != nil || existing != nil || w.policy == nil {
 				return existing != nil, err
 			}

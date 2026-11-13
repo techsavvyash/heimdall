@@ -190,7 +190,7 @@ func (o *OperationRecords) Get(ctx context.Context, id string, actor contract.Id
 	}
 	return o.read(ctx, o.db, id, hash, false)
 }
-func (o *OperationRecords) FindCreate(ctx context.Context, intent contract.Intent, key string) (*ManagedOperation, error) {
+func (o *OperationRecords) FindIntent(ctx context.Context, intent contract.Intent, key string) (*ManagedOperation, error) {
 	digests, err := contract.IntentDigests(intent, key)
 	if err != nil {
 		return nil, err

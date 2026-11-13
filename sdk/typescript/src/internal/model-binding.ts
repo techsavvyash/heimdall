@@ -149,6 +149,66 @@ export class PinnedModel {
     if (!Object.hasOwn(this.compiled.roles, role)) throw new HeimdallError("invalid_argument");
     return this.checkRelation(user, workspace, this.compiled.roles[role]!.effective, signal);
   }
+  checkDelegation(user: string, workspace: string, role: string, signal: AbortSignal) {
+    if (!Object.hasOwn(this.compiled.roles, role)) throw new HeimdallError("invalid_argument");
+    return this.checkRelation(user, workspace, this.compiled.roles[role]!.delegate, signal);
+  }
+  async directMembership(user: string, workspace: string, signal: AbortSignal) {
+    const object = "workspace:" + workspace;
+    const known = new Set([
+      "member",
+      ...Object.values(this.compiled.roles).map((role) => role.assignment),
+    ]);
+    const result = new Set<string>();
+    let cursor = "";
+    for (let index = 0; index < 2; index++) {
+      const page = await this.request("/read", signal, {
+        tuple_key: { object, user },
+        consistency: "HIGHER_CONSISTENCY",
+        page_size: 100,
+        ...(cursor ? { continuation_token: cursor } : {}),
+      });
+      if (
+        !Array.isArray(page.tuples) ||
+        page.tuples.length > 100 ||
+        (page.continuation_token !== undefined && typeof page.continuation_token !== "string")
+      )
+        throw new HeimdallError("unavailable");
+      for (const row of page.tuples) {
+        const key = row?.key;
+        if (
+          key?.object !== object ||
+          key.user !== user ||
+          !known.has(key.relation) ||
+          result.has(key.relation) ||
+          (key.condition !== undefined && key.condition !== null)
+        )
+          throw new HeimdallError("unavailable");
+        result.add(key.relation);
+      }
+      if (!page.continuation_token) return result;
+      if (page.tuples.length === 0 || page.continuation_token === cursor)
+        throw new HeimdallError("unavailable");
+      cursor = page.continuation_token;
+    }
+    throw new HeimdallError("unavailable");
+  }
+  async writeDirectMembership(
+    user: string,
+    workspace: string,
+    writes: string[],
+    deletes: string[],
+    signal: AbortSignal,
+  ) {
+    if (writes.length + deletes.length === 0) return;
+    const tupleKeys = (relations: string[]) =>
+      relations.map((relation) => ({ user, object: "workspace:" + workspace, relation }));
+    await this.request("/write", signal, {
+      authorization_model_id: this.config.modelId,
+      ...(writes.length ? { writes: { tuple_keys: tupleKeys(writes) } } : {}),
+      ...(deletes.length ? { deletes: { tuple_keys: tupleKeys(deletes) } } : {}),
+    });
+  }
   private async checkRelation(
     user: string,
     workspace: string,

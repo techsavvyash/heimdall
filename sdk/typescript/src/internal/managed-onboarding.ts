@@ -189,7 +189,7 @@ export function managedOnboarding(
         config.openfga.modelId,
         config.manifestVersion,
         async (operation) => {
-          existing = await records.findCreate(intent, key, operation);
+          existing = await records.findIntent(intent, key, operation);
           return (
             !!existing ||
             (policy !== undefined &&

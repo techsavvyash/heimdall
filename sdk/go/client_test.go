@@ -70,6 +70,7 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 	expiresAt := time.Now().Add(time.Hour).Unix()
 	var issuer string
 	var model map[string]any
+	var ownerRelation string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		var body any
@@ -97,7 +98,7 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 			matching := []map[string]any{}
 			tupleMu.Lock()
 			for _, tuple := range tuples {
-				if tuple["object"] == read.Key["object"] && tuple["relation"] == read.Key["relation"] &&
+				if tuple["object"] == read.Key["object"] && (read.Key["relation"] == "" || tuple["relation"] == read.Key["relation"]) &&
 					(read.Key["user"] == "" || tuple["user"] == read.Key["user"]) {
 					matching = append(matching, map[string]any{"key": tuple})
 				}
@@ -109,6 +110,9 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 				Writes struct {
 					Tuples []map[string]string `json:"tuple_keys"`
 				} `json:"writes"`
+				Deletes struct {
+					Tuples []map[string]string `json:"tuple_keys"`
+				} `json:"deletes"`
 			}
 			if json.NewDecoder(r.Body).Decode(&write) != nil {
 				w.WriteHeader(400)
@@ -119,6 +123,11 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 				panic(http.ErrAbortHandler)
 			}
 			tupleMu.Lock()
+			for _, target := range write.Deletes.Tuples {
+				tuples = slices.DeleteFunc(tuples, func(tuple map[string]string) bool {
+					return tuple["user"] == target["user"] && tuple["object"] == target["object"] && tuple["relation"] == target["relation"]
+				})
+			}
 			tuples = append(tuples, write.Writes.Tuples...)
 			tupleMu.Unlock()
 			if h.providerFault.Load() == "lost_response" {
@@ -134,7 +143,7 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 			}
 			user := "user:" + base64.RawURLEncoding.EncodeToString([]byte(`["`+issuer+`","runtime-user"]`))
 			if json.NewDecoder(r.Body).Decode(&check) != nil || check.Model != "model-1" ||
-				check.Consistency != "HIGHER_CONSISTENCY" || check.Tuple["user"] != user || !slices.Contains([]string{"member", "p_0", "e_0", "e_1", "e_2", "e_3"}, check.Tuple["relation"]) {
+				check.Consistency != "HIGHER_CONSISTENCY" || check.Tuple["user"] != user || !slices.Contains([]string{"member", "p_0", "e_0", "e_1", "e_2", "e_3", "d_0", "d_1", "d_2", "d_3"}, check.Tuple["relation"]) {
 				w.WriteHeader(400)
 				return
 			}
@@ -149,6 +158,18 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 					check.Tuple["relation"] == "member" && tuple["relation"] == "member"
 			}
 			tupleMu.Unlock()
+			if strings.HasPrefix(check.Tuple["relation"], "d_") {
+				tupleMu.Lock()
+				owner, member := false, false
+				for _, tuple := range tuples {
+					if tuple["object"] == check.Tuple["object"] && tuple["user"] == user {
+						owner = owner || tuple["relation"] == ownerRelation
+						member = member || tuple["relation"] == "member"
+					}
+				}
+				tupleMu.Unlock()
+				allowed = owner && member
+			}
 			body = map[string]any{"allowed": allowed}
 		case "/oauth/v2/keys":
 			body = map[string]any{"keys": []any{map[string]any{"kty": "RSA", "kid": "runtime", "alg": "RS256", "n": base64.RawURLEncoding.EncodeToString(key.N.Bytes()), "e": "AQAB"}}}
@@ -178,6 +199,7 @@ func setupRuntime(t *testing.T, failure string, environment ...string) *runtimeH
 		t.Fatal(e)
 	}
 	model = deployment.Artifact().Model
+	ownerRelation = deployment.Artifact().Roles[deployment.Manifest().OwnerRole].Assignment
 	model["id"] = "model-1"
 	if failure == "model" {
 		model["id"] = "wrong"
@@ -850,6 +872,48 @@ func TestPublicManagedOnboarding(t *testing.T) {
 		t.Fatal("concurrent dispatch", winner, err)
 	}
 	active = append(active, workspaceID)
+	var mutation struct {
+		Target                         string
+		InitialRoles, ReplacementRoles []string
+		ConfirmedWrites                int64
+	}
+	raw, err = os.ReadFile("../../contracts/fixtures/membership-administration.json")
+	if err != nil || json.Unmarshal(raw, &mutation) != nil {
+		t.Fatal("membership fixture")
+	}
+	members := client.Tenant(workspaceID).Memberships()
+	target := heimdall.Identity{Issuer: actor.Identity().Issuer, Subject: mutation.Target}
+	add := heimdall.MembershipRolesInput{MembershipInput: heimdall.MembershipInput{Target: target, IdempotencyKey: "add"}, Roles: mutation.InitialRoles}
+	beforeChanges := h.writes.Load()
+	added, err := members.Add(ctx, actor, add)
+	if err != nil || added.Status != "confirmed" {
+		t.Fatal("add", added, err)
+	}
+	if again, err := members.Add(ctx, actor, add); err != nil || again != added {
+		t.Fatal("replay", again, err)
+	}
+	replacement := add
+	replacement.Roles = mutation.ReplacementRoles
+	if _, err := members.Add(ctx, actor, replacement); !errors.Is(err, heimdall.ErrConflict) {
+		t.Fatal("different input", err)
+	}
+	replacement.IdempotencyKey = "assign"
+	if result, err := members.AssignRoles(ctx, actor, replacement); err != nil || result.Status != "confirmed" {
+		t.Fatal("assign", result, err)
+	}
+	if _, err := members.Remove(ctx, actor, heimdall.MembershipInput{Target: actor.Identity(), IdempotencyKey: "owner-remove"}); !errors.Is(err, heimdall.ErrForbidden) {
+		t.Fatal("owner removal", err)
+	}
+	if result, err := members.Remove(ctx, actor, heimdall.MembershipInput{Target: target, IdempotencyKey: "remove"}); err != nil || result.Status != "confirmed" {
+		t.Fatal("remove", result, err)
+	}
+	if h.writes.Load()-beforeChanges != mutation.ConfirmedWrites {
+		t.Fatal("unexpected write count")
+	}
+	var candidateCount int
+	if err := admin.QueryRow("SELECT count(*) FROM heimdall_managed.membership_candidates WHERE environment='onboarding-go' AND workspace_id=$1", workspaceID).Scan(&candidateCount); err != nil || candidateCount != 1 {
+		t.Fatal("candidate cleanup", candidateCount, err)
+	}
 	discovery, err := client.NewWorkspaceDiscovery(heimdall.DiscoveryOptions{ActiveKeyID: "cursor", Keys: map[string][]byte{"cursor": make([]byte, 32)}})
 	if err != nil {
 		t.Fatal(err)
@@ -864,6 +928,24 @@ func TestPublicManagedOnboarding(t *testing.T) {
 	}
 	if !slices.Equal(discovered, active) {
 		t.Fatal("candidate state", discovered, active)
+	}
+	h.providerFault.Store("lost_response")
+	add.IdempotencyKey = "lost"
+	pending, err := members.Add(ctx, actor, add)
+	if err != nil || pending.Status != "pending" || pending.Reason != "recovery_required" {
+		t.Fatal("lost response", pending, err)
+	}
+	if again, err := members.Add(ctx, actor, add); err != nil || again != pending {
+		t.Fatal("quarantine replay", again, err)
+	}
+	if _, err := members.Remove(ctx, actor, heimdall.MembershipInput{Target: target, IdempotencyKey: "blocked"}); !errors.Is(err, heimdall.ErrForbidden) {
+		t.Fatal("conflicting operation", err)
+	}
+	if allowed, err := h.options.Storage.Managed.Allows(ctx, workspaceID); err != nil || allowed {
+		t.Fatal("workspace gate", err)
+	}
+	if h.writes.Load()-beforeChanges != mutation.ConfirmedWrites+1 {
+		t.Fatal("unexpected write after quarantine")
 	}
 	var recoveryCount int
 	if err := admin.QueryRow(`SELECT count(*) FROM heimdall.audit_events WHERE environment='onboarding-go'

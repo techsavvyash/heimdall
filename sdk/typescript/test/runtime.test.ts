@@ -90,7 +90,7 @@ function setup(failure = "", environment = "production") {
             .filter(
               (tuple) =>
                 tuple.object === key.object &&
-                tuple.relation === key.relation &&
+                (!key.relation || tuple.relation === key.relation) &&
                 (!key.user || tuple.user === key.user),
             )
             .map((key) => ({ key })),
@@ -99,7 +99,18 @@ function setup(failure = "", environment = "production") {
       if (url.endsWith("/write")) {
         fga.writes++;
         if (fga.fault === "lost_before_apply") throw new Error("simulated interrupted write");
-        tuples.push(...JSON.parse(String(init?.body)).writes.tuple_keys);
+        const mutation = JSON.parse(String(init?.body));
+        for (const tuple of mutation.deletes?.tuple_keys ?? []) {
+          const index = tuples.findIndex(
+            (item) =>
+              item.user === tuple.user &&
+              item.object === tuple.object &&
+              item.relation === tuple.relation,
+          );
+          if (index < 0) return Response.json({}, { status: 400 });
+          tuples.splice(index, 1);
+        }
+        tuples.push(...(mutation.writes?.tuple_keys ?? []));
         if (fga.fault === "lost_response") throw new Error("simulated lost response");
         return Response.json({});
       }
@@ -120,14 +131,28 @@ function setup(failure = "", environment = "production") {
           ![
             "member",
             artifact.permissions["invoice.approve"],
-            ...Object.values(artifact.roles).map((r) => r.effective),
+            ...Object.values(artifact.roles).flatMap((r) => [r.effective, r.delegate]),
           ].includes(check.tuple_key.relation)
         )
           return new Response(null, { status: 400 });
         if (check.tuple_key.object === "workspace:outage")
           return new Response(null, { status: 503 });
+        const subjectTuples = tuples.filter(
+          (tuple) => tuple.object === check.tuple_key.object && tuple.user === check.tuple_key.user,
+        );
+        const actorRoles = Object.keys(artifact.roles).filter((role) =>
+          subjectTuples.some((tuple) => tuple.relation === artifact.roles[role]!.assignment),
+        );
+        const permitted = actorRoles.some(
+          (role) =>
+            check.tuple_key.relation === artifact.roles[role]!.effective ||
+            base.manifest.delegation[role]?.some(
+              (target: string) => check.tuple_key.relation === artifact.roles[target]!.delegate,
+            ),
+        );
         return Response.json({
           allowed:
+            (permitted && subjectTuples.some((tuple) => tuple.relation === "member")) ||
             (check.tuple_key.object === "workspace:acme" &&
               ["member", "p_0", artifact.roles.approver!.effective].includes(
                 check.tuple_key.relation,
@@ -657,10 +682,79 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       const winner = await api.get(actor, results[0]!.operationId, call);
       expect(winner.status).toBe("active");
       expectedActive.push(winner.workspaceId);
+      const changes = runtime.tenant(winner.workspaceId).memberships!;
+      const fixtureMembership = read("membership-administration.json");
+      const target = { issuer: actor.issuer, subject: fixtureMembership.target };
+      const beforeChanges = s.fga.writes;
+      const added = await changes.add(
+        actor,
+        { target, roles: fixtureMembership.initialRoles, idempotencyKey: "add" },
+        call,
+      );
+      expect(added.status).toBe("confirmed");
+      expect(
+        await changes.add(
+          actor,
+          { target, roles: fixtureMembership.initialRoles, idempotencyKey: "add" },
+          call,
+        ),
+      ).toEqual(added);
+      await expect(
+        changes.add(
+          actor,
+          { target, roles: fixtureMembership.replacementRoles, idempotencyKey: "add" },
+          call,
+        ),
+      ).rejects.toThrow("conflict");
+      await expect(
+        changes.assignRoles(
+          actor,
+          { target, roles: [base.manifest.ownerRole], idempotencyKey: "owner" },
+          call,
+        ),
+      ).rejects.toThrow("invalid_argument");
+      await expect(
+        changes.remove(
+          actor,
+          {
+            target: { issuer: actor.issuer, subject: actor.subject },
+            idempotencyKey: "owner-remove",
+          },
+          call,
+        ),
+      ).rejects.toThrow("forbidden");
+      expect(
+        (
+          await changes.assignRoles(
+            actor,
+            { target, roles: fixtureMembership.replacementRoles, idempotencyKey: "assign" },
+            call,
+          )
+        ).status,
+      ).toBe("confirmed");
+      expect((await changes.remove(actor, { target, idempotencyKey: "remove" }, call)).status).toBe(
+        "confirmed",
+      );
+      expect(s.fga.writes - beforeChanges).toBe(fixtureMembership.confirmedWrites);
+      const candidates = await admin.query(
+        "SELECT count(*)::int AS count FROM heimdall_managed.membership_candidates WHERE environment='onboarding-ts' AND workspace_id=$1",
+        [winner.workspaceId],
+      );
+      expect(candidates.rows[0]?.count).toBe(1);
       const page = await runtime
         .createWorkspaceDiscovery({ activeKeyId: "cursor", keys: { cursor: Buffer.alloc(32, 9) } })
         .list(actor, call);
       expect(page.items.map(({ id }) => id)).toEqual(expectedActive);
+      s.fga.fault = "lost_response";
+      const lost = { target, roles: fixtureMembership.initialRoles, idempotencyKey: "lost" };
+      const pending = await changes.add(actor, lost, call);
+      expect(pending).toMatchObject({ status: "pending", reason: "recovery_required" });
+      expect(await changes.add(actor, lost, call)).toEqual(pending);
+      await expect(
+        changes.remove(actor, { target, idempotencyKey: "blocked" }, call),
+      ).rejects.toThrow("forbidden");
+      expect(await s.options.storage.managed!.allows(winner.workspaceId, call.signal)).toBe(false);
+      expect(s.fga.writes - beforeChanges).toBe(fixtureMembership.confirmedWrites + 1);
       const counts = await admin.query(
         "SELECT count(*)::int AS count FROM heimdall.audit_deliveries WHERE environment='onboarding-ts' AND sink_id='siem'",
       );

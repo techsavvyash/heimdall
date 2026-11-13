@@ -1,0 +1,6 @@
+{
+  "target": "member-to-administer",
+  "initialRoles": ["viewer"],
+  "replacementRoles": ["approver"],
+  "confirmedWrites": 3
+}

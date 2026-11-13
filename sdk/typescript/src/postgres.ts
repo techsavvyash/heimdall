@@ -85,6 +85,7 @@ export function createManagedPostgresStorage(
   const candidates = CandidateRecords.forRetainedRuntime(pool, productId, environment);
   const auditSinks = [...options.auditSinks];
   const managed: NonNullable<RuntimeStorage["managed"]> = {
+    workspace: workspaces.get.bind(workspaces),
     operations(binding) {
       if (binding.productId !== productId || binding.environment !== environment)
         throw new HeimdallError("invalid_argument");

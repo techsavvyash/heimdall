@@ -32,3 +32,9 @@ export type {
   WorkspaceCreateInput,
   WorkspaceCreationPolicy,
 } from "./internal/managed-onboarding.js";
+
+export type {
+  MembershipInput,
+  MembershipStatus,
+  Memberships,
+} from "./internal/managed-memberships.js";

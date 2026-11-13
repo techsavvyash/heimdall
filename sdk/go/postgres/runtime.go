@@ -153,6 +153,7 @@ func NewManagedStorage(db *sql.DB, options StorageOptions) (heimdall.RuntimeStor
 	}
 	sinks := append([]string{}, options.AuditSinks...)
 	storage.Managed = &heimdall.ManagedStorage{
+		Workspace: workspaces.Get,
 		Operations: func(binding internal.OperationBinding) (*internal.OperationRecords, error) {
 			if binding.ProductID != options.ProductID || binding.Environment != options.Environment {
 				return nil, heimdall.ErrInvalidArgument
