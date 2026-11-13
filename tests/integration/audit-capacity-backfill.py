@@ -543,12 +543,19 @@ try:
   sql(retirement_grants,database)
   role='&options=-c%20role%3Dretained_retirement_runtime'
   retirement_env=dict(env,HEIMDALL_TEST_RETIRE_URL=dsn(database)+role,HEIMDALL_TEST_RETIRE_ADMIN=dsn(database))
+  sql('CREATE ROLE retained_scan_reader',database)
+  sql('GRANT USAGE ON SCHEMA heimdall,heimdall_capacity,heimdall_retention TO retained_scan_reader; GRANT SELECT ON ALL TABLES IN SCHEMA heimdall,heimdall_capacity,heimdall_retention TO retained_scan_reader',database)
+  scan_env=dict(env,HEIMDALL_TEST_RETIRE_SCAN_URL=dsn(database)+'&options=-c%20role%3Dretained_scan_reader')
+  def scan_test(settings):
+   go('^TestRetirementScan$',settings)
+   run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retirement-scan.test.ts'],env=settings)
   def retire_test(language,settings):
    if language=='go':go('^TestRetainedRetirement$',settings)
    else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retire.test.ts'],env=settings)
   for language in ['ts','go']:
    retire_test(language,dict(retirement_env,HEIMDALL_TEST_RETIRE_CASE='ordinary',HEIMDALL_TEST_RETIRE_EXPECT='conflict'))
   sql("UPDATE heimdall.audit_deliveries SET state='delivered',delivered_at=6001",database)
+  scan_test(scan_env)
   for language in ['ts','go']:
    for case in ['pending','held','too-young','wrong-tenant']:
     retire_test(language,dict(retirement_env,HEIMDALL_TEST_RETIRE_CASE=case))
@@ -583,6 +590,8 @@ try:
       FROM heimdall_capacity.event_charges
     ) c""",database)=='t'
   print('Audited retirement passed: all group shapes, refusal, restricted role, rollback and cross-language receipts',flush=True)
+  scan_test(dict(scan_env,HEIMDALL_TEST_RETIRE_SCAN_AFTER='1'))
+  print('Retirement scans passed under a SELECT-only role in TS and Go before and after retirement',flush=True)
   # END audited retirement proof
   # BEGIN TS retirement loss proof
   database='retirement_runtime_ts_loss'

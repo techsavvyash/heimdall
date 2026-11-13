@@ -27,9 +27,17 @@ import { bindAuditDecision } from "../audit-decision-binding.js";
 import type { Pool, PoolClient } from "pg";
 import { auditDigest, validateDeliveryReceipt } from "../audit-receipts.js";
 import { HeimdallError } from "../errors.js";
-import { transaction, query } from "./query.js";
+import { transaction, query, readSnapshot } from "./query.js";
 const token = (v: unknown, max: number): v is string =>
   typeof v === "string" && v.length > 0 && v.length <= max && !/[^A-Za-z0-9_-]/.test(v);
+type RetirementCursor = {
+  productId: string;
+  environment: string;
+  tenantId: string | null;
+  now: number;
+  retainForMs: number;
+  eventId: string;
+};
 type RetentionEligibilityRow = {
   root: RetainedRow;
   bound: boolean;
@@ -77,6 +85,7 @@ export class PostgresAudit {
       readResolution: audit.readRetainedResolution.bind(audit),
       resolveReceipt: audit.resolveRetainedReceipt.bind(audit),
       eligibility: audit.inspectRetentionEligibility.bind(audit),
+      scanRetirementCandidates: audit.scanRetirementCandidates.bind(audit),
     });
   }
   private retainedHistorySQL(sql: string) {
@@ -254,6 +263,100 @@ export class PostgresAudit {
     if (rows.length !== 1) throw new HeimdallError("unavailable");
     return (
       this.decodeRetirementCandidate(rows[0]!, tenantId, eventId, now, retainForMs)?.reason ?? null
+    );
+  }
+  private async scanRetirementCandidates(
+    tenantId: string | null,
+    now: number,
+    retainForMs: number,
+    after: RetirementCursor | null,
+    limit: number,
+    signal?: AbortSignal,
+  ): Promise<{ eventIds: string[]; next: RetirementCursor | null }> {
+    if (
+      (tenantId !== null && !token(tenantId, 128)) ||
+      !Number.isSafeInteger(now) ||
+      now < 0 ||
+      !Number.isSafeInteger(retainForMs) ||
+      retainForMs < 1 ||
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 8 ||
+      (after !== null &&
+        (!after ||
+          after.productId !== this.productId ||
+          after.environment !== this.environment ||
+          after.tenantId !== tenantId ||
+          after.now !== now ||
+          after.retainForMs !== retainForMs ||
+          !token(after.eventId, 128)))
+    )
+      throw new HeimdallError("invalid_argument");
+    const last = after?.eventId ?? "";
+    return readSnapshot(
+      this.pool,
+      async (client) => {
+        const {
+          rows: [page],
+        } = await client.query<{
+          ready: boolean;
+          scanned: number;
+          last_scanned: string | null;
+          missing_identity: boolean;
+          selected: string[];
+        }>(retirementPageSQL, [
+          ...retentionArgs,
+          this.productId,
+          this.environment,
+          last,
+          limit,
+          tenantId,
+          now - retainForMs,
+        ]);
+        if (!page?.ready) throw new HeimdallError("unavailable");
+        if (
+          page.missing_identity ||
+          !Number.isInteger(page.scanned) ||
+          page.scanned < 0 ||
+          page.scanned > limit ||
+          (page.scanned > 0 && !token(page.last_scanned, 128)) ||
+          !Array.isArray(page.selected) ||
+          page.selected.length > page.scanned
+        )
+          throw new HeimdallError("audit_unavailable");
+        const eventIds: string[] = [];
+        for (const id of page.selected) {
+          const { rows } = await client.query<RetentionEligibilityRow>(
+            this.retainedHistorySQL(retentionEligibilitySQL),
+            this.retainedHistoryArgs(id),
+          );
+          if (rows.length !== 1) throw new HeimdallError("unavailable");
+          const candidate = this.decodeRetirementCandidate(
+            rows[0]!,
+            tenantId,
+            id,
+            now,
+            retainForMs,
+          );
+          if (!candidate) throw new HeimdallError("audit_unavailable");
+          if (candidate.reason === "candidate") eventIds.push(id);
+        }
+        return {
+          eventIds,
+          next:
+            page.scanned === limit
+              ? {
+                  productId: this.productId,
+                  environment: this.environment,
+                  tenantId,
+                  now,
+                  retainForMs,
+                  eventId: page.last_scanned!,
+                }
+              : null,
+        };
+      },
+      signal,
     );
   }
   private decodeRetirementCandidate(
@@ -1869,6 +1972,21 @@ LEFT JOIN LATERAL (
  LEFT JOIN LATERAL (SELECT jsonb_agg(jsonb_build_object('sinkId',sink_id,'state',state,'deliveredAt',delivered_at) ORDER BY sink_id COLLATE "C") AS rows FROM (SELECT sink_id,state,delivered_at FROM heimdall.audit_deliveries WHERE product_id=$5 AND environment=$6 AND event_id=member.event_id LIMIT 33) bounded) delivery ON true
 ) group_rows ON true
 `;
+
+const retirementPageSQL = `
+WITH scanned AS MATERIALIZED (
+ SELECT event_id FROM heimdall.audit_events
+ WHERE product_id=$7 AND environment=$8 AND event_id>$9
+ ORDER BY event_id LIMIT $10
+)
+SELECT admission.ready, (SELECT count(*)::int FROM scanned) AS scanned,
+ (SELECT max(event_id) FROM scanned) AS last_scanned,
+ EXISTS(SELECT 1 FROM scanned s LEFT JOIN heimdall_retention.event_identities i
+ ON i.product_id=$7 AND i.environment=$8 AND i.event_id=s.event_id WHERE i.event_id IS NULL) AS missing_identity,
+ coalesce((SELECT jsonb_agg(i.event_id ORDER BY i.event_id) FROM scanned s
+ JOIN heimdall_retention.event_identities i ON i.product_id=$7 AND i.environment=$8 AND i.event_id=s.event_id
+ WHERE i.tenant_id IS NOT DISTINCT FROM $11::text AND i.kind IN ('ordinary','request') AND i.recorded_at<=$12),'[]'::jsonb) AS selected
+FROM (${retentionSQL}) admission`;
 
 const retainedResolutionSQL = `SELECT snapshot.*,
  EXISTS(SELECT 1 FROM heimdall.audit_decisions WHERE product_id=$5 AND environment=$6 AND decision_id=$7)

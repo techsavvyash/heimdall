@@ -802,3 +802,27 @@ Each invocation applies one operation. Product scheduling and durable storage
 of the original proposal belong to the integrating deployment. For retry hold
 release, its trusted policy must verify that the underlying retry obligation
 has ended.
+
+## Bounded retirement discovery
+
+TS `scanRetirementCandidates` and Go `ScanRetirementCandidates` return candidate
+root IDs from one compatible primary snapshot. The deployment supplies the exact
+nullable tenant, the sweep time and its retention duration. A page reads at
+most eight live source keys in primary-key order for the bound product and
+environment, then applies tenant, root-kind and age filters. Missing retained
+identity for a scanned source fails the page. Each matching root is classified
+sequentially using the existing complete group, routing and hold checks.
+
+An empty page can carry a continuation. The cursor stores the last scanned key
+and binds the product, environment, tenant, time and duration. Keep these inputs
+fixed for a sweep. A subsequent sweep starts from the beginning so it can see
+new events before the previous cursor or events that became eligible later.
+The scan requires SELECT privileges and publishes only eligible root IDs and
+the internal cursor. The cursor may reflect a scanned row outside the requested
+tenant and stays inside trusted deployment maintenance.
+
+The product schedules the scan and persists stable retirement proposals with
+the page cursor before dispatching the authorized command. Retry the same proposal after an unknown
+outcome. The command reauthorizes and storage reclassifies each group before
+any removal. A newly placed hold, retry obligation or other protection can
+block an earlier candidate. A scan does not itself modify audit history.

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -85,6 +86,20 @@ func testMaintenanceCommand(t *testing.T, bearer string, now int64, issuer, audi
 		}
 		if _, e = durable.Append(ctx, seed); e != nil {
 			t.Fatal(e)
+		}
+		var cursor *postgres.RetirementCursor
+		for {
+			page, e := durable.ScanRetirementCandidates(ctx, nil, now, 1000, cursor, 8)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if slices.Contains(page.EventIDs, target) {
+				break
+			}
+			if page.Next == nil {
+				t.Fatal("product-level target was not discovered")
+			}
+			cursor = page.Next
 		}
 		store = durable
 		appendEvent = durable.Append

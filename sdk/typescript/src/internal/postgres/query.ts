@@ -118,3 +118,24 @@ export function transaction<T>(
     caller,
   );
 }
+
+// Existing admission queries require a primary with read-write defaults.
+// The callback only reads, and rollback closes the snapshot without a write receipt.
+export function readSnapshot<T>(
+  pool: Pool,
+  action: (client: PoolClient) => Promise<T>,
+  caller?: AbortSignal,
+): Promise<T> {
+  return withConnection(
+    pool,
+    async (client) => {
+      await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
+      try {
+        return await action(client);
+      } finally {
+        await client.query("ROLLBACK");
+      }
+    },
+    caller,
+  );
+}

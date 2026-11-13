@@ -348,6 +348,16 @@ test("bound maintenance command", async () => {
         attributes: {},
         policyVersion: "p1",
       });
+    let found = false;
+    if (durable) {
+      let after = null;
+      do {
+        const page = await durable.scanRetirementCandidates(null, f.now, 1000, after, 8);
+        found ||= page.eventIds.includes(target);
+        after = page.next;
+      } while (!found && after);
+    }
+    expect(found).toBe(!!durable);
     const auth = setup(durable ? durable.append : async (event) => receipt(event));
     const command = new MaintenanceCommand(
       auth,

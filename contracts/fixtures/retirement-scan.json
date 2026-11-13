@@ -1,0 +1,66 @@
+{
+  "cases": [
+    {
+      "name": "completed group appears once after its terminal",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "eventIds": ["ordinary", "z-request"],
+      "scanned": ["normal-terminal", "ordinary", "z-request"]
+    },
+    {
+      "name": "delivery time keeps an old event protected",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "now": 7000,
+      "eventIds": [],
+      "scanned": ["normal-terminal", "ordinary", "z-request"]
+    },
+    {
+      "name": "product scope excludes tenant history",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": null,
+      "eventIds": [],
+      "scanned": ["normal-terminal", "ordinary", "z-request"]
+    },
+    {
+      "name": "other tenant is excluded",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-2",
+      "eventIds": [],
+      "scanned": ["normal-terminal", "ordinary", "z-request"]
+    },
+    {
+      "name": "pending group is retained",
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "excluded": ["z-request"]
+    },
+    {
+      "name": "held ordinary event is retained",
+      "productId": "holds-ts",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "excluded": ["ordinary"]
+    },
+    {
+      "name": "recovered group appears once",
+      "productId": "support",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "eventIds": ["ordinary", "z-request"]
+    },
+    {
+      "name": "retired roots are omitted from the live scan",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "afterRetirement": true,
+      "excluded": ["ordinary", "z-request", "normal-terminal"]
+    }
+  ]
+}

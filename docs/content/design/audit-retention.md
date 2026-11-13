@@ -3,10 +3,10 @@ title: Audit retention and retry identity
 date: 2026-11-12
 ---
 
-Retention must reclaim delivered payloads without breaking immutable event IDs,
-receipts or authorization history. The TS and Go **eligibility classifier is
-implemented and fixture-tested**. [[evidence/phase-3-retention-identities]] adds prepared compact storage constraints;
-prepared holds, metadata quotas and retirement guards now have live SQL proof. Runtime integration and authorized atomic deletion remain required; no purge is enabled.
+Retention reclaims delivered payloads while preserving immutable event IDs,
+receipts and authorization history. Both SDKs implement eligibility discovery,
+compact identity storage and an authorized atomic retirement command.
+[[evidence/phase-3-audited-retirement]] · [[evidence/phase-3-maintenance-authorization]]
 
 ## Selection and age
 
@@ -30,11 +30,11 @@ flowchart TD
   Protected -->|no| Age{Retention age reached}
   Age -->|no| Keep
   Age -->|yes| Candidate[Candidate only]
-  subgraph Future[Required persistence work - not implemented]
+  subgraph Retirement[Authorized retirement transaction]
     Candidate --> Lock[Lock and revalidate group policy and holds]
-    Lock --> Identity[Preserve immutable receipt and decision identities]
-    Identity --> Reclaim[Remove payloads and transfer accounting atomically]
-    Reclaim --> Audit[Commit required administrative audit]
+    Lock --> Audit[Append required administrative audit]
+    Audit --> Reclaim[Remove payloads and update accounting]
+    Reclaim --> Commit[Commit with immutable receipts preserved]
   end
 ```
 
@@ -81,11 +81,12 @@ obligations use immutable `retry`-purpose holds in that same ledger; see
 no lease or time-based expiry. Its explicit audited release must commit before
 retirement; releasing one obligation leaves other obligations active.
 
-Public bearer storage now requires activated v4 and retained audit writes; see
-[[evidence/phase-3-public-retention]]. Explicit preparation, bounded backfill and
-activation are implemented. Authorized atomic retirement/audit, managed/recovery
-runtime integration, bounded scheduling and complete lifecycle fault tests remain
-required. Schema readiness alone is not sufficient to enable purge.
+Public bearer storage supports activated v4 and v5 with retained audit writes.
+The product schedules bounded discovery and persists the original proposal before
+dispatch. An empty scan page can still advance the cursor. The authorized command
+rechecks identity, policy and current retention protections before removing
+payloads. Production policy setup and scale qualification remain open.
+[[evidence/phase-3-public-retention]] · [[evidence/phase-3-retirement-discovery]]
 The detailed implementation protocol is `contracts/audit-retention.md` in the
 repository. [[audit-contract]] remains the product audit contract, and
 [[evidence/phase-3-readiness-audit]] tracks the incomplete Phase 3 gate.
