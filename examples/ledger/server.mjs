@@ -161,7 +161,9 @@ const statuses = {
 };
 createServer(async (incoming, outgoing) => {
   const cancellation = new AbortController();
-  outgoing.once("close", () => cancellation.abort());
+  outgoing.once("close", () => {
+    if (!outgoing.writableFinished) cancellation.abort();
+  });
   let response;
   try {
     const target = new URL(incoming.url, origin);
@@ -192,6 +194,7 @@ createServer(async (incoming, outgoing) => {
       statuses[code] ?? 503,
     );
   }
+  incoming.resume();
   const cookies = response.headers.getSetCookie();
   const headers = Object.fromEntries(response.headers);
   delete headers["set-cookie"];
