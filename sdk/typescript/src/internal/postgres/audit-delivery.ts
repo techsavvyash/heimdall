@@ -4,6 +4,8 @@ import { validateEndpoint } from "../endpoints.js";
 import { auditEventValidator, type CustomAuditValidator } from "./custom-audit.js";
 import { checkCancellation, HeimdallError } from "../errors.js";
 import { PostgresAudit } from "./audit.js";
+import { readSnapshot } from "./query.js";
+import { retentionSQL, retentionArgs } from "./readiness.js";
 
 export function createAuditDelivery(
   pool: Pool,
@@ -34,6 +36,76 @@ export function createAuditDelivery(
   );
   const scope = { productId, environment, sinkId };
   return Object.freeze({
+    /** Read sink backlog and database-wide audit capacity without decoding event payloads. */
+    metrics(signal: AbortSignal) {
+      if (!(signal instanceof AbortSignal)) throw new HeimdallError("invalid_argument");
+      const now = Date.now();
+      return readSnapshot(
+        pool,
+        async (client) => {
+          const ready = await client.query<{ ready: boolean }>(
+            `SELECT ready AND current_setting('default_transaction_read_only')='off' AS ready
+             FROM (${retentionSQL}) admission`,
+            retentionArgs,
+          );
+          if (ready.rows[0]?.ready !== true) throw new HeimdallError("unavailable");
+          const {
+            rows: [backlog],
+          } = await client.query<{
+            pending: string;
+            due: string;
+            quarantined: string;
+            oldest: string | null;
+          }>(
+            `SELECT count(*) FILTER (WHERE d.state='pending')::text AS pending,
+            count(*) FILTER (WHERE d.state='pending' AND d.next_attempt_at<=$4)::text AS due,
+            count(*) FILTER (WHERE d.state='quarantined')::text AS quarantined,
+            min(e.recorded_at) FILTER (WHERE d.state='pending')::text AS oldest
+          FROM heimdall.audit_deliveries d JOIN heimdall.audit_events e USING(product_id,environment,event_id)
+          WHERE d.product_id=$1 AND d.environment=$2 AND d.sink_id=$3
+            AND d.state IN ('pending','quarantined')`,
+            [productId, environment, sinkId, now],
+          );
+          const {
+            rows: [capacity],
+          } = await client.query<{
+            events: string;
+            eventLimit: string;
+            bytes: string;
+            byteLimit: string;
+            deliveries: string;
+            deliveryLimit: string;
+            retainedRows: string;
+            retainedRowLimit: string;
+          }>(`SELECT (used_events+reserved_events)::text AS events,event_limit::text AS "eventLimit",
+          (used_bytes+reserved_bytes)::text AS bytes,p.byte_limit::text AS "byteLimit",
+          (used_deliveries+reserved_deliveries)::text AS deliveries,delivery_limit::text AS "deliveryLimit",
+          (r.used_rows+r.reserved_rows)::text AS "retainedRows",
+          LEAST(r.row_limit,r.byte_limit/8192)::text AS "retainedRowLimit"
+          FROM heimdall_capacity.policy p CROSS JOIN heimdall_retention.capacity r
+          WHERE p.singleton AND r.singleton`);
+          if (!backlog || !capacity) throw new HeimdallError("unavailable");
+          return {
+            pending: Number(backlog.pending),
+            due: Number(backlog.due),
+            quarantined: Number(backlog.quarantined),
+            oldestPendingAgeMs:
+              backlog.oldest === null ? null : Math.max(0, now - Number(backlog.oldest)),
+            capacity: {
+              events: Number(capacity.events),
+              eventLimit: Number(capacity.eventLimit),
+              bytes: Number(capacity.bytes),
+              byteLimit: Number(capacity.byteLimit),
+              deliveries: Number(capacity.deliveries),
+              deliveryLimit: Number(capacity.deliveryLimit),
+              retainedRows: Number(capacity.retainedRows),
+              retainedRowLimit: Number(capacity.retainedRowLimit),
+            },
+          };
+        },
+        signal,
+      );
+    },
     async deliver(limit: number, signal: AbortSignal) {
       if (!(signal instanceof AbortSignal)) throw new HeimdallError("invalid_argument");
       const operation = AbortSignal.any([signal, AbortSignal.timeout(30000)]);

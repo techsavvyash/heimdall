@@ -93,6 +93,11 @@ func TestAuditDeliveryPostgres(t *testing.T) {
 	if _, err := delivery.Deliver(ctx, 10); !errors.Is(err, contract.ErrUnavailable) {
 		t.Fatal(err)
 	}
+	if metrics, err := delivery.Metrics(ctx); err != nil || metrics.Pending != 2 || metrics.Due != 0 ||
+		metrics.Quarantined != 0 || metrics.OldestPendingAgeMS == nil || *metrics.OldestPendingAgeMS <= 0 ||
+		metrics.Capacity.Events < 2 || metrics.Capacity.EventLimit < metrics.Capacity.Events {
+		t.Fatal(metrics, err)
+	}
 	if result, err := delivery.Deliver(ctx, 10); err != nil || result != (AuditDeliveryResult{}) {
 		t.Fatal(result, err)
 	}
@@ -105,6 +110,22 @@ func TestAuditDeliveryPostgres(t *testing.T) {
 	mode.Store(3)
 	if result, err := delivery.Deliver(ctx, 10); err != nil || result != (AuditDeliveryResult{2, 1, 1}) {
 		t.Fatal(result, err)
+	}
+	if metrics, err := delivery.Metrics(ctx); err != nil || metrics.Pending != 0 || metrics.Due != 0 ||
+		metrics.Quarantined != 1 || metrics.OldestPendingAgeMS != nil {
+		t.Fatal(metrics, err)
+	}
+	other, err := NewAuditDelivery(pool, AuditDeliveryOptions{ProductID: "ledger", Environment: "delivery-go", SinkID: "other", Endpoint: server.URL, Token: "test-token", TransportProfile: "loopback"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if metrics, err := other.Metrics(ctx); err != nil || metrics.Pending != 0 || metrics.Quarantined != 0 {
+		t.Fatal(metrics, err)
+	}
+	stopped, stop := context.WithCancel(ctx)
+	stop()
+	if _, err := delivery.Metrics(stopped); !errors.Is(err, contract.ErrCancelled) {
+		t.Fatal(err)
 	}
 	if ok, err := delivery.Requeue(ctx, "z-request", 3); err != nil || !ok {
 		t.Fatal(ok, err)

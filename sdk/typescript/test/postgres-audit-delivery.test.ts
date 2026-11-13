@@ -73,6 +73,13 @@ test.skipIf(!process.env.HEIMDALL_TEST_AUDIT_DELIVERY_DB)(
           [scope.environment],
         );
       await expect(delivery.deliver(10, signal)).rejects.toThrow("unavailable");
+      expect(await delivery.metrics(signal)).toMatchObject({
+        pending: 2,
+        due: 0,
+        quarantined: 0,
+        oldestPendingAgeMs: expect.any(Number),
+        capacity: { events: expect.any(Number), eventLimit: expect.any(Number) },
+      });
       expect(await delivery.deliver(10, signal)).toEqual({
         attempted: 0,
         delivered: 0,
@@ -87,6 +94,12 @@ test.skipIf(!process.env.HEIMDALL_TEST_AUDIT_DELIVERY_DB)(
         attempted: 2,
         delivered: 1,
         quarantined: 1,
+      });
+      expect(await delivery.metrics(signal)).toMatchObject({
+        pending: 0,
+        due: 0,
+        quarantined: 1,
+        oldestPendingAgeMs: null,
       });
       expect(await delivery.requeue("z-request", 3, signal)).toBe(true);
       mode = "partial";
@@ -143,6 +156,20 @@ test.skipIf(!process.env.HEIMDALL_TEST_AUDIT_DELIVERY_DB)(
         quarantined: 0,
       });
       expect(accepted.at(-1)).toBe(event.eventId);
+      const other = createAuditDelivery(pool, {
+        ...scope,
+        sinkId: "other",
+        endpoint: "http://127.0.0.1:" + address.port,
+        token: "test-token",
+        transportProfile: "loopback",
+      });
+      expect(await other.metrics(signal)).toMatchObject({
+        pending: 0,
+        due: 0,
+        quarantined: 0,
+        oldestPendingAgeMs: null,
+      });
+      await expect(delivery.metrics(AbortSignal.abort())).rejects.toThrow("cancelled");
     } finally {
       server.close();
       await pool.end();

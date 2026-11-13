@@ -183,3 +183,14 @@ func (d *AuditDelivery) Requeue(ctx context.Context, eventID string, attempts in
 	}
 	return d.audit.RequeueQuarantined(ctx, d.options.SinkID, eventID, attempts, time.Now().UnixMilli())
 }
+
+type AuditDeliveryMetrics = internal.AuditDeliveryMetrics
+type AuditDeliveryCapacity = internal.AuditDeliveryCapacity
+
+// Metrics reads sink backlog and database-wide audit capacity without decoding event payloads.
+func (d *AuditDelivery) Metrics(ctx context.Context) (AuditDeliveryMetrics, error) {
+	if d == nil || d.audit == nil {
+		return AuditDeliveryMetrics{}, contract.ErrInvalidArgument
+	}
+	return d.audit.DeliveryMetrics(ctx, d.options.SinkID, time.Now().UnixMilli())
+}
