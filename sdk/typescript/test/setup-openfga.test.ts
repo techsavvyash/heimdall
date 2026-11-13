@@ -1,3 +1,4 @@
+import { ensureTenantOwner } from "../src/provisioning/index.js";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { expect, test, vi } from "vitest";
@@ -86,6 +87,56 @@ test.skipIf(!process.env.HEIMDALL_TEST_SETUP_DSN || !process.env.HEIMDALL_PROBE_
       );
       expect(await provisionOpenFGA(pool, options, signal)).toEqual(result);
       expect(writes).toBe(2);
+      vi.unstubAllGlobals();
+      const runtimeConfig = JSON.stringify({ ...config, openfga: result });
+      const owner = {
+        operationId: "owner-1",
+        tenantId: "acme",
+        owner: { issuer: config.issuer, subject: "alice" },
+      };
+      const blocked = async () => {
+        throw new Error("audit unavailable");
+      };
+      await expect(
+        ensureTenantOwner(runtimeConfig, options.manifestJSON, token, owner, blocked, signal),
+      ).rejects.toThrow("unavailable");
+      let attempts = 0;
+      const dispatch = async () => {
+        attempts++;
+      };
+      vi.stubGlobal("fetch", async (input: string, init: RequestInit) => {
+        const response = await fetchReal(input, init);
+        if (!input.endsWith("/write")) return response;
+        if (!response.ok) throw new Error("expected successful owner write");
+        await response.body?.cancel();
+        throw new Error("discarded owner write response");
+      });
+      await expect(
+        ensureTenantOwner(runtimeConfig, options.manifestJSON, token, owner, dispatch, signal),
+      ).rejects.toMatchObject({ code: "outcome_unknown", operationId: "owner-1" });
+      vi.unstubAllGlobals();
+      // The test interceptor has already received the provider response, so this write is quiescent.
+      expect(
+        await ensureTenantOwner(
+          runtimeConfig,
+          options.manifestJSON,
+          token,
+          owner,
+          dispatch,
+          signal,
+        ),
+      ).toMatchObject({ tenantId: "acme", modelId });
+      await expect(
+        ensureTenantOwner(
+          runtimeConfig,
+          options.manifestJSON,
+          token,
+          { ...owner, owner: { ...owner.owner, subject: "bob" } },
+          dispatch,
+          signal,
+        ),
+      ).rejects.toThrow("conflict");
+      expect(attempts).toBe(1);
     } finally {
       vi.unstubAllGlobals();
       try {

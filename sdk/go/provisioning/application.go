@@ -99,7 +99,7 @@ func provisionApplication(ctx context.Context, db *sql.DB, o applicationOptions)
 			return empty, unknown
 		}
 		createdClientID = oidc.ClientID
-		if err = secretOperation(ctx, func(ctx context.Context) error { return o.saveSecret(ctx, id, oidc.ClientID, oidc.ClientSecret) }); err != nil {
+		if err = runSetupCallback(ctx, func(ctx context.Context) error { return o.saveSecret(ctx, id, oidc.ClientID, oidc.ClientSecret) }); err != nil {
 			return empty, unknown
 		}
 	}
@@ -130,7 +130,7 @@ func provisionApplication(ctx context.Context, db *sql.DB, o applicationOptions)
 		!sameValues(oidc.GrantTypes, expected.GrantTypes) {
 		return empty, conflict
 	}
-	if err := secretOperation(ctx, func(ctx context.Context) error {
+	if err := runSetupCallback(ctx, func(ctx context.Context) error {
 		ok, err := o.hasSecret(ctx, id, oidc.ClientID)
 		if err != nil || !ok {
 			return unknown
@@ -161,7 +161,7 @@ func sameValues(actual, expected []string) bool {
 	return true
 }
 
-func secretOperation(ctx context.Context, run func(context.Context) error) error {
+func runSetupCallback(ctx context.Context, run func(context.Context) error) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := contract.CheckCancellation(ctx); err != nil {

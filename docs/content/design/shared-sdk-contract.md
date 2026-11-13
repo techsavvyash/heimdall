@@ -248,11 +248,12 @@ const intent = await tenantRepo.beginOnboarding({
 
 // Runs under the product's durable per-tenant mutation serialization.
 if (intent.status !== 'active') {
-  const receipt = await auth.provisioning.ensureTenantOwner({
-    operationId: intent.operationId,
-    tenantId: intent.tenantId,
-    owner: intent.owner,
-  }, { signal })
+  const receipt = await ensureTenantOwner(
+    configJSON, manifestJSON, mutationToken,
+    { operationId: intent.operationId, tenantId: intent.tenantId, owner: intent.owner },
+    (signal) => tenantRepo.commitAuditedDispatch(intent, signal),
+    signal,
+  )
   await tenantRepo.activateIfPending(intent, receipt)
 }
 ```
@@ -268,11 +269,14 @@ if err != nil { return err }
 
 // Product serializes all lifecycle mutations for this tenant.
 if intent.Status != Active {
-    receipt, err := auth.Provisioning().EnsureTenantOwner(ctx, heimdall.TenantOwnerInput{
-        OperationID: intent.OperationID,
-        TenantID: intent.TenantID,
-        Owner: intent.Owner,
-    })
+    receipt, err := provisioning.EnsureTenantOwner(
+        ctx, configJSON, manifestJSON, mutationToken,
+        provisioning.TenantOwnerInput{
+            OperationID: intent.OperationID, TenantID: intent.TenantID,
+            Issuer: intent.Owner.Issuer, Subject: intent.Owner.Subject,
+        },
+        func(ctx context.Context) error { return tenantRepo.CommitAuditedDispatch(ctx, intent) },
+    )
     if err != nil { return err }
     if err := tenantRepo.ActivateIfPending(ctx, intent, receipt); err != nil {
         return err
@@ -280,7 +284,7 @@ if intent.Status != Active {
 }
 ```
 
-These are product workflow bodies, not standalone endpoints. `tenantRepo` is application code. Both examples assume authenticated creation authorization, payload validation, and a serialized workflow around bootstrap, cancellation and activation. The SDK's operation ID is for correlation. Durable idempotency is provided by the product's stored intent.
+These are product workflow bodies, not standalone endpoints. `tenantRepo` is application code. Both examples assume authenticated creation authorization, payload validation, and a serialized workflow around bootstrap, cancellation and activation. The dispatch callback must commit the audit and dispatch marker before OpenFGA writes. The workflow must record confirmed, failed or uncertain outcomes before activation or releasing the operation. The SDK's operation ID is for correlation. Durable idempotency is provided by the product's stored intent.
 
 ### Required product operation record
 
@@ -302,7 +306,7 @@ Same key and same payload returns the existing operation. Same key with another 
 3. If an unexpected existing owner is observed, return conflict. The product's serialization prevents competing bootstrap operations. The SDK read cannot provide an atomic global uniqueness guarantee.
 4. Write missing relationships. Handle concurrent duplicate writes by rereading and verifying desired state.
 5. Confirm membership and ownership and return a receipt containing operation ID, tenant ID, principal and model ID.
-6. On uncertain write outcome, return `outcome_unknown`. The caller retries the same recorded intent. Successful grants are preserved for reconciliation.
+6. On uncertain write outcome, return `outcome_unknown`. The caller keeps the tenant blocked and establishes quiescence before reconciling the same recorded intent. Successful grants are preserved for reconciliation.
 
 ```mermaid
 sequenceDiagram
@@ -316,8 +320,9 @@ sequenceDiagram
   SDK->>F: Read and write missing relationships
   F-->>SDK: Grant committed but response lost
   SDK-->>Product: Outcome unknown with operation ID
-  Product->>DB: Keep pending and record retry
-  Product->>SDK: Retry same intent
+  Product->>DB: Keep pending and record uncertain outcome
+  Product->>Product: Verify prior attempt is quiescent
+  Product->>SDK: Reconcile same intent
   SDK->>F: Reconcile and confirm desired relationships
   F-->>SDK: Confirmed
   SDK-->>Product: Receipt

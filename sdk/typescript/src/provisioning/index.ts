@@ -179,3 +179,6 @@ export async function setupProduct(
 }
 
 export { readSetupStatus } from "./journal.js";
+
+export { ensureTenantOwner } from "./tenant-owner.js";
+export type { TenantOwnerInput } from "./tenant-owner.js";

@@ -4,11 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/postgres"
 )
 
@@ -66,6 +68,28 @@ func TestProvisionOpenFGALive(t *testing.T) {
 	if err != nil || again != binding {
 		t.Fatal("resume failed", err)
 	}
+	fixture.Config["openfga"].(map[string]any)["storeId"] = binding.StoreID
+	fixture.Config["openfga"].(map[string]any)["modelId"] = binding.ModelID
+	config, err = json.Marshal(fixture.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := TenantOwnerInput{OperationID: "first-owner", TenantID: "acme", Issuer: fixture.Config["issuer"].(string), Subject: "alice"}
+	attempts := 0
+	dispatch := func(context.Context) error { attempts++; return nil }
+	receipt, err := EnsureTenantOwner(ctx, config, fixture.Manifest, token, owner, dispatch)
+	if err != nil || receipt.TenantID != "acme" || receipt.ModelID != binding.ModelID {
+		t.Fatal("initial owner", err)
+	}
+	againOwner, err := EnsureTenantOwner(ctx, config, fixture.Manifest, token, owner, dispatch)
+	if err != nil || receipt != againOwner || attempts != 1 {
+		t.Fatal("repeat owner", err, attempts)
+	}
+	owner.Subject = "bob"
+	if _, err := EnsureTenantOwner(ctx, config, fixture.Manifest, token, owner, dispatch); !errors.Is(err, contract.ErrConflict) || attempts != 1 {
+		t.Fatal("competing owner", err)
+	}
+
 }
 
 func deleteVerificationStore(t *testing.T, base, token, store string) {
