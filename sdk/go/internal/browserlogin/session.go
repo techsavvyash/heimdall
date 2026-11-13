@@ -178,7 +178,7 @@ func (s *Sessions) Authenticate(r *http.Request) (*identity.Principal, error) {
 	if stored == nil {
 		return nil, contract.ErrUnauthenticated
 	}
-	payload, record, access, err := readSession(stored)
+	payload, record, access, err := readSession(stored.Value, &stored.ExpiresAt)
 	if err != nil {
 		return nil, err
 	}
@@ -306,10 +306,10 @@ func (s *Sessions) Logout(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func readSession(stored *postgres.Record) (map[string]any, contract.SessionRecord, string, error) {
+func readSession(value []byte, expiry *int64) (map[string]any, contract.SessionRecord, string, error) {
 	var payload map[string]any
 	var record contract.SessionRecord
-	if !contract.ValidJSONUnicode(stored.Value) || json.Unmarshal(stored.Value, &payload) != nil {
+	if !contract.ValidJSONUnicode(value) || json.Unmarshal(value, &payload) != nil {
 		return nil, record, "", contract.ErrUnavailable
 	}
 	version, ok := payload["schemaVersion"].(float64)
@@ -371,8 +371,13 @@ func readSession(stored *postgres.Record) (map[string]any, contract.SessionRecor
 	default:
 		return nil, record, "", contract.ErrUnavailable
 	}
-	if record.IdleExpiresAt != stored.ExpiresAt {
+	if expiry != nil && record.IdleExpiresAt != *expiry {
 		return nil, record, "", contract.ErrUnavailable
 	}
 	return payload, record, access, nil
+}
+
+func SessionPrincipal(value []byte) (postgres.SessionPrincipal, error) {
+	_, record, _, err := readSession(value, nil)
+	return postgres.SessionPrincipal{ProductID: record.ProductID, Environment: record.Environment, Issuer: record.Issuer, Subject: record.Subject}, err
 }

@@ -4,11 +4,15 @@ import (
 	"context"
 	"errors"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/auditflow"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/browserlogin"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/configuration"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/identity"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/modelbinding"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/postgres"
+	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -39,6 +43,7 @@ type RuntimeStorage struct {
 	Ready       func(context.Context) error
 	Identity    IdentityGate
 	AppendAudit func(context.Context, map[string]any) (AuditReceipt, error)
+	Browser     *BrowserStorage
 }
 type Credentials struct {
 	ClientSecret, OpenFGAKey func(context.Context) (string, error)
@@ -49,7 +54,35 @@ type Options struct {
 	Credentials         Credentials
 	Storage             RuntimeStorage
 }
-type Client struct{ authentication *auditflow.Authentication }
+type BrowserStorage struct {
+	Login    *postgres.BrowserLoginRecords
+	Sessions *postgres.SessionRecords
+}
+
+type SessionOptions struct {
+	CallbackURL, ReturnTo, ZitadelAPIAudience string
+	AbsoluteLifetime, IdleLifetime            time.Duration
+}
+
+type Sessions interface {
+	Start(http.ResponseWriter, *http.Request) error
+	Callback(http.ResponseWriter, *http.Request) error
+	Authenticate(*http.Request) (*Principal, error)
+	Logout(http.ResponseWriter, *http.Request) error
+}
+
+type Client struct {
+	authentication *auditflow.Authentication
+	createSessions func(context.Context, SessionOptions) (Sessions, error)
+}
+
+func (c *Client) NewSessions(ctx context.Context, options SessionOptions) (Sessions, error) {
+	if c == nil || ctx == nil || c.createSessions == nil {
+		return nil, ErrInvalidArgument
+	}
+	return c.createSessions(ctx, options)
+}
+
 type Tokens struct{ authentication *auditflow.Authentication }
 
 func (c *Client) Tokens() *Tokens {
@@ -139,7 +172,46 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 	if err != nil {
 		return nil, err
 	}
-	return &Client{authentication}, nil
+	client := &Client{authentication: authentication}
+	if storage.Browser != nil && storage.Browser.Login != nil && storage.Browser.Sessions != nil {
+		browser := *storage.Browser
+		redirects := deployment.Manifest().Clients[cfg.ClientKey].RedirectURIs
+		client.createSessions = func(ctx context.Context, session SessionOptions) (Sessions, error) {
+			if !slices.Contains(redirects, session.CallbackURL) || session.ZitadelAPIAudience == "" {
+				return nil, ErrInvalidArgument
+			}
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			type secretResult struct {
+				value string
+				err   error
+			}
+			secret := make(chan secretResult, 1)
+			if err := contract.CheckCancellation(ctx); err != nil {
+				return nil, err
+			}
+			go func() { value, err := options.Credentials.ClientSecret(ctx); secret <- secretResult{value, err} }()
+			var credential string
+			select {
+			case <-ctx.Done():
+				return nil, contract.CheckCancellation(ctx)
+			case result := <-secret:
+				if result.err != nil {
+					return nil, ErrUnavailable
+				}
+				credential = result.value
+			}
+			login, err := browserlogin.NewHTTP(ctx, identity.BrowserOIDCConfig{
+				Issuer: cfg.Issuer, Profile: profile, Audience: cfg.Audience, ClientID: cfg.ClientID, ClientSecret: credential,
+				RedirectURI: session.CallbackURL, ZitadelAPIAudience: session.ZitadelAPIAudience,
+			}, browser.Login, cfg.ProductID, cfg.Environment, "default")
+			if err != nil {
+				return nil, err
+			}
+			return browserlogin.NewSessions(login, authentication, browser.Sessions, session.ReturnTo, session.AbsoluteLifetime, session.IdleLifetime, nil)
+		}
+	}
+	return client, nil
 }
 
 // AuditEventDigest computes the portable digest for a custom durable audit implementation.

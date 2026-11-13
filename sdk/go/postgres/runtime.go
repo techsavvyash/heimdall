@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	heimdall "github.com/techsavvyash/heimdall/sdk/go"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/browserlogin"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	internal "github.com/techsavvyash/heimdall/sdk/go/internal/postgres"
 )
@@ -15,6 +16,13 @@ type StorageOptions struct {
 	ProductID, Environment string
 	// AuditSinks fixes initial routing. An empty list stores events without delivery rows.
 	AuditSinks []string
+	Sessions   *SessionStorageOptions
+}
+
+type SessionStorageOptions struct {
+	KeyUsageDB  *sql.DB
+	ActiveKeyID string
+	Keys        map[string][]byte
 }
 
 // NewStorage performs no I/O and never closes the caller's pool.
@@ -45,13 +53,37 @@ func NewStorage(db *sql.DB, options StorageOptions) (heimdall.RuntimeStorage, er
 	if err != nil {
 		return empty, err
 	}
+	var browser *heimdall.BrowserStorage
+	var keyDB *sql.DB
+	if sessions := options.Sessions; sessions != nil {
+		keyDB = sessions.KeyUsageDB
+		cipher, err := contract.NewRecordCipher(sessions.ActiveKeyID, sessions.Keys)
+		if err != nil {
+			return empty, err
+		}
+		records, err := internal.NewRecords(db, keyDB, cipher, options.ProductID, options.Environment, nil)
+		if err != nil {
+			return empty, err
+		}
+		store, err := internal.NewSessionRecords(db, keyDB, cipher, options.ProductID, options.Environment, browserlogin.SessionPrincipal, nil)
+		if err != nil {
+			return empty, err
+		}
+		browser = &heimdall.BrowserStorage{Login: internal.NewBrowserLoginRecords(records, nil), Sessions: store}
+	}
 	return heimdall.RuntimeStorage{
-		ProductID: options.ProductID, Environment: options.Environment,
+		ProductID: options.ProductID, Environment: options.Environment, Browser: browser,
 		Ready: func(ctx context.Context) error {
 			if ctx == nil {
 				return heimdall.ErrInvalidArgument
 			}
-			return internal.CheckRetentionReadiness(ctx, db)
+			if err := internal.CheckRetentionReadiness(ctx, db); err != nil {
+				return err
+			}
+			if keyDB != nil {
+				return internal.CheckKeyUsageReadiness(ctx, keyDB)
+			}
+			return nil
 		},
 		Identity: heimdall.IdentityGate{
 			Check: func(ctx context.Context, value heimdall.Identity) (bool, error) {

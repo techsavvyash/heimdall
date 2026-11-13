@@ -1,6 +1,7 @@
 package heimdall_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -293,7 +294,9 @@ func TestPublicPostgresRuntime(t *testing.T) {
 	}
 	defer db.Close()
 	sinks := []string{"siem"}
-	storage, err := postgres.NewStorage(db, postgres.StorageOptions{ProductID: "ledger", Environment: "public-go", AuditSinks: sinks})
+	storage, err := postgres.NewStorage(db, postgres.StorageOptions{ProductID: "ledger", Environment: "public-go", AuditSinks: sinks,
+		Sessions: &postgres.SessionStorageOptions{KeyUsageDB: db, ActiveKeyID: "k1", Keys: map[string][]byte{"k1": bytes.Repeat([]byte{7}, 32)}},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,6 +306,26 @@ func TestPublicPostgresRuntime(t *testing.T) {
 	client, err := heimdall.New(ctx, h.config, h.manifest, h.options)
 	if err != nil {
 		t.Fatal(err)
+	}
+	options := heimdall.SessionOptions{CallbackURL: "https://other.example/callback", ReturnTo: "/workspaces", ZitadelAPIAudience: "api"}
+	if _, err := client.NewSessions(ctx, options); !errors.Is(err, heimdall.ErrInvalidArgument) {
+		t.Fatal(err)
+	}
+	options.CallbackURL = "https://ledger.example.com/auth/callback"
+	sessions, err := client.NewSessions(ctx, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	if err = sessions.Start(recorder, httptest.NewRequest(http.MethodGet, "https://ledger.example.com/auth/start", nil)); err != nil {
+		t.Fatal(err)
+	}
+	if recorder.Code != 303 || !strings.HasPrefix(recorder.Header().Get("Set-Cookie"), "__Host-heimdall-") {
+		t.Fatal("invalid login response")
+	}
+	var loginCount int
+	if err = db.QueryRow("SELECT count(*) FROM heimdall.records WHERE environment='public-go' AND kind='login'").Scan(&loginCount); err != nil || loginCount != 1 {
+		t.Fatal(loginCount, err)
 	}
 	actor, err := client.Tokens().Verify(ctx, h.token)
 	if err != nil {

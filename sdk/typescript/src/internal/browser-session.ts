@@ -230,7 +230,7 @@ type SessionPayload = Parameters<typeof sessionStatus>[0] & {
   accessToken: string;
   schemaVersion: 1;
 };
-function readSession(bytes: Uint8Array, expires: number): SessionPayload {
+export function readSession(bytes: Uint8Array, expires?: number): SessionPayload {
   try {
     const payload: SessionPayload = JSON.parse(
       new TextDecoder("utf-8", { fatal: true }).decode(bytes),
@@ -245,7 +245,7 @@ function readSession(bytes: Uint8Array, expires: number): SessionPayload {
     ];
     if (
       payload.schemaVersion !== 1 ||
-      payload.idleExpiresAt !== expires ||
+      (expires !== undefined && payload.idleExpiresAt !== expires) ||
       !instants.every((at) => Number.isSafeInteger(at) && at >= 0) ||
       ![
         payload.productId,

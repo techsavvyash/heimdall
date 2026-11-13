@@ -213,7 +213,11 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
     });
     const signal = new AbortController().signal;
     const sinks = ["siem"];
-    const storage = createPostgresStorage(pool, { ...s.config, auditSinks: sinks });
+    const storage = createPostgresStorage(pool, {
+      ...s.config,
+      auditSinks: sinks,
+      sessions: { keyUsagePool: pool, activeKeyId: "k1", keys: { k1: Buffer.alloc(32, 7) } },
+    });
     sinks[0] = "changed";
     s.options.storage = storage;
     try {
@@ -223,6 +227,25 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         s.options,
         { signal },
       );
+      const callbackUrl = base.manifest.clients.web.redirectUris[0];
+      const sessionOptions = { callbackUrl, returnTo: "/workspaces", zitadelAPIAudience: "api" };
+      await expect(
+        runtime.createSessions(
+          { ...sessionOptions, callbackUrl: "https://other.example/callback" },
+          { signal },
+        ),
+      ).rejects.toThrow("invalid_argument");
+      const sessions = await runtime.createSessions(sessionOptions, { signal });
+      const response = await sessions.start(new Request(new URL("/auth/start", callbackUrl)));
+      expect(response.status).toBe(303);
+      expect(response.headers.get("set-cookie")).toMatch(/^__Host-heimdall-/);
+      expect(
+        (
+          await pool.query(
+            "SELECT count(*)::int AS count FROM heimdall.records WHERE environment='public-ts' AND kind='login'",
+          )
+        ).rows[0].count,
+      ).toBe(1);
       await runtime.tokens.verify(raw, { signal });
       await expect(runtime.tokens.verify("invalid", { signal })).rejects.toThrow("unauthenticated");
       await storage.identity.invalidate(

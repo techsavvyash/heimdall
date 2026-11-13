@@ -1,3 +1,5 @@
+import { browserSession } from "./internal/browser-session.js";
+import { createBrowserLoginHTTP } from "./internal/browser-login-http.js";
 import { parseDeployment } from "./internal/configuration.js";
 import { discoverOIDC } from "./internal/oidc-discovery.js";
 import { PinnedModel } from "./internal/model-binding.js";
@@ -16,6 +18,10 @@ export type RuntimeStorage = {
   ready(signal: AbortSignal): Promise<void>;
   identity: IdentityGate;
   appendAudit: AuditAppend;
+  browser?: {
+    login: Parameters<typeof createBrowserLoginHTTP>[1];
+    sessions: Parameters<typeof browserSession>[2];
+  };
 };
 export type RuntimeOptions = {
   policyVersion: string;
@@ -30,7 +36,18 @@ declare const principalBrand: unique symbol;
 export type Principal = Awaited<ReturnType<AuditedAuthentication["verify"]>> & {
   readonly [principalBrand]: true;
 };
+export type SessionOptions = Parameters<typeof browserSession>[3] & {
+  callbackUrl: string;
+  zitadelAPIAudience: string;
+};
+export type Sessions = Readonly<{
+  start(request: Request): Promise<Response>;
+  callback(request: Request): Promise<Response>;
+  authenticate(request: Request): Promise<Principal>;
+  logout(request: Request): Promise<Response>;
+}>;
 export type Heimdall = Readonly<{
+  createSessions(options: SessionOptions, request: { signal: AbortSignal }): Promise<Sessions>;
   tokens: Readonly<{
     verify(accessToken: string, options: { signal: AbortSignal }): Promise<Principal>;
   }>;
@@ -75,6 +92,20 @@ export async function createHeimdall(
     check: storage.identity.check.bind(storage.identity),
     invalidate: storage.identity.invalidate.bind(storage.identity),
   };
+  const browser = storage.browser && {
+    login: {
+      start: storage.browser.login.start.bind(storage.browser.login),
+      claim: storage.browser.login.claim.bind(storage.browser.login),
+    },
+    sessions: {
+      createSession: storage.browser.sessions.createSession.bind(storage.browser.sessions),
+      getSession: storage.browser.sessions.getSession.bind(storage.browser.sessions),
+      compareAndSwapSession: storage.browser.sessions.compareAndSwapSession.bind(
+        storage.browser.sessions,
+      ),
+      deleteSession: storage.browser.sessions.deleteSession.bind(storage.browser.sessions),
+    },
+  };
   const secret = options.credentials.clientSecret.bind(options.credentials);
   const key = options.credentials.openfgaKey.bind(options.credentials);
   const policyVersion = options.policyVersion;
@@ -110,6 +141,43 @@ export async function createHeimdall(
       append,
     );
     return Object.freeze({
+      async createSessions(options: SessionOptions, request: { signal: AbortSignal }) {
+        if (
+          !browser ||
+          !(request?.signal instanceof AbortSignal) ||
+          !manifest.clients[config.clientKey]?.redirectUris.includes(options?.callbackUrl) ||
+          !options.zitadelAPIAudience
+        )
+          throw new HeimdallError("invalid_argument");
+        const operation = AbortSignal.any([request.signal, AbortSignal.timeout(5000)]);
+        const { callbackUrl, zitadelAPIAudience, ...sessionOptions } = options;
+        const clientSecret = await bounded(secret, operation).catch((error: unknown) => {
+          checkCancellation(operation);
+          throw known(error);
+        });
+        const login = await createBrowserLoginHTTP(
+          {
+            issuer: config.issuer,
+            audience: config.audience,
+            clientId: config.clientId,
+            profile,
+            productId: config.productId,
+            environment: config.environment,
+            returnToKey: "default",
+            clientSecret,
+            redirectUri: callbackUrl,
+            zitadelAPIAudience,
+          },
+          browser.login,
+          operation,
+        );
+        const sessions = browserSession(login, authentication, browser.sessions, sessionOptions);
+        return Object.freeze({
+          ...sessions,
+          authenticate: async (request: Request) =>
+            (await sessions.authenticate(request)) as Principal,
+        });
+      },
       tokens: Object.freeze({
         verify: async (raw: string, call: { signal: AbortSignal }) => {
           if (!(call?.signal instanceof AbortSignal)) throw new HeimdallError("invalid_argument");

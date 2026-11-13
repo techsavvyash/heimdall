@@ -2,6 +2,8 @@ export { createHeimdall } from "./runtime.js";
 export type {
   Heimdall,
   RuntimeOptions,
+  SessionOptions,
+  Sessions,
   RuntimeStorage,
   IdentityGate,
   AuditAppend,

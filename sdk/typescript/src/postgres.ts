@@ -1,8 +1,14 @@
+import { HeimdallError } from "./internal/errors.js";
+import { readSession } from "./internal/browser-session.js";
+import { RecordCipher } from "./internal/envelopes.js";
+import { BrowserLoginRecords } from "./internal/postgres/login.js";
+import { PostgresRecords } from "./internal/postgres/records.js";
+import { SessionRecords } from "./internal/postgres/sessions.js";
 import type { Pool } from "pg";
 import type { RuntimeStorage } from "./runtime.js";
 import { IdentityRecords } from "./internal/postgres/identity.js";
 import { PostgresAudit } from "./internal/postgres/audit.js";
-import { checkRetentionReadiness } from "./internal/postgres/readiness.js";
+import { checkKeyUsageReadiness, checkRetentionReadiness } from "./internal/postgres/readiness.js";
 import { validateAuditShape } from "./internal/audit-shape.js";
 import { validateAuditEvent } from "./internal/audit.js";
 
@@ -11,6 +17,11 @@ export type PostgresStorageOptions = {
   environment: string;
   /** Explicit initial routing. An empty list stores events without delivery rows. */
   auditSinks: readonly string[];
+  sessions?: {
+    keyUsagePool: Pool;
+    activeKeyId: string;
+    keys: Readonly<Record<string, Uint8Array>>;
+  };
 };
 
 /** Compose durable runtime ports. The caller owns the pool and runs migrations separately. */
@@ -28,10 +39,28 @@ export function createPostgresStorage(pool: Pool, options: PostgresStorageOption
       validateAuditEvent(event as Parameters<typeof validateAuditEvent>[0], "sdk", () => false);
     },
   );
+  const sessionOptions = options.sessions;
+  const keyPool = sessionOptions?.keyUsagePool;
+  if (sessionOptions && !keyPool) throw new HeimdallError("invalid_argument");
+  const cipher =
+    sessionOptions && new RecordCipher(sessionOptions.activeKeyId, sessionOptions.keys);
+  const browser =
+    keyPool &&
+    cipher &&
+    Object.freeze({
+      login: new BrowserLoginRecords(
+        new PostgresRecords(pool, keyPool, cipher, productId, environment),
+      ),
+      sessions: new SessionRecords(pool, keyPool, cipher, productId, environment, readSession),
+    });
   return Object.freeze({
     productId,
     environment,
-    ready: (signal: AbortSignal) => checkRetentionReadiness(pool, signal),
+    ready: async (signal: AbortSignal) => {
+      await checkRetentionReadiness(pool, signal);
+      if (keyPool) await checkKeyUsageReadiness(keyPool, signal);
+    },
+    ...(browser ? { browser } : {}),
     identity: Object.freeze(identities),
     appendAudit: audit.append,
   });

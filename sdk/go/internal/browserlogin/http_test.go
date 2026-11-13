@@ -442,7 +442,7 @@ func TestBrowserLoginHTTP(t *testing.T) {
 	if err != nil || current == nil {
 		t.Fatal("missing rotated record", err)
 	}
-	_, record, _, err := readSession(current)
+	_, record, _, err := readSession(current.Value, &current.ExpiresAt)
 	if err != nil || record.State != "active" || record.RefreshToken != "replacement-refresh" || refreshes.Load() != 1 {
 		t.Fatal("unexpected rotation", err)
 	}

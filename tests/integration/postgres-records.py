@@ -79,6 +79,18 @@ try:
     for args in (["--prepare-retention-upgrade","--writers-drained","--sql-directory",str(ROOT/"contracts/persistence/session"),"--retention-rows","10000","--retention-bytes","81920000"],["--backfill-retention-upgrade","--writers-drained"],["--backfill-retention-upgrade","--writers-drained"],["--activate-retention-upgrade","--writers-drained"]):
         subprocess.run(["go","run","./cmd/heimdall-migrate",*args],cwd=ROOT/"sdk/go",env=runtime_env,check=True)
     run(["docker","exec","-i",name,"psql","-U","postgres","-d","public_runtime","-v","ON_ERROR_STOP=1"],input="CREATE ROLE heimdall_public_runtime NOLOGIN; GRANT USAGE ON SCHEMA heimdall TO heimdall_public_runtime; GRANT SELECT ON heimdall.schema_metadata,heimdall.migrations,heimdall.identity_denials,heimdall.records,heimdall.audit_events,heimdall.audit_deliveries TO heimdall_public_runtime; GRANT INSERT,UPDATE ON heimdall.identity_denials TO heimdall_public_runtime; GRANT DELETE ON heimdall.records TO heimdall_public_runtime; GRANT INSERT ON heimdall.audit_events,heimdall.audit_deliveries TO heimdall_public_runtime; GRANT SELECT,INSERT,UPDATE ON heimdall.audit_decisions TO heimdall_public_runtime; GRANT USAGE ON SCHEMA heimdall_capacity TO heimdall_public_runtime; GRANT SELECT ON heimdall_capacity.policy,heimdall_capacity.upgrade,heimdall_capacity.backfill TO heimdall_public_runtime; GRANT SELECT,INSERT ON heimdall_capacity.event_charges TO heimdall_public_runtime; GRANT SELECT,INSERT,UPDATE ON heimdall_capacity.reservations TO heimdall_public_runtime; GRANT UPDATE(used_events,used_bytes,used_deliveries,reserved_events,reserved_bytes,reserved_deliveries) ON heimdall_capacity.policy TO heimdall_public_runtime; GRANT USAGE ON SCHEMA heimdall_retention TO heimdall_public_runtime; GRANT SELECT ON ALL TABLES IN SCHEMA heimdall_retention TO heimdall_public_runtime; GRANT INSERT,UPDATE ON heimdall_retention.event_identities,heimdall_retention.decision_identities TO heimdall_public_runtime; GRANT UPDATE(used_rows,reserved_rows) ON heimdall_retention.capacity TO heimdall_public_runtime;",capture_output=True,text=True)
+    run(["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime", "-v", "ON_ERROR_STOP=1"],
+        input=(ROOT / "contracts/persistence/keys/0001.sql").read_text() + f"""
+        INSERT INTO heimdall_keys.migrations(version,checksum) VALUES(1,'{key_checksum}');
+        INSERT INTO heimdall_keys.schema_metadata(database_version,state,reader_min,reader_max,writer_min,writer_max)
+        VALUES(1,'ready',1,1,1,1);
+        INSERT INTO heimdall_keys.record_key_usage(fingerprint,encryption_limit) VALUES(decode('{fingerprint}','hex'),1000);
+        GRANT USAGE ON SCHEMA heimdall_keys TO heimdall_public_runtime;
+        GRANT SELECT ON ALL TABLES IN SCHEMA heimdall_keys TO heimdall_public_runtime;
+        GRANT UPDATE(used) ON heimdall_keys.record_key_usage TO heimdall_public_runtime;
+        GRANT INSERT,UPDATE ON heimdall.records TO heimdall_public_runtime;
+        GRANT USAGE ON SEQUENCE heimdall.record_revision_seq TO heimdall_public_runtime;
+        """, capture_output=True, text=True)
     run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/runtime.test.ts"], env=runtime_env)
     subprocess.run(["go", "test", "-race", "-count=1", ".", "-run", "TestPublicPostgresRuntime|TestPostgresFactory"], cwd=ROOT / "sdk/go", env=runtime_env, check=True)
     if os.environ.get("HEIMDALL_PROBE_DURABLE_RUNTIME") == "1":
