@@ -1,0 +1,25 @@
+{
+  "clientId": "ledger-web",
+  "clientSecret": "fixture:secret+*~",
+  "audience": "ledger-project",
+  "subject": "alice",
+  "code": "opaque+authorization/code",
+  "nonce": "browser-nonce",
+  "verifier": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ",
+  "cases": [
+    { "name": "valid", "error": "" },
+    { "name": "project and client audiences", "error": "" },
+    { "name": "missing authorized party with two audiences", "error": "unauthenticated" },
+    { "name": "wrong nonce", "error": "unauthenticated" },
+    { "name": "wrong ID audience", "error": "unauthenticated" },
+    { "name": "extra ID audience", "error": "unauthenticated" },
+    { "name": "wrong authorized party", "error": "unauthenticated" },
+    { "name": "wrong access hash", "error": "unauthenticated" },
+    { "name": "wrong access audience", "error": "unauthenticated" },
+    { "name": "wrong access subject", "error": "unauthenticated" },
+    { "name": "invalid grant", "error": "unauthenticated" },
+    { "name": "redirect", "error": "unavailable" },
+    { "name": "oversize", "error": "unavailable" },
+    { "name": "claim uncertain", "error": "outcome_unknown" }
+  ]
+}

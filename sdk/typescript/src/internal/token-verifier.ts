@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
 import type { JSONWebKeySet } from "jose";
 import { validateEndpoint } from "./endpoints.js";
@@ -158,6 +159,24 @@ export class TokenVerifier {
     return this.keys!;
   }
   async verify(token: string, signal?: AbortSignal): Promise<Token> {
+    return this.verifySigned(token, signal);
+  }
+
+  async verifyIDToken(
+    token: string,
+    audience: string,
+    nonce: string,
+    accessToken: string,
+    signal?: AbortSignal,
+  ): Promise<Token> {
+    return this.verifySigned(token, signal, { audience, nonce, accessToken });
+  }
+
+  private async verifySigned(
+    token: string,
+    signal?: AbortSignal,
+    login?: { audience: string; nonce: string; accessToken: string },
+  ): Promise<Token> {
     const bounded = AbortSignal.any([AbortSignal.timeout(5000), ...(signal ? [signal] : [])]);
     checkCancellation(bounded);
     if (
@@ -186,7 +205,7 @@ export class TokenVerifier {
       const { payload } = await jwtVerify(token, keys, {
         algorithms: ["RS256"],
         issuer: this.config.issuer,
-        audience: this.config.audience,
+        audience: login?.audience ?? this.config.audience,
         requiredClaims: ["sub", "exp", "iat"],
         clockTolerance: 0,
         currentDate: new Date(this.now()),
@@ -204,6 +223,27 @@ export class TokenVerifier {
         (payload.nbf !== undefined && (!Number.isSafeInteger(payload.nbf) || payload.nbf < 0))
       )
         throw new Error();
+      if (login) {
+        const audiences = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+        if (
+          !login.nonce ||
+          payload.nonce !== login.nonce ||
+          new Set(audiences).size !== audiences.length ||
+          audiences.some(
+            (audience) => audience !== login.audience && audience !== this.config.audience,
+          ) ||
+          ((audiences.length > 1 || Object.hasOwn(payload, "azp")) &&
+            payload.azp !== login.audience) ||
+          (Object.hasOwn(payload, "at_hash") &&
+            payload.at_hash !==
+              createHash("sha256")
+                .update(login.accessToken, "ascii")
+                .digest()
+                .subarray(0, 16)
+                .toString("base64url"))
+        )
+          throw new Error();
+      }
       encodeIdentity(this.config.issuer, payload.sub);
       checkCancellation(bounded);
       const result = Object.freeze({
@@ -211,7 +251,7 @@ export class TokenVerifier {
         subject: payload.sub,
         expiresAt: payload.exp! * 1000,
       });
-      this.verified.add(result);
+      if (!login) this.verified.add(result);
       return result;
     } catch {
       checkCancellation(bounded);

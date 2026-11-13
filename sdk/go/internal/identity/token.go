@@ -3,6 +3,7 @@ package identity
 import (
 	"context"
 	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"github.com/golang-jwt/jwt/v5"
@@ -187,7 +188,20 @@ func (v *TokenVerifier) key(ctx context.Context, kid string) (*rsa.PublicKey, er
 	}
 	return v.keys[kid], nil
 }
+
+type idTokenBinding struct {
+	audience, nonce, accessToken string
+}
+
 func (v *TokenVerifier) Verify(ctx context.Context, raw string) (*VerifiedToken, error) {
+	return v.verify(ctx, raw, nil)
+}
+
+func (v *TokenVerifier) verifyIDToken(ctx context.Context, raw, audience, nonce, accessToken string) (*VerifiedToken, error) {
+	return v.verify(ctx, raw, &idTokenBinding{audience, nonce, accessToken})
+}
+
+func (v *TokenVerifier) verify(ctx context.Context, raw string, login *idTokenBinding) (*VerifiedToken, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := contract.CheckCancellation(ctx); err != nil {
@@ -220,7 +234,11 @@ func (v *TokenVerifier) Verify(ctx context.Context, raw string) (*VerifiedToken,
 	if err != nil {
 		return nil, err
 	}
-	token, err := jwt.Parse(raw, func(*jwt.Token) (any, error) { return key, nil }, jwt.WithValidMethods([]string{"RS256"}), jwt.WithIssuer(v.config.Issuer), jwt.WithAudience(v.config.Audience), jwt.WithExpirationRequired(), jwt.WithIssuedAt(), jwt.WithJSONNumber(), jwt.WithTimeFunc(v.now))
+	audience := v.config.Audience
+	if login != nil {
+		audience = login.audience
+	}
+	token, err := jwt.Parse(raw, func(*jwt.Token) (any, error) { return key, nil }, jwt.WithValidMethods([]string{"RS256"}), jwt.WithIssuer(v.config.Issuer), jwt.WithAudience(audience), jwt.WithExpirationRequired(), jwt.WithIssuedAt(), jwt.WithJSONNumber(), jwt.WithTimeFunc(v.now))
 	if cancellation := contract.CheckCancellation(ctx); cancellation != nil {
 		return nil, cancellation
 	}
@@ -255,7 +273,31 @@ func (v *TokenVerifier) Verify(ctx context.Context, raw string) (*VerifiedToken,
 	if _, err = contract.EncodeIdentity(v.config.Issuer, sub); err != nil {
 		return nil, contract.ErrUnauthenticated
 	}
-	return &VerifiedToken{v.config.Issuer, sub, exp * 1000, v}, nil
+	owner := v
+	if login != nil {
+		audiences, err := claims.GetAudience()
+		if err != nil || login.nonce == "" || claims["nonce"] != login.nonce {
+			return nil, contract.ErrUnauthenticated
+		}
+		seen := make(map[string]bool, len(audiences))
+		for _, value := range audiences {
+			if seen[value] || (value != audience && value != v.config.Audience) {
+				return nil, contract.ErrUnauthenticated
+			}
+			seen[value] = true
+		}
+		if azp, present := claims["azp"]; (len(audiences) > 1 || present) && azp != audience {
+			return nil, contract.ErrUnauthenticated
+		}
+		if hash, ok := claims["at_hash"]; ok {
+			digest := sha256.Sum256([]byte(login.accessToken))
+			if hash != base64.RawURLEncoding.EncodeToString(digest[:16]) {
+				return nil, contract.ErrUnauthenticated
+			}
+		}
+		owner = nil
+	}
+	return &VerifiedToken{v.config.Issuer, sub, exp * 1000, owner}, nil
 }
 
 func validKid(kid string) bool {

@@ -349,6 +349,68 @@ try {
     return { verifier, nonce, code };
   }
   for (const client of clients) {
+    if (process.env.HEIMDALL_PROBE_SDK_BROWSER_EXCHANGE === "1") {
+      for (const language of ["ts", "go"]) {
+        const attempt = await authorize(client);
+        const env = {
+          ...process.env,
+          HEIMDALL_TEST_BROWSER_EXCHANGE: JSON.stringify({
+            config: {
+              issuer,
+              profile: "production",
+              clientId: client.clientId,
+              clientSecret: client.clientSecret,
+              audience: client.projectId,
+              redirectUri: client.redirectUri,
+            },
+            code: attempt.code,
+            nonce: attempt.nonce,
+            pkceVerifier: attempt.verifier,
+            subject: user.id,
+          }),
+        };
+        const command =
+          language === "ts"
+            ? [
+                "pnpm",
+                "--filter",
+                "@heimdall/sdk",
+                "exec",
+                "vitest",
+                "run",
+                "test/browser-oidc.live.test.ts",
+              ]
+            : [
+                "go",
+                "test",
+                "-race",
+                "-count=1",
+                "./internal/identity",
+                "-run",
+                "^TestLiveBrowserExchange$",
+              ];
+        const child = spawnSync(command[0], command.slice(1), {
+          env,
+          cwd: new URL(language === "ts" ? "../../" : "../../sdk/go/", import.meta.url),
+          encoding: "utf8",
+          timeout: 60000,
+        });
+        if (child.status !== 0) {
+          const codes =
+            (child.stdout + child.stderr).match(
+              /\b(?:unauthenticated|unavailable|deadline_exceeded|invalid_argument|cancelled)\b/g,
+            ) ?? [];
+          console.error(
+            JSON.stringify({ sdkExchangeFailure: language, codes: [...new Set(codes)] }),
+          );
+        }
+        assert.equal(child.status, 0, `${language} SDK live authorization code exchange failed`);
+      }
+      observations.push({
+        product: client.product,
+        sdkBrowserExchange: { typescript: "passed", go: "passed" },
+      });
+    }
     const auth = await authorize(client);
     const result = await form("/oauth/v2/token", client, {
       grant_type: "authorization_code",
