@@ -1,0 +1,8 @@
+{
+  "run": "601e612b-9dc3-4ccf-a588-5515998a32f5",
+  "elasticsearch": "8.19.0",
+  "scopedReplay": true,
+  "changedTenantRejected": true,
+  "partialReceipt": true,
+  "storedDocuments": 2
+}

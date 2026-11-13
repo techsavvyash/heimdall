@@ -143,3 +143,29 @@ sequenceDiagram
 ```
 
 The provider and receiver in this fault test are fixtures. Production visibility and retention bounds and a compatible SIEM deployment still require qualification.
+
+## Elasticsearch receipt verification
+
+The reference integration mounts `examples/audit/elasticsearch_receipt.py` in an existing product or collector endpoint. The operator assigns one bearer credential and concrete Elasticsearch index to each product, environment and sink binding. The handler validates the batch and every event's scope before sending any documents. It derives each document ID from the product, environment and event ID. It uses create-only writes and returns a receipt for successful creates or verified identical replays. A conflicting payload under an existing ID remains pending for operator investigation.
+
+```mermaid
+sequenceDiagram
+  participant S as Product SDK exporter
+  participant H as Product receipt handler
+  participant E as Elasticsearch
+  S->>H: Submit authenticated scoped audit batch
+  H->>E: Create document under a stable scoped ID
+  alt New event
+    E-->>H: Confirm durable creation
+  else Repeated event
+    E-->>H: Report existing document ID
+    H->>E: Compare existing payload and flush verified replay
+  end
+  H-->>S: Acknowledge accepted event IDs
+```
+
+Precreate the index with request-level translog durability and deploy the handler behind the product's HTTPS endpoint. Give its Elasticsearch credential create, read and flush access for that index. Keep the index concrete and stable during the replay period. A replay must find the original document and match its payload. The handler flushes the index before acknowledging matches so a real-time read of a concurrent create alone cannot produce a receipt. [Create API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-create) · [Translog durability](https://www.elastic.co/docs/reference/elasticsearch/index-settings/translog) · [Flush API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-indices-flush)
+
+Run `python3 tests/integration/elasticsearch-receipts.py` against a disposable Elasticsearch 8.19.0 node with `HEIMDALL_TEST_ELASTICSEARCH_URL` and protected `HEIMDALL_TEST_ELASTICSEARCH_CREDENTIALS`. The test creates and deletes one run-scoped index. Run `601e612b-9dc3-4ccf-a588-5515998a32f5` used the checksum-verified native Elastic distribution with authentication enabled. It rejected invalid credentials and cross-product batches, acknowledged an identical replay without adding a document, left a changed tenant payload pending and accepted the healthy product event in that same batch. Direct Elasticsearch reads confirmed that the index held exactly the two expected documents.
+
+This run verifies the receipt handler against real Elasticsearch. The prior commit-loss run exercises SDK exporters against the receipt protocol. A combined live provider-to-SIEM run and Elasticsearch restart qualification remain open.
