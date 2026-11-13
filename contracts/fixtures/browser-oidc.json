@@ -6,6 +6,17 @@
   "code": "opaque+authorization/code",
   "nonce": "browser-nonce",
   "verifier": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ",
+  "federatedSession": {
+    "sessionId": "verified-provider-session",
+    "verifiedAt": 1760000000123
+  },
+  "federationCases": [
+    { "name": "federated binding valid", "error": "" },
+    { "name": "federated wrong session", "error": "unauthenticated" },
+    { "name": "federated wrong authentication time", "error": "unauthenticated" },
+    { "name": "federated missing authentication time", "error": "unauthenticated" },
+    { "name": "federated wrong subject", "error": "unauthenticated" }
+  ],
   "cases": [
     { "name": "valid", "error": "" },
     { "name": "project and client audiences", "error": "" },

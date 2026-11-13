@@ -1,7 +1,7 @@
 import { validateEndpoint } from "./endpoints.js";
 import { checkCancellation, HeimdallError } from "./errors.js";
 import { discoverOIDC } from "./oidc-discovery.js";
-import { TokenVerifier } from "./token-verifier.js";
+import { TokenVerifier, type FederatedSessionBinding } from "./token-verifier.js";
 
 type Config = {
   issuer: string;
@@ -12,7 +12,7 @@ type Config = {
   clientSecret: string;
   redirectUri: string;
 };
-type Claim = { nonce: string; pkceVerifier: string };
+type Claim = { nonce: string; pkceVerifier: string; federation?: FederatedSessionBinding };
 const visible = (value: unknown, max: number): value is string =>
   typeof value === "string" &&
   value.length > 0 &&
@@ -104,7 +104,9 @@ export async function createBrowserOIDC(config: Config, signal?: AbortSignal) {
   }
 
   return {
-    authorizationURL(state: string, nonce: string, pkceChallenge: string) {
+    authorizationURL(state: string, nonce: string, pkceChallenge: string, organizationId?: string) {
+      if (organizationId !== undefined && !/^[A-Za-z0-9_-]{1,128}(?![\s\S])/.test(organizationId))
+        throw new HeimdallError("invalid_argument");
       const url = new URL(metadata.authorization_endpoint);
       url.search = new URLSearchParams({
         client_id: clientId,
@@ -116,13 +118,18 @@ export async function createBrowserOIDC(config: Config, signal?: AbortSignal) {
         code_challenge: pkceChallenge,
         code_challenge_method: "S256",
       }).toString();
+      if (organizationId !== undefined)
+        url.searchParams.set(
+          "scope",
+          url.searchParams.get("scope")! + ` urn:zitadel:iam:org:id:${organizationId}`,
+        );
       return url.href;
     },
     // Claim is supplied by the callback so no code is dispatched before a confirmed claim.
     async exchange(code: string, claim: () => Promise<Claim>, caller?: AbortSignal) {
       if (caller) checkCancellation(caller);
       if (!visible(code, 4096)) throw new HeimdallError("unauthenticated");
-      const { nonce, pkceVerifier } = await claim();
+      const { nonce, pkceVerifier, federation } = await claim();
       const tokens = await requestTokens(
         new URLSearchParams({
           grant_type: "authorization_code",
@@ -140,6 +147,7 @@ export async function createBrowserOIDC(config: Config, signal?: AbortSignal) {
         tokens.accessToken,
         caller,
         zitadelAPIAudience,
+        federation,
       );
       const access = await verifier.verify(tokens.accessToken, caller);
       if (identity.subject !== access.subject) throw new HeimdallError("unauthenticated");

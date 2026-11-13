@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { randomUUID, randomBytes, createHash, createPublicKey, verify } from "node:crypto";
 import { createBrowserBridge } from "./browser-bridge.mjs";
 
@@ -659,44 +660,48 @@ try {
       });
   const client = app.oidcConfiguration;
   assert(client && !client.nonCompliant);
-  const nonce = randomUUID();
-  const state = randomUUID();
-  const verifier = randomBytes(32).toString("base64url");
-  const query = new URLSearchParams({
-    client_id: client.clientId,
-    redirect_uri: redirectUri,
-    response_type: "code",
-    scope: `openid urn:zitadel:iam:org:project:id:${project.projectId}:aud urn:zitadel:iam:org:id:${orgId} urn:zitadel:iam:org:project:id:zitadel:aud`,
-    state,
-    nonce,
-    code_challenge_method: "S256",
-    code_challenge: createHash("sha256").update(verifier).digest("base64url"),
-  });
-  const authorization = await page(`${z}/oauth/v2/authorize?${query}`);
-  assert(authorization.status === 302);
-  const authRequestId = new URL(authorization.headers.get("location"), z).searchParams.get(
-    "authRequest",
-  );
-  assert(authRequestId);
-  const callback = await za(
-    "POST",
-    `/v2/oidc/auth_requests/${authRequestId}`,
-    { session: { sessionId: session.sessionId, sessionToken: session.sessionToken } },
-    flowPat,
-  );
-  let callbackUrl = new URL(callback.callbackUrl);
-  for (let i = 0; i < 4 && callbackUrl.origin === z; i++) {
-    const redirect = await page(callbackUrl.href);
-    assert([302, 303, 307].includes(redirect.status));
-    callbackUrl = new URL(redirect.headers.get("location"), callbackUrl);
+  async function productCode() {
+    const nonce = randomUUID();
+    const state = randomUUID();
+    const verifier = randomBytes(32).toString("base64url");
+    const query = new URLSearchParams({
+      client_id: client.clientId,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: `openid urn:zitadel:iam:org:project:id:${project.projectId}:aud urn:zitadel:iam:org:id:${orgId} urn:zitadel:iam:org:project:id:zitadel:aud`,
+      state,
+      nonce,
+      code_challenge_method: "S256",
+      code_challenge: createHash("sha256").update(verifier).digest("base64url"),
+    });
+    const authorization = await page(`${z}/oauth/v2/authorize?${query}`);
+    assert(authorization.status === 302);
+    const authRequestId = new URL(authorization.headers.get("location"), z).searchParams.get(
+      "authRequest",
+    );
+    assert(authRequestId);
+    const callback = await za(
+      "POST",
+      `/v2/oidc/auth_requests/${authRequestId}`,
+      { session: { sessionId: session.sessionId, sessionToken: session.sessionToken } },
+      flowPat,
+    );
+    let callbackUrl = new URL(callback.callbackUrl);
+    for (let i = 0; i < 4 && callbackUrl.origin === z; i++) {
+      const redirect = await page(callbackUrl.href);
+      assert([302, 303, 307].includes(redirect.status));
+      callbackUrl = new URL(redirect.headers.get("location"), callbackUrl);
+    }
+    assert(
+      callbackUrl.origin + callbackUrl.pathname === redirectUri &&
+        callbackUrl.searchParams.get("state") === state,
+      "Downstream callback binding mismatch",
+    );
+    const code = callbackUrl.searchParams.get("code");
+    assert(code, "Downstream authorization code missing");
+    return { code, nonce, verifier };
   }
-  assert(
-    callbackUrl.origin + callbackUrl.pathname === redirectUri &&
-      callbackUrl.searchParams.get("state") === state,
-    "Downstream callback binding mismatch",
-  );
-  const code = callbackUrl.searchParams.get("code");
-  assert(code, "Downstream authorization code missing");
+  const { code, nonce, verifier } = await productCode();
   const exchange = await fetch(`${z}/oauth/v2/token`, {
     method: "POST",
     headers: {
@@ -799,6 +804,73 @@ try {
     idClaims.auth_time === Math.floor(Date.parse(read.session.factors.intent.verifiedAt) / 1000),
     "Signed authentication time must match verified intent",
   );
+  if (process.env.HEIMDALL_PROBE_SDK_FEDERATION === "1") {
+    const apiAudience = [idClaims.aud]
+      .flat()
+      .find((value) => value !== client.clientId && value !== project.projectId);
+    assert(apiAudience);
+    const checks = [];
+    for (const language of ["typescript", "go"]) {
+      for (const mismatch of [false, true]) {
+        const login = await productCode();
+        const config = {
+          issuer: z,
+          profile: "production",
+          clientId: client.clientId,
+          clientSecret: client.clientSecret,
+          audience: project.projectId,
+          zitadelAPIAudience: apiAudience,
+          redirectUri,
+        };
+        const input = {
+          config,
+          subject: user.id,
+          code: login.code,
+          nonce: login.nonce,
+          pkceVerifier: login.verifier,
+          federation: {
+            subject: user.id,
+            sessionId: mismatch ? "other-session" : session.sessionId,
+            verifiedAt: Date.parse(read.session.factors.intent.verifiedAt),
+          },
+          expectFederationDenied: mismatch,
+        };
+        const command =
+          language === "typescript"
+            ? [
+                "pnpm",
+                "--filter",
+                "@heimdall/sdk",
+                "exec",
+                "vitest",
+                "run",
+                "test/browser-oidc.live.test.ts",
+              ]
+            : [
+                "go",
+                "test",
+                "-race",
+                "-count=1",
+                "./internal/identity",
+                "-run",
+                "^TestLiveBrowserExchange$",
+              ];
+        const result = spawnSync(command[0], command.slice(1), {
+          cwd: new URL(language === "typescript" ? "../../" : "../../sdk/go/", import.meta.url),
+          env: { ...process.env, HEIMDALL_TEST_BROWSER_EXCHANGE: JSON.stringify(input) },
+          encoding: "utf8",
+          timeout: 60000,
+        });
+        assert.equal(
+          result.status,
+          0,
+          `${language} federation exchange failed (wrong session: ${mismatch})`,
+        );
+      }
+      checks.push({ language, matchedSignedBinding: "accepted", wrongSignedSession: "denied" });
+    }
+    observations.push({ sdkFederatedExchange: checks });
+  }
   if (sharedClient)
     observations.push({
       verifiedEnterpriseEvidence: {

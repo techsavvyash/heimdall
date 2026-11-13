@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -23,7 +24,8 @@ import (
 func TestBrowserOIDCExchange(t *testing.T) {
 	var f struct {
 		ClientID, ClientSecret, Audience, Subject, Code, Nonce, Verifier string
-		Cases                                                            []struct{ Name, Error string }
+		Cases, FederationCases                                           []struct{ Name, Error string }
+		FederatedSession                                                 FederatedSessionBinding
 	}
 	raw, err := os.ReadFile("../../../../contracts/fixtures/browser-oidc.json")
 	if err != nil || json.Unmarshal(raw, &f) != nil {
@@ -129,6 +131,18 @@ func TestBrowserOIDCExchange(t *testing.T) {
 		case "wrong access hash":
 			id["at_hash"] = "other"
 		}
+		if strings.HasPrefix(scenario, "federated ") {
+			id["sid"] = f.FederatedSession.SessionID
+			id["auth_time"] = f.FederatedSession.VerifiedAt / 1000
+			switch scenario {
+			case "federated wrong session":
+				id["sid"] = "other-session"
+			case "federated wrong authentication time":
+				id["auth_time"] = f.FederatedSession.VerifiedAt/1000 + 1
+			case "federated missing authentication time":
+				delete(id, "auth_time")
+			}
+		}
 		_ = json.NewEncoder(w).Encode(tokenResponse{accessToken, sign(issuer, id), "refresh-fixture", "Bearer"})
 	}))
 	defer server.Close()
@@ -137,16 +151,36 @@ func TestBrowserOIDCExchange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, scenario := range f.Cases {
+	rawURL, err := browser.FederatedAuthorizationURL("state", f.Nonce, "pkce", "acme-org")
+	authorization, parseErr := url.Parse(rawURL)
+	if err != nil || parseErr != nil || !strings.Contains(authorization.Query().Get("scope"), " urn:zitadel:iam:org:id:acme-org") {
+		t.Fatal("organization scope missing", err, parseErr)
+	}
+	if _, err := browser.FederatedAuthorizationURL("state", f.Nonce, "pkce", "acme openid"); !errors.Is(err, contract.ErrInvalidArgument) {
+		t.Fatal("invalid organization accepted", err)
+	}
+	for _, scenario := range append(f.Cases, f.FederationCases...) {
 		t.Run(scenario.Name, func(t *testing.T) {
 			mode.Store(scenario.Name)
 			before := posts.Load()
-			result, err := browser.Exchange(ctx, f.Code, func() (string, string, error) {
+			claim := func() (string, string, error) {
 				if scenario.Name == "claim uncertain" {
 					return "", "", contract.ErrOutcomeUnknown
 				}
 				return f.Nonce, f.Verifier, nil
-			})
+			}
+			var result *BrowserTokens
+			var err error
+			if strings.HasPrefix(scenario.Name, "federated ") {
+				binding := f.FederatedSession
+				binding.Subject = f.Subject
+				if scenario.Name == "federated wrong subject" {
+					binding.Subject = "other"
+				}
+				result, err = browser.ExchangeFederated(ctx, f.Code, f.Nonce, f.Verifier, binding)
+			} else {
+				result, err = browser.Exchange(ctx, f.Code, claim)
+			}
 			if scenario.Error == "" {
 				if err != nil || result == nil || result.Identity.Subject() != f.Subject || browser.verifier.Owns(result.Identity) || result.RefreshToken != "refresh-fixture" {
 					t.Fatal("invalid exchange result", err)
@@ -173,6 +207,8 @@ func TestLiveBrowserExchange(t *testing.T) {
 	var f struct {
 		Config                             BrowserOIDCConfig
 		Code, Nonce, PKCEVerifier, Subject string
+		Federation                         *FederatedSessionBinding
+		ExpectFederationDenied             bool
 	}
 	if json.Unmarshal([]byte(raw), &f) != nil {
 		t.Fatal("invalid live exchange input")
@@ -183,14 +219,31 @@ func TestLiveBrowserExchange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := browser.Exchange(ctx, f.Code, func() (string, string, error) {
-		return f.Nonce, f.PKCEVerifier, nil
-	})
+	var result *BrowserTokens
+	if f.Federation != nil {
+		result, err = browser.ExchangeFederated(ctx, f.Code, f.Nonce, f.PKCEVerifier, *f.Federation)
+	} else {
+		result, err = browser.Exchange(ctx, f.Code, func() (string, string, error) {
+			return f.Nonce, f.PKCEVerifier, nil
+		})
+	}
+	if f.ExpectFederationDenied {
+		if result != nil || !errors.Is(err, contract.ErrUnauthenticated) {
+			t.Fatal("wrong federation session was not rejected", err)
+		}
+		return
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Identity.Subject() != f.Subject || result.RefreshToken == "" || result.AccessExpiresAt <= time.Now().UnixMilli() {
+	if result.Identity.Subject() != f.Subject || result.AccessExpiresAt <= time.Now().UnixMilli() {
 		t.Fatal("unexpected verified exchange result")
+	}
+	if f.Federation != nil {
+		return
+	}
+	if result.RefreshToken == "" {
+		t.Fatal("expected refresh token")
 	}
 	cfg := browser.verifier.config
 	status, err := NewIdentityVerifier(StatusConfig{

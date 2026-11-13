@@ -12,6 +12,11 @@ type Config = {
   profile: "production" | "loopback";
 };
 type Token = Readonly<{ issuer: string; subject: string; expiresAt: number }>;
+export type FederatedSessionBinding = Readonly<{
+  subject: string;
+  sessionId: string;
+  verifiedAt: number;
+}>;
 const cacheMs = 300000;
 const cooldownMs = 30000;
 const maxBytes = 262144;
@@ -169,8 +174,15 @@ export class TokenVerifier {
     accessToken: string,
     signal?: AbortSignal,
     apiAudience?: string,
+    federation?: FederatedSessionBinding,
   ): Promise<Token> {
-    return this.verifySigned(token, signal, { audience, nonce, accessToken, apiAudience });
+    return this.verifySigned(token, signal, {
+      audience,
+      nonce,
+      accessToken,
+      apiAudience,
+      federation,
+    });
   }
 
   private async verifySigned(
@@ -181,6 +193,7 @@ export class TokenVerifier {
       nonce: string;
       accessToken: string;
       apiAudience: string | undefined;
+      federation: FederatedSessionBinding | undefined;
     },
   ): Promise<Token> {
     const bounded = AbortSignal.any([AbortSignal.timeout(5000), ...(signal ? [signal] : [])]);
@@ -253,6 +266,19 @@ export class TokenVerifier {
         )
           throw new Error();
       }
+      const federation = login?.federation;
+      const authTime = payload.auth_time;
+      if (
+        federation &&
+        (!federation.sessionId ||
+          !Number.isSafeInteger(federation.verifiedAt) ||
+          federation.verifiedAt < 0 ||
+          payload.sub !== federation.subject ||
+          payload.sid !== federation.sessionId ||
+          authTime !== Math.floor(federation.verifiedAt / 1000) ||
+          authTime > payload.iat!)
+      )
+        throw new Error();
       encodeIdentity(this.config.issuer, payload.sub);
       checkCancellation(bounded);
       const result = Object.freeze({

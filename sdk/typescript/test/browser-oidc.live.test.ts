@@ -6,13 +6,21 @@ import { createBrowserOIDC } from "../src/internal/browser-oidc.js";
 test.skipIf(!process.env.HEIMDALL_TEST_BROWSER_EXCHANGE)(
   "exchanges a fresh pinned-provider authorization code",
   async () => {
-    const { config, code, nonce, pkceVerifier, subject } = JSON.parse(
-      process.env.HEIMDALL_TEST_BROWSER_EXCHANGE!,
-    );
+    const { config, code, nonce, pkceVerifier, subject, federation, expectFederationDenied } =
+      JSON.parse(process.env.HEIMDALL_TEST_BROWSER_EXCHANGE!);
     const browser = await createBrowserOIDC(config);
-    const result = await browser.exchange(code, async () => ({ nonce, pkceVerifier }));
+    const outcome = await browser
+      .exchange(code, async () => ({ nonce, pkceVerifier, federation }))
+      .then(
+        (result) => ({ status: "accepted", result }),
+        (error: Error) => ({ status: error.message, result: null }),
+      );
+    expect(outcome.status).toBe(expectFederationDenied ? "unauthenticated" : "accepted");
+    const { result } = outcome;
+    if (!result) return;
     expect(result.identity.subject === subject).toBe(true);
     expect(result.accessExpiresAt > Date.now()).toBe(true);
+    if (federation) return;
     expect(Boolean(result.refreshToken)).toBe(true);
     const metadata = await discoverOIDC(config.issuer, config.profile);
     const status = new IdentityVerifier(

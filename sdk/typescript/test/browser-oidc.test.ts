@@ -9,8 +9,18 @@ const fixture = (name: string) =>
   JSON.parse(
     readFileSync(new URL(`../../../contracts/fixtures/${name}.json`, import.meta.url), "utf8"),
   );
-const { clientId, clientSecret, audience, subject, code, nonce, verifier, cases } =
-  fixture("browser-oidc");
+const {
+  clientId,
+  clientSecret,
+  audience,
+  subject,
+  code,
+  nonce,
+  verifier,
+  cases,
+  federationCases,
+  federatedSession,
+} = fixture("browser-oidc");
 const { issuer, metadata } = fixture("oidc-discovery");
 const redirectUri = "https://ledger.example.test/auth/callback";
 
@@ -70,6 +80,18 @@ test("browser OIDC code exchange follows the shared response and claim matrix", 
         : {
             azp: mode === "wrong authorized party" ? "other" : clientId,
           }),
+      ...(mode.startsWith("federated")
+        ? {
+            sid: mode === "federated wrong session" ? "other-session" : federatedSession.sessionId,
+            ...(mode === "federated missing authentication time"
+              ? {}
+              : {
+                  auth_time:
+                    Math.floor(federatedSession.verifiedAt / 1000) +
+                    Number(mode === "federated wrong authentication time"),
+                }),
+          }
+        : {}),
       at_hash:
         mode === "wrong access hash"
           ? "other"
@@ -92,12 +114,31 @@ test("browser OIDC code exchange follows the shared response and claim matrix", 
       clientSecret,
       redirectUri,
     });
-    for (const scenario of cases as { name: string; error: string }[]) {
+    expect(
+      new URL(browser.authorizationURL("state", nonce, "pkce", "acme-org")).searchParams
+        .get("scope")
+        ?.split(" "),
+    ).toContain("urn:zitadel:iam:org:id:acme-org");
+    expect(() => browser.authorizationURL("state", nonce, "pkce", "acme openid")).toThrow(
+      "invalid_argument",
+    );
+    for (const scenario of [...cases, ...federationCases] as { name: string; error: string }[]) {
       mode = scenario.name;
       const before = posts;
       const exchange = browser.exchange(code, async () => {
         if (mode === "claim uncertain") throw new HeimdallError("outcome_unknown");
-        return { nonce, pkceVerifier: verifier };
+        return {
+          nonce,
+          pkceVerifier: verifier,
+          ...(mode.startsWith("federated")
+            ? {
+                federation: {
+                  ...federatedSession,
+                  subject: mode === "federated wrong subject" ? "other" : subject,
+                },
+              }
+            : {}),
+        };
       });
       const result = await exchange.then(
         (value) => ({ subject: value.identity.subject, refreshToken: value.refreshToken }),

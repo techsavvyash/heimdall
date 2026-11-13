@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -22,6 +23,8 @@ type BrowserOIDC struct {
 	config                               BrowserOIDCConfig
 	verifier                             *TokenVerifier
 }
+
+var federationOrganizationID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 
 func visibleToken(value string, max int) bool {
 	if len(value) == 0 || len(value) > max {
@@ -52,10 +55,24 @@ func NewBrowserOIDC(ctx context.Context, config BrowserOIDCConfig) (*BrowserOIDC
 }
 
 func (b *BrowserOIDC) AuthorizationURL(state, nonce, pkceChallenge string) string {
+	return b.authorizationURL(state, nonce, pkceChallenge, "")
+}
+
+func (b *BrowserOIDC) FederatedAuthorizationURL(state, nonce, pkceChallenge, organizationID string) (string, error) {
+	if !federationOrganizationID.MatchString(organizationID) {
+		return "", contract.ErrInvalidArgument
+	}
+	return b.authorizationURL(state, nonce, pkceChallenge, organizationID), nil
+}
+
+func (b *BrowserOIDC) authorizationURL(state, nonce, pkceChallenge, organizationID string) string {
 	target, _ := url.Parse(b.authorizationEndpoint)
 	scope := "openid profile offline_access urn:zitadel:iam:org:project:id:" + b.config.Audience + ":aud"
 	if b.config.ZitadelAPIAudience != "" {
 		scope += " urn:zitadel:iam:org:project:id:zitadel:aud"
+	}
+	if organizationID != "" {
+		scope += " urn:zitadel:iam:org:id:" + organizationID
 	}
 	target.RawQuery = url.Values{
 		"client_id": {b.config.ClientID}, "redirect_uri": {b.config.RedirectURI}, "response_type": {"code"},
@@ -73,6 +90,14 @@ type BrowserTokens struct {
 
 // Exchange dispatches a single code request after the callback confirms its claim.
 func (b *BrowserOIDC) Exchange(ctx context.Context, code string, claim func() (nonce, pkceVerifier string, err error)) (*BrowserTokens, error) {
+	return b.exchange(ctx, code, claim, nil)
+}
+
+func (b *BrowserOIDC) ExchangeFederated(ctx context.Context, code, nonce, verifier string, binding FederatedSessionBinding) (*BrowserTokens, error) {
+	return b.exchange(ctx, code, func() (string, string, error) { return nonce, verifier, nil }, &binding)
+}
+
+func (b *BrowserOIDC) exchange(ctx context.Context, code string, claim func() (nonce, pkceVerifier string, err error), federation *FederatedSessionBinding) (*BrowserTokens, error) {
 	if err := contract.CheckCancellation(ctx); err != nil {
 		return nil, err
 	}
@@ -93,7 +118,7 @@ func (b *BrowserOIDC) Exchange(ctx context.Context, code string, claim func() (n
 	if !visibleToken(tokens.IDToken, 16384) {
 		return nil, contract.ErrUnavailable
 	}
-	identity, err := b.verifier.verifyIDToken(ctx, tokens.IDToken, b.config.ClientID, nonce, tokens.AccessToken, b.config.ZitadelAPIAudience)
+	identity, err := b.verifier.verifyIDToken(ctx, tokens.IDToken, b.config.ClientID, nonce, tokens.AccessToken, b.config.ZitadelAPIAudience, federation)
 	if err != nil {
 		return nil, err
 	}

@@ -35,3 +35,16 @@ The pinned-service reference run `1c53781a-a8fd-490c-88ae-d91795e3956e` tested b
 | Support Go | `79b658cf-6dca-42cf-ad99-1b5829724259` | 44 |
 
 The local PostgreSQL run `heimdall-records-748e9f26d16941a39609eb5a41d74e80` also passed the reference and storage suites. An earlier local run stopped in discovery repair after the strict SSO assertions. The full retry passed, including both products' discovery repair checks.
+
+## Signed product token binding
+
+Both SDKs can scope an OIDC authorization request to the trusted target organization and require the signed product ID token to match a verified federation session. The verifier checks the issuer, audience, nonce, upstream-linked ZITADEL subject, session ID and authentication time. A provider session's verified timestamp is rounded down to seconds for comparison with the signed claim. Normal product login continues through the existing exchange path.
+
+The live federation probe created fresh codes for each SDK and assertion against Railway ZITADEL and the Keycloak fixture. Each language accepted the matching SAML and OIDC session and rejected a code checked against a different session ID. Shared exchange fixtures additionally reject a missing or incorrect authentication time and a different subject.
+
+| Upstream protocol | Live run |
+| --- | --- |
+| OIDC | `128e9606-2a24-46ba-a807-60341791fac6` |
+| SAML | `2d2291e5-71e5-4436-994a-4963842d9ceb` |
+
+Run the federation probe with `HEIMDALL_PROBE_SDK_FEDERATION=1` and the protected verification configuration described in [[phase-2-browser-federation]]. The probe supplies provider provenance directly to the internal exchange. Binding a product browser transaction to the exact provider intent and issuing an encrypted, identity-bound session are still required.

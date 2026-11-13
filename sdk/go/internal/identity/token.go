@@ -198,16 +198,22 @@ func (v *TokenVerifier) key(ctx context.Context, kid string) (*rsa.PublicKey, er
 	return v.keys[kid], nil
 }
 
+type FederatedSessionBinding struct {
+	Subject, SessionID string
+	VerifiedAt         int64
+}
+
 type idTokenBinding struct {
 	audience, nonce, accessToken, apiAudience string
+	federation                                *FederatedSessionBinding
 }
 
 func (v *TokenVerifier) Verify(ctx context.Context, raw string) (*VerifiedToken, error) {
 	return v.verify(ctx, raw, nil)
 }
 
-func (v *TokenVerifier) verifyIDToken(ctx context.Context, raw, audience, nonce, accessToken, apiAudience string) (*VerifiedToken, error) {
-	return v.verify(ctx, raw, &idTokenBinding{audience, nonce, accessToken, apiAudience})
+func (v *TokenVerifier) verifyIDToken(ctx context.Context, raw, audience, nonce, accessToken, apiAudience string, federation *FederatedSessionBinding) (*VerifiedToken, error) {
+	return v.verify(ctx, raw, &idTokenBinding{audience, nonce, accessToken, apiAudience, federation})
 }
 
 func (v *TokenVerifier) verify(ctx context.Context, raw string, login *idTokenBinding) (*VerifiedToken, error) {
@@ -301,6 +307,13 @@ func (v *TokenVerifier) verify(ctx context.Context, raw string, login *idTokenBi
 		if hash, ok := claims["at_hash"]; ok {
 			digest := sha256.Sum256([]byte(login.accessToken))
 			if hash != base64.RawURLEncoding.EncodeToString(digest[:16]) {
+				return nil, contract.ErrUnauthenticated
+			}
+		}
+		if binding := login.federation; binding != nil {
+			authTime, ok := numeric("auth_time")
+			if !ok || binding.SessionID == "" || binding.VerifiedAt < 0 || binding.VerifiedAt > 9007199254740991 ||
+				sub != binding.Subject || claims["sid"] != binding.SessionID || authTime != binding.VerifiedAt/1000 || authTime > iat {
 				return nil, contract.ErrUnauthenticated
 			}
 		}
