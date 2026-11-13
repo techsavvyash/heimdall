@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { HeimdallError } from "../errors.js";
-import { transaction } from "./query.js";
+import { query, transaction } from "./query.js";
 
 // Explicit physical expiry maintenance; no keys, background timers or journal retention.
 export class RecordMaintenance {
@@ -16,6 +16,31 @@ export class RecordMaintenance {
       )
     )
       throw new HeimdallError("invalid_argument");
+  }
+  async cleanupLag(signal: AbortSignal): Promise<number | null> {
+    const now = this.now();
+    const rows = await query<{ primary: boolean; oldest: string | null }>(
+      this.pool,
+      `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
+       (SELECT expires_at::text FROM heimdall.records WHERE product_id=$1 AND environment=$2
+        AND expires_at<=$3 ORDER BY expires_at LIMIT 1) AS oldest`,
+      [this.productId, this.environment, now],
+      false,
+      signal,
+    );
+    const row = rows[0];
+    if (rows.length !== 1 || row?.primary !== true) throw new HeimdallError("unavailable");
+    if (row.oldest === null) return null;
+    const oldest = Number(row.oldest);
+    if (
+      typeof row.oldest !== "string" ||
+      !Number.isSafeInteger(oldest) ||
+      String(oldest) !== row.oldest ||
+      oldest < 0 ||
+      oldest > now
+    )
+      throw new HeimdallError("unavailable");
+    return now - oldest;
   }
   async cleanupExpired(limit: number, signal?: AbortSignal): Promise<number> {
     const cutoff = this.now();

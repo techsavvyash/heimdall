@@ -51,6 +51,7 @@ type Credentials struct {
 	ClientSecret, OpenFGAKey func(context.Context) (string, error)
 }
 type Options struct {
+	AuthorizeManagedExport      ManagedExportPolicy
 	AuthorizeWorkspaceCreation  WorkspaceCreationPolicy
 	AuthorizeWorkspaceLifecycle WorkspaceLifecyclePolicy
 	PolicyVersion               string
@@ -60,10 +61,11 @@ type Options struct {
 	SessionStorage              *SessionStoreOptions
 }
 type ManagedStorage struct {
-	Allows     func(context.Context, string) (bool, error)
-	Source     func(Identity) WorkspaceSource
-	Workspace  func(context.Context, string) (*postgres.ManagedWorkspace, error)
-	Operations func(postgres.OperationBinding) (*postgres.OperationRecords, error)
+	ExportReader *postgres.ManagedExport
+	Allows       func(context.Context, string) (bool, error)
+	Source       func(Identity) WorkspaceSource
+	Workspace    func(context.Context, string) (*postgres.ManagedWorkspace, error)
+	Operations   func(postgres.OperationBinding) (*postgres.OperationRecords, error)
 }
 
 type BrowserStorage struct {
@@ -84,6 +86,7 @@ type Sessions interface {
 }
 
 type Client struct {
+	managedExport      *managedExportRuntime
 	onboarding         *WorkspaceOnboarding
 	membership         *membershipRuntime
 	workspaceLifecycle WorkspaceLifecyclePolicy
@@ -235,6 +238,12 @@ func New(ctx context.Context, configJSON, manifestJSON []byte, options Options) 
 		scope:   contract.CursorScope{ProductID: cfg.ProductID, Environment: cfg.Environment, ModelID: cfg.OpenFGA.ModelID},
 		version: cfg.ManifestVersion, auth: authentication, model: model, managed: managed,
 	}}
+	if options.AuthorizeManagedExport != nil {
+		if managed == nil || managed.ExportReader == nil {
+			return nil, ErrInvalidArgument
+		}
+		client.managedExport = &managedExportRuntime{managed.ExportReader, options.AuthorizeManagedExport, cfg.OpenFGA.ModelID, cfg.ManifestVersion}
+	}
 	if managed != nil && managed.Operations != nil {
 		records, err := managed.Operations(postgres.OperationBinding{
 			ProductID: cfg.ProductID, Environment: cfg.Environment, StoreID: cfg.OpenFGA.StoreID,

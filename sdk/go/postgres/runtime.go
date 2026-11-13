@@ -13,6 +13,7 @@ import (
 )
 
 type StorageOptions struct {
+	ExportDB               *sql.DB
 	ProductID, Environment string
 	// AuditSinks fixes initial routing. An empty list stores events without delivery rows.
 	AuditSinks []string
@@ -151,9 +152,17 @@ func NewManagedStorage(db *sql.DB, options StorageOptions) (heimdall.RuntimeStor
 		}
 		return internal.CheckManagedRetentionReadiness(ctx, db)
 	}
+	var exportReader *internal.ManagedExport
+	if options.ExportDB != nil {
+		exportReader, err = internal.NewRetainedManagedExport(options.ExportDB, options.ProductID, options.Environment)
+		if err != nil {
+			return heimdall.RuntimeStorage{}, err
+		}
+	}
 	sinks := append([]string{}, options.AuditSinks...)
 	storage.Managed = &heimdall.ManagedStorage{
-		Workspace: workspaces.Get,
+		ExportReader: exportReader,
+		Workspace:    workspaces.Get,
 		Operations: func(binding internal.OperationBinding) (*internal.OperationRecords, error) {
 			if binding.ProductID != options.ProductID || binding.Environment != options.Environment {
 				return nil, heimdall.ErrInvalidArgument

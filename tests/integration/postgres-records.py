@@ -115,6 +115,7 @@ try:
         schemas = "\n".join((ROOT / "examples" / name / file).read_text()
                             for name in ("ledger", "support") for file in ("schema.sql", "invitations.sql"))
         schemas += "\nGRANT USAGE ON SCHEMA ledger,support TO heimdall_public_runtime; GRANT SELECT ON ledger.invoices,support.tickets TO heimdall_public_runtime; GRANT SELECT,INSERT,UPDATE ON ledger.invitations,support.invitations TO heimdall_public_runtime;"
+        schemas += "\nCREATE ROLE heimdall_reference_export NOLOGIN;\n" + (ROOT / "tests/integration/reference-export-grants.sql").read_text()
         run(["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime", "-v", "ON_ERROR_STOP=1"],
             input=schemas, capture_output=True, text=True)
         run(["pnpm", "run", "build"])

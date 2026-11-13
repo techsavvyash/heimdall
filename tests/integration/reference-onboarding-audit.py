@@ -92,6 +92,16 @@ def verify(products, payloads):
             assert len(repairs) == 4
             assert all(e["actor"] == {"kind": "system", "id": "candidate-rebuild"}
                        and e["outcome"] == "succeeded" for e in repairs)
+        if "managedExport" in item:
+            for key in ("pageId", "inventoryId"):
+                events_for_export = [e for e in scoped if e.get("operationId") == item["managedExport"][key]]
+                assert Counter((e["eventType"], e["outcome"]) for e in events_for_export) == {
+                    ("heimdall.authorization.requested", "requested"): 1,
+                    ("heimdall.authorization.completed", "allow"): 1,
+                    ("heimdall.export.completed", "succeeded"): 1,
+                }
+                assert all(e["actor"] == actor and e["tenantId"] == operation["workspaceId"]
+                           and e["action"] == "managed.export.operations" for e in events_for_export)
         print(f"{product}: four lifecycle events, {len(requests)} matched authorization decisions")
 
 

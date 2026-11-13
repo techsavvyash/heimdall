@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/postgres"
 )
 
+type OperationMetrics = postgres.OperationMetrics
 type ReconcileOptions struct {
 	// Zero uses the default of 100.
 	MaxOperations int
@@ -102,4 +104,13 @@ func (w *WorkspaceOnboarding) Reconcile(ctx context.Context, options ReconcileOp
 			return result, nil
 		}
 	}
+}
+
+// OperationMetrics returns aggregate diagnostics for the trusted scheduler.
+func (c *Client) OperationMetrics(ctx context.Context) (OperationMetrics, error) {
+	w := c.Onboarding()
+	if ctx == nil || w == nil {
+		return OperationMetrics{}, ErrInvalidArgument
+	}
+	return w.records.Metrics(ctx)
 }

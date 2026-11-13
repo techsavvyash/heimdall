@@ -36,6 +36,7 @@ export type WorkspaceOnboarding = Readonly<{
   ): Promise<WorkspaceOnboardingStatus>;
   get(actor: Principal, operationId: string, call: Call): Promise<WorkspaceOnboardingStatus>;
   reconcile(options: ReconcileOptions): Promise<ReconcileResult>;
+  operationMetrics(call: Call): ReturnType<OperationRecords["operationMetrics"]>;
   resume(actor: Principal, operationId: string, call: Call): Promise<WorkspaceOnboardingStatus>;
 }>;
 
@@ -185,6 +186,11 @@ export function managedOnboarding(
     return { record, signal };
   }
   return Object.freeze({
+    operationMetrics(call: Call) {
+      if (!(call?.signal instanceof AbortSignal))
+        return Promise.reject(new HeimdallError("invalid_argument"));
+      return records.operationMetrics(call.signal);
+    },
     reconcile(options: ReconcileOptions) {
       return reconcileOperations(records, options, (op, signal) => drive(op, signal, true));
     },

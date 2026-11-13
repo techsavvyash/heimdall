@@ -1,3 +1,5 @@
+import type { ManagedExport } from "./internal/postgres/export.js";
+import type { MaintenanceContext } from "./internal/audited-authentication.js";
 import { randomUUID } from "node:crypto";
 import { managedMemberships, type Memberships } from "./internal/managed-memberships.js";
 import type { ManagedWorkspace, WorkspaceRecords } from "./internal/postgres/workspaces.js";
@@ -42,6 +44,7 @@ export type RuntimeStorage = {
     allows(id: string, signal: AbortSignal): Promise<boolean>;
     source(actor: Principal): WorkspaceSource;
     workspace?: WorkspaceRecords["get"];
+    exportReader?: Pick<ManagedExport, "scan" | "withSnapshot">;
     operations?: (binding: {
       productId: string;
       environment: string;
@@ -60,6 +63,7 @@ export type RuntimeOptions = {
   policyVersion: string;
   authorizeWorkspaceCreation?: WorkspaceCreationPolicy;
   authorizeWorkspaceLifecycle?: WorkspaceLifecyclePolicy;
+  authorizeManagedExport?: ManagedExportPolicy;
   identityFreshnessMs?: number;
   credentials: {
     clientSecret(signal: AbortSignal): Promise<string>;
@@ -97,10 +101,24 @@ export type Tenant = Readonly<{
   can(actor: Principal, permission: string, options: { signal: AbortSignal }): Promise<boolean>;
   require(actor: Principal, permission: string, options: { signal: AbortSignal }): Promise<void>;
 }>;
+export type ManagedExportPolicy = (
+  scope: MaintenanceContext,
+  signal: AbortSignal,
+) => Promise<boolean>;
+export type ManagedExportRequest = Parameters<AuditedAuthentication["runManagedExport"]>[1];
+type ExportCall = (
+  token: string,
+  request: ManagedExportRequest,
+  options: { signal: AbortSignal },
+) => Promise<string>;
+
 export type Heimdall = Readonly<{
   tenant(id: string): Tenant;
   onboarding?: WorkspaceOnboarding;
   reconcile?: WorkspaceOnboarding["reconcile"];
+  operationMetrics?: WorkspaceOnboarding["operationMetrics"];
+  exportManagedPage?: ExportCall;
+  exportManagedInventory?: ExportCall;
   createWorkspaceDiscovery(options: DiscoveryOptions): WorkspaceDiscovery;
   createSessions(options: SessionOptions, request: { signal: AbortSignal }): Promise<Sessions>;
   tokens: Readonly<{
@@ -199,6 +217,17 @@ export async function createHeimdall(
     (!operations || !workspace || typeof authorizeLifecycle !== "function")
   )
     throw new HeimdallError("invalid_argument");
+  const authorizeExport = options.authorizeManagedExport;
+  const exportReader = storage.managed?.exportReader;
+  if (
+    authorizeExport !== undefined &&
+    (typeof authorizeExport !== "function" ||
+      typeof exportReader?.scan !== "function" ||
+      typeof exportReader?.withSnapshot !== "function")
+  )
+    throw new HeimdallError("invalid_argument");
+  const scanExport = exportReader?.scan.bind(exportReader);
+  const snapshotExport = exportReader?.withSnapshot.bind(exportReader);
   const freshnessMs = options.identityFreshnessMs ?? 60000;
   const profile = config.transportProfile ?? "production";
   try {
@@ -242,8 +271,41 @@ export async function createHeimdall(
         gate,
         authorize,
       );
+    const exportManagedPage: ExportCall = (token, request, call) => {
+      if (!(call?.signal instanceof AbortSignal))
+        return Promise.reject(new HeimdallError("invalid_argument"));
+      return authentication.runManagedExport(
+        token,
+        request,
+        config.openfga.modelId,
+        config.manifestVersion,
+        authorizeExport!,
+        scanExport!,
+        call.signal,
+      );
+    };
+    const exportManagedInventory: ExportCall = (token, request, call) => {
+      if (!(call?.signal instanceof AbortSignal))
+        return Promise.reject(new HeimdallError("invalid_argument"));
+      return authentication.runManagedInventory(
+        token,
+        request,
+        config.openfga.modelId,
+        config.manifestVersion,
+        authorizeExport!,
+        snapshotExport!,
+        call.signal,
+      );
+    };
     return Object.freeze({
-      ...(onboarding ? { onboarding, reconcile: onboarding.reconcile } : {}),
+      ...(onboarding
+        ? {
+            onboarding,
+            reconcile: onboarding.reconcile,
+            operationMetrics: onboarding.operationMetrics,
+          }
+        : {}),
+      ...(authorizeExport ? { exportManagedPage, exportManagedInventory } : {}),
       createWorkspaceDiscovery(options: DiscoveryOptions) {
         return workspaceDiscovery(
           options,

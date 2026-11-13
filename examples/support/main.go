@@ -14,6 +14,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -128,8 +129,22 @@ func main() {
 	if json.Unmarshal([]byte(required("HEIMDALL_RECORD_KEYS")), &keys) != nil {
 		log.Fatal("Invalid record keys")
 	}
+	maintenance, err := postgres.NewRecordMaintenance(records, config.ProductID, config.Environment)
+	if err != nil {
+		log.Fatal("Invalid maintenance configuration")
+	}
+	var lastSuccessAt atomic.Int64
+	var exportDB *sql.DB
+	var exportPolicy heimdall.ManagedExportPolicy
+	if os.Getenv("HEIMDALL_EXPORT_DATABASE_URL") != "" {
+		exportDB = database("HEIMDALL_EXPORT_DATABASE_URL")
+		defer exportDB.Close()
+		exportPolicy = func(_ context.Context, scope heimdall.ManagedExportScope) (bool, error) {
+			return scope.Actor.Subject == workspaceCreator, nil
+		}
+	}
 	storage, err := postgres.NewManagedStorage(records, postgres.StorageOptions{
-		ProductID: config.ProductID, Environment: config.Environment,
+		ProductID: config.ProductID, Environment: config.Environment, ExportDB: exportDB,
 		Sessions: &postgres.SessionStorageOptions{KeyUsageDB: keyUsage, ActiveKeyID: required("HEIMDALL_RECORD_KEY_ID"), Keys: keys},
 	})
 	if err != nil {
@@ -138,7 +153,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	auth, err := heimdall.New(ctx, configJSON, manifestJSON, heimdall.Options{
-		PolicyVersion: required("HEIMDALL_POLICY_VERSION"), Storage: storage,
+		PolicyVersion: required("HEIMDALL_POLICY_VERSION"), Storage: storage, AuthorizeManagedExport: exportPolicy,
 		AuthorizeWorkspaceCreation: func(_ context.Context, actor *heimdall.Principal, _ string) (bool, error) {
 			return actor.Identity().Subject == workspaceCreator, nil
 		},
@@ -248,6 +263,34 @@ func main() {
 	}
 	mount("POST /workspaces", workspaceOperation)
 	mount("GET /workspace-operations/{operation}", workspaceOperation)
+	if exportDB != nil {
+		mount("GET /managed-export", func(w http.ResponseWriter, r *http.Request) error {
+			bearer := strings.Fields(r.Header.Get("Authorization"))
+			if len(bearer) != 2 || !strings.EqualFold(bearer[0], "Bearer") {
+				return heimdall.ErrUnauthenticated
+			}
+			query := r.URL.Query()
+			input := heimdall.ManagedExportRequest{Kind: query.Get("kind"), OperationID: query.Get("operation"), Limit: 1}
+			if query.Has("workspace") {
+				value := query.Get("workspace")
+				input.WorkspaceID = &value
+			}
+			if query.Has("after") {
+				value := query.Get("after")
+				input.After = &value
+			}
+			export := auth.ExportManagedPage
+			if query.Get("inventory") == "1" {
+				export = auth.ExportManagedInventory
+			}
+			data, err := export(r.Context(), bearer[1], input)
+			if err != nil {
+				return err
+			}
+			writeJSON(w, 200, json.RawMessage(data))
+			return nil
+		})
+	}
 	mount("POST /workspace-operations/reconcile", func(w http.ResponseWriter, r *http.Request) error {
 		if len(r.Header.Values("Origin")) != 1 || r.Header.Get("Origin") != origin {
 			return heimdall.ErrForbidden
@@ -263,7 +306,35 @@ func main() {
 		if err != nil {
 			return err
 		}
+		lastSuccessAt.Store(time.Now().UnixMilli())
 		writeJSON(w, http.StatusOK, result)
+		return nil
+	})
+	mount("GET /workspace-operations/metrics", func(w http.ResponseWriter, r *http.Request) error {
+		actor, err := sessions.Authenticate(r)
+		if err != nil {
+			return err
+		}
+		if actor.Identity().Subject != workspaceCreator {
+			return heimdall.ErrForbidden
+		}
+		metrics, err := auth.OperationMetrics(r.Context())
+		if err != nil {
+			return err
+		}
+		lag, err := maintenance.CleanupLag(r.Context())
+		if err != nil {
+			return err
+		}
+		var last any
+		if at := lastSuccessAt.Load(); at > 0 {
+			last = at
+		}
+		writeJSON(w, 200, struct {
+			heimdall.OperationMetrics
+			CleanupLagMS  *int64 `json:"cleanupLagMs"`
+			LastSuccessAt any    `json:"lastSuccessAt"`
+		}{metrics, lag, last})
 		return nil
 	})
 	mount("POST /workspace-operations/{operation}", workspaceOperation)

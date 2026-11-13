@@ -1,3 +1,4 @@
+import { ManagedExport } from "./internal/postgres/export.js";
 import { RecordMaintenance } from "./internal/postgres/maintenance.js";
 import { OperationRecords } from "./internal/postgres/operations.js";
 import { WorkspaceRecords } from "./internal/postgres/workspaces.js";
@@ -78,7 +79,7 @@ export function createPostgresStorage(pool: Pool, options: PostgresStorageOption
 /** Managed runtime storage always gates tenant checks and owns discovery candidates. */
 export function createManagedPostgresStorage(
   pool: Pool,
-  options: PostgresStorageOptions,
+  options: PostgresStorageOptions & { exportPool?: Pool },
 ): RuntimeStorage {
   const storage = createPostgresStorage(pool, options);
   const { productId, environment } = storage;
@@ -87,6 +88,15 @@ export function createManagedPostgresStorage(
   const auditSinks = [...options.auditSinks];
   const managed: NonNullable<RuntimeStorage["managed"]> = {
     workspace: workspaces.get.bind(workspaces),
+    ...(options.exportPool
+      ? {
+          exportReader: ManagedExport.forRetainedRuntime(
+            options.exportPool,
+            productId,
+            environment,
+          ),
+        }
+      : {}),
     operations(binding) {
       if (binding.productId !== productId || binding.environment !== environment)
         throw new HeimdallError("invalid_argument");
@@ -130,5 +140,8 @@ export function createManagedPostgresStorage(
 export function createRecordMaintenance(pool: Pool, productId: string, environment: string) {
   if (typeof pool?.connect !== "function") throw new HeimdallError("invalid_argument");
   const maintenance = new RecordMaintenance(pool, productId, environment);
-  return Object.freeze({ cleanupExpired: maintenance.cleanupExpired.bind(maintenance) });
+  return Object.freeze({
+    cleanupExpired: maintenance.cleanupExpired.bind(maintenance),
+    cleanupLag: maintenance.cleanupLag.bind(maintenance),
+  });
 }

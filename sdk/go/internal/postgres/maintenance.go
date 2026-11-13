@@ -23,6 +23,34 @@ func NewRecordMaintenance(db *sql.DB, product, environment string, now func() in
 	}
 	return &RecordMaintenance{db, product, environment, now}, nil
 }
+
+// CleanupLag returns the age of the oldest expired record in the configured scope.
+func (m *RecordMaintenance) CleanupLag(ctx context.Context) (*int64, error) {
+	if ctx == nil {
+		return nil, contract.ErrInvalidArgument
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	now := m.now()
+	var primary bool
+	var oldest sql.NullString
+	err := m.db.QueryRowContext(ctx, `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
+       (SELECT expires_at::text FROM heimdall.records WHERE product_id=$1 AND environment=$2
+        AND expires_at<=$3 ORDER BY expires_at LIMIT 1) AS oldest`, m.product, m.environment, now).Scan(&primary, &oldest)
+	if err != nil || !primary {
+		return nil, databaseError(ctx)
+	}
+	if !oldest.Valid {
+		return nil, contract.CheckCancellation(ctx)
+	}
+	at, ok := workspaceDecimal(&oldest.String, maxSafe, false)
+	if !ok || at > now {
+		return nil, contract.ErrUnavailable
+	}
+	lag := now - at
+	return &lag, contract.CheckCancellation(ctx)
+}
+
 func (m *RecordMaintenance) CleanupExpired(ctx context.Context, limit int) (int, error) {
 	cutoff := m.now()
 	if ctx == nil || cutoff < 0 || cutoff > maxSafe || limit < 1 || limit > 100 {

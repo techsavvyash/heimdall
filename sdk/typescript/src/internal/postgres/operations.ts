@@ -304,6 +304,32 @@ export class OperationRecords {
     );
   }
 
+  async operationMetrics(signal: AbortSignal) {
+    const { productId, environment } = this.binding;
+    const [sql, args] = this.readQuery(
+      `SELECT NOT pg_is_in_recovery() AND current_setting('transaction_read_only')='off' AS primary,
+        count(*) FILTER (WHERE state IN ('dispatching','uncertain'))::text AS blocked,
+        coalesce(sum(dispatch_count),0)::text AS attempts,
+        min(created_at)::text AS oldest
+       FROM heimdall_managed.operations WHERE product_id=$1 AND environment=$2
+       AND state NOT IN ('completed','cancelled')`,
+      [productId, environment],
+    );
+    const rows = await query<{
+      primary: boolean;
+      blocked: string;
+      attempts: string;
+      oldest: string | null;
+    }>(this.pool, sql, args, false, signal);
+    const row = rows[0];
+    if (rows.length !== 1 || row?.primary !== true) throw new HeimdallError("unavailable");
+    return {
+      blocked: integer(row.blocked, 0),
+      attempts: integer(row.attempts, 0),
+      queueAgeMs: row.oldest === null ? null : Math.max(0, Date.now() - integer(row.oldest, 0)),
+    };
+  }
+
   // Trusted maintenance only: selection does not claim work or authorize remote replay.
   async scan(
     queue: "runnable" | "recovery" | "completion" | "reconcile",

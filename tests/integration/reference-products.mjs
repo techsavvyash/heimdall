@@ -8,8 +8,17 @@ import { createRequire } from "node:module";
 import { promisify } from "node:util";
 
 export async function verifyReferenceProduct(input, authorize) {
-  const { config, manifest, clientSecret, apiAudience, user, recipient, runId, otherWorkspace } =
-    input;
+  const {
+    config,
+    manifest,
+    clientSecret,
+    apiAudience,
+    user,
+    recipient,
+    runId,
+    otherWorkspace,
+    exportToken,
+  } = input;
   const ledger = config.productId === "ledger";
   const port = ledger ? 18640 : 18641;
   const remote = process.env.HEIMDALL_REFERENCE_RAILWAY === "1";
@@ -86,12 +95,16 @@ export async function verifyReferenceProduct(input, authorize) {
       ]
     : db + "&options=-c%20role%3Dheimdall_public_runtime";
   assert(runtimeDB);
+  const exportDB = remote
+    ? process.env.HEIMDALL_REFERENCE_EXPORT_DATABASE
+    : db + "&options=-c%20role%3Dheimdall_reference_export";
   const cmd = ledger
     ? ["node", ["examples/ledger/server.mjs"]]
     : [process.env.HEIMDALL_REFERENCE_SUPPORT_BINARY, []];
   const recordKey = remote ? randomBytes(32) : Buffer.alloc(32, 7);
   const variables = {
     PORT: String(port),
+    ...(exportDB ? { HEIMDALL_EXPORT_DATABASE_URL: exportDB } : {}),
     DATABASE_URL: runtimeDB,
     HEIMDALL_KEY_DATABASE_URL: runtimeDB,
     [ledger ? "LEDGER_DATABASE_URL" : "SUPPORT_DATABASE_URL"]: runtimeDB,
@@ -619,6 +632,64 @@ export async function verifyReferenceProduct(input, authorize) {
         ({ operationId }) => operationId === workspace.operationId,
       ),
     );
+    const metricsPath = "/workspace-operations/metrics";
+    await expectDenied(await request(metricsPath, { headers: recipientHeaders }), 403);
+    const metrics = await request(metricsPath, { headers });
+    assert.equal(metrics.status, 200);
+    const observedMetrics = await metrics.json();
+    assert.deepEqual(Object.keys(observedMetrics).sort(), [
+      "attempts",
+      "blocked",
+      "cleanupLagMs",
+      "lastSuccessAt",
+      "queueAgeMs",
+    ]);
+    assert(
+      Number.isSafeInteger(observedMetrics.attempts) &&
+        Number.isSafeInteger(observedMetrics.blocked),
+    );
+    assert(
+      Number.isSafeInteger(observedMetrics.lastSuccessAt) && observedMetrics.lastSuccessAt > 0,
+    );
+    let managedExport;
+    if (exportDB) {
+      const authHeader = { authorization: "Bearer " + exportToken };
+      const exportPath = "/managed-export?kind=operations&workspace=" + workspace.workspaceId;
+      const inventoryId = runId + "-" + schema + "-inventory";
+      const pageId = runId + "-" + schema + "-page";
+      await expectDenied(await request(exportPath + "&operation=" + pageId), 401);
+      await expectDenied(
+        await request("/managed-export?kind=operations&operation=" + pageId, {
+          headers: authHeader,
+        }),
+        400,
+      );
+      const page = await request(exportPath + "&operation=" + pageId, { headers: authHeader });
+      assert.equal(page.status, 200);
+      const one = await page.json();
+      assert.equal(one.items.length, 1);
+      assert.equal(one.nextId, one.items[0].operationId);
+      const inventory = await request(exportPath + "&inventory=1&operation=" + inventoryId, {
+        headers: authHeader,
+      });
+      assert.equal(inventory.status, 200);
+      const all = await inventory.json();
+      assert.equal(all.nextId, null);
+      assert.equal(all.items.length, 6);
+      assert.deepEqual(all.items[0], one.items[0]);
+      assert(
+        all.items.every(
+          (entry) =>
+            entry.workspaceId === workspace.workspaceId &&
+            entry.productId === schema &&
+            entry.state === "completed" &&
+            !Object.keys(entry).some((field) =>
+              ["actor", "target", "intent", "name", "keyDigest"].includes(field),
+            ),
+        ),
+      );
+      managedExport = { pageId, inventoryId, operations: all.items.length };
+    }
     await expectDenied(
       await request("/auth/logout", { method: "POST", headers: { ...recipientHeaders, origin } }),
       204,
@@ -665,6 +736,8 @@ export async function verifyReferenceProduct(input, authorize) {
         confirmedCompleted: true,
         terminalExcluded: true,
       },
+      ...(managedExport ? { managedExport } : {}),
+      metrics: { operator: 200, unauthorized: 403, lastSuccessRecorded: true },
       otherTenant: 403,
     };
   } finally {

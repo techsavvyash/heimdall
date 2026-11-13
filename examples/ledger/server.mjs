@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { addAbortSignal } from "node:stream";
 import { Pool } from "pg";
 import { createHeimdall, HeimdallError } from "@heimdall/sdk";
-import { createManagedPostgresStorage } from "@heimdall/sdk/postgres";
+import { createManagedPostgresStorage, createRecordMaintenance } from "@heimdall/sdk/postgres";
 
 function required(name) {
   const value = process.env[name];
@@ -26,6 +26,10 @@ const business = new Pool({
   connectionTimeoutMillis: 5000,
 });
 
+const exportDSN = process.env.HEIMDALL_EXPORT_DATABASE_URL;
+const exportPool = exportDSN && new Pool({ connectionString: exportDSN });
+const maintenance = createRecordMaintenance(pool, config.productId, config.environment);
+let lastSuccessAt = null;
 const signal = AbortSignal.timeout(10000);
 const auth = await createHeimdall(
   configJSON,
@@ -34,6 +38,9 @@ const auth = await createHeimdall(
     policyVersion: required("HEIMDALL_POLICY_VERSION"),
     authorizeWorkspaceCreation: async (actor) => actor.subject === workspaceCreator,
     authorizeWorkspaceLifecycle: async (actor) => actor.subject === workspaceCreator,
+    ...(exportPool
+      ? { authorizeManagedExport: async (scope) => scope.actor.subject === workspaceCreator }
+      : {}),
     credentials: {
       clientSecret: async () => required("HEIMDALL_CLIENT_SECRET"),
       openfgaKey: async () => required("HEIMDALL_OPENFGA_KEY"),
@@ -42,6 +49,7 @@ const auth = await createHeimdall(
       productId: config.productId,
       environment: config.environment,
       auditSinks: [],
+      ...(exportPool ? { exportPool } : {}),
       sessions: {
         keyUsagePool,
         activeKeyId: required("HEIMDALL_RECORD_KEY_ID"),
@@ -209,11 +217,40 @@ async function route(request) {
   if (url.pathname === "/auth/start") return sessions.start(request);
   if (url.pathname === new URL(callbackUrl).pathname) return sessions.callback(request);
   if (url.pathname === "/auth/logout") return sessions.logout(request);
+  if (request.method === "GET" && url.pathname === "/managed-export" && auth.exportManagedPage) {
+    const bearer = /^Bearer (\S+)$/i.exec(request.headers.get("authorization") ?? "");
+    if (!bearer) throw new HeimdallError("unauthenticated");
+    const inventory = url.searchParams.get("inventory") === "1";
+    const run = inventory ? auth.exportManagedInventory : auth.exportManagedPage;
+    const data = await run(
+      bearer[1],
+      {
+        kind: url.searchParams.get("kind"),
+        workspaceId: url.searchParams.get("workspace"),
+        after: url.searchParams.get("after"),
+        operationId: url.searchParams.get("operation"),
+        limit: 1,
+      },
+      { signal: request.signal },
+    );
+    return read(JSON.parse(data));
+  }
   if (request.method === "POST" && url.pathname === "/workspace-operations/reconcile") {
     if (request.headers.get("origin") !== origin) throw new HeimdallError("forbidden");
     const actor = await sessions.authenticate(request);
     if (actor.subject !== workspaceCreator) throw new HeimdallError("forbidden");
-    return read(await auth.reconcile({ signal: request.signal }));
+    const result = await auth.reconcile({ signal: request.signal });
+    lastSuccessAt = Date.now();
+    return read(result);
+  }
+  if (request.method === "GET" && url.pathname === "/workspace-operations/metrics") {
+    const actor = await sessions.authenticate(request);
+    if (actor.subject !== workspaceCreator) throw new HeimdallError("forbidden");
+    return read({
+      ...(await auth.operationMetrics({ signal: request.signal })),
+      cleanupLagMs: await maintenance.cleanupLag(request.signal),
+      lastSuccessAt,
+    });
   }
   const operation = /^\/workspace-operations\/([A-Za-z0-9_-]{1,128})$/.exec(url.pathname);
   const create = request.method === "POST" && url.pathname === "/workspaces";
