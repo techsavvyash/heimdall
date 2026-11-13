@@ -11,6 +11,15 @@ import (
 // PlanMembership reads current direct grants and checks manifest delegation.
 // The caller must serialize the snapshot and commit dispatch before invoking the plan.
 func (p *PinnedModel) PlanMembership(ctx context.Context, ownerRole string, i contract.Intent) (func(context.Context, string) error, error) {
+	return p.planMembership(ctx, ownerRole, i, false)
+}
+
+// PlanMembershipRecovery reconciles an already authorized intent after a verified recovery claim.
+func (p *PinnedModel) PlanMembershipRecovery(ctx context.Context, ownerRole string, i contract.Intent) (func(context.Context, string) error, error) {
+	return p.planMembership(ctx, ownerRole, i, true)
+}
+
+func (p *PinnedModel) planMembership(ctx context.Context, ownerRole string, i contract.Intent, recovering bool) (func(context.Context, string) error, error) {
 	switch i.Kind {
 	case "add_member", "assign_roles", "remove_member":
 	default:
@@ -49,21 +58,23 @@ func (p *PinnedModel) PlanMembership(ctx context.Context, ownerRole string, i co
 		delegatedRoles[role] = allowed
 		return allowed, err
 	}
-	administrator, err := p.CheckRole(ctx, admin, i.WorkspaceID, ownerRole)
-	if err != nil {
-		return nil, err
-	}
-	for _, role := range names {
-		if administrator {
-			break
-		}
-		administrator, err = canDelegate(role)
+	if !recovering {
+		administrator, err := p.CheckRole(ctx, admin, i.WorkspaceID, ownerRole)
 		if err != nil {
 			return nil, err
 		}
-	}
-	if !administrator {
-		return nil, contract.ErrForbidden
+		for _, role := range names {
+			if administrator {
+				break
+			}
+			administrator, err = canDelegate(role)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if !administrator {
+			return nil, contract.ErrForbidden
+		}
 	}
 	current, err := p.directMembership(ctx, user, i.WorkspaceID)
 	if err != nil {
@@ -75,7 +86,7 @@ func (p *PinnedModel) PlanMembership(ctx context.Context, ownerRole string, i co
 	if i.Kind == "assign_roles" && !current["member"] {
 		return nil, contract.ErrNotFound
 	}
-	if i.Kind == "add_member" && current["member"] {
+	if !recovering && i.Kind == "add_member" && current["member"] {
 		return nil, contract.ErrConflict
 	}
 	next := map[string]bool{}
@@ -87,7 +98,7 @@ func (p *PinnedModel) PlanMembership(ctx context.Context, ownerRole string, i co
 		if desired[name] {
 			next[relation] = true
 		}
-		if current[relation] == desired[name] && !(i.Kind == "add_member" && desired[name]) {
+		if recovering || (current[relation] == desired[name] && !(i.Kind == "add_member" && desired[name])) {
 			continue
 		}
 		allowed, err := canDelegate(name)

@@ -1,3 +1,5 @@
+import { PinnedModel } from "../internal/model-binding.js";
+import { planMembership } from "../internal/membership-mutation.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { bounded, known } from "../internal/audited-decision.js";
@@ -16,6 +18,7 @@ export type WorkspaceRecoveryScope = Readonly<{
   updatedAt: number;
   storeId: string;
   modelId: string;
+  kind: string;
 }>;
 
 export type WorkspaceRecoveryOptions = {
@@ -43,7 +46,31 @@ export async function recoverWorkspaceCreation(
   options: WorkspaceRecoveryOptions,
   caller: AbortSignal,
 ) {
-  const { config, artifact } = parseDeployment(configJSON, manifestJSON);
+  const result = await recoverOperation(pool, configJSON, manifestJSON, options, caller, true);
+  return { ...result, status: "active" as const };
+}
+
+/** Recover an audited add, role replacement or removal under operator quiescence. */
+export async function recoverMembership(
+  pool: Pool,
+  configJSON: string,
+  manifestJSON: string,
+  options: WorkspaceRecoveryOptions,
+  caller: AbortSignal,
+) {
+  const result = await recoverOperation(pool, configJSON, manifestJSON, options, caller, false);
+  return { ...result, status: "confirmed" as const };
+}
+
+async function recoverOperation(
+  pool: Pool,
+  configJSON: string,
+  manifestJSON: string,
+  options: WorkspaceRecoveryOptions,
+  caller: AbortSignal,
+  creating: boolean,
+) {
+  const { config, artifact, manifest } = parseDeployment(configJSON, manifestJSON);
   const { operationId, expectedGeneration, policyVersion, recoveryToken, verifyQuiescence } =
     options;
   const actor = { ...options.initiatingActor };
@@ -68,7 +95,13 @@ export async function recoverWorkspaceCreation(
   };
   const records = OperationRecords.forRetainedRuntime(pool, binding, options.auditSinks);
   let op = await records.get(operationId, actor, signal);
-  if (!op || op.intent.kind !== "create_workspace") throw new HeimdallError("not_found");
+  if (
+    !op ||
+    (creating
+      ? op.intent.kind !== "create_workspace"
+      : !["add_member", "assign_roles", "remove_member"].includes(op.intent.kind))
+  )
+    throw new HeimdallError("not_found");
   if (op.generation !== expectedGeneration || !["uncertain", "dispatching"].includes(op.state))
     throw new HeimdallError("conflict", operationId);
   const scope = Object.freeze({
@@ -78,6 +111,7 @@ export async function recoverWorkspaceCreation(
     workspaceId: op.workspaceId,
     generation: op.generation,
     updatedAt: op.updatedAt,
+    kind: op.intent.kind,
     storeId: binding.storeId,
     modelId: binding.modelId,
   });
@@ -116,25 +150,38 @@ export async function recoverWorkspaceCreation(
   op = await advance(op, "recover", signal);
   const quarantine = new HeimdallError("outcome_unknown", operationId);
   try {
-    await ensureTenantOwner(
-      configJSON,
-      manifestJSON,
-      recoveryToken,
-      {
-        operationId,
-        tenantId: op.workspaceId,
-        owner: op.intent.target,
-      },
-      async (s) => {
-        checkCancellation(s);
-      },
-      signal,
-    );
+    if (creating) {
+      await ensureTenantOwner(
+        configJSON,
+        manifestJSON,
+        recoveryToken,
+        {
+          operationId,
+          tenantId: op.workspaceId,
+          owner: op.intent.target,
+        },
+        async (s) => {
+          checkCancellation(s);
+        },
+        signal,
+      );
+    } else {
+      const model = new PinnedModel(
+        { ...config.openfga, profile: config.transportProfile ?? "production" },
+        manifest,
+        config,
+        artifact,
+        async () => recoveryToken,
+      );
+      const apply = await planMembership(model, manifest.ownerRole, op.intent, signal, true);
+      await apply(operationId, signal);
+    }
   } catch (error) {
-    if (known(error).code === "conflict") throw new HeimdallError("conflict", operationId);
+    if (["conflict", "forbidden", "not_found"].includes(known(error).code))
+      throw new HeimdallError("conflict", operationId);
     throw quarantine;
   }
   op = await advance(op, "confirm", signal);
   op = await advance(op, "complete", signal);
-  return { operationId, workspaceId: op.workspaceId, status: "active" as const };
+  return { operationId, workspaceId: op.workspaceId };
 }

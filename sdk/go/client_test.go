@@ -876,6 +876,11 @@ func TestPublicManagedOnboarding(t *testing.T) {
 		Target                         string
 		InitialRoles, ReplacementRoles []string
 		ConfirmedWrites                int64
+		RecoveryCases                  []struct {
+			Kind, Fault  string
+			RepairWrites int64
+			Candidates   int
+		}
 	}
 	raw, err = os.ReadFile("../../contracts/fixtures/membership-administration.json")
 	if err != nil || json.Unmarshal(raw, &mutation) != nil {
@@ -929,29 +934,87 @@ func TestPublicManagedOnboarding(t *testing.T) {
 	if !slices.Equal(discovered, active) {
 		t.Fatal("candidate state", discovered, active)
 	}
-	h.providerFault.Store("lost_response")
-	add.IdempotencyKey = "lost"
-	pending, err := members.Add(ctx, actor, add)
-	if err != nil || pending.Status != "pending" || pending.Reason != "recovery_required" {
-		t.Fatal("lost response", pending, err)
-	}
-	if again, err := members.Add(ctx, actor, add); err != nil || again != pending {
-		t.Fatal("quarantine replay", again, err)
-	}
-	if _, err := members.Remove(ctx, actor, heimdall.MembershipInput{Target: target, IdempotencyKey: "blocked"}); !errors.Is(err, heimdall.ErrForbidden) {
-		t.Fatal("conflicting operation", err)
-	}
-	if allowed, err := h.options.Storage.Managed.Allows(ctx, workspaceID); err != nil || allowed {
-		t.Fatal("workspace gate", err)
-	}
-	if h.writes.Load()-beforeChanges != mutation.ConfirmedWrites+1 {
-		t.Fatal("unexpected write after quarantine")
+	for _, item := range mutation.RecoveryCases {
+		before := h.writes.Load()
+		h.providerFault.Store(item.Fault)
+		input := heimdall.MembershipInput{Target: target, IdempotencyKey: "lost-" + item.Kind}
+		mutate := func() (heimdall.MembershipStatus, error) {
+			switch item.Kind {
+			case "add_member":
+				return members.Add(ctx, actor, heimdall.MembershipRolesInput{MembershipInput: input, Roles: mutation.InitialRoles})
+			case "assign_roles":
+				return members.AssignRoles(ctx, actor, heimdall.MembershipRolesInput{MembershipInput: input, Roles: mutation.ReplacementRoles})
+			case "remove_member":
+				return members.Remove(ctx, actor, input)
+			default:
+				t.Fatal("unexpected fixture kind", item.Kind)
+				return heimdall.MembershipStatus{}, nil
+			}
+		}
+		pending, err := mutate()
+		if err != nil || pending.Status != "pending" || pending.Reason != "recovery_required" {
+			t.Fatal("lost response", pending, err)
+		}
+		if again, err := mutate(); err != nil || again != pending {
+			t.Fatal("quarantine replay", again, err)
+		}
+		if _, err := members.Remove(ctx, actor, heimdall.MembershipInput{Target: target, IdempotencyKey: "blocked"}); !errors.Is(err, heimdall.ErrForbidden) {
+			t.Fatal("conflicting operation", err)
+		}
+		if allowed, err := h.options.Storage.Managed.Allows(ctx, workspaceID); err != nil || allowed {
+			t.Fatal("workspace gate", err)
+		}
+		if h.writes.Load()-before != 1 {
+			t.Fatal("unexpected write after quarantine")
+		}
+		var state string
+		var generation int64
+		if err := admin.QueryRow("SELECT state,generation FROM heimdall_managed.operations WHERE environment='onboarding-go' AND operation_id=$1", pending.OperationID).Scan(&state, &generation); err != nil || state != "uncertain" {
+			t.Fatal("read quarantine", state, err)
+		}
+		identity := actor.Identity()
+		options := provisioning.WorkspaceRecoveryOptions{
+			OperationID: pending.OperationID, ExpectedGeneration: generation, PolicyVersion: "p1",
+			InitiatingIssuer: identity.Issuer, InitiatingSubject: identity.Subject, RecoveryToken: "new-key", AuditSinks: []string{"siem"},
+			VerifyQuiescence: func(context.Context, provisioning.WorkspaceRecoveryScope) (provisioning.WorkspaceRecoveryEvidence, error) {
+				return provisioning.WorkspaceRecoveryEvidence{}, nil
+			},
+		}
+		h.providerFault.Store("none")
+		if _, err := provisioning.RecoverMembership(ctx, db, h.config, h.manifest, options); !errors.Is(err, heimdall.ErrForbidden) {
+			t.Fatal("missing proof", err)
+		}
+		options.VerifyQuiescence = func(_ context.Context, scope provisioning.WorkspaceRecoveryScope) (provisioning.WorkspaceRecoveryEvidence, error) {
+			if scope.WorkspaceID != workspaceID || scope.OperationID != pending.OperationID || scope.Kind != item.Kind || scope.Generation != generation {
+				return provisioning.WorkspaceRecoveryEvidence{}, heimdall.ErrForbidden
+			}
+			return provisioning.WorkspaceRecoveryEvidence{OperatorID: "operator", EvidenceID: "membership-drain"}, nil
+		}
+		recovered, err := provisioning.RecoverMembership(ctx, db, h.config, h.manifest, options)
+		if err != nil || recovered.Status != "confirmed" || recovered.OperationID != pending.OperationID || recovered.WorkspaceID != workspaceID {
+			t.Fatal("recover membership", recovered, err)
+		}
+		if _, err := provisioning.RecoverMembership(ctx, db, h.config, h.manifest, options); !errors.Is(err, heimdall.ErrConflict) {
+			t.Fatal("stale recovery", err)
+		}
+		if again, err := mutate(); err != nil || again.OperationID != pending.OperationID || again.Status != "confirmed" {
+			t.Fatal("completed replay", again, err)
+		}
+		if allowed, err := h.options.Storage.Managed.Allows(ctx, workspaceID); err != nil || !allowed {
+			t.Fatal("workspace gate after recovery", err)
+		}
+		if h.writes.Load()-before != 1+item.RepairWrites {
+			t.Fatal("unexpected recovery write count")
+		}
+		if err := admin.QueryRow("SELECT count(*) FROM heimdall_managed.membership_candidates WHERE environment='onboarding-go' AND workspace_id=$1", workspaceID).Scan(&candidateCount); err != nil || candidateCount != item.Candidates {
+			t.Fatal("candidate recovery", candidateCount, err)
+		}
 	}
 	var recoveryCount int
 	if err := admin.QueryRow(`SELECT count(*) FROM heimdall.audit_events WHERE environment='onboarding-go'
 		AND convert_from(decode(translate(event->>'payload','-_','+/') ||
 		repeat('=', (4-length(event->>'payload')%4)%4), 'base64'),'UTF8')::jsonb
-		@> '{"requestId":"drain-record","actor":{"kind":"system","id":"operator"}}'`).Scan(&recoveryCount); err != nil || recoveryCount != 6 {
+		->>'requestId' IN ('drain-record','membership-drain')`).Scan(&recoveryCount); err != nil || recoveryCount != 15 {
 		t.Fatal("recovery audit", recoveryCount, err)
 	}
 	var count int

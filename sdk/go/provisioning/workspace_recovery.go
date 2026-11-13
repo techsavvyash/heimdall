@@ -10,11 +10,13 @@ import (
 
 	"github.com/techsavvyash/heimdall/sdk/go/internal/configuration"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
+	"github.com/techsavvyash/heimdall/sdk/go/internal/modelbinding"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/postgres"
 )
 
 type WorkspaceRecoveryScope struct {
 	ProductID, Environment, OperationID, WorkspaceID, StoreID, ModelID string
+	Kind                                                               string
 	Generation, UpdatedAt                                              int64
 }
 
@@ -36,6 +38,15 @@ type WorkspaceRecoveryResult struct {
 
 // RecoverWorkspaceCreation requires a trusted maintenance caller to keep the deployment drained throughout.
 func RecoverWorkspaceCreation(ctx context.Context, db *sql.DB, configJSON, manifestJSON []byte, options WorkspaceRecoveryOptions) (WorkspaceRecoveryResult, error) {
+	return recoverOperation(ctx, db, configJSON, manifestJSON, options, true)
+}
+
+// RecoverMembership completes an audited add, role replacement or removal under operator quiescence.
+func RecoverMembership(ctx context.Context, db *sql.DB, configJSON, manifestJSON []byte, options WorkspaceRecoveryOptions) (WorkspaceRecoveryResult, error) {
+	return recoverOperation(ctx, db, configJSON, manifestJSON, options, false)
+}
+
+func recoverOperation(ctx context.Context, db *sql.DB, configJSON, manifestJSON []byte, options WorkspaceRecoveryOptions, creating bool) (WorkspaceRecoveryResult, error) {
 	empty := WorkspaceRecoveryResult{}
 	configJSON, manifestJSON = append([]byte(nil), configJSON...), append([]byte(nil), manifestJSON...)
 	d, err := configuration.Parse(configJSON, manifestJSON)
@@ -64,7 +75,8 @@ func RecoverWorkspaceCreation(ctx context.Context, db *sql.DB, configJSON, manif
 	if err != nil {
 		return empty, err
 	}
-	if op == nil || op.Intent.Kind != "create_workspace" {
+	if op == nil || (creating && op.Intent.Kind != "create_workspace") ||
+		(!creating && op.Intent.Kind != "add_member" && op.Intent.Kind != "assign_roles" && op.Intent.Kind != "remove_member") {
 		return empty, contract.ErrNotFound
 	}
 	conflict := contract.NewError(contract.Conflict, id)
@@ -73,7 +85,7 @@ func RecoverWorkspaceCreation(ctx context.Context, db *sql.DB, configJSON, manif
 	}
 	scope := WorkspaceRecoveryScope{
 		ProductID: cfg.ProductID, Environment: cfg.Environment, OperationID: id, WorkspaceID: op.WorkspaceID,
-		StoreID: binding.StoreID, ModelID: binding.ModelID, Generation: op.Generation, UpdatedAt: op.UpdatedAt,
+		StoreID: binding.StoreID, ModelID: binding.ModelID, Generation: op.Generation, UpdatedAt: op.UpdatedAt, Kind: op.Intent.Kind,
 	}
 	proofs := make(chan WorkspaceRecoveryEvidence, 1)
 	if err := runSetupCallback(ctx, func(operation context.Context) error {
@@ -108,11 +120,33 @@ func RecoverWorkspaceCreation(ctx context.Context, db *sql.DB, configJSON, manif
 	if err := advance("recover"); err != nil {
 		return empty, err
 	}
-	target := op.Intent.Target
-	if _, err := EnsureTenantOwner(ctx, configJSON, manifestJSON, options.RecoveryToken, TenantOwnerInput{
-		OperationID: id, TenantID: op.WorkspaceID, Issuer: target.Issuer, Subject: target.Subject,
-	}, contract.CheckCancellation); err != nil {
-		if errors.Is(err, contract.ErrConflict) {
+	status := "confirmed"
+	if creating {
+		status = "active"
+		target := op.Intent.Target
+		_, err = EnsureTenantOwner(ctx, configJSON, manifestJSON, options.RecoveryToken, TenantOwnerInput{
+			OperationID: id, TenantID: op.WorkspaceID, Issuer: target.Issuer, Subject: target.Subject,
+		}, contract.CheckCancellation)
+	} else {
+		profile := cfg.TransportProfile
+		if profile == "" {
+			profile = "production"
+		}
+		manifest := d.Manifest()
+		model, modelErr := modelbinding.New(modelbinding.Config{URL: cfg.OpenFGA.URL, StoreID: binding.StoreID, ModelID: binding.ModelID, Profile: profile},
+			manifest, contract.Binding{ProductID: cfg.ProductID, ManifestVersion: cfg.ManifestVersion, ClientKey: cfg.ClientKey, TransportProfile: profile},
+			d.Artifact(), func(context.Context) (string, error) { return options.RecoveryToken, nil })
+		err = modelErr
+		if err == nil {
+			var apply func(context.Context, string) error
+			apply, err = model.PlanMembershipRecovery(ctx, manifest.OwnerRole, op.Intent)
+			if err == nil {
+				err = apply(ctx, id)
+			}
+		}
+	}
+	if err != nil {
+		if errors.Is(err, contract.ErrConflict) || errors.Is(err, contract.ErrForbidden) || errors.Is(err, contract.ErrNotFound) {
 			return empty, conflict
 		}
 		return empty, contract.NewError(contract.OutcomeUnknown, id)
@@ -122,5 +156,5 @@ func RecoverWorkspaceCreation(ctx context.Context, db *sql.DB, configJSON, manif
 			return empty, err
 		}
 	}
-	return WorkspaceRecoveryResult{id, op.WorkspaceID, "active"}, nil
+	return WorkspaceRecoveryResult{id, op.WorkspaceID, status}, nil
 }

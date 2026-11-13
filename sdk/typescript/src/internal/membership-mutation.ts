@@ -8,6 +8,7 @@ export async function planMembership(
   ownerRole: string,
   intent: Intent,
   signal: AbortSignal,
+  recovering = false,
 ) {
   const { kind, workspaceId, actor, target } = intent;
   if (!["add_member", "assign_roles", "remove_member"].includes(kind))
@@ -25,23 +26,25 @@ export async function planMembership(
       delegatedRoles.set(role, await model.checkDelegation(admin, workspaceId, role, signal));
     return delegatedRoles.get(role)!;
   }
-  let administrator = await model.checkRole(admin, workspaceId, ownerRole, signal);
-  for (const role of Object.keys(verified.roles)) {
-    if (administrator) break;
-    administrator = await canDelegate(role);
+  if (!recovering) {
+    let administrator = await model.checkRole(admin, workspaceId, ownerRole, signal);
+    for (const role of Object.keys(verified.roles)) {
+      if (administrator) break;
+      administrator = await canDelegate(role);
+    }
+    if (!administrator) throw new HeimdallError("forbidden");
   }
-  if (!administrator) throw new HeimdallError("forbidden");
   const current = await model.directMembership(user, workspaceId, signal);
   if (current.has(verified.roles[ownerRole]!.assignment)) throw new HeimdallError("forbidden");
   const isMember = current.has("member");
   if (kind === "assign_roles" && !isMember) throw new HeimdallError("not_found");
-  if (kind === "add_member" && isMember) throw new HeimdallError("conflict");
+  if (!recovering && kind === "add_member" && isMember) throw new HeimdallError("conflict");
   const next = new Set<string>(kind === "remove_member" ? [] : ["member"]);
   for (const [name, relation] of Object.entries(verified.roles)) {
     const had = current.has(relation.assignment);
     const wants = desired.has(name);
     if (wants) next.add(relation.assignment);
-    if (had !== wants || (kind === "add_member" && wants)) {
+    if (!recovering && (had !== wants || (kind === "add_member" && wants))) {
       if (!(await canDelegate(name))) throw new HeimdallError("forbidden");
     }
   }

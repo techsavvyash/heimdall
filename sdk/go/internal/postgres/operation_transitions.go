@@ -44,7 +44,7 @@ func (o *OperationRecords) Advance(ctx context.Context, id string, actor contrac
 	if before == nil {
 		return nil, contract.ErrConflict
 	}
-	if m.RecoveryOperator != "" && before.Intent.Kind != "create_workspace" {
+	if m.RecoveryOperator != "" && before.Intent.Kind == "transfer_owner" {
 		return nil, contract.ErrConflict
 	}
 	dispatch := transition == "dispatch" || transition == "recover"

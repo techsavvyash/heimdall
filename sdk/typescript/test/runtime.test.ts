@@ -1,4 +1,4 @@
-import { recoverWorkspaceCreation } from "../src/provisioning/index.js";
+import { recoverMembership, recoverWorkspaceCreation } from "../src/provisioning/index.js";
 import { Pool } from "pg";
 import { createManagedPostgresStorage, createPostgresStorage } from "../src/postgres.js";
 import { readFileSync } from "node:fs";
@@ -745,16 +745,88 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         .createWorkspaceDiscovery({ activeKeyId: "cursor", keys: { cursor: Buffer.alloc(32, 9) } })
         .list(actor, call);
       expect(page.items.map(({ id }) => id)).toEqual(expectedActive);
-      s.fga.fault = "lost_response";
-      const lost = { target, roles: fixtureMembership.initialRoles, idempotencyKey: "lost" };
-      const pending = await changes.add(actor, lost, call);
-      expect(pending).toMatchObject({ status: "pending", reason: "recovery_required" });
-      expect(await changes.add(actor, lost, call)).toEqual(pending);
-      await expect(
-        changes.remove(actor, { target, idempotencyKey: "blocked" }, call),
-      ).rejects.toThrow("forbidden");
-      expect(await s.options.storage.managed!.allows(winner.workspaceId, call.signal)).toBe(false);
-      expect(s.fga.writes - beforeChanges).toBe(fixtureMembership.confirmedWrites + 1);
+      for (const item of fixtureMembership.recoveryCases) {
+        const before = s.fga.writes;
+        s.fga.fault = item.fault;
+        const input = { target, idempotencyKey: "lost-" + item.kind };
+        const mutate = () => {
+          switch (item.kind) {
+            case "add_member":
+              return changes.add(actor, { ...input, roles: fixtureMembership.initialRoles }, call);
+            case "assign_roles":
+              return changes.assignRoles(
+                actor,
+                { ...input, roles: fixtureMembership.replacementRoles },
+                call,
+              );
+            case "remove_member":
+              return changes.remove(actor, input, call);
+            default:
+              throw new Error("unexpected fixture kind");
+          }
+        };
+        const pending = await mutate();
+        expect(pending).toMatchObject({ status: "pending", reason: "recovery_required" });
+        expect(await mutate()).toEqual(pending);
+        await expect(
+          changes.remove(actor, { target, idempotencyKey: "blocked" }, call),
+        ).rejects.toThrow("forbidden");
+        expect(await s.options.storage.managed!.allows(winner.workspaceId, call.signal)).toBe(
+          false,
+        );
+        expect(s.fga.writes - before).toBe(1);
+        const state = await admin.query(
+          "SELECT state,generation FROM heimdall_managed.operations WHERE environment='onboarding-ts' AND operation_id=$1",
+          [pending.operationId],
+        );
+        expect(state.rows[0]?.state).toBe("uncertain");
+        const generation = Number(state.rows[0]?.generation);
+        const options = {
+          operationId: pending.operationId,
+          expectedGeneration: generation,
+          policyVersion: "p1",
+          initiatingActor: { issuer: actor.issuer, subject: actor.subject },
+          recoveryToken: "new-key",
+          auditSinks: ["siem"],
+          verifyQuiescence: async () => null,
+        };
+        const recover = (opts: Parameters<typeof recoverMembership>[3]) =>
+          recoverMembership(
+            pool,
+            JSON.stringify(s.config),
+            JSON.stringify(base.manifest),
+            opts,
+            call.signal,
+          );
+        s.fga.fault = "none";
+        await expect(recover(options)).rejects.toThrow("forbidden");
+        const verify: Parameters<typeof recoverMembership>[3]["verifyQuiescence"] = async (
+          scope,
+        ) => {
+          expect(scope).toMatchObject({
+            operationId: pending.operationId,
+            workspaceId: winner.workspaceId,
+            kind: item.kind,
+            generation,
+          });
+          return { operatorId: "operator", evidenceId: "membership-drain" };
+        };
+        const recovered = await recover({ ...options, verifyQuiescence: verify });
+        expect(recovered).toEqual({
+          operationId: pending.operationId,
+          workspaceId: winner.workspaceId,
+          status: "confirmed",
+        });
+        await expect(recover({ ...options, verifyQuiescence: verify })).rejects.toThrow("conflict");
+        expect(await mutate()).toEqual(recovered);
+        expect(await s.options.storage.managed!.allows(winner.workspaceId, call.signal)).toBe(true);
+        expect(s.fga.writes - before).toBe(1 + item.repairWrites);
+        const indexed = await admin.query(
+          "SELECT count(*)::int AS count FROM heimdall_managed.membership_candidates WHERE environment='onboarding-ts' AND workspace_id=$1",
+          [winner.workspaceId],
+        );
+        expect(indexed.rows[0]?.count).toBe(item.candidates);
+      }
       const counts = await admin.query(
         "SELECT count(*)::int AS count FROM heimdall.audit_deliveries WHERE environment='onboarding-ts' AND sink_id='siem'",
       );
@@ -764,8 +836,8 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       );
       const recoveryEvents = audit.rows
         .map(({ payload }) => JSON.parse(Buffer.from(payload, "base64url").toString()))
-        .filter((event) => event.requestId === "drain-record");
-      expect(recoveryEvents).toHaveLength(6);
+        .filter((event) => ["drain-record", "membership-drain"].includes(event.requestId));
+      expect(recoveryEvents).toHaveLength(15);
       expect(
         recoveryEvents.every(
           (event) => event.actor.kind === "system" && event.actor.id === "operator",

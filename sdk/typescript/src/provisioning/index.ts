@@ -183,5 +183,5 @@ export { readSetupStatus } from "./journal.js";
 export { ensureTenantOwner } from "./tenant-owner.js";
 export type { TenantOwnerInput } from "./tenant-owner.js";
 
-export { recoverWorkspaceCreation } from "./workspace-recovery.js";
+export { recoverWorkspaceCreation, recoverMembership } from "./workspace-recovery.js";
 export type { WorkspaceRecoveryOptions, WorkspaceRecoveryScope } from "./workspace-recovery.js";
