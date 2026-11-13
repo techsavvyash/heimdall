@@ -6,12 +6,16 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
 	"regexp"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	_ "github.com/lib/pq"
 	heimdall "github.com/techsavvyash/heimdall/sdk/go"
@@ -45,8 +49,10 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 func respondError(w http.ResponseWriter, err error) {
 	var sdk *heimdall.Error
 	code, status := "unavailable", http.StatusServiceUnavailable
+	var operationID string
 	if errors.As(err, &sdk) {
 		code = string(sdk.Code)
+		operationID = sdk.OperationID
 		switch code {
 		case "unauthenticated":
 			status = http.StatusUnauthorized
@@ -54,11 +60,35 @@ func respondError(w http.ResponseWriter, err error) {
 			status = http.StatusForbidden
 		case "invalid_argument":
 			status = http.StatusBadRequest
+		case "conflict":
+			status = http.StatusConflict
 		case "not_found":
 			status = http.StatusNotFound
 		}
 	}
-	writeJSON(w, status, map[string]string{"code": code})
+	body := map[string]string{"code": code}
+	if operationID != "" {
+		body["operationId"] = operationID
+	}
+	writeJSON(w, status, body)
+}
+
+func workspaceInput(w http.ResponseWriter, r *http.Request) (heimdall.WorkspaceCreateInput, error) {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	keys := r.Header.Values("Idempotency-Key")
+	if err != nil || mediaType != "application/json" || len(keys) != 1 || strings.Contains(keys[0], ", ") {
+		return heimdall.WorkspaceCreateInput{}, heimdall.ErrInvalidArgument
+	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
+	if err != nil || !utf8.Valid(body) {
+		return heimdall.WorkspaceCreateInput{}, heimdall.ErrInvalidArgument
+	}
+	var fields map[string]json.RawMessage
+	var name string
+	if json.Unmarshal(body, &fields) != nil || len(fields) != 1 || json.Unmarshal(fields["name"], &name) != nil {
+		return heimdall.WorkspaceCreateInput{}, heimdall.ErrInvalidArgument
+	}
+	return heimdall.WorkspaceCreateInput{Name: name, IdempotencyKey: keys[0]}, nil
 }
 
 func main() {
@@ -72,6 +102,8 @@ func main() {
 	if err != nil {
 		log.Fatal("Invalid callback configuration")
 	}
+	origin := callbackURL.Scheme + "://" + callbackURL.Host
+	workspaceCreator := os.Getenv("HEIMDALL_WORKSPACE_CREATOR_SUBJECT")
 	records, keyUsage, business := database("DATABASE_URL"), database("HEIMDALL_KEY_DATABASE_URL"), database("SUPPORT_DATABASE_URL")
 	defer records.Close()
 	defer keyUsage.Close()
@@ -91,6 +123,9 @@ func main() {
 	defer cancel()
 	auth, err := heimdall.New(ctx, configJSON, manifestJSON, heimdall.Options{
 		PolicyVersion: required("HEIMDALL_POLICY_VERSION"), Storage: storage,
+		AuthorizeWorkspaceCreation: func(_ context.Context, actor *heimdall.Principal, _ string) (bool, error) {
+			return actor.Identity().Subject == workspaceCreator, nil
+		},
 		Credentials: heimdall.Credentials{
 			ClientSecret: func(context.Context) (string, error) { return required("HEIMDALL_CLIENT_SECRET"), nil },
 			OpenFGAKey:   func(context.Context) (string, error) { return required("HEIMDALL_OPENFGA_KEY"), nil },
@@ -156,6 +191,45 @@ func main() {
 		return nil
 	})
 	workspaceID := regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+	onboarding := auth.Onboarding()
+	workspaceOperation := func(w http.ResponseWriter, r *http.Request) error {
+		mutation := r.Method == http.MethodPost
+		if mutation && (len(r.Header.Values("Origin")) != 1 || r.Header.Get("Origin") != origin) {
+			return heimdall.ErrForbidden
+		}
+		actor, err := sessions.Authenticate(r)
+		if err != nil {
+			return err
+		}
+		ctx, operation := r.Context(), r.PathValue("operation")
+		var result heimdall.WorkspaceOnboardingStatus
+		switch {
+		case operation == "":
+			input, decodeErr := workspaceInput(w, r)
+			if decodeErr != nil {
+				return decodeErr
+			}
+			result, err = onboarding.Create(ctx, actor, input)
+		case !workspaceID.MatchString(operation):
+			return heimdall.ErrInvalidArgument
+		case mutation:
+			result, err = onboarding.Resume(ctx, actor, operation)
+		default:
+			result, err = onboarding.Get(ctx, actor, operation)
+		}
+		if err != nil {
+			return err
+		}
+		status := http.StatusOK
+		if mutation && result.Status == "pending" {
+			status = http.StatusAccepted
+		}
+		writeJSON(w, status, result)
+		return nil
+	}
+	mount("POST /workspaces", workspaceOperation)
+	mount("GET /workspace-operations/{operation}", workspaceOperation)
+	mount("POST /workspace-operations/{operation}", workspaceOperation)
 	mount("GET /workspaces/{workspace}/roles", func(w http.ResponseWriter, r *http.Request) error {
 		workspace := r.PathValue("workspace")
 		if !workspaceID.MatchString(workspace) {

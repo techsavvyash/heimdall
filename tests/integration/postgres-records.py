@@ -123,28 +123,12 @@ try:
             products = [result for result in observations if "scopedRead" in result]
             if len(products) != 2:
                 raise RuntimeError("missing reference product observations")
-            from base64 import urlsafe_b64decode
-            from collections import Counter
             audit_rows = run(
                 ["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime", "-XAt", "-v", "ON_ERROR_STOP=1"],
                 input="SELECT event->>'payload' FROM heimdall.audit_events WHERE environment='verification'",
                 capture_output=True, text=True).stdout.splitlines()
-            audit_counts = Counter()
-            for payload in audit_rows:
-                event = json.loads(urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
-                audit_counts[event["productId"], event["eventType"], event["outcome"]] += 1
-            expected = {
-                (product, "heimdall." + event_type, outcome): count
-                for product in ("ledger", "support")
-                for event_type, outcome, count in (
-                    ("authentication.completed", "succeeded", 4),
-                    ("authorization.requested", "requested", 5),
-                    ("authorization.completed", "allow", 3),
-                    ("authorization.completed", "deny", 2),
-                )
-            }
-            if audit_counts != expected:
-                raise RuntimeError("unexpected reference product audit history: " + str(audit_counts))
+            run(["python3", "tests/integration/reference-onboarding-audit.py"],
+                input=json.dumps({"products": products, "payloads": audit_rows}), text=True)
             print(json.dumps({"referenceProducts": products}), flush=True)
     if os.environ.get("HEIMDALL_PROBE_DURABLE_RUNTIME") == "1":
         for args in (

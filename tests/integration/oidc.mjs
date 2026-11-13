@@ -95,6 +95,7 @@ async function sdkRuntime(client, c) {
             apiAudience: c.reference.apiAudience,
             user: c.subject,
             runId,
+            otherWorkspace: observations.find((entry) => entry.onboarding)?.onboarding,
           },
           c.reference.authorize,
         ),

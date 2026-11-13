@@ -6,7 +6,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 
 export async function verifyReferenceProduct(input, authorize) {
-  const { config, manifest, clientSecret, apiAudience, user, runId } = input;
+  const { config, manifest, clientSecret, apiAudience, user, runId, otherWorkspace } = input;
   const ledger = config.productId === "ledger";
   const port = ledger ? 18640 : 18641;
   const remote = process.env.HEIMDALL_REFERENCE_RAILWAY === "1";
@@ -93,6 +93,7 @@ export async function verifyReferenceProduct(input, authorize) {
     HEIMDALL_MANIFEST: JSON.stringify(manifest),
     HEIMDALL_CALLBACK_URL: callback,
     HEIMDALL_POLICY_VERSION: "reference-v1",
+    HEIMDALL_WORKSPACE_CREATOR_SUBJECT: user,
     HEIMDALL_CLIENT_SECRET: clientSecret,
     HEIMDALL_OPENFGA_KEY: process.env.HEIMDALL_PROBE_OPENFGA_KEY,
     HEIMDALL_RECORD_KEY_ID: "fixture",
@@ -185,7 +186,7 @@ export async function verifyReferenceProduct(input, authorize) {
             },
           );
           request.on("error", reject);
-          request.end();
+          request.end(options.body);
         });
   try {
     let ready = false;
@@ -242,6 +243,75 @@ export async function verifyReferenceProduct(input, authorize) {
     const denied = await request(`/workspaces/globex/${collection}`, { headers });
     assert.equal(denied.status, 403);
     await denied.body?.cancel();
+    const input = { name: "Onboarded " + schema };
+    const mutation = {
+      method: "POST",
+      headers: { cookie, origin, "content-type": "application/json", "idempotency-key": runId },
+      body: JSON.stringify(input),
+    };
+    const csrf = await request("/workspaces", {
+      ...mutation,
+      headers: { ...mutation.headers, origin: "https://unrelated.example" },
+    });
+    assert.equal(csrf.status, 403);
+    await csrf.body?.cancel();
+    const anonymous = await request("/workspaces", {
+      ...mutation,
+      headers: { ...mutation.headers, cookie: "" },
+    });
+    assert.equal(anonymous.status, 401);
+    await anonymous.body?.cancel();
+    const injected = await request("/workspaces", {
+      ...mutation,
+      body: JSON.stringify({ ...input, owner: user }),
+    });
+    assert.equal(injected.status, 400);
+    await injected.body?.cancel();
+    if (otherWorkspace) {
+      const foreignStatus = await request("/workspace-operations/" + otherWorkspace.operationId, {
+        headers,
+      });
+      assert.equal(foreignStatus.status, 404);
+      await foreignStatus.body?.cancel();
+      const foreignRoles = await request(`/workspaces/${otherWorkspace.workspaceId}/roles`, {
+        headers,
+      });
+      assert.equal(foreignRoles.status, 200);
+      assert.deepEqual(await foreignRoles.json(), { roles: [] });
+    }
+    const created = await request("/workspaces", mutation);
+    assert.equal(created.status, 200, `Reference ${schema} create returned ${created.status}`);
+    const workspace = await created.json();
+    assert.equal(workspace.status, "active");
+    for (const id of [workspace.workspaceId, workspace.operationId])
+      assert.match(id, /^[A-Za-z0-9_-]{1,128}$/);
+    const duplicate = await request("/workspaces", mutation);
+    assert.equal(duplicate.status, 200);
+    assert.deepEqual(await duplicate.json(), workspace);
+    const conflict = await request("/workspaces", {
+      ...mutation,
+      body: JSON.stringify({ name: "Changed" }),
+    });
+    assert.equal(conflict.status, 409);
+    await conflict.body?.cancel();
+    const operationPath = "/workspace-operations/" + workspace.operationId;
+    for (const method of ["GET", "POST"]) {
+      const response = await request(operationPath, { method, headers: { cookie, origin } });
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), workspace);
+    }
+    const discovered = await request("/workspaces", { headers });
+    assert.equal(discovered.status, 200);
+    assert.deepEqual((await discovered.json()).items, [
+      { id: "acme", name: "Acme" },
+      { id: workspace.workspaceId, name: input.name },
+    ]);
+    const owner = await request(`/workspaces/${workspace.workspaceId}/roles`, { headers });
+    assert.equal(owner.status, 200);
+    assert.deepEqual(await owner.json(), { roles: [manifest.ownerRole] });
+    const owned = await request(`/workspaces/${workspace.workspaceId}/${collection}`, { headers });
+    assert.equal(owned.status, 200);
+    assert.deepEqual(await owned.json(), { [collection]: [] });
     const logout = await request("/auth/logout", { method: "POST", headers: { cookie, origin } });
     assert.equal(logout.status, 204);
     const replay = await request("/workspaces", { headers });
@@ -254,6 +324,18 @@ export async function verifyReferenceProduct(input, authorize) {
       discovery: "Acme",
       roles: { acme: [manifest.ownerRole], globex: [] },
       scopedRead: 200,
+      onboarding: {
+        ...workspace,
+        replay: 200,
+        changedInput: 409,
+        crossOrigin: 403,
+        unauthenticated: 401,
+        injectedOwner: 400,
+        ...(otherWorkspace ? { otherProductOperation: 404, otherProductRoles: [] } : {}),
+        discovered: true,
+        roles: [manifest.ownerRole],
+        emptyScopedRead: 200,
+      },
       otherTenant: 403,
     };
   } finally {
