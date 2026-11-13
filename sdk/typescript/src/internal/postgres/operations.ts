@@ -736,32 +736,44 @@ export class OperationRecords {
           workspaceId,
         });
         if (!result) throw new HeimdallError("unavailable");
-        for (const o of batch) {
-          const key = [b.productId, b.environment, workspaceId, Buffer.from(o.identityHash, "hex")];
-          const prior = await tx.query<{ principal: string; observed_at: string }>(
-            "SELECT principal,observed_at::text FROM heimdall_managed.membership_candidates WHERE product_id=$1 AND environment=$2 AND workspace_id=$3 AND identity_hash=$4 FOR UPDATE",
-            key,
-          );
-          if (prior.rows.length > 1) throw new HeimdallError("unavailable");
-          if (
-            prior.rows.length === 1 &&
-            (prior.rows[0]!.principal !== o.principal ||
-              integer(prior.rows[0]!.observed_at, 0) > o.observedAt)
-          )
-            throw new HeimdallError("conflict");
-          if (o.member) {
-            await tx.query(
-              `INSERT INTO heimdall_managed.membership_candidates(product_id,environment,workspace_id,identity_hash,principal,observed_at)
-            VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(product_id,environment,identity_hash,workspace_id) DO UPDATE SET observed_at=EXCLUDED.observed_at`,
-              [...key, o.principal, o.observedAt],
-            );
-          } else {
-            await tx.query(
-              "DELETE FROM heimdall_managed.membership_candidates WHERE product_id=$1 AND environment=$2 AND workspace_id=$3 AND identity_hash=$4",
-              key,
-            );
-          }
-        }
+        const applied = await tx.query<{ applied: boolean }>(
+          `WITH batch AS MATERIALIZED (
+  SELECT decode(x.hash,'hex') AS identity_hash,x.principal,x.member,x.observed
+  FROM jsonb_to_recordset($4::jsonb) AS x(hash text,principal text,member boolean,observed bigint)
+), incompatible AS MATERIALIZED (
+  SELECT 1 FROM batch b JOIN heimdall_managed.membership_candidates c
+    ON c.product_id=$1 AND c.environment=$2 AND c.workspace_id=$3 AND c.identity_hash=b.identity_hash
+  WHERE c.principal<>b.principal OR c.observed_at>b.observed
+), saved AS (
+  INSERT INTO heimdall_managed.membership_candidates(product_id,environment,workspace_id,identity_hash,principal,observed_at)
+  SELECT $1,$2,$3,identity_hash,principal,observed FROM batch WHERE member AND NOT EXISTS (SELECT 1 FROM incompatible)
+  ON CONFLICT(product_id,environment,identity_hash,workspace_id) DO UPDATE SET observed_at=EXCLUDED.observed_at
+  WHERE membership_candidates.principal=EXCLUDED.principal AND membership_candidates.observed_at<=EXCLUDED.observed_at
+  RETURNING 1
+), removed AS (
+  DELETE FROM heimdall_managed.membership_candidates c USING batch b
+  WHERE c.product_id=$1 AND c.environment=$2 AND c.workspace_id=$3 AND c.identity_hash=b.identity_hash
+  AND NOT b.member AND c.principal=b.principal AND c.observed_at<=b.observed
+  AND NOT EXISTS (SELECT 1 FROM incompatible)
+)
+SELECT NOT EXISTS (SELECT 1 FROM incompatible) AND
+  (SELECT count(*) FROM saved)=(SELECT count(*) FROM batch WHERE member) AS applied`,
+          [
+            b.productId,
+            b.environment,
+            workspaceId,
+            JSON.stringify(
+              batch.map((o) => ({
+                hash: o.identityHash,
+                principal: o.principal,
+                member: o.member,
+                observed: o.observedAt,
+              })),
+            ),
+          ],
+        );
+        if (applied.rows.length !== 1 || applied.rows[0]?.applied !== true)
+          throw new HeimdallError("conflict");
       },
       signal,
     );

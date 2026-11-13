@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"github.com/techsavvyash/heimdall/sdk/go/internal/contract"
 	"time"
@@ -31,10 +32,10 @@ func (o *OperationRecords) RepairCandidates(ctx context.Context, id, expectedRev
 		return nil, e
 	}
 	type observation struct {
-		hash      []byte
-		principal string
-		member    bool
-		observed  int64
+		Hash      string `json:"hash"`
+		Principal string `json:"principal"`
+		Member    bool   `json:"member"`
+		Observed  int64  `json:"observed"`
 	}
 	batch := make([]observation, 0, len(observations))
 	seen := make(map[string]bool)
@@ -52,12 +53,12 @@ func (o *OperationRecords) RepairCandidates(ctx context.Context, id, expectedRev
 		}
 		seen[key] = true
 		principal, _ := contract.EncodeIdentity(item.Identity.Issuer, item.Identity.Subject)
-		batch = append(batch, observation{hash, principal, item.Member, item.ObservedAt})
+		batch = append(batch, observation{key, principal, item.Member, item.ObservedAt})
 	}
 	oldest := m.RecordedAt
 	for _, item := range batch {
-		if item.observed < oldest {
-			oldest = item.observed
+		if item.Observed < oldest {
+			oldest = item.Observed
 		}
 	}
 	b := o.binding
@@ -86,32 +87,36 @@ func (o *OperationRecords) RepairCandidates(ctx context.Context, id, expectedRev
 		if result == nil {
 			return contract.ErrUnavailable
 		}
-		for _, item := range batch {
-			var principal, observed string
-			err = tx.QueryRowContext(ctx, "SELECT principal,observed_at::text FROM heimdall_managed.membership_candidates WHERE product_id=$1 AND environment=$2 AND workspace_id=$3 AND identity_hash=$4 FOR UPDATE", b.ProductID, b.Environment, id, item.hash).Scan(&principal, &observed)
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				return err
-			}
-			if err == nil {
-				time, ok := workspaceDecimal(&observed, maxSafe, false)
-				if !ok {
-					return contract.ErrUnavailable
-				}
-				if principal != item.principal || time > item.observed {
-					return contract.ErrConflict
-				}
-			}
-			if item.member {
-				_, err = tx.ExecContext(ctx, `INSERT INTO heimdall_managed.membership_candidates(product_id,environment,workspace_id,identity_hash,principal,observed_at)
-     VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(product_id,environment,identity_hash,workspace_id) DO UPDATE SET observed_at=EXCLUDED.observed_at`, b.ProductID, b.Environment, id, item.hash, item.principal, item.observed)
-			} else {
-				_, err = tx.ExecContext(ctx, "DELETE FROM heimdall_managed.membership_candidates WHERE product_id=$1 AND environment=$2 AND workspace_id=$3 AND identity_hash=$4", b.ProductID, b.Environment, id, item.hash)
-			}
-			if err != nil {
-				return err
-			}
+		payload, err := json.Marshal(batch)
+		if err != nil {
+			return contract.ErrUnavailable
 		}
-		return nil
+		var applied bool
+		err = tx.QueryRowContext(ctx, `WITH batch AS MATERIALIZED (
+  SELECT decode(x.hash,'hex') AS identity_hash,x.principal,x.member,x.observed
+  FROM jsonb_to_recordset($4::jsonb) AS x(hash text,principal text,member boolean,observed bigint)
+), incompatible AS MATERIALIZED (
+  SELECT 1 FROM batch b JOIN heimdall_managed.membership_candidates c
+    ON c.product_id=$1 AND c.environment=$2 AND c.workspace_id=$3 AND c.identity_hash=b.identity_hash
+  WHERE c.principal<>b.principal OR c.observed_at>b.observed
+), saved AS (
+  INSERT INTO heimdall_managed.membership_candidates(product_id,environment,workspace_id,identity_hash,principal,observed_at)
+  SELECT $1,$2,$3,identity_hash,principal,observed FROM batch WHERE member AND NOT EXISTS (SELECT 1 FROM incompatible)
+  ON CONFLICT(product_id,environment,identity_hash,workspace_id) DO UPDATE SET observed_at=EXCLUDED.observed_at
+  WHERE membership_candidates.principal=EXCLUDED.principal AND membership_candidates.observed_at<=EXCLUDED.observed_at
+  RETURNING 1
+), removed AS (
+  DELETE FROM heimdall_managed.membership_candidates c USING batch b
+  WHERE c.product_id=$1 AND c.environment=$2 AND c.workspace_id=$3 AND c.identity_hash=b.identity_hash
+  AND NOT b.member AND c.principal=b.principal AND c.observed_at<=b.observed
+  AND NOT EXISTS (SELECT 1 FROM incompatible)
+)
+SELECT NOT EXISTS (SELECT 1 FROM incompatible) AND
+  (SELECT count(*) FROM saved)=(SELECT count(*) FROM batch WHERE member) AS applied`, b.ProductID, b.Environment, id, string(payload)).Scan(&applied)
+		if err == nil && !applied {
+			return contract.ErrConflict
+		}
+		return err
 	})
 	if e != nil {
 		return nil, e
