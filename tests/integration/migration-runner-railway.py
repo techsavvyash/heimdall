@@ -41,6 +41,9 @@ try:
     architecture = remote("uname -m").stdout.decode().strip()
     if architecture != "x86_64":
         raise RuntimeError("verification service architecture changed")
+    postgres_version = sql("SHOW server_version", "postgres")
+    if postgres_version != "17.11":
+        raise RuntimeError("verification PostgreSQL version changed")
     with tempfile.TemporaryDirectory(prefix="heimdall-migration-") as directory:
         binary = Path(directory) / "heimdall-migrate"
         subprocess.run(["go", "build", "-trimpath", "-o", str(binary), "./cmd/heimdall-migrate"],
@@ -50,7 +53,7 @@ try:
         archive = io.BytesIO()
         with tarfile.open(fileobj=archive, mode="w:gz") as tar:
             tar.add(binary, arcname="heimdall-migrate")
-            tar.add(migration, arcname="0001.sql")
+            tar.add(migration.parent, arcname="session")
             tar.add(ROOT/"contracts/persistence/managed/0001.sql",arcname="managed-0001.sql")
         remote("mkdir -m 700 " + REMOTE)
         uploaded = True
@@ -63,7 +66,7 @@ try:
     # Unix socket access uses the verification container's existing local trust
     # configuration. No production credential is copied into an artifact.
     dsn = "host=/var/run/postgresql user=heimdall_probe dbname=" + DATABASE + " sslmode=disable"
-    command = "HEIMDALL_MIGRATION_DATABASE_URL=" + shlex.quote(dsn) + " " + REMOTE + "/heimdall-migrate -initialize-session-schema -sql " + REMOTE + "/0001.sql"
+    command = "HEIMDALL_MIGRATION_DATABASE_URL=" + shlex.quote(dsn) + " " + REMOTE + "/heimdall-migrate -initialize-session-schema -sql " + REMOTE + "/session/0001.sql"
     prefix=command.split(" -initialize-session-schema")[0]
     managed_command=prefix+" -initialize-managed-schema -sql "+REMOTE+"/managed-0001.sql"
     missing=remote(managed_command,success=False)
@@ -109,10 +112,49 @@ try:
         if sql("SELECT state FROM "+schema+".schema_metadata")!="migrating":raise RuntimeError("managed runner repaired metadata")
         sql("UPDATE "+schema+".schema_metadata SET state='ready'")
     remote(managed_command)
+    def migrate(flags, success=True):
+        return remote(prefix + " " + flags, success=success)
+
+    def backfill(family, field, terminal):
+        for _ in range(10):
+            result = migrate(f"-backfill-{family}-upgrade -writers-drained -batch-size 2")
+            if json.loads(result.stdout)[field] == terminal:
+                return
+        raise RuntimeError(f"{family} fixture backfill did not converge")
+
+    def expect_refused(result):
+        if result.returncode != 1 or result.stderr.decode().strip() != "unavailable":
+            raise RuntimeError("incompatible or unauthorized migration command was admitted")
+
+    prepare = " -writers-drained -sql-directory " + REMOTE + "/session"
+    for family, version, limits, field, terminal in (
+        ("audit", 2, "", "status", "coverage_complete"),
+        ("capacity", 3, " -capacity-events 1000 -capacity-bytes 200000000 -capacity-deliveries 32000", "phase", "complete"),
+        ("retention", 4, " -retention-rows 10000 -retention-bytes 81920000", "phase", "complete"),
+        ("hold-release", 5, "", None, None),
+    ):
+        migrate(f"-prepare-{family}-upgrade" + prepare + limits)
+        for status_version in (version - 1, version):
+            status = "managed" if status_version == 1 else f"managed-v{status_version}"
+            expect_refused(migrate("-status " + status, success=False))
+        if field is not None:
+            backfill(family, field, terminal)
+        migrate(f"-activate-{family}-upgrade -writers-drained")
+        receipt = migrate(f"-status managed-v{version}").stdout.decode().strip()
+        if receipt != f"audit schema v{version} and managed schema v1 ready":
+            raise RuntimeError("unexpected managed upgrade status")
+    for schema in ("heimdall_capacity", "heimdall_retention"):
+        sql(f"GRANT USAGE ON SCHEMA {schema} TO {ROLE}; GRANT SELECT ON ALL TABLES IN SCHEMA {schema} TO {ROLE}")
+    restricted = "HEIMDALL_MIGRATION_DATABASE_URL=" + shlex.quote(status_dsn) + " " + REMOTE + "/heimdall-migrate"
+    remote(restricted + " -status managed-v5")
+    expect_refused(remote(restricted + " -activate-hold-release-upgrade -writers-drained", success=False))
+    expect_refused(migrate("-status managed-v4", success=False))
+    migrate("-activate-hold-release-upgrade -writers-drained")
     proof = {"runId": RUN, "projectId": PROJECT, "environmentId": ENVIRONMENT,
-        "serviceId": SERVICE, "binarySha256": binary_digest, "migrationSha256": checksum, "managedMigrationSha256":managed_checksum,
+        "serviceId": SERVICE, "postgresVersion": postgres_version, "binarySha256": binary_digest, "migrationSha256": checksum, "managedMigrationSha256":managed_checksum,
         "checks": ["uploaded compiled Linux binary checksum", "two independent runner invocations", "exact ledger and ready metadata", "six shared schema tables", "incompatible state rejected without repair", "idempotent rerun", "managed initialization refuses missing prerequisite without implicit installation", "two managed installers serialize", "exact managed ledger and metadata", "session and managed read-only status", "managed status with SELECT-only role", "either incompatible family blocks managed initialization/status without repair"],
         "result": "passed"}
+    proof["checks"].extend(["ordered audit v1 through v5 migration and managed readiness", "old and new managed status refuse prepared schemas", "v5 SELECT-only status and denied activation", "v4 refusal and idempotent v5 activation"])
 finally:
     try:
         if created:
@@ -125,5 +167,7 @@ finally:
 if sql("SELECT count(*) FROM pg_database WHERE datname='" + DATABASE + "'", "postgres") != "0":
     raise RuntimeError("disposable database was not removed")
 remote("test ! -e " + REMOTE)
+if sql("SELECT count(*) FROM pg_roles WHERE rolname='" + ROLE + "'", "postgres") != "0":
+    raise RuntimeError("disposable role was not removed")
 proof["cleanupVerified"] = True
 print(json.dumps(proof))

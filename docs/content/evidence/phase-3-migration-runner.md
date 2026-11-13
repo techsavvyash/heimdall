@@ -62,6 +62,34 @@ The real command returned outcome_unknown. An independent direct database connec
 
 This test covers one committed outcome with a lost response. It does not make every network error distinguishable or prove any managed OpenFGA mutation safe to retry; the migration's transaction lock and checksum ledger are specific to PostgreSQL installation.
 
-## Remaining Phase 3 work
+## Managed v5 migration on Railway
 
-Runtime credential provisioning, complete adapter construction, identity denial and atomic audit/outbox remain open. The tool supports the only current schema version; future migrations require a tested bridge or maintenance procedure, not automatic acceptance of unknown history. It does not drain incompatible runtime processes or verify backup/restore readiness.
+Run `ca91918ee3e347c3ad32d42fbdfcd132` passed against PostgreSQL 17.11 on Railway
+deployment `574c0fb1-1252-41cb-a02b-7f3fdd74c18b`. The SDK source was commit
+`3305e9c42f009c975df897d0a182c8256355de14`. The run verified removal of the
+disposable database, restricted role and upload directory. The run record is
+`tests/integration/evidence/managed-v5-migration-railway-2026-11-13.json`.
+
+The Railway probe also exercises each migration from session v1 through audit v5
+with managed v1 installed. At each prepared stage, the CLI refuses readiness for
+both adjacent versions. The probe advances bounded backfills to completion, then
+explicitly activates and checks the exact version. On v5 it checks that a
+SELECT-only role can read status and is refused activation. It confirms that
+managed v4 status is refused and that repeating v5 activation succeeds.
+
+```mermaid
+flowchart LR
+  Upload[Upload checksum-verified CLI and SQL] --> Init[Initialize session and managed v1]
+  Init --> Prepare[Prepare the next audit version]
+  Prepare --> Refuse[Verify readiness is closed]
+  Refuse --> Backfill[Complete bounded backfill when required]
+  Backfill --> Activate[Activate and verify exact version]
+  Activate -->|v2 through v4| Prepare
+  Activate -->|v5| Status[Verify restricted status and denied activation]
+  Status --> Cleanup[Remove disposable database and role]
+```
+
+This probe uses an empty application database. Historical backfill, concurrent
+audit writes and restored-state reads are covered by separate tests. The
+deployment operator still drains writers and maintenance workers before migrating.
+See [[phase-3-audit-capacity-backfill]] and [[phase-3-retained-storage-restore]].
