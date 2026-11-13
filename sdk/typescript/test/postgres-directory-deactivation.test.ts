@@ -4,6 +4,7 @@ import {
   createDirectoryCleanup,
   createDirectoryDeactivation,
   createDirectoryPolling,
+  createDirectoryReactivation,
   createPostgresStorage,
 } from "../src/postgres.js";
 import { encodeIdentity } from "../src/internal/identity-encoding.js";
@@ -24,6 +25,8 @@ test.skipIf(!process.env.HEIMDALL_TEST_DIRECTORY_DB)(
     let listUnavailable = false;
     vi.stubGlobal("fetch", async (url: string) => {
       const start = new URL(url).searchParams.get("startIndex");
+      if (url.endsWith("/scim/v2/org-a/Users/employee"))
+        return Response.json({ id: identity.subject, active: true, externalId: "directory-key" });
       if (start !== null && listUnavailable) return new Response(null, { status: 503 });
       if (start !== null)
         return Response.json({
@@ -146,6 +149,12 @@ test.skipIf(!process.env.HEIMDALL_TEST_DIRECTORY_DB)(
       const cleanup = createDirectoryCleanup(pool, options);
       const [pending] = await cleanup.pending(null, 1, signal);
       expect(pending).toMatchObject({ subject: identity.subject, reason: "inactive" });
+      const prepare = createDirectoryReactivation(pool, options);
+      state = "USER_STATE_ACTIVE";
+      owner = "org-a";
+      await expect(prepare(identity.subject, pending!.revision, signal)).rejects.toMatchObject({
+        code: "conflict",
+      });
       await expect(cleanup.pending(pending!.revision, 1, signal)).resolves.toEqual([]);
       await expect(
         createDirectoryCleanup(pool, { ...options, organizationId: "org-b" }).pending(
@@ -158,8 +167,21 @@ test.skipIf(!process.env.HEIMDALL_TEST_DIRECTORY_DB)(
       await cleanup.complete(identity.subject, pending!.revision, signal);
       await expect(cleanup.pending(null, 1, signal)).resolves.toEqual([]);
       owner = "org-a";
+      state = "USER_STATE_INACTIVE";
       await observe(identity.subject, signal);
       await expect(cleanup.pending(null, 1, signal)).resolves.toEqual([]);
+      state = "USER_STATE_ACTIVE";
+      const prepared = await prepare(identity.subject, pending!.revision, signal);
+      await expect(prepare(identity.subject, pending!.revision, signal)).resolves.toEqual(prepared);
+      await expect(port.identity.check(identity, signal)).resolves.toBe(true);
+      state = "USER_STATE_INACTIVE";
+      await observe(identity.subject, signal);
+      const [again] = await cleanup.pending(null, 1, signal);
+      expect(again!.revision).not.toBe(pending!.revision);
+      state = "USER_STATE_ACTIVE";
+      await expect(prepare(identity.subject, pending!.revision, signal)).rejects.toMatchObject({
+        code: "conflict",
+      });
       state = "USER_STATE_DELETED";
       await observe(identity.subject, signal);
       await expect(
@@ -168,6 +190,11 @@ test.skipIf(!process.env.HEIMDALL_TEST_DIRECTORY_DB)(
       const [deleted] = await cleanup.pending(null, 1, signal);
       expect(deleted).toMatchObject({ subject: identity.subject, reason: "deleted" });
       expect(deleted!.revision).not.toBe(pending!.revision);
+      await cleanup.complete(identity.subject, deleted!.revision, signal);
+      state = "USER_STATE_ACTIVE";
+      await expect(prepare(identity.subject, deleted!.revision, signal)).rejects.toMatchObject({
+        code: "conflict",
+      });
       await expect(port.identity.check(identity, signal)).resolves.toBe(true);
     } finally {
       vi.unstubAllGlobals();

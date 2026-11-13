@@ -90,3 +90,26 @@ flowchart LR
 The product serializes edits to grant provenance for the subject and workspace until the result is confirmed. Preserve the input snapshot and idempotency key across retries. The SDK checks the current direct role snapshot before dispatch and uses the managed workspace revision to serialize supported writes. A new operation based on a stale role snapshot returns a conflict. The product finalizes its source change after confirmation. The helper accepts product-owned provenance and does not automatically build a full grant-source ledger from legacy membership writes.
 
 The shared TypeScript and Go fixtures cover overlapping rules, independent sources, ownership and missing provenance. PostgreSQL run `heimdall-records-dd5b1989d3644be3a43b27184c4a8eb2` exercises stale-snapshot rejection, removal of a directory-only role while retaining an independently sourced membership, and idempotent replay.
+
+## Preparing reactivation
+
+Install directory migration `0006.sql` before upgrading the worker. The PostgreSQL SDK entry points `createDirectoryReactivation` and `NewDirectoryReactivation` prepare an exact cleanup revision after reading an active user with directory provenance. Preparation requires completed cleanup and an inactive denial older than the provider read. A deleted identity cannot be prepared. Repeating preparation returns the same record.
+
+```mermaid
+sequenceDiagram
+  participant W as Product lifecycle worker
+  participant S as Heimdall SDK
+  participant Z as ZITADEL
+  participant D as PostgreSQL
+  W->>S: Prepare a cleaned subject revision
+  S->>Z: Read exact active user and directory provenance
+  S->>D: Lock identity and verify cleanup and denial
+  D-->>S: Persist preparation while keeping denial
+  Z-->>W: Later inactive observation
+  W->>S: Observe the subject again
+  S->>D: Invalidate preparation and queue a fresh cleanup revision
+```
+
+Preparation keeps the identity denied and leaves sessions and roles untouched. A subsequent inactive or deleted directory observation invalidates the preparation and opens a fresh cleanup revision. A newer local denial also prevents reuse of the prepared record. The release step still needs to apply current approved enrollment rules through audited membership operations and release the denial only once the new state is confirmed.
+
+PostgreSQL run `heimdall-records-4db02028f58f40a092bb543575667a09` exercised both SDKs. The tests covered pending cleanup rejection, preparation replay, retained denial, invalidation by a new deactivation, and rejection of a deleted identity.

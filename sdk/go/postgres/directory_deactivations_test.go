@@ -30,9 +30,14 @@ func TestDirectoryDeactivationPostgres(t *testing.T) {
 	defer db.Close()
 	var wrongOwner atomic.Bool
 	var initial atomic.Bool
+	var active atomic.Bool
 	var deleted atomic.Bool
 	var listUnavailable atomic.Bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/scim/v2/org-a/Users/employee" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "employee", "active": true, "externalId": "directory-key"})
+			return
+		}
 		if start := r.URL.Query().Get("startIndex"); start != "" {
 			if listUnavailable.Load() {
 				w.WriteHeader(http.StatusServiceUnavailable)
@@ -54,6 +59,9 @@ func TestDirectoryDeactivationPostgres(t *testing.T) {
 		state := "USER_STATE_INACTIVE"
 		if initial.Load() {
 			state = "USER_STATE_INITIAL"
+		}
+		if active.Load() {
+			state = "USER_STATE_ACTIVE"
 		}
 		if deleted.Load() {
 			state = "USER_STATE_DELETED"
@@ -179,6 +187,16 @@ func TestDirectoryDeactivationPostgres(t *testing.T) {
 		t.Fatal("pending cleanup missing", items, err)
 	}
 	revision := items[0].Revision
+	prepare, err := NewDirectoryReactivation(db, product, environment, provisioning.DirectoryReaderOptions{Issuer: server.URL, OrganizationID: "org-a", Token: "viewer", TransportProfile: "loopback"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrongOwner.Store(false)
+	active.Store(true)
+	if _, err := prepare(ctx, identity.Subject, revision); !errors.Is(err, heimdall.ErrConflict) {
+		t.Fatal("reactivation accepted pending cleanup", err)
+	}
+	active.Store(false)
 	if items, err := cleanup.Pending(ctx, revision, 1); err != nil || len(items) != 0 {
 		t.Fatal("cursor repeated item", items, err)
 	}
@@ -201,6 +219,29 @@ func TestDirectoryDeactivationPostgres(t *testing.T) {
 	if items, err := cleanup.Pending(ctx, "", 1); err != nil || len(items) != 0 {
 		t.Fatal("replay reopened item", items, err)
 	}
+	active.Store(true)
+	prepared, err := prepare(ctx, identity.Subject, revision)
+	if err != nil {
+		t.Fatal("prepare", err)
+	}
+	if again, err := prepare(ctx, identity.Subject, revision); err != nil || again != prepared {
+		t.Fatal("prepare replay", again, err)
+	}
+	if denied, err := port.Identity.Check(ctx, identity); err != nil || !denied {
+		t.Fatal("prepare released denial", denied, err)
+	}
+	active.Store(false)
+	if _, err := observe(ctx, identity.Subject); err != nil {
+		t.Fatal(err)
+	}
+	if items, err := cleanup.Pending(ctx, "", 1); err != nil || len(items) != 1 || items[0].Revision == revision {
+		t.Fatal("new deactivation did not invalidate preparation", items, err)
+	}
+	active.Store(true)
+	if _, err := prepare(ctx, identity.Subject, revision); !errors.Is(err, heimdall.ErrConflict) {
+		t.Fatal("stale reactivation accepted", err)
+	}
+	active.Store(false)
 	deleted.Store(true)
 	if _, err := observe(ctx, identity.Subject); err != nil {
 		t.Fatal(err)
@@ -211,6 +252,14 @@ func TestDirectoryDeactivationPostgres(t *testing.T) {
 	items, err = cleanup.Pending(ctx, "", 1)
 	if err != nil || len(items) != 1 || items[0].Reason != "deleted" || items[0].Revision == revision {
 		t.Fatal("deletion did not supersede inactive item", items, err)
+	}
+	if err := cleanup.Complete(ctx, identity.Subject, items[0].Revision); err != nil {
+		t.Fatal(err)
+	}
+	deleted.Store(false)
+	active.Store(true)
+	if _, err := prepare(ctx, identity.Subject, items[0].Revision); !errors.Is(err, heimdall.ErrConflict) {
+		t.Fatal("deleted subject was prepared", err)
 	}
 	if denied, err := port.Identity.Check(ctx, identity); err != nil || !denied {
 		t.Fatal("deny missing after acknowledgement", denied, err)
