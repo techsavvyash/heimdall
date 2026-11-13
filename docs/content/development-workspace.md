@@ -50,9 +50,9 @@ As of November 8, 2026, the 30-day policy selects Knip's Zod 4.6.5 and Quartz's 
 
 ### Diagram validation
 
-Every docs build runs `pnpm --filter @jackyzha0/quartz run check:mermaid`
-before Quartz. It parses every Mermaid block using Mermaid 11.4.0, matching
-the Quartz browser renderer. Errors report the Markdown path and opening line
-and fail the build. In sequence-diagram message labels, use commas instead of
-literal semicolons: Mermaid interprets semicolons as statement separators.
-Parser validation complements checking rendered diagrams in the browser.
+Every docs build checks Mermaid syntax in the Markdown before Quartz runs and
+checks the diagram text in the generated HTML afterward. Errors report the
+Markdown path and opening line or the generated page and diagram number.
+Railway serves the same pinned Mermaid version used by both checks, along
+with its browser modules. In sequence diagram message labels, use commas in
+place of literal semicolons, which Mermaid interprets as statement separators.

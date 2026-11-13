@@ -1,4 +1,5 @@
 import { createHash } from "crypto"
+import { readdir, readFile } from "node:fs/promises"
 import { FullSlug, joinSegments } from "../../util/path"
 import { QuartzEmitterPlugin } from "../types"
 
@@ -26,6 +27,10 @@ import { write } from "./helpers"
 function hashContent(content: string | Buffer): string {
   return createHash("sha256").update(content).digest("hex").slice(0, 8)
 }
+
+const mermaidCdnImport =
+  /https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/mermaid\/[\d.]+\/mermaid\.esm\.min\.mjs/
+const mermaidEntry = "mermaid.esm.min.mjs"
 
 type ComponentResources = {
   css: string[]
@@ -465,10 +470,40 @@ export const ComponentResources: QuartzEmitterPlugin = () => {
         })
       }
 
+      let emittedMermaid = false
       for (const jsResource of resources.js) {
         if (jsResource.contentType !== "inline") continue
 
-        const minified = await joinScripts([jsResource.script])
+        let script = jsResource.script
+        if (mermaidCdnImport.test(script)) {
+          // Use the same pinned Mermaid package as the docs syntax checker.
+          const version = JSON.parse(
+            await readFile(new URL(import.meta.resolve("mermaid/package.json")), "utf8"),
+          ).version
+          const directory = `mermaid-${version}`
+          script = script.replace(mermaidCdnImport, `./${directory}/${mermaidEntry}`)
+          if (!emittedMermaid) {
+            const mermaid = new URL("./", import.meta.resolve("mermaid/package.json"))
+            const chunks = "dist/chunks/mermaid.esm.min/"
+            const files = [
+              `dist/${mermaidEntry}`,
+              ...(await readdir(new URL(chunks, mermaid)))
+                .filter((file) => file.endsWith(".mjs"))
+                .map((file) => `${chunks}${file}`),
+              "LICENSE",
+            ]
+            for (const file of files) {
+              yield write({
+                ctx,
+                slug: `static/${directory}/${file.replace(/^dist\//, "")}` as FullSlug,
+                ext: "",
+                content: await readFile(new URL(file, mermaid)),
+              })
+            }
+            emittedMermaid = true
+          }
+        }
+        const minified = await joinScripts([script])
         const hash = hashContent(minified)
         const loadTimePrefix = jsResource.loadTime === "beforeDOMReady" ? "before" : "after"
         const slug = `static/resource-${loadTimePrefix}-${hash}`

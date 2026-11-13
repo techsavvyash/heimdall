@@ -21,6 +21,7 @@
     "install-plugins": "tsx ./quartz/plugins/loader/install-plugins.ts",
     "prebuild": "pnpm run check:mermaid && pnpm run install-plugins",
     "build": "node quartz/bootstrap-cli.mjs build",
+    "postbuild": "pnpm run check:mermaid --built",
     "dev": "node quartz/bootstrap-cli.mjs build --serve",
     "check:mermaid": "node scripts/check-mermaid.mjs"
   },
