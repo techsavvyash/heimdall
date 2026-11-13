@@ -49,6 +49,8 @@ The preceding ORG_USER_MANAGER comparison is retained in scim-credentials-2026-1
 
 The role permits user lifecycle operations, potentially including sensitive user-management actions outside SCIM. Give it only to the authorized tenant directory administrator; it is not a normal end-user token or a product session credential. These checks do not exhaustively audit every API or permission interaction. Provisioning domains separate external-ID lookup, not authority over users within the same organization.
 
+Phase 6 follow-up run `699a529d-becd-4676-8f68-3e72c9ea28d1` gave a separate machine account the same provisioning-domain metadata and ZITADEL's standard `ORG_OWNER_VIEWER` role. It read the directory external ID and authoritative organization owner. Cross-organization list and exact user reads returned HTTP 404. An attempted SCIM deactivation in its own organization returned HTTP 403, and the user remained active. The role has broader organization read permissions than directory reconciliation needs. Reproduce with `HEIMDALL_PROBE_SCIM_READER=true`.
+
 On upgrades, reconcile the full role map with the new pinned defaults before setup. Do not silently retain an old map or replace it with only the custom role. The first-release deployment documentation and setup workflow must preserve this operational requirement.
 
 Human OIDC tokens, strict SAML/OIDC policy evidence, token/session revocation, lifecycle workers, fault behavior, listing limits and uncertain-write recovery still require proof. This checkpoint does not advance Phase 2 or certify the SDK runtime.

@@ -13,6 +13,7 @@ const orgs = [];
 const observations = [];
 const scopedTokens = new Map();
 const credentialChecks = [];
+const scimUserPath = (organizationId) => `/scim/v2/${organizationId}/Users`;
 async function request(method, path, body, credential) {
   credential ??=
     (path.startsWith("/scim/") ? scopedTokens.get(path.split("/")[3]) : undefined) ?? pat;
@@ -85,7 +86,7 @@ try {
     assert(token.token);
     scopedTokens.set(org.organizationId, token.token);
   }
-  const paths = orgs.map((id) => `/scim/v2/${id}/Users`);
+  const paths = orgs.map(scimUserPath);
   assert.equal((await request("GET", paths[0], undefined, "")).status, 401);
   const users = [];
   for (const [index, path] of paths.entries()) {
@@ -178,6 +179,62 @@ try {
       unfilteredListIncludesUserOutsideCallerProvisioningDomain: true,
     },
   });
+  if (process.env.HEIMDALL_PROBE_SCIM_READER === "true") {
+    const viewer = await ok("POST", "/v2/users/new", {
+      organizationId: orgs[0],
+      username: `scim-reader-${runId}`,
+      machine: { name: "Disposable SCIM directory reader" },
+      metadata: [
+        {
+          key: "urn:zitadel:scim:provisioningDomain",
+          value: Buffer.from("directory-acme").toString("base64"),
+        },
+      ],
+    });
+    await ok(
+      "POST",
+      "/zitadel.internal_permission.v2.InternalPermissionService/CreateAdministrator",
+      {
+        userId: viewer.id,
+        resource: { organizationId: orgs[0] },
+        roles: ["ORG_OWNER_VIEWER"],
+      },
+    );
+    const { token } = await ok("POST", `/v2/users/${viewer.id}/pats`, {
+      expirationDate: new Date(Date.now() + 3600000).toISOString(),
+    });
+    const ownList = await ok("GET", paths[0] + "?startIndex=1&count=10", undefined, token);
+    assert.equal(
+      ownList.Resources.find((user) => user.id === users[0])?.externalId,
+      `employee-${runId}`,
+    );
+    const ownUser = await ok("GET", `/v2/users/${users[0]}`, undefined, token);
+    assert.equal(ownUser.user.details.resourceOwner, orgs[0]);
+    const otherUser = await request("GET", `/v2/users/${users[1]}`, undefined, token);
+    assert([403, 404].includes(otherUser.status));
+    const otherList = await request("GET", paths[1], undefined, token);
+    assert([403, 404].includes(otherList.status));
+    const patch = await request(
+      "PATCH",
+      `${paths[0]}/${users[0]}`,
+      {
+        schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+        Operations: [{ op: "replace", path: "active", value: false }],
+      },
+      token,
+    );
+    assert([403, 404].includes(patch.status));
+    assert.equal((await ok("GET", `${paths[0]}/${users[0]}`)).active, true);
+    observations.push({
+      organizationViewer: {
+        directoryExternalIdVisible: true,
+        ownUserOrganizationVerified: true,
+        otherUserReadStatus: otherUser.status,
+        otherListStatus: otherList.status,
+        ownMutationStatus: patch.status,
+      },
+    });
+  }
   for (const active of [false, false, true, false]) {
     const start = performance.now();
     await ok("PATCH", `${paths[0]}/${users[0]}`, {
