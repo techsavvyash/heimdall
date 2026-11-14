@@ -32,6 +32,7 @@ Implementation follows the [[implementation-phases|seven sequential phases]]. Ea
 | [[design/release-contract|First-release acceptance contract]] | Required functionality and revocation guarantees |
 | [[design/enterprise-contract|SSO, SCIM and SIEM]] and [[design/audit-contract|durable audit]] | Enterprise behavior, data flows and failure requirements |
 | [[implementation-roadmap|Implementation roadmap and tickets]] | Build order, PRDs and verification dependencies |
+| [[reference-quickstart|Ledger and Support quickstart]] | Prepare and run both reference products with the SDKs |
 | [[development-workspace|Development setup]] | Tools, commands, Git hooks and agent feedback loop |
 
 ## Design authority and delivery status

@@ -192,7 +192,7 @@ export async function verifyReferenceProduct(input, authorize) {
     ? process.env.HEIMDALL_REFERENCE_EXPORT_DATABASE
     : db + "&options=-c%20role%3Dheimdall_reference_export";
   const cmd = ledger
-    ? ["node", ["examples/ledger/server.mjs"]]
+    ? ["node", [process.env.HEIMDALL_REFERENCE_LEDGER_ENTRY ?? "examples/ledger/server.mjs"]]
     : [process.env.HEIMDALL_REFERENCE_SUPPORT_BINARY, []];
   const recordKey = remote ? randomBytes(32) : Buffer.alloc(32, 7);
   const variables = {

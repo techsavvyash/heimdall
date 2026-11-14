@@ -1,0 +1,62 @@
+{
+  "sourceCommit": "432c7e38649304f15affb94844f5718ecc787f21",
+  "storageRun": "heimdall-records-813b9518a438456f953b23beec527f45",
+  "isolatedConsumers": {
+    "archive": "heimdall-sdk-0.0.0.tgz",
+    "goModuleVersion": "v0.0.0-20261114045309-432c7e386493"
+  },
+  "products": [
+    {
+      "product": "ledger",
+      "session": "issued and logged out",
+      "discovery": "Acme",
+      "roles": {
+        "acme": ["owner"],
+        "globex": []
+      },
+      "scopedRead": 200,
+      "businessWrite": {
+        "action": "approve",
+        "insufficientRole": 403,
+        "crossTenantId": 404,
+        "authorized": 204,
+        "repeat": 204,
+        "inactiveWorkspace": 403,
+        "pendingWorkspace": 403,
+        "auditUnavailable": 503
+      },
+      "reconcile": {
+        "operator": 200,
+        "unauthorized": 403,
+        "confirmedCompleted": true,
+        "terminalExcluded": true
+      }
+    },
+    {
+      "product": "support",
+      "session": "issued and logged out",
+      "discovery": "Acme",
+      "roles": {
+        "acme": ["owner"],
+        "globex": []
+      },
+      "scopedRead": 200,
+      "businessWrite": {
+        "action": "assign-to-me",
+        "insufficientRole": 403,
+        "crossTenantId": 404,
+        "authorized": 204,
+        "repeat": 204,
+        "inactiveWorkspace": 403,
+        "pendingWorkspace": 403,
+        "auditUnavailable": 503
+      },
+      "reconcile": {
+        "operator": 200,
+        "unauthorized": 403,
+        "confirmedCompleted": true,
+        "terminalExcluded": true
+      }
+    }
+  ]
+}

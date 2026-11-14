@@ -188,6 +188,8 @@ try:
         recovery_env = dict(env, HEIMDALL_RECOVERY_DATABASE_URL=runtime_dsn + "&options=-c%20role%3Dheimdall_public_runtime")
         run(["node", "tests/integration/openfga-recovery.mjs"], env=recovery_env)
     if os.environ.get("HEIMDALL_PROBE_REFERENCE_PRODUCTS") == "1":
+        import re
+        import shutil
         import tempfile
         schemas = "\n".join((ROOT / "examples" / name / file).read_text()
                             for name in ("ledger", "support") for file in ("schema.sql", "invitations.sql"))
@@ -206,11 +208,43 @@ try:
             input=schemas, capture_output=True, text=True)
         run(["pnpm", "run", "build"])
         with tempfile.TemporaryDirectory() as temp:
-            binary = str(Path(temp) / "support")
-            subprocess.run(["go", "build", "-o", binary, "."], cwd=ROOT / "examples/support", check=True)
+            consumer = Path(temp)
+            binary = str(consumer / "support-bin")
+            support_source = ROOT / "examples/support"
             reference_env = dict(env, HEIMDALL_PROBE_SDK_RUNTIME="1",
                                  HEIMDALL_REFERENCE_DATABASE_URL=runtime_dsn,
                                  HEIMDALL_REFERENCE_SUPPORT_BINARY=binary)
+            revision = os.environ.get("HEIMDALL_PROBE_CONSUMER_REVISION")
+            consumer_info = None
+            if revision:
+                if not re.fullmatch(r"[0-9a-f]{40}", revision):
+                    raise RuntimeError("The consumer revision must be a pushed Git commit")
+                ledger = consumer / "ledger"
+                support_source = consumer / "support"
+                shutil.copytree(ROOT / "examples/ledger", ledger, ignore=shutil.ignore_patterns("node_modules"))
+                shutil.copytree(ROOT / "examples/support", support_source)
+                archive_dir = consumer / "archive"
+                archive_dir.mkdir()
+                run(["pnpm", "--filter", "@heimdall/sdk", "pack", "--pack-destination", str(archive_dir)])
+                archive, = archive_dir.glob("*.tgz")
+                package_path = ledger / "package.json"
+                package = json.loads(package_path.read_text())
+                package["dependencies"]["@heimdall/sdk"] = "file:" + str(archive)
+                package_path.write_text(json.dumps(package))
+                (ledger / "pnpm-workspace.yaml").write_text("minimumReleaseAge: 43200\nminimumReleaseAgeStrict: true\n")
+                subprocess.run(["pnpm", "install", "--ignore-scripts"], cwd=ledger, check=True)
+                module = "github.com/techsavvyash/heimdall/sdk/go"
+                reference_env["GOWORK"] = "off"
+                subprocess.run(["go", "mod", "edit", "-dropreplace=" + module, "-droprequire=" + module],
+                               cwd=support_source, env=reference_env, check=True)
+                subprocess.run(["go", "get", module + "@" + revision], cwd=support_source,
+                               env=reference_env, check=True)
+                subprocess.run(["go", "mod", "tidy"], cwd=support_source, env=reference_env, check=True)
+                reference_env["HEIMDALL_REFERENCE_LEDGER_ENTRY"] = str(ledger / "server.mjs")
+                go_version = subprocess.check_output(["go", "list", "-m", "-f", "{{.Version}}", module],
+                                                     cwd=support_source, env=reference_env, text=True).strip()
+                consumer_info = {"archive": archive.name, "goModuleVersion": go_version}
+            subprocess.run(["go", "build", "-o", binary, "."], cwd=support_source, env=reference_env, check=True)
             org_file = Path(temp) / "scim-organization"
             if scim_siem:
                 assert elastic_start and os.environ.get("HEIMDALL_PROBE_SCIM_BROWSER") == "1"
@@ -219,7 +253,6 @@ try:
                 reference = subprocess.run(["node", "tests/integration/oidc.mjs"], cwd=ROOT, env=reference_env,
                                        capture_output=True, text=True, timeout=240)
                 if reference.returncode != 0:
-                    import re
                     diagnostics = re.findall(r"(?:AssertionError \[ERR_ASSERTION\]:[^\n]+|reference-products\.mjs:\d+:\d+|OIDC probe run: [a-f0-9-]+)", reference.stderr)
                     raise RuntimeError("Reference product verification failed: " + " | ".join(diagnostics)[:1000])
                 if scim_siem:
@@ -289,7 +322,8 @@ try:
                 for product in products:
                     del product["auditActor"]
                     del product["auditRecipient"]
-            print(json.dumps({"referenceProducts": products}), flush=True)
+            print(json.dumps({"referenceProducts": products,
+                              **({"isolatedConsumers": consumer_info} if consumer_info else {})}), flush=True)
     if os.environ.get("HEIMDALL_PROBE_DURABLE_RUNTIME") == "1":
         for args in (
             ["--prepare-hold-release-upgrade", "--writers-drained", "--sql-directory", str(ROOT / "contracts/persistence/session")],
