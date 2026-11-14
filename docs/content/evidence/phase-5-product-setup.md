@@ -3,7 +3,7 @@ title: Phase 5 product setup SDKs and CLI
 date: 2026-11-13
 ---
 
-The TypeScript `@heimdall/sdk/provisioning` and Go `provisioning` entry points accept a product plan, manifest, operator database connection, separate provider credentials and secret storage callbacks. Both validate the manifest and endpoints before claiming work. They provision a project, one application per manifest client in sorted key order, an OpenFGA store and a verified model. The returned configuration map is keyed by client and uses the existing portable runtime schema.
+The TypeScript `@techsavvyash/heimdall-sdk/provisioning` and Go `provisioning` entry points accept a product plan, manifest, operator database connection, separate provider credentials and secret storage callbacks. Both validate the manifest and endpoints before claiming work. They provision a project, one application per manifest client in sorted key order, an OpenFGA store and a verified model. The returned configuration map is keyed by client and uses the existing portable runtime schema.
 
 ```mermaid
 flowchart LR

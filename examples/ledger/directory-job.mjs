@@ -1,10 +1,10 @@
 import { Pool } from "pg";
-import { createHeimdall, HeimdallError } from "@heimdall/sdk";
+import { createHeimdall, HeimdallError } from "@techsavvyash/heimdall-sdk";
 import {
   createDirectoryCleanup,
   createDirectoryPolling,
   createManagedPostgresStorage,
-} from "@heimdall/sdk/postgres";
+} from "@techsavvyash/heimdall-sdk/postgres";
 import { directoryMapping } from "./directory-cleanup.mjs";
 import { providerSettings } from "./provider-settings.mjs";
 import { tenantSSOPolicy } from "./tenant-sso.mjs";

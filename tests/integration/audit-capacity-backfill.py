@@ -27,7 +27,7 @@ def sql(statement,database='postgres'):
  except subprocess.CalledProcessError as error:
   raise RuntimeError('PostgreSQL statement failed: '+error.stderr[-1200:]) from None
 def go(pattern,selected):subprocess.run(['go','test','-race','-count=1','./internal/postgres','-run',pattern],cwd=ROOT/'sdk/go',env=selected,check=True)
-def ts(selected):run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-capacity-history.test.ts'],env=selected)
+def ts(selected):run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-capacity-history.test.ts'],env=selected)
 try:
  storage=[]
  if os.environ.get('HEIMDALL_TEST_POSTGRES_BIND_ROOT'):
@@ -167,7 +167,7 @@ try:
   cli(['--status','managed-v3'],'cli_activation')
   ready_env=dict(env,HEIMDALL_TEST_CAPACITY_READY_URL=dsn('cli_activation'))
   go('^Test(CapacityReadiness|ConnectorPostgresReuse)$',ready_env)
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-capacity-readiness.test.ts'],env=ready_env)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-capacity-readiness.test.ts'],env=ready_env)
   sql("CREATE ROLE public_capacity_runtime; GRANT USAGE ON SCHEMA heimdall,heimdall_capacity TO public_capacity_runtime; GRANT SELECT ON heimdall.schema_metadata,heimdall.migrations,heimdall_capacity.policy,heimdall_capacity.upgrade,heimdall_capacity.backfill TO public_capacity_runtime; GRANT SELECT,INSERT ON heimdall.audit_events,heimdall.audit_deliveries,heimdall_capacity.event_charges TO public_capacity_runtime; GRANT SELECT,INSERT,UPDATE ON heimdall.audit_decisions,heimdall_capacity.reservations TO public_capacity_runtime; GRANT UPDATE(used_events,used_bytes,used_deliveries,reserved_events,reserved_bytes,reserved_deliveries) ON heimdall_capacity.policy TO public_capacity_runtime",'cli_activation')
   go('^TestLegacyPublicCapacityHistory$',ready_env)
   # Retention preparation is an offline transaction over the activated v3 history.
@@ -207,7 +207,7 @@ try:
   assert sql("SELECT has_schema_privilege('public_capacity_runtime','heimdall_retention','USAGE')",'retention_prepare')=='f'
   selected=dict(env,HEIMDALL_TEST_RETENTION_PREPARED_URL=dsn('retention_prepare'))
   go('^TestRetention(UpgradeInput|PreparedReadiness)$',selected)
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retention-upgrade.test.ts'],env=selected)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retention-upgrade.test.ts'],env=selected)
   # Changed retention structure must fail on retry rather than normalize the schema.
   sql('ALTER TABLE heimdall_retention.capacity ADD COLUMN unexpected text','retention_prepare')
   cli(retention_prepare,'retention_prepare',1)
@@ -294,7 +294,7 @@ try:
   cli(['--status','audit-v4'],'retention_activation');cli(['--status','managed-v4'],'retention_activation');cli(['--status','audit-v3'],'retention_activation',1)
   selected=dict(env,HEIMDALL_TEST_RETENTION_READY_URL=dsn('retention_activation'))
   go('^TestRetention(Readiness|ActivationInput)$',selected)
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retention-readiness.test.ts'],env=selected)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retention-readiness.test.ts'],env=selected)
   for database,mutation in [
    ('retention_activation_payload',"UPDATE heimdall.audit_events SET event=jsonb_set(event,'{payload}',to_jsonb('!'||substr(event->>'payload',2))) WHERE event_id='ordinary'"),
    ('retention_activation_tenant',"SET session_replication_role=replica; UPDATE heimdall_retention.event_identities SET tenant_id='other' WHERE event_id='ordinary'; SET session_replication_role=origin"),
@@ -315,13 +315,13 @@ try:
   cli(retention_activate,'retention_empty')
   resolution_env=dict(env,HEIMDALL_TEST_RETAINED_RESOLUTION_URL=dsn('retention_activation'))
   go('^TestRetainedResolution$',resolution_env)
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-resolution.test.ts'],env=resolution_env)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retained-resolution.test.ts'],env=resolution_env)
   print('Retention activation passed: read-only semantic revalidation, atomic publication, old-writer exclusion, TS/Go readiness and lost COMMIT retry',flush=True)
   # Public factories run on an independent activated clone; v3 migration history stays fixed.
   sql('CREATE DATABASE public_v4_capacity TEMPLATE retention_activation')
   sql("GRANT USAGE ON SCHEMA heimdall,heimdall_capacity,heimdall_retention TO public_capacity_runtime; GRANT SELECT ON ALL TABLES IN SCHEMA heimdall,heimdall_capacity,heimdall_retention TO public_capacity_runtime; GRANT INSERT ON heimdall.audit_events,heimdall.audit_deliveries,heimdall_capacity.event_charges TO public_capacity_runtime; GRANT INSERT,UPDATE ON heimdall.audit_decisions,heimdall_capacity.reservations,heimdall_retention.event_identities,heimdall_retention.decision_identities TO public_capacity_runtime; GRANT UPDATE(used_events,used_bytes,used_deliveries,reserved_events,reserved_bytes,reserved_deliveries) ON heimdall_capacity.policy TO public_capacity_runtime; GRANT UPDATE(used_rows,reserved_rows) ON heimdall_retention.capacity TO public_capacity_runtime", 'public_v4_capacity')
   public_env=dict(env,HEIMDALL_TEST_CAPACITY_READY_URL=dsn('public_v4_capacity'))
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-public-capacity.test.ts'],env=public_env)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-public-capacity.test.ts'],env=public_env)
   subprocess.run(['go','test','-race','-count=1','.', '-run','^TestPublicCapacity$'],cwd=ROOT/'sdk/go',env=public_env,check=True)
   sql('CREATE ROLE retained_runtime_profile','retention_activation')
   runtime_grants="GRANT USAGE ON SCHEMA heimdall,heimdall_capacity,heimdall_retention TO retained_runtime_profile; GRANT SELECT ON heimdall.schema_metadata,heimdall.migrations,heimdall.audit_events,heimdall.audit_deliveries,heimdall.audit_decisions TO retained_runtime_profile; GRANT SELECT ON ALL TABLES IN SCHEMA heimdall_capacity,heimdall_retention TO retained_runtime_profile; GRANT INSERT ON heimdall.audit_events,heimdall.audit_deliveries,heimdall_capacity.event_charges TO retained_runtime_profile; GRANT INSERT,UPDATE ON heimdall.audit_decisions,heimdall_capacity.reservations,heimdall_retention.event_identities,heimdall_retention.decision_identities TO retained_runtime_profile; GRANT UPDATE(used_events,used_bytes,used_deliveries,reserved_events,reserved_bytes,reserved_deliveries) ON heimdall_capacity.policy TO retained_runtime_profile; GRANT UPDATE(used_rows,reserved_rows) ON heimdall_retention.capacity TO retained_runtime_profile"
@@ -331,10 +331,10 @@ try:
   sql(runtime_grants.replace('retained_runtime_profile','retained_hold_runtime')+'; GRANT INSERT,UPDATE ON heimdall_retention.event_holds TO retained_hold_runtime', 'retained_holds_v4')
   sql("UPDATE heimdall_capacity.policy SET event_limit=100000,byte_limit=1000000000,delivery_limit=100000; UPDATE heimdall_capacity.upgrade SET event_limit=100000,byte_limit=1000000000,delivery_limit=100000; UPDATE heimdall_retention.capacity SET row_limit=100000,byte_limit=819200000; UPDATE heimdall_retention.upgrade SET row_limit=100000,byte_limit=819200000; ALTER TABLE heimdall_retention.event_holds ADD CONSTRAINT test_late_hold_failure CHECK(hold_id<>'rollback')", 'retained_holds_v4')
   hold_env=dict(env,HEIMDALL_TEST_HOLD_URL=dsn('retained_holds_v4')+'&options=-c%20role%3Dretained_hold_runtime',HEIMDALL_TEST_HOLD_ADMIN=dsn('retained_holds_v4'))
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-hold.test.ts'],env=hold_env)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-hold.test.ts'],env=hold_env)
   go('^TestRetainedHolds$',hold_env)
   go('^TestRetainedHolds$',dict(hold_env,HEIMDALL_TEST_HOLD_PEER='1'))
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-hold.test.ts'],env=dict(hold_env,HEIMDALL_TEST_HOLD_PEER='1'))
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-hold.test.ts'],env=dict(hold_env,HEIMDALL_TEST_HOLD_PEER='1'))
   print('Retained holds passed: atomic acquire and release, immutable retries, late rollback and reciprocal TS/Go receipts',flush=True)
   # Prepared hold release accounting, independent of runtime protocol publication.
   sql('CREATE DATABASE hold_release_reservations TEMPLATE retained_holds_v4')
@@ -425,7 +425,7 @@ try:
   # BEGIN v5 hold release proof
   def hold_test(which,settings):
    if which=='go':go('^TestRetainedHolds$',settings)
-   else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-hold.test.ts'],env=settings)
+   else:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-hold.test.ts'],env=settings)
   activate_release=['--activate-hold-release-upgrade','--writers-drained']
   for language,peer in [('ts','go'),('go','ts')]:
    database='hold_release_v5_'+language
@@ -515,7 +515,7 @@ try:
   cli(activate_release,database)
   sql(runtime_grants.replace('retained_runtime_profile','public_capacity_runtime'),database)
   public_v5=dict(env,HEIMDALL_TEST_CAPACITY_READY_URL=dsn(database))
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-public-capacity.test.ts'],env=public_v5)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-public-capacity.test.ts'],env=public_v5)
   subprocess.run(['go','test','-race','-count=1','.', '-run','^TestPublicCapacity$'],cwd=ROOT/'sdk/go',env=public_v5,check=True)
   assert sql("SELECT database_version FROM heimdall.schema_metadata",database)=='5'
   print('v5 public factory proof passed in TS and Go',flush=True)
@@ -526,7 +526,7 @@ try:
    selected=dict(env,HEIMDALL_TEST_RETAINED_DELIVERY_URL=dsn(delivery_db)+'&options=-c%20role%3Dretained_runtime_profile')
    def delivery_test(settings):
     go('^TestRetainedDelivery$',settings)
-    run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-delivery.test.ts'],env=settings)
+    run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retained-delivery.test.ts'],env=settings)
    delivery_test(selected)
    rejected=dict(selected,HEIMDALL_TEST_RETAINED_DELIVERY_REJECT='1')
    sql("UPDATE heimdall.schema_metadata SET state='migrating'",delivery_db)
@@ -545,7 +545,7 @@ try:
    UPDATE heimdall_retention.upgrade SET row_limit=100000,byte_limit=819200000""",database)
   maintenance_env=dict(env,HEIMDALL_TEST_MAINTENANCE_AUDIT_URL=dsn(database)+'&options=-c%20role%3Dpublic_capacity_runtime')
   subprocess.run(['go','test','-race','-count=1','./internal/auditflow','-run','^TestAuditedMaintenance$'],cwd=ROOT/'sdk/go',env=maintenance_env,check=True)
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/audited-authentication.test.ts','-t','audited maintenance'],env=maintenance_env)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/audited-authentication.test.ts','-t','audited maintenance'],env=maintenance_env)
   assert sql("SELECT count(*) FROM heimdall_retention.decision_identities WHERE product_id='ledger' AND environment='production' AND tenant_id IS NULL AND resolution='completed'",database)=='10'
   print('Audited maintenance passed with durable v5 requests and decisions in TS and Go',flush=True)
   # BEGIN audited retirement proof
@@ -565,10 +565,10 @@ try:
   scan_env=dict(env,HEIMDALL_TEST_RETIRE_SCAN_URL=dsn(database)+'&options=-c%20role%3Dretained_scan_reader')
   def scan_test(settings):
    go('^TestRetirementScan$',settings)
-   run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retirement-scan.test.ts'],env=settings)
+   run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retirement-scan.test.ts'],env=settings)
   def retire_test(language,settings):
    if language=='go':go('^TestRetainedRetirement$',settings)
-   else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retire.test.ts'],env=settings)
+   else:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retire.test.ts'],env=settings)
   for language in ['ts','go']:
    retire_test(language,dict(retirement_env,HEIMDALL_TEST_RETIRE_CASE='ordinary',HEIMDALL_TEST_RETIRE_EXPECT='conflict'))
   sql("UPDATE heimdall.audit_deliveries SET state='delivered',delivered_at=6001",database)
@@ -634,7 +634,7 @@ try:
    GRANT SELECT,INSERT ON public.test_retirement_batches TO retained_retirement_runtime""",database)
   command_env=dict(env,HEIMDALL_TEST_MAINTENANCE_COMMAND_URL=dsn(database)+'&options=-c%20role%3Dretained_retirement_runtime')
   subprocess.run(['go','test','-race','-count=1','./internal/auditflow','-run','^TestAuditedMaintenance$/^bound_maintenance_command$'],cwd=ROOT/'sdk/go',env=command_env,check=True)
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/audited-authentication.test.ts','-t','bound maintenance command'],env=command_env)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/audited-authentication.test.ts','-t','bound maintenance command'],env=command_env)
   assert sql("SELECT count(*) FROM heimdall_retention.retirements WHERE product_id='ledger' AND environment='production' AND tenant_id IS NULL AND target_event_id IN ('bound-maintenance-go','bound-maintenance-ts')",database)=='2'
   assert sql("SELECT count(*) FROM heimdall_retention.event_holds WHERE product_id='ledger' AND environment='production' AND event_id IN ('bound-maintenance-go','bound-maintenance-ts') AND tenant_id IS NULL AND release_event_id IS NOT NULL",database)=='4'
   assert sql("SELECT count(*) FROM heimdall.audit_events WHERE product_id='ledger' AND environment='production' AND event_id IN ('bound-maintenance-go','bound-maintenance-ts')",database)=='0'
@@ -657,7 +657,7 @@ try:
      assert proxy.dropped.is_set() and not proxy.errors
     hold_test('go' if language=='ts' else 'ts',dict(selected,HEIMDALL_TEST_HOLD_OPERATION=operation,HEIMDALL_TEST_HOLD_RETRY='1'))
    concurrent_hold_env=dict(selected,HEIMDALL_TEST_HOLD_OPERATION='concurrent')
-   writers=[subprocess.Popen(['go','test','-race','-count=1','./internal/postgres','-run','^TestRetainedHolds$'],cwd=ROOT/'sdk/go',env=concurrent_hold_env),subprocess.Popen(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-hold.test.ts'],cwd=ROOT,env=concurrent_hold_env)]
+   writers=[subprocess.Popen(['go','test','-race','-count=1','./internal/postgres','-run','^TestRetainedHolds$'],cwd=ROOT/'sdk/go',env=concurrent_hold_env),subprocess.Popen(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-hold.test.ts'],cwd=ROOT,env=concurrent_hold_env)]
    results=[writer.wait() for writer in writers]
    assert results==[0,0],results
    assert sql("SELECT count(*) FROM heimdall_retention.event_holds WHERE product_id='holds-"+language+"' AND hold_id='concurrent'",database)=='1'
@@ -666,7 +666,7 @@ try:
   sql('CREATE DATABASE retained_holds_groups TEMPLATE retained_holds_v4')
   group_env=dict(env,HEIMDALL_TEST_HOLD_URL=dsn('retained_holds_groups')+'&options=-c%20role%3Dretained_hold_runtime',HEIMDALL_TEST_HOLD_ADMIN=dsn('retained_holds_groups'),HEIMDALL_TEST_HOLD_GROUP='1')
   go('^TestRetainedHolds$',group_env)
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-hold.test.ts'],env=group_env)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-hold.test.ts'],env=group_env)
   print('Retained hold group proof passed: terminal hold protects complete decision and corrupt sibling refuses without writes',flush=True)
   # BEGIN retained hold readiness proof
   sql('CREATE DATABASE retained_holds_legacy TEMPLATE retained_holds_v4')
@@ -674,7 +674,7 @@ try:
   for database,options in [('retained_holds_legacy',''),('retained_holds_v4','&options=-c%20default_transaction_read_only%3Don%20-c%20role%3Dretained_hold_runtime')]:
    rejected=dict(env,HEIMDALL_TEST_HOLD_URL=dsn(database)+options,HEIMDALL_TEST_HOLD_ADMIN=dsn(database),HEIMDALL_TEST_HOLD_REJECT='1')
    go('^TestRetainedHolds$',rejected)
-   run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-hold.test.ts'],env=rejected)
+   run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-hold.test.ts'],env=rejected)
   print('Retained hold readiness proof passed: legacy and read-only refusal without writes',flush=True)
   # END retained hold readiness proof
   # END retained hold fault proof
@@ -686,12 +686,12 @@ try:
   sql("ALTER TABLE heimdall_retention.event_identities ADD CONSTRAINT managed_late_failure CHECK(product_id NOT IN ('atomic-go-metadata_failure','atomic-ts-metadata_failure'))", 'managed_retained_v4')
   managed_env=dict(env,HEIMDALL_TEST_MANAGED_DATABASE_URL=dsn('managed_retained_v4'),HEIMDALL_TEST_MANAGED_AUDIT_V4='1')
   go('^TestManagedAudit(Invalid|Atomic)$',managed_env)
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-managed-audit.test.ts'],env=managed_env)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-managed-audit.test.ts'],env=managed_env)
   for language in ['go','ts']:
    with CommitLossProxy(int(port)) as proxy:
     selected=dict(managed_env,HEIMDALL_TEST_MANAGED_AUDIT_LOSS=dsn('managed_retained_v4',proxy.port))
     if language=='go':go('^TestManagedAuditCommitLoss$',selected)
-    else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-managed-audit.test.ts','-t','committed response loss'],env=selected)
+    else:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-managed-audit.test.ts','-t','committed response loss'],env=selected)
     assert proxy.dropped.is_set() and not proxy.errors
   assert sql("SELECT count(*) FROM heimdall.audit_events e LEFT JOIN heimdall_retention.event_identities i USING(product_id,environment,event_id) LEFT JOIN heimdall_capacity.event_charges c USING(product_id,environment,event_id) WHERE e.product_id LIKE 'atomic-%' AND (i.event_id IS NULL OR c.event_id IS NULL)", 'managed_retained_v4')=='0'
   assert sql("SELECT used_rows=(SELECT count(*) FROM heimdall_retention.event_identities)+(SELECT count(*) FROM heimdall_retention.decision_identities) FROM heimdall_retention.capacity", 'managed_retained_v4')=='t'
@@ -706,7 +706,7 @@ try:
   sql("INSERT INTO heimdall_managed.workspaces VALUES ('ledger','production','export-probe','Private name','suspended',true,1,1,2)",'managed_operations_v4')
   export_env=dict(env,HEIMDALL_TEST_AUDITED_EXPORT_READER=dsn('managed_operations_v4')+'&options=-c%20role%3Dheimdall_export_reader',HEIMDALL_TEST_AUDITED_EXPORT_WRITER=dsn('managed_operations_v4')+'&options=-c%20role%3Dheimdall_managed_runtime')
   subprocess.run(['go','test','-race','-count=1','./internal/auditflow','-run','^TestAuditedMaintenance$/^live_managed_export$'],cwd=ROOT/'sdk/go',env=export_env,check=True)
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/audited-authentication.test.ts','-t','live audited managed export'],env=export_env)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/audited-authentication.test.ts','-t','live audited managed export'],env=export_env)
   assert sql("SELECT count(*) FROM heimdall_retention.event_identities WHERE product_id='ledger' AND environment='production' AND tenant_id='export-probe'",'managed_operations_v4')=='6'
   inventory_payloads=sql("SELECT event->>'payload' FROM heimdall.audit_events WHERE product_id='ledger' AND environment='production'",'managed_operations_v4').splitlines()
   inventory_events=[json.loads(base64.urlsafe_b64decode(payload+'='*(-len(payload)%4))) for payload in inventory_payloads]
@@ -714,11 +714,11 @@ try:
   print('Audited managed export passed in TS and Go with separate reader and writer roles',flush=True)
   operation_env=dict(env,HEIMDALL_TEST_MANAGED_DATABASE_URL=dsn('managed_operations_v4'),HEIMDALL_TEST_MANAGED_OPERATIONS_V4='1')
   go('^TestRetainedOperationsAdmission$',operation_env)
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-operations-retained.test.ts'],env=operation_env)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-operations-retained.test.ts'],env=operation_env)
   operation_files=['test/postgres-'+n+'.test.ts' for n in ['workspaces','operations','operation-transitions','membership-intents','candidate-repair','operation-scan','candidates','export']]
-  for file in operation_files:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run',file],env=operation_env)
+  for file in operation_files:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run',file],env=operation_env)
   go('^(TestOperation(Journal|Input|Create|Transition|TransitionInput|MembershipCompletion|Scan|ScanInput)|TestMembership(Input|Intent)|TestCandidate(Decoder|Input|Primary|Repair|RepairInput)|TestWorkspace(Decoder|Input|Primary)|TestExport(Decoder|Input|Primary))$',dict(operation_env,HEIMDALL_TEST_MANAGED_READ_PEER='1'))
-  for file in operation_files:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run',file],env=dict(operation_env,HEIMDALL_TEST_MANAGED_READ_PEER='1'))
+  for file in operation_files:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run',file],env=dict(operation_env,HEIMDALL_TEST_MANAGED_READ_PEER='1'))
   for language in ['go','ts']:
    for variable,file,ts_name,go_name in [
     ('CREATE','operations','operation create committed response loss and retry','TestOperationCreateLoss'),
@@ -728,11 +728,11 @@ try:
     with CommitLossProxy(int(port)) as proxy:
      selected=dict(operation_env,**{'HEIMDALL_TEST_'+variable+'_LOSS':dsn('managed_operations_v4',proxy.port)})
      if language=='go':go('^'+go_name+'$',selected)
-     else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-'+file+'.test.ts','-t',ts_name],env=selected)
+     else:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-'+file+'.test.ts','-t',ts_name],env=selected)
      assert proxy.dropped.is_set() and not proxy.errors
   race_env=dict(operation_env,HEIMDALL_TEST_CREATE_RACE='1')
   with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-   attempts=[pool.submit(go,'^TestOperationCreateRaceCross$',race_env),pool.submit(run,['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-operations.test.ts','-t','cross-language create race'],env=race_env)]
+   attempts=[pool.submit(go,'^TestOperationCreateRaceCross$',race_env),pool.submit(run,['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-operations.test.ts','-t','cross-language create race'],env=race_env)]
    for attempt in attempts:attempt.result()
   for table in ['workspaces','operations']:
    assert sql("SELECT count(*) FROM heimdall_managed."+table+" WHERE product_id='creation-cross'", 'managed_operations_v4')=='1'
@@ -749,7 +749,7 @@ try:
   cli(activate_release,backup_source)
   sql(runtime_grants.replace('retained_runtime_profile','heimdall_managed_runtime')+"; GRANT USAGE ON SCHEMA heimdall_managed TO heimdall_managed_runtime; GRANT SELECT ON heimdall_managed.schema_metadata,heimdall_managed.migrations TO heimdall_managed_runtime; GRANT SELECT,INSERT,UPDATE ON heimdall_managed.workspaces,heimdall_managed.operations,heimdall_managed.membership_candidates TO heimdall_managed_runtime; GRANT DELETE ON heimdall_managed.membership_candidates TO heimdall_managed_runtime; GRANT USAGE ON ALL SEQUENCES IN SCHEMA heimdall_managed TO heimdall_managed_runtime", backup_source)
   backup_operations_env=dict(env,HEIMDALL_TEST_MANAGED_DATABASE_URL=dsn(backup_source),HEIMDALL_TEST_MANAGED_OPERATIONS_V4='1')
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-operation-transitions.test.ts'],env=backup_operations_env)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-operation-transitions.test.ts'],env=backup_operations_env)
   go('^TestOperationTransition$',backup_operations_env)
   sql("UPDATE heimdall.audit_deliveries SET state='delivered',delivered_at=6001 WHERE product_id='ledger' AND environment='staging'",backup_source)
   sql(retirement_grants,backup_source)
@@ -796,11 +796,11 @@ try:
   sql("CREATE ROLE restore_inspector; GRANT USAGE ON SCHEMA heimdall,heimdall_managed,heimdall_capacity,heimdall_retention TO restore_inspector; GRANT SELECT ON ALL TABLES IN SCHEMA heimdall,heimdall_managed,heimdall_capacity,heimdall_retention TO restore_inspector",restored)
   restored_env=dict(env,HEIMDALL_TEST_RESTORED_STORAGE_URL=dsn(restored)+'&options=-c%20role%3Drestore_inspector')
   go('^TestRestoredStorage$',restored_env)
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-restored-storage.test.ts'],env=restored_env)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-restored-storage.test.ts'],env=restored_env)
   print('Restored v5 storage passed: isolated target, retired receipt, pending decision and uncertain operation in TS and Go',flush=True)
   def runtime_profile(language,selected):
    if language=='go':go('^TestRetainedRuntime$',selected)
-   else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-runtime.test.ts'],env=selected)
+   else:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retained-runtime.test.ts'],env=selected)
   for language in ['go','ts']:
    database='retained_runtime_'+language
    sql('CREATE DATABASE '+database+' TEMPLATE retention_activation');sql(runtime_grants,database)
@@ -827,7 +827,7 @@ try:
     selected=dict(env,HEIMDALL_TEST_RECOVERY_BATCH_URL=dsn(database),HEIMDALL_TEST_RECOVERY_BATCH_V4='1')
     def retained_batch():
      if language=='go':go('^TestRecoveryBatchPostgres$',selected)
-     else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-recovery-batch.test.ts'],env=selected)
+     else:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-recovery-batch.test.ts'],env=selected)
     if lost:
      with CommitLossProxy(int(port)) as proxy:
       selected['HEIMDALL_TEST_RECOVERY_BATCH_LOSS']=dsn(database,proxy.port)
@@ -840,7 +840,7 @@ try:
     selected=dict(env,HEIMDALL_TEST_RUNTIME_RECOVERY_URL=dsn(database))
     def recover():
      if language=='go':go('^TestRuntimeRecovery$',selected)
-     else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-runtime-recovery.test.ts'],env=selected)
+     else:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-runtime-recovery.test.ts'],env=selected)
     if lost:
      with CommitLossProxy(int(port)) as proxy:
       selected['HEIMDALL_TEST_RUNTIME_RECOVERY_LOSS']=dsn(database,proxy.port)+'&options=-c%20role%3Dpublic_capacity_runtime'
@@ -854,7 +854,7 @@ try:
     selected=dict(env,HEIMDALL_TEST_RECOVERY_BATCH_URL=dsn(database))
     def batch():
      if language=='go':go('^TestRecoveryBatchPostgres$',selected)
-     else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-recovery-batch.test.ts'],env=selected)
+     else:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-recovery-batch.test.ts'],env=selected)
     if lost:
      with CommitLossProxy(int(port)) as proxy:
       selected['HEIMDALL_TEST_RECOVERY_BATCH_LOSS']=dsn(database,proxy.port)
@@ -897,14 +897,14 @@ try:
    sql(identity_sql,database)
    selected=dict(env,HEIMDALL_TEST_RETENTION_URL=dsn(database))
    if language=='go':go('^TestPreparedRetention$',selected)
-   else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retention.test.ts'],env=selected)
+   else:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retention.test.ts'],env=selected)
   for first,second in [('go','ts'),('ts','go')]:
    database='retention_loss_'+first
    sql('CREATE DATABASE '+database+' TEMPLATE cli_activation')
    sql(identity_sql,database)
    def retention_attempt(language,selected):
     if language=='go':go('^TestRetentionCommitLoss$',selected)
-    else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retention-loss.test.ts'],env=selected)
+    else:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retention-loss.test.ts'],env=selected)
    selected=dict(env,HEIMDALL_TEST_RETENTION_LOSS_URL=dsn(database))
    with CommitLossProxy(int(port)) as proxy:
     retention_attempt(first,dict(selected,HEIMDALL_TEST_RETENTION_FAULT_URL=dsn(database,proxy.port)))
@@ -1089,7 +1089,7 @@ try:
    sql('CREATE DATABASE '+database+' TEMPLATE retirement_markers')
    selected=dict(env,HEIMDALL_TEST_RETAINED_READ_URL=dsn(database))
    if language=='go':go('^TestRetainedInspection$',selected)
-   else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-read.test.ts'],env=selected)
+   else:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retained-read.test.ts'],env=selected)
   decision_retirement=json.loads((ROOT/'contracts/fixtures/retired-decision-inspection.json').read_text())
   decision_db='retired_decisions'
   sql('CREATE DATABASE '+decision_db+' TEMPLATE retention_port_go')
@@ -1101,13 +1101,13 @@ try:
    sql('CREATE DATABASE '+database+' TEMPLATE '+decision_db)
    selected=dict(env,HEIMDALL_TEST_RETAINED_RECOVERY_URL=dsn(database))
    if language=='go':go('^TestRetainedRecovery$',selected)
-   else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-recovery.test.ts'],env=selected)
+   else:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retained-recovery.test.ts'],env=selected)
   for first,second in [('go','ts'),('ts','go')]:
    database='retained_recovery_loss_'+first
    sql('CREATE DATABASE '+database+' TEMPLATE '+decision_db)
    def retained_recovery_attempt(language,selected):
     if language=='go':go('^TestRetainedRecoveryLoss$',selected)
-    else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-recovery.test.ts'],env=selected)
+    else:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retained-recovery.test.ts'],env=selected)
    selected=dict(env,HEIMDALL_TEST_RETAINED_RECOVERY_LOSS_URL=dsn(database))
    with CommitLossProxy(int(port)) as proxy:
     retained_recovery_attempt(first,dict(selected,HEIMDALL_TEST_RETAINED_RECOVERY_FAULT_URL=dsn(database,proxy.port)))
@@ -1121,7 +1121,7 @@ try:
   append_counts="SELECT jsonb_build_array(p.used_events,p.reserved_events,c.used_rows,c.reserved_rows) FROM heimdall_capacity.policy p CROSS JOIN heimdall_retention.capacity c"
   def retained_write_attempt(language,selected):
    if language=='go':go('^TestRetainedWriteLoss$',selected)
-   else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-write-loss.test.ts'],env=selected)
+   else:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retained-write-loss.test.ts'],env=selected)
   for case in append_loss:
    for first,second in [('go','ts'),('ts','go')]:
     database='retained_write_loss_'+case['name']+'_'+first
@@ -1142,13 +1142,13 @@ try:
    sql('CREATE DATABASE '+database+' TEMPLATE '+decision_db)
    selected=dict(env,HEIMDALL_TEST_RETAINED_WRITE_URL=dsn(database))
    if language=='go':go('^TestRetainedWrites$',selected)
-   else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-write.test.ts'],env=selected)
+   else:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retained-write.test.ts'],env=selected)
   for language in ['go','ts']:
    database='retention_eligibility_'+language
    sql('CREATE DATABASE '+database+' TEMPLATE '+decision_db)
    selected=dict(env,HEIMDALL_TEST_RETENTION_ELIGIBILITY_URL=dsn(database))
    if language=='go':go('^TestRetentionEligibility$',selected)
-   else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retention-eligibility.test.ts'],env=selected)
+   else:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retention-eligibility.test.ts'],env=selected)
   compact_before=sql("SELECT jsonb_build_object('events',(SELECT jsonb_agg(to_jsonb(i) ORDER BY product_id,environment,event_id) FROM heimdall_retention.event_identities i),'decisions',(SELECT jsonb_agg(to_jsonb(d) ORDER BY product_id,environment,decision_id) FROM heimdall_retention.decision_identities d))",decision_db)
   initial_used=int(sql('SELECT used_rows FROM heimdall_retention.capacity',decision_db))
   for scope in decision_retirement['scopes']:
@@ -1199,7 +1199,7 @@ try:
   assert int(sql('SELECT used_rows FROM heimdall_retention.capacity',decision_db))==initial_used+2
   selected=dict(env,HEIMDALL_TEST_RETIRED_DECISION_URL=dsn(decision_db))
   go('^TestRetiredDecisionInspection$',selected)
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retired-decision.test.ts'],env=selected)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retired-decision.test.ts'],env=selected)
   # Exercise retired resolution on an actually activated v4 database as well.
   sql('CREATE DATABASE retired_resolution_v4 TEMPLATE retention_activation')
   sql("UPDATE heimdall_capacity.policy SET event_limit=event_limit+10; UPDATE heimdall_capacity.upgrade SET event_limit=(SELECT event_limit FROM heimdall_capacity.policy)",'retired_resolution_v4')
@@ -1215,15 +1215,15 @@ try:
    sql('BEGIN;'+retirement+';'+detach+remove_members(members)+';COMMIT;','retired_resolution_v4')
   resolution_v4=dict(env,HEIMDALL_TEST_RETAINED_RESOLUTION_URL=dsn('retired_resolution_v4'),HEIMDALL_TEST_RETAINED_RESOLUTION_RETIRED='1',HEIMDALL_TEST_RETAINED_RESOLUTION_V4='1')
   go('^TestRetainedResolution$',resolution_v4)
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-resolution.test.ts'],env=resolution_v4)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retained-resolution.test.ts'],env=resolution_v4)
   resolution_env=dict(env,HEIMDALL_TEST_RETAINED_RESOLUTION_URL=dsn(decision_db),HEIMDALL_TEST_RETAINED_RESOLUTION_RETIRED='1')
   go('^TestRetainedResolution$',resolution_env)
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-resolution.test.ts'],env=resolution_env)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retained-resolution.test.ts'],env=resolution_env)
   retry_snapshot="SELECT jsonb_build_object('events',(SELECT jsonb_agg(to_jsonb(e) ORDER BY product_id,environment,event_id) FROM heimdall.audit_events e),'deliveries',(SELECT jsonb_agg(to_jsonb(d) ORDER BY product_id,environment,event_id,sink_id) FROM heimdall.audit_deliveries d),'metadata',(SELECT to_jsonb(c) FROM heimdall_retention.capacity c))"
   before_retry=sql(retry_snapshot,decision_db)
   selected=dict(env,HEIMDALL_TEST_RETAINED_RETRY_URL=dsn(decision_db))
   go('^TestRetainedRetry$',selected)
-  run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-retained-retry.test.ts'],env=selected)
+  run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-retained-retry.test.ts'],env=selected)
   assert sql(retry_snapshot,decision_db)==before_retry
   identity_db='retention_identities'
   sql('CREATE DATABASE '+identity_db+' TEMPLATE cli_activation')

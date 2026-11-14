@@ -1,5 +1,5 @@
-import { HeimdallError } from "@heimdall/sdk";
-import { createDirectoryCleanup } from "@heimdall/sdk/postgres";
+import { HeimdallError } from "@techsavvyash/heimdall-sdk";
+import { createDirectoryCleanup } from "@techsavvyash/heimdall-sdk/postgres";
 
 export function directoryMapping() {
   const workspaces = JSON.parse(process.env.HEIMDALL_DIRECTORY_WORKSPACES ?? "null");

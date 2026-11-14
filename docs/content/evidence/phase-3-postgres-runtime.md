@@ -31,8 +31,8 @@ sequenceDiagram
 ## Developer wiring
 
 ```ts
-import { createHeimdall } from "@heimdall/sdk";
-import { createPostgresStorage } from "@heimdall/sdk/postgres";
+import { createHeimdall } from "@techsavvyash/heimdall-sdk";
+import { createPostgresStorage } from "@techsavvyash/heimdall-sdk/postgres";
 
 const storage = createPostgresStorage(pool, {
   productId: "ledger", environment: "production", auditSinks: ["siem"],

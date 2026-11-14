@@ -145,7 +145,7 @@ try:
              "-v", "ON_ERROR_STOP=1", "-c",
              "DROP TRIGGER reject_directory_delete ON heimdall.records; DROP FUNCTION public.reject_directory_delete();"],
             capture_output=True, text=True)
-    run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/runtime.test.ts"], env=runtime_env)
+    run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/runtime.test.ts"], env=runtime_env)
     run(["docker", "exec", name, "psql", "-U", "postgres", "-d", "public_runtime",
          "-v", "ON_ERROR_STOP=1", "-c",
          """GRANT UPDATE(state,attempts,next_attempt_at,delivered_at) ON heimdall.audit_deliveries TO heimdall_public_runtime;
@@ -156,7 +156,7 @@ try:
            FOR EACH ROW EXECUTE FUNCTION public.reject_collector_delivery();"""],
         capture_output=True, text=True)
     delivery_env = dict(runtime_env, HEIMDALL_TEST_AUDIT_DELIVERY_DB=runtime_dsn + "&options=-c%20role%3Dheimdall_public_runtime")
-    run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-audit-delivery.test.ts", "test/postgres-identity-collector.test.ts"], env=delivery_env)
+    run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/postgres-audit-delivery.test.ts", "test/postgres-identity-collector.test.ts"], env=delivery_env)
     subprocess.run(["go", "test", "-race", "-count=1", "./postgres", "-run", "^Test(AuditDelivery|IdentityCollector)Postgres$"],
                    cwd=ROOT / "sdk/go", env=delivery_env, check=True)
     print(json.dumps({"run": name, "auditDelivery": ["typescript", "go"], "result": "passed"}), flush=True)
@@ -167,7 +167,7 @@ try:
                 "?sslmode=disable&options=-c%20role%3Dheimdall_public_runtime"
             ))
             if language == "ts":
-                run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run",
+                run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run",
                      "test/postgres-identity-collector.test.ts", "-t", "loses its commit response"], env=fault_env)
             else:
                 subprocess.run(["go", "test", "-race", "-count=1", "./postgres", "-run",
@@ -193,7 +193,7 @@ try:
     directory_env = dict(runtime_env, HEIMDALL_TEST_DIRECTORY_DB=runtime_dsn + "&options=-c%20role%3Dheimdall_public_runtime")
     if os.environ.get("HEIMDALL_PROBE_SCIM_WORKER") == "true":
         run(["node", "tests/integration/scim.mjs"], env=directory_env)
-    run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-directory-deactivation.test.ts"], env=directory_env)
+    run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/postgres-directory-deactivation.test.ts"], env=directory_env)
     subprocess.run(["go", "test", "-race", "-count=1", "./postgres", "-run", "^TestDirectoryDeactivationPostgres$"],
                    cwd=ROOT / "sdk/go", env=directory_env, check=True)
     run(["docker", "exec", name, "psql", "-U", "postgres", "-d", "public_runtime",
@@ -205,7 +205,7 @@ try:
         from pinned_openfga import pinned_openfga
         with pinned_openfga(ROOT) as provider:
             pinned_env = dict(runtime_env, **provider)
-            run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/runtime.test.ts", "-t", "managed onboarding safely"], env=pinned_env)
+            run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/runtime.test.ts", "-t", "managed onboarding safely"], env=pinned_env)
             subprocess.run(["go", "test", "-race", "-count=1", ".", "-run", "^TestPublicManagedOnboarding$"], cwd=ROOT / "sdk/go", env=pinned_env, check=True)
             print(json.dumps({"run": name, "pinnedAdministration": ["typescript", "go"], "result": "passed"}), flush=True)
     if os.environ.get("HEIMDALL_PROBE_SDK_RECOVERY") == "1":
@@ -334,13 +334,21 @@ try:
                     if not tagged_version:
                         raise RuntimeError("An external archive requires a paired version tag")
                 else:
-                    run(["pnpm", "--filter", "@heimdall/sdk", "pack", "--pack-destination", str(archive_dir)])
+                    run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "pack", "--pack-destination", str(archive_dir)])
                     archive, = archive_dir.glob("*.tgz")
-                if tagged_version and archive.name != f"heimdall-sdk-{tagged_version[1]}.tgz":
+                archive_manifest = json.loads(subprocess.check_output(
+                    ["tar", "-xOzf", str(archive), "package/package.json"]))
+                package_name = archive_manifest["name"]
+                if package_name not in {"@heimdall/sdk", "@techsavvyash/heimdall-sdk"}:
+                    raise RuntimeError("Unexpected TypeScript archive package")
+                if tagged_version and archive_manifest["version"] != tagged_version[1]:
                     raise RuntimeError("TypeScript archive must match the Go tag version")
                 package_path = ledger / "package.json"
                 package = json.loads(package_path.read_text())
-                package["dependencies"]["@heimdall/sdk"] = "file:" + str(archive)
+                del package["dependencies"]["@techsavvyash/heimdall-sdk"]
+                package["dependencies"][package_name] = "file:" + str(archive)
+                for source_file in ledger.glob("*.mjs"):
+                    source_file.write_text(source_file.read_text().replace("@techsavvyash/heimdall-sdk", package_name))
                 package_path.write_text(json.dumps(package))
                 (ledger / "pnpm-workspace.yaml").write_text("minimumReleaseAge: 43200\nminimumReleaseAgeStrict: true\n")
                 subprocess.run(["pnpm", "install", "--ignore-scripts"], cwd=ledger, check=True)
@@ -353,7 +361,7 @@ try:
                 subprocess.run(["go", "mod", "tidy"], cwd=support_source, env=reference_env, check=True)
                 reference_env["HEIMDALL_REFERENCE_LEDGER_ENTRY"] = str(ledger / "server.mjs")
                 if operator:
-                    reference_env["HEIMDALL_REFERENCE_SETUP_CLI"] = str(ledger / "node_modules/@heimdall/sdk/dist/cli.js")
+                    reference_env["HEIMDALL_REFERENCE_SETUP_CLI"] = str(ledger / "node_modules" / package_name / "dist/cli.js")
                 go_version = subprocess.check_output(["go", "list", "-m", "-f", "{{.Version}}", module],
                                                      cwd=support_source, env=reference_env, text=True).strip()
                 if tagged_version and go_version != revision:
@@ -376,14 +384,19 @@ try:
                 # Use the same product wiring on each side of the SDK switch.
                 prior_archive = prior / "archive"
                 prior_archive.mkdir()
-                subprocess.run(["pnpm", "--filter", "@heimdall/sdk", "pack", "--pack-destination", str(prior_archive)],
-                               cwd=prior, check=True)
+                prior_sdk = prior / "sdk/typescript"
+                prior_name = json.loads((prior_sdk / "package.json").read_text())["name"]
+                subprocess.run(["pnpm", "pack", "--pack-destination", str(prior_archive)],
+                               cwd=prior_sdk, check=True)
                 prior_tgz, = prior_archive.glob("*.tgz")
                 prior_ledger = consumer / "previous-ledger"
                 shutil.copytree(ledger, prior_ledger, ignore=shutil.ignore_patterns("node_modules", "pnpm-lock.yaml"))
                 package_path = prior_ledger / "package.json"
                 package = json.loads(package_path.read_text())
-                package["dependencies"]["@heimdall/sdk"] = "file:" + str(prior_tgz)
+                del package["dependencies"][package_name]
+                package["dependencies"][prior_name] = "file:" + str(prior_tgz)
+                for source_file in prior_ledger.glob("*.mjs"):
+                    source_file.write_text(source_file.read_text().replace(package_name, prior_name))
                 package_path.write_text(json.dumps(package))
                 subprocess.run(["pnpm", "install", "--ignore-scripts"], cwd=prior_ledger, check=True)
                 prior_support = consumer / "previous-support"
@@ -601,16 +614,16 @@ try:
             env["HEIMDALL_TEST_READ_PEER"] = "1"
         # Maintenance deliberately takes a table lock to test cancellation. Keep
         # that fault isolated from other suites' multi-connection transactions.
-        run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-maintenance.test.ts"], env=env)
-        run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-records.test.ts", "test/postgres-readiness.test.ts", "test/postgres-audit.test.ts", "test/postgres-sessions.test.ts"], env=env)
-        run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-login.test.ts", "test/browser-login-http.test.ts"], env=env)
+        run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/postgres-maintenance.test.ts"], env=env)
+        run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/postgres-records.test.ts", "test/postgres-readiness.test.ts", "test/postgres-audit.test.ts", "test/postgres-sessions.test.ts"], env=env)
+        run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/postgres-login.test.ts", "test/browser-login-http.test.ts"], env=env)
         subprocess.run(["go", "test", "-race", "-count=1", "./internal/browserlogin"], cwd=ROOT / "sdk/go", env=env, check=True)
         subprocess.run(["go", "test", "-race", "-count=1", "./internal/postgres"], cwd=ROOT / "sdk/go", env=env, check=True)
     for language in ("ts", "go"):
         with CommitLossProxy(int(port)) as proxy:
             fault_env = dict(env, HEIMDALL_TEST_AUDIT_COMMIT_LOSS=f"postgres://postgres:{password}@127.0.0.1:{proxy.port}/postgres?sslmode=disable")
             if language == "ts":
-                run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-audit.test.ts", "-t", "audit committed response loss"], env=fault_env)
+                run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/postgres-audit.test.ts", "-t", "audit committed response loss"], env=fault_env)
             else:
                 subprocess.run(["go", "test", "-race", "-count=1", "./internal/postgres", "-run", "^TestAuditCommitLoss$"], cwd=ROOT / "sdk/go", env=fault_env, check=True)
             if not proxy.dropped.is_set() or proxy.errors:
@@ -620,7 +633,7 @@ try:
             with CommitLossProxy(int(port)) as proxy:
                 fault_env = dict(env, HEIMDALL_TEST_DECISION_COMMIT_LOSS=f"postgres://postgres:{password}@127.0.0.1:{proxy.port}/postgres?sslmode=disable", HEIMDALL_TEST_DECISION_LOSS_STAGE=str(stage))
                 if language == "ts":
-                    run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-audit.test.ts", "-t", "decision audit committed response loss"], env=fault_env)
+                    run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/postgres-audit.test.ts", "-t", "decision audit committed response loss"], env=fault_env)
                 else:
                     subprocess.run(["go", "test", "-race", "-count=1", "./internal/postgres", "-run", "^TestDecisionCommitLoss$"], cwd=ROOT / "sdk/go", env=fault_env, check=True)
                 if not proxy.dropped.is_set() or proxy.errors:
@@ -629,7 +642,7 @@ try:
         with CommitLossProxy(int(port)) as proxy:
             fault_env = dict(env, HEIMDALL_TEST_ACK_COMMIT_LOSS=f"postgres://postgres:{password}@127.0.0.1:{proxy.port}/postgres?sslmode=disable")
             if language == "ts":
-                run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-audit.test.ts", "-t", "acknowledgement committed response loss"], env=fault_env)
+                run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/postgres-audit.test.ts", "-t", "acknowledgement committed response loss"], env=fault_env)
             else:
                 subprocess.run(["go", "test", "-race", "-count=1", "./internal/postgres", "-run", "^TestAcknowledgementCommitLoss$"], cwd=ROOT / "sdk/go", env=fault_env, check=True)
             if not proxy.dropped.is_set() or proxy.errors:
@@ -639,7 +652,7 @@ try:
             with CommitLossProxy(int(port)) as proxy:
                 fault_env = dict(env, HEIMDALL_TEST_TRANSITION_LOSS=f"postgres://postgres:{password}@127.0.0.1:{proxy.port}/postgres?sslmode=disable", HEIMDALL_TEST_TRANSITION_KIND=operation)
                 if language == "ts":
-                    run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-audit.test.ts", "-t", "delivery transition committed response loss"], env=fault_env)
+                    run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/postgres-audit.test.ts", "-t", "delivery transition committed response loss"], env=fault_env)
                 else:
                     subprocess.run(["go", "test", "-race", "-count=1", "./internal/postgres", "-run", "^TestTransitionCommitLoss$"], cwd=ROOT / "sdk/go", env=fault_env, check=True)
                 if not proxy.dropped.is_set() or proxy.errors:
@@ -648,7 +661,7 @@ try:
         with CommitLossProxy(int(port)) as proxy:
             fault_env = dict(env, HEIMDALL_TEST_IDENTITY_COMMIT_LOSS=f"postgres://postgres:{password}@127.0.0.1:{proxy.port}/postgres?sslmode=disable")
             if language == "ts":
-                run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-sessions.test.ts", "-t", "identity invalidation committed response loss"], env=fault_env)
+                run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/postgres-sessions.test.ts", "-t", "identity invalidation committed response loss"], env=fault_env)
             else:
                 subprocess.run(["go", "test", "-race", "-count=1", "./internal/postgres", "-run", "^TestIdentityCommitLoss$"], cwd=ROOT / "sdk/go", env=fault_env, check=True)
             if not proxy.dropped.is_set() or proxy.errors:
@@ -657,7 +670,7 @@ try:
         with CommitLossProxy(int(port)) as proxy:
             fault_env = dict(env, HEIMDALL_TEST_SESSION_DELETE_LOSS=f"postgres://postgres:{password}@127.0.0.1:{proxy.port}/postgres?sslmode=disable")
             if language == "ts":
-                run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-sessions.test.ts", "-t", "conditional session deletion committed response loss"], env=fault_env)
+                run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/postgres-sessions.test.ts", "-t", "conditional session deletion committed response loss"], env=fault_env)
             else:
                 subprocess.run(["go", "test", "-race", "-count=1", "./internal/postgres", "-run", "^TestConditionalSessionCommitLoss$"], cwd=ROOT / "sdk/go", env=fault_env, check=True)
             if not proxy.dropped.is_set() or proxy.errors:
@@ -666,7 +679,7 @@ try:
         with CommitLossProxy(int(port)) as proxy:
             fault_env = dict(env, HEIMDALL_TEST_CLEANUP_LOSS=f"postgres://postgres:{password}@127.0.0.1:{proxy.port}/postgres?sslmode=disable")
             if language == "ts":
-                run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-maintenance.test.ts", "-t", "cleanup committed response loss"], env=fault_env)
+                run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/postgres-maintenance.test.ts", "-t", "cleanup committed response loss"], env=fault_env)
             else:
                 subprocess.run(["go", "test", "-race", "-count=1", "./internal/postgres", "-run", "^TestCleanupCommitLoss$"], cwd=ROOT / "sdk/go", env=fault_env, check=True)
             if not proxy.dropped.is_set() or proxy.errors:

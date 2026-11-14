@@ -1,5 +1,5 @@
 {
-  "name": "@heimdall/sdk",
+  "name": "@techsavvyash/heimdall-sdk",
   "version": "0.1.0",
   "description": "Heimdall TypeScript SDK for product authentication and authorization",
   "bin": {

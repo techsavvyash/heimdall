@@ -8,7 +8,7 @@
     "directory:run": "node directory-job.mjs"
   },
   "dependencies": {
-    "@heimdall/sdk": "workspace:*",
+    "@techsavvyash/heimdall-sdk": "workspace:*",
     "pg": "8.23.1"
   }
 }

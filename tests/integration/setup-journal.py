@@ -109,7 +109,7 @@ try:
     sql(prefix + "UPDATE heimdall_setup.schema_metadata SET database_version=2;", rejected=True)
     if not railway:
         runtime = dict(env, HEIMDALL_TEST_SETUP_DSN=dsn + "&options=-c%20role%3D" + ROLE)
-        subprocess.run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/setup-journal.test.ts"],
+        subprocess.run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/setup-journal.test.ts"],
                        env=runtime, cwd=ROOT, check=True, timeout=45)
         subprocess.run(["go", "test", "-race", "-count=1", "./internal/postgres", "-run", "^TestSetupJournal$"],
                        env=runtime, cwd=ROOT / "sdk/go", check=True, timeout=45)
@@ -132,7 +132,7 @@ try:
                 subprocess.run(["pnpm", "run", "build"], cwd=ROOT, check=True, timeout=45)
                 subprocess.run(["go", "test", "-race", "-count=1", "./provisioning"],
                                env=runtime, cwd=ROOT / "sdk/go", check=True, timeout=60)
-                subprocess.run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "--testTimeout=35000", "test/setup-project.test.ts", "test/setup-openfga.test.ts", "test/setup-product.test.ts"],
+                subprocess.run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "--testTimeout=35000", "test/setup-project.test.ts", "test/setup-openfga.test.ts", "test/setup-product.test.ts"],
                                env=runtime, cwd=ROOT, check=True, timeout=60)
             finally:
                 provider("/v2/organizations/" + org, "DELETE")

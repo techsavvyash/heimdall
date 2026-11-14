@@ -198,7 +198,7 @@ def run(delivery_env, elastic_start, products=None, scim_event=None):
                     else:
                         raise RuntimeError("Reference audit job exceeded page budget")
                 elif lang == "ts":
-                    subprocess.run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run",
+                    subprocess.run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run",
                                     "test/live-identity-siem.test.ts"], cwd=ROOT, env=env, check=True)
                 else:
                     subprocess.run(["go", "test", "-race", "-count=1", "./postgres", "-run", "^TestLiveIdentitySIEM$"],

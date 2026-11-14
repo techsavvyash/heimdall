@@ -62,7 +62,14 @@ function runLiveWorker(reader, subject, stage) {
   for (const [command, args, cwd] of [
     [
       "pnpm",
-      ["--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/live-scim-worker.test.ts"],
+      [
+        "--filter",
+        "@techsavvyash/heimdall-sdk",
+        "exec",
+        "vitest",
+        "run",
+        "test/live-scim-worker.test.ts",
+      ],
       new URL("../../", import.meta.url),
     ],
     [

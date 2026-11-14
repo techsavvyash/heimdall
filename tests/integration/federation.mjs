@@ -1136,7 +1136,7 @@ try {
             ? [
                 "pnpm",
                 "--filter",
-                "@heimdall/sdk",
+                "@techsavvyash/heimdall-sdk",
                 "exec",
                 "vitest",
                 "run",
@@ -1210,7 +1210,7 @@ try {
         [
           "pnpm",
           "--filter",
-          "@heimdall/sdk",
+          "@techsavvyash/heimdall-sdk",
           "exec",
           "vitest",
           "run",

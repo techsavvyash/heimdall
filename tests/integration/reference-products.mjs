@@ -1308,7 +1308,7 @@ export async function verifyReferenceProduct(input, authorize) {
         ? [
             "pnpm",
             "--filter",
-            "@heimdall/sdk",
+            "@techsavvyash/heimdall-sdk",
             "exec",
             "vitest",
             "run",

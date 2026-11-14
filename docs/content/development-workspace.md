@@ -15,7 +15,7 @@ pnpm install --frozen-lockfile
 pnpm run check
 ```
 
-pnpm workspaces manage the TypeScript package and Quartz. Quartz shares the root workspace lockfile and install. The Go module is `github.com/techsavvyash/heimdall/sdk/go`. The development TypeScript package is private and named `@heimdall/sdk` pending publication decisions.
+pnpm workspaces manage the TypeScript package and Quartz. Quartz shares the root workspace lockfile and install. The Go module is `github.com/techsavvyash/heimdall/sdk/go`. The development TypeScript package is private and named `@techsavvyash/heimdall-sdk` pending publication decisions.
 
 ## Fast feedback
 

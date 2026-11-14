@@ -2,12 +2,12 @@ import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { addAbortSignal } from "node:stream";
 import { Pool } from "pg";
-import { createHeimdall, HeimdallError } from "@heimdall/sdk";
+import { createHeimdall, HeimdallError } from "@techsavvyash/heimdall-sdk";
 import {
   createManagedPostgresStorage,
   createPostgresStorage,
   createRecordMaintenance,
-} from "@heimdall/sdk/postgres";
+} from "@techsavvyash/heimdall-sdk/postgres";
 import { tenantSSOPolicy } from "./tenant-sso.mjs";
 import { directoryCleanupRoute } from "./directory-cleanup.mjs";
 import { providerSettings, providerSettingsRoute } from "./provider-settings.mjs";

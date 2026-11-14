@@ -42,7 +42,7 @@ try:
   for language,product in [('ts','ledger'),('go','support')]:
    database='restored_'+product if restored else product
    selected_env=dict(env,HEIMDALL_ROTATION_PRODUCT=dsn(database),HEIMDALL_ROTATION_LEDGER=dsn(ledger),HEIMDALL_ROTATION_PHASE=selected)
-   args=['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-key-rotation.test.ts'] if language=='ts' else ['go','test','-race','-count=1','./internal/postgres','-run','^TestKeyRotationPhases$']
+   args=['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-key-rotation.test.ts'] if language=='ts' else ['go','test','-race','-count=1','./internal/postgres','-run','^TestKeyRotationPhases$']
    processes.append(subprocess.Popen(args,cwd=ROOT if language=='ts' else ROOT/'sdk/go',env=selected_env))
   assert [p.wait() for p in processes]==[0,0]
  with tempfile.TemporaryDirectory(prefix='heimdall-rotation-') as directory:

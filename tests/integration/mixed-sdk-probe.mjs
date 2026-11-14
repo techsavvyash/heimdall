@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { auditEventDigest, createHeimdall } from "@heimdall/sdk";
+import { auditEventDigest, createHeimdall } from "@techsavvyash/heimdall-sdk";
 
 const c = JSON.parse(process.env.HEIMDALL_TEST_RUNTIME);
 const signal = AbortSignal.timeout(30000);

@@ -233,7 +233,7 @@ async function sdkRuntime(client, c) {
           ? [
               "pnpm",
               "--filter",
-              "@heimdall/sdk",
+              "@techsavvyash/heimdall-sdk",
               "exec",
               "vitest",
               "run",
@@ -331,7 +331,7 @@ function sdkStatus(c, expected, stage) {
         ? [
             "pnpm",
             "--filter",
-            "@heimdall/sdk",
+            "@techsavvyash/heimdall-sdk",
             "exec",
             "vitest",
             "run",
@@ -739,7 +739,7 @@ try {
             ? [
                 "pnpm",
                 "--filter",
-                "@heimdall/sdk",
+                "@techsavvyash/heimdall-sdk",
                 "exec",
                 "vitest",
                 "run",
@@ -946,7 +946,7 @@ try {
             ? [
                 "pnpm",
                 "--filter",
-                "@heimdall/sdk",
+                "@techsavvyash/heimdall-sdk",
                 "exec",
                 "vitest",
                 "run",

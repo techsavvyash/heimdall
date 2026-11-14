@@ -42,15 +42,15 @@ try:
         source = (ROOT / "contracts/persistence" / item["path"]).read_text()
         assert hashlib.sha256(source.encode()).hexdigest() == item["checksum"]
         sql(source)
-    run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-audit-decision.test.ts"], env=env)
+    run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/postgres-audit-decision.test.ts"], env=env)
     subprocess.run(["go", "test", "-race", "-count=1", "./internal/postgres", "-run", "^TestAuditDecision(Input)?$"], cwd=ROOT / "sdk/go", env=env, check=True)
-    run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-audit-decision.test.ts"], env=dict(env, HEIMDALL_TEST_DECISION_PEER="1"))
+    run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/postgres-audit-decision.test.ts"], env=dict(env, HEIMDALL_TEST_DECISION_PEER="1"))
     for stage in ("request", "terminal"):
         for language in ("ts", "go"):
             with CommitLossProxy(int(port)) as proxy:
                 fault = dict(env, HEIMDALL_TEST_DECISION_STAGE=stage, HEIMDALL_TEST_DECISION_LOSS=f"postgres://postgres:{env['POSTGRES_PASSWORD']}@127.0.0.1:{proxy.port}/postgres?sslmode=disable")
                 if language == "ts":
-                    run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-audit-decision.test.ts", "-t", "decision append committed response loss"], env=fault)
+                    run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/postgres-audit-decision.test.ts", "-t", "decision append committed response loss"], env=fault)
                 else:
                     subprocess.run(["go", "test", "-race", "-count=1", "./internal/postgres", "-run", "^TestAuditDecisionLoss$"], cwd=ROOT / "sdk/go", env=fault, check=True)
                 assert proxy.dropped.is_set() and not proxy.errors

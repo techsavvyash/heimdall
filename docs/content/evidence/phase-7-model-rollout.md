@@ -35,7 +35,7 @@ Both implementations rejected the old manifest paired with the candidate model I
 Run from the repository root with an HTTPS OpenFGA origin in `HEIMDALL_PROBE_OPENFGA_URL` and the verification credential in `HEIMDALL_PROBE_OPENFGA_KEY`. The credential needs permission to create and delete disposable stores.
 
 ```sh
-HEIMDALL_PROBE_MODEL_ROLLOUT=1 pnpm --filter @heimdall/sdk exec vitest run test/model-rollout.live.test.ts --disableConsoleIntercept
+HEIMDALL_PROBE_MODEL_ROLLOUT=1 pnpm --filter @techsavvyash/heimdall-sdk exec vitest run test/model-rollout.live.test.ts --disableConsoleIntercept
 ```
 
 This exercises two model and manifest versions through the current TS and Go implementations. It covers a deterministic rejected tuple batch with a corrected retry. Coordinated adapter restore and recovery after uncertain writes remain separate release checks under [[phase-7-release-qualification]].

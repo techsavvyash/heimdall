@@ -64,7 +64,7 @@ Railway probe `b1ea029c-3db6-448c-ab3f-890cb4a36bd4` repeated the deployed login
 Use two independent clients against a disposable instance of the same backend. The suite exercises binary reads, a single committed create and compare-and-swap under concurrency, idempotent deletion, expiry, and non-repeating revisions after delete or expiry. It creates and cleans up a randomly named record.
 
 ```ts
-import { verifySessionStore } from "@heimdall/sdk/sessionstoretest"
+import { verifySessionStore } from "@techsavvyash/heimdall-sdk/sessionstoretest"
 
 await verifySessionStore(replicaA, replicaB)
 ```

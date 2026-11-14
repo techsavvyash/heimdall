@@ -9,7 +9,7 @@ Release qualification is in progress. The enterprise gate is recorded in [[phase
 | #41 and #42 Reference integrations | [[phase-4-reference-backends#phase-7-verification]] records invoice approval and ticket assignment. The [operator rehearsal](../reference-quickstart#rehearse-the-operator-handoff) ties the installed setup CLI to both reference backends. The patched reference deployments repeated the business-write outage checks on Railway. [[phase-7-tenant-matrix]] verifies both named workspaces and product-specific grants. |
 | #43 Security and failure suite | [[phase-7-security-coverage]] maps all locked dry runs to test evidence and records remaining assertions. The `service-faults` CI job passed pinned PostgreSQL and OpenFGA fault coverage and offline key restore on the commit `51b4090` [pull request run](https://github.com/techsavvyash/heimdall/actions/runs/43557924136). |
 | #49 Mixed SDK versions and rollback | [[phase-3-acceptance]] covers schema admission and migration. [[phase-7-model-rollout]] and [[phase-7-sdk-candidate]] cover staged model rollout and rollback. [[phase-7-mixed-persistence]] verifies same-schema rollback for the previous and tagged SDK builds, including persisted sessions, discovery, operation state and audit. |
-| #50 Release artifacts | [[phase-7-sdk-candidate]] records the tagged Go module and checksummed ESM archive, candidate CI, live install and product verification, and versioned operating notes. Stable registry publication and the remaining release gates are open. |
+| #50 Release artifacts | [[phase-7-sdk-candidate]] records the tagged Go module and checksummed ESM archive, candidate CI, live install and product verification, and versioned operating notes. The stable release uses GitHub release assets. |
 | #45, #47 and #48 Installed candidate enterprise repeat | [[phase-7-sdk-candidate#scim-and-siem-on-the-installed-candidate]] records two-product session denial, revision-bound cleanup and tenant-scoped delivery from both installed reference audit jobs. Phase 6 covers the full tenant SSO and enterprise provider settings scenarios. |
 | #44 Deployed candidate source enterprise repeat | [[phase-6-tenant-sso-gate#local-feedback-loop]] records local watch-mode tenant SSO and policy checks, followed by the successful Railway repeat of tenant switching, tested provider activation and strict-workspace cleanup from rc.2 source. |
 | #55 Adapter safety | [[phase-7-security-coverage]] covers pinned fault tests. The [offline session and key restore](phase-3-key-rotation-restore) and [retained audit and managed-state restore](phase-3-retained-storage-restore) cases passed again in Phase 7. [[phase-7-coordinated-restore]] covers restoring PostgreSQL after known live identity, relationship and audit delivery changes. The [existing-workspace rehearsal](#Existing workspace catalogs) verified the session adapter and core source path. The [incomplete-history drill](phase-7-coordinated-restore#incomplete-post-backup-history) verifies the database fence blocks runtime and audit export while reconciliation is incomplete. [[phase-7-adapter-measurements]] records request SQL counts, candidate-scan cost and the measured mutation and reconciliation intervals. |
@@ -21,33 +21,25 @@ The production TypeScript package audit reported zero known vulnerabilities. The
 
 ## Publish the paired SDKs
 
-The npm maintainer needs publish access to `@heimdall/sdk`. Confirm the scope in npm and authenticate in the maintainer's environment. The current verification session returns HTTP 401 from `npm whoami --registry=https://registry.npmjs.org`. A public package lookup cannot verify scope ownership. [npm organization package publishing](https://docs.npmjs.com/creating-and-publishing-an-organization-scoped-package/)
+TypeScript is distributed as the package `@techsavvyash/heimdall-sdk` on GitHub Releases. Go resolves the nested module from the same `sdk/go/v<version>` tag. The two package versions and runtime markers match.
 
-Use the approved stable version in the TypeScript manifest and both runtime version constants. Remove the TypeScript manifest's `private` flag in the stable release commit. Run the workspace and pinned-service checks on that commit, and use the same commit for the nested Go tag `sdk/go/v<version>`. Run the reference journeys against the stable build and record the artifact checksums and Railway deployment IDs.
-
-The paired SDK workflow runs on both stable and release candidate tags. It verifies the package and runtime versions, runs the workspace and pinned-service checks, installs the tagged Go module in a clean consumer, and uploads a checksummed TypeScript archive after checking that exact file. The stable tag also requires a publishable TypeScript manifest. The workflow produces artifacts for the maintainer.
-
-To rehearse locally from a clean checkout of the approved release commit, build and check a TypeScript archive.
+The paired SDK workflow runs the workspace and pinned-service checks, installs the tagged Go module in a clean consumer, and uploads the checked TypeScript archive with its SHA-256 manifest. Download the workflow artifact, verify the checksum, and run the reference journeys from that archive and the Go tag before publishing the GitHub release. Attach the same archive and manifest to the release.
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm run check
-release_dir="$(mktemp -d)"
-version="$(node -p 'require("./sdk/typescript/package.json").version')"
-archive="$release_dir/heimdall-sdk-$version.tgz"
-pnpm --filter @heimdall/sdk pack --pack-destination "$release_dir"
-pnpm run check:package "$archive"
-shasum -a 256 "$archive"
-npm publish "$archive" --registry=https://registry.npmjs.org --access public --dry-run
+gh release download sdk/go/v0.1.0 --repo techsavvyash/heimdall \
+  --pattern techsavvyash-heimdall-sdk-0.1.0.tgz --pattern SHA256SUMS
+shasum -a 256 -c SHA256SUMS
+pnpm add ./techsavvyash-heimdall-sdk-0.1.0.tgz
+go get github.com/techsavvyash/heimdall/sdk/go@v0.1.0
 ```
 
-During the authorized release, push the matching Go tag, wait for the paired workflow, and download its TypeScript archive and checksum. Verify the checksum and use that archive with `HEIMDALL_PROBE_CONSUMER_ARCHIVE` and `HEIMDALL_PROBE_CONSUMER_REVISION=v<version>` in the release integration probes. Publish the verified archive with `npm publish "$archive" --registry=https://registry.npmjs.org --access public`. If npm publication fails, verify whether that version exists with the expected integrity before retrying with the same file. Verify npm's `dist.integrity` against the SHA-512 of the archive. Verify both installs from fresh consumers and check that the Go tag resolves to the same release commit before announcing the pair. [npm publish](https://docs.npmjs.com/commands/npm-publish/)
+In TypeScript, import the runtime from `@techsavvyash/heimdall-sdk`, the PostgreSQL adapters from `@techsavvyash/heimdall-sdk/postgres`, and provisioning from `@techsavvyash/heimdall-sdk/provisioning`. Keep the downloaded tarball next to the project if its manifest refers to it with a file dependency.
 
 ### Stable build rehearsal
 
 Commit `d24fe6e` on the [stable preparation branch](https://github.com/techsavvyash/heimdall/tree/codex/release-0.1.0) aligns the TypeScript package and both SDK runtime markers at `0.1.0`. The workspace suite and pinned-service fault run `heimdall-records-e94b481a42b145ae884878b5779e5ae9` passed. The local TypeScript archive passed clean-install verification and an npm publish dry run. Its SHA-256 was `88ed42a2f31320b49113964f7bf2cc3d62a407f86583a0b0cc5dfe053b2c8720`.
 
-Run `heimdall-records-d10e68c52a034cc7b28be611b8752dfd` exercised both source-built products with disposable PostgreSQL and the Railway verification providers. Both completed the authorization and onboarding journeys, passed the business write and audit-outage checks, and matched 48 authorization requests to terminal receipts per product. The checked audit events reported `0.1.0`. Stable tag and registry installs still require the paired publication step.
+Run `heimdall-records-d10e68c52a034cc7b28be611b8752dfd` exercised both source-built products with disposable PostgreSQL and the Railway verification providers. Both completed the authorization and onboarding journeys, passed the business write and audit-outage checks, and matched 48 authorization requests to terminal receipts per product. The checked audit events reported `0.1.0`. This rehearsal used the package name from before the GitHub release distribution decision.
 
 
 ## Isolated consumer journeys

@@ -1,6 +1,7 @@
 """Install two pushed SDK revisions as isolated consumers and run the live OIDC probe."""
 
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -27,11 +28,13 @@ def prepare(revision, folder, archive=None):
         run(["pnpm", "run", "build"], source)
         archive_dir = folder / "archive"
         archive_dir.mkdir()
-        run(["pnpm", "--filter", "@heimdall/sdk", "pack", "--pack-destination", str(archive_dir)], source)
+        run(["pnpm", "pack", "--pack-destination", str(archive_dir)], source / "sdk/typescript")
         archive, = archive_dir.glob("*.tgz")
     ts = folder / "ts"
     ts.mkdir(parents=True)
-    shutil.copyfile(ROOT / "tests/integration/mixed-sdk-probe.mjs", ts / "probe.mjs")
+    metadata = json.loads(subprocess.check_output(["tar", "-xOzf", str(archive), "package/package.json"]))
+    probe = (ROOT / "tests/integration/mixed-sdk-probe.mjs").read_text()
+    (ts / "probe.mjs").write_text(probe.replace("@techsavvyash/heimdall-sdk", metadata["name"]))
     (ts / "package.json").write_text('{"type":"module"}\n')
     (ts / "pnpm-workspace.yaml").write_text("minimumReleaseAge: 43200\nminimumReleaseAgeStrict: true\n")
     run(["pnpm", "add", "--ignore-scripts", str(archive)], ts)
@@ -73,7 +76,7 @@ if __name__ == "__main__":
         if not re.fullmatch(r"v\d+\.\d+\.\d+-rc\.[1-9]\d*", sys.argv[2]):
             raise SystemExit("The supplied archive requires a candidate tag")
         archive = Path(sys.argv[3]).resolve(strict=True)
-        if archive.name != f"heimdall-sdk-{sys.argv[2][1:]}.tgz":
+        if archive.name not in {f"{name}-{sys.argv[2][1:]}.tgz" for name in ("heimdall-sdk", "techsavvyash-heimdall-sdk")}:
             raise SystemExit("The archive name must match the candidate version")
     elif not re.fullmatch("[0-9a-f]{40}", sys.argv[2]):
         raise SystemExit("Pass a pushed Git commit to build the candidate archive")

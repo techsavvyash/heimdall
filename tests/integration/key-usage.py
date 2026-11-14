@@ -67,23 +67,23 @@ try:
  sql("INSERT INTO heimdall_keys.record_key_usage(fingerprint,encryption_limit) VALUES(decode(repeat('6',64),'hex'),2)")
  env.update(HEIMDALL_TEST_KEYS_ADMIN=dsn(),HEIMDALL_TEST_KEYS_RUNTIME=dsn(role=True))
  subprocess.run(["go","test","-race","-count=1","./internal/postgres","-run","^TestKeyUsageLive$"],cwd=ROOT/'sdk/go',env=env,check=True)
- run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-key-usage.test.ts"],env=env)
+ run(["pnpm","--filter","@techsavvyash/heimdall-sdk","exec","vitest","run","test/postgres-key-usage.test.ts"],env=env)
  assert sql("SELECT used FROM heimdall_keys.record_key_usage WHERE fingerprint=decode(repeat('6',64),'hex')")=="2"
  sql((ROOT/'contracts/persistence/session/0001.sql').read_text())
  subprocess.run(["go","test","-race","-count=1","./internal/postgres","-run","^TestMeteredRecords$"],cwd=ROOT/'sdk/go',env=env,check=True)
- run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-metered-records.test.ts"],env=env)
+ run(["pnpm","--filter","@techsavvyash/heimdall-sdk","exec","vitest","run","test/postgres-metered-records.test.ts"],env=env)
  for language in ('go','ts'):
   with CommitLossProxy(int(port)) as proxy:
    fault=dict(env,HEIMDALL_TEST_KEYS_LOSS=dsn(proxy.port,True))
    if language=='go':subprocess.run(["go","test","-race","-count=1","./internal/postgres","-run","^TestMeteredRecordsLoss$"],cwd=ROOT/'sdk/go',env=fault,check=True)
-   else:run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-metered-records.test.ts","-t","uncertain reservation"],env=fault)
+   else:run(["pnpm","--filter","@techsavvyash/heimdall-sdk","exec","vitest","run","test/postgres-metered-records.test.ts","-t","uncertain reservation"],env=fault)
    assert proxy.dropped.is_set() and not proxy.errors
  sql("INSERT INTO heimdall_keys.record_key_usage(fingerprint,encryption_limit) VALUES(decode(repeat('3',64),'hex'),10)")
  for language in ('go','ts'):
   with CommitLossProxy(int(port)) as proxy:
    fault=dict(env,HEIMDALL_TEST_KEYS_LOSS=dsn(proxy.port,True))
    if language=='go':subprocess.run(["go","test","-race","-count=1","./internal/postgres","-run","^TestKeyUsageLoss$"],cwd=ROOT/'sdk/go',env=fault,check=True)
-   else:run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-key-usage.test.ts","-t","key reservation COMMIT loss"],env=fault)
+   else:run(["pnpm","--filter","@techsavvyash/heimdall-sdk","exec","vitest","run","test/postgres-key-usage.test.ts","-t","key reservation COMMIT loss"],env=fault)
    assert proxy.dropped.is_set() and not proxy.errors
  assert sql("SELECT used FROM heimdall_keys.record_key_usage WHERE fingerprint=decode(repeat('3',64),'hex')")=="2"
  for statement in ["UPDATE heimdall_keys.record_key_usage SET used=0", "UPDATE heimdall_keys.record_key_usage SET encryption_limit=100", "UPDATE heimdall_keys.record_key_usage SET state='active'", "DELETE FROM heimdall_keys.record_key_usage"]:

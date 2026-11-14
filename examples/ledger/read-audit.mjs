@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { createCustomAuditWriter } from "@heimdall/sdk/postgres";
+import { createCustomAuditWriter } from "@techsavvyash/heimdall-sdk/postgres";
 
 const eventType = "product.invoice.listed";
 export function validateInvoiceRead(type, version, attributes) {

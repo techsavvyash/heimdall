@@ -28,7 +28,7 @@ try:
  def dsn(database='postgres',selected_port=port):return f"postgres://postgres:{env['POSTGRES_PASSWORD']}@127.0.0.1:{selected_port}/{database}?sslmode=disable"
  selected=dict(env,HEIMDALL_TEST_CAPACITY_UPGRADE_URL=dsn())
  subprocess.run(['go','test','-race','-count=1','./internal/postgres','-run','^TestAuditCapacityUpgrade(Input|Live)$'],cwd=ROOT/'sdk/go',env=selected,check=True)
- run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-audit-capacity.test.ts'],env=selected)
+ run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-audit-capacity.test.ts'],env=selected)
  assert sql("SELECT database_version||':'||state FROM heimdall.schema_metadata")=='2:migrating'
  assert sql("SELECT state||':'||used_events||':'||reserved_events FROM heimdall_capacity.policy")=='preparing:1:0'
  with tempfile.TemporaryDirectory(prefix='heimdall-capacity-cli-') as directory:

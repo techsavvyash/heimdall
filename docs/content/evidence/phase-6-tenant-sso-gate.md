@@ -174,7 +174,7 @@ Use the same tenant switch and policy assertions against local Ledger and Suppor
 With Air on `PATH`, start the TypeScript SDK build watcher in one terminal.
 
 ```sh
-pnpm --filter @heimdall/sdk exec rolldown -c --watch
+pnpm --filter @techsavvyash/heimdall-sdk exec rolldown -c --watch
 ```
 
 In another terminal, run the local verification with Node's watch mode and Air. Changes to the TypeScript SDK or Ledger restart Ledger. Changes to the Go SDK or Support rebuild and restart Support. Rerun the assertions if a save restarts a server during a request.

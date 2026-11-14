@@ -1,10 +1,10 @@
 import { Pool } from "pg";
-import { HeimdallError } from "@heimdall/sdk";
+import { HeimdallError } from "@techsavvyash/heimdall-sdk";
 import {
   createAuditDelivery,
   createIdentityCollector,
   deriveIdentityEventCoverage,
-} from "@heimdall/sdk/postgres";
+} from "@techsavvyash/heimdall-sdk/postgres";
 import { exportPolicyPublications, validatePolicyPublication } from "./provider-settings.mjs";
 import { validateInvoiceRead } from "./read-audit.mjs";
 

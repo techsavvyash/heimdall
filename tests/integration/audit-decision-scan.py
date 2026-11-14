@@ -41,9 +41,9 @@ try:
         source = (ROOT / "contracts/persistence" / item["path"]).read_text()
         assert hashlib.sha256(source.encode()).hexdigest() == item["checksum"]
         sql(source)
-    run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-audit-scan.test.ts"], env=env)
+    run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/postgres-audit-scan.test.ts"], env=env)
     subprocess.run(["go", "test", "-race", "-count=1", "./internal/postgres", "-run", "^TestAuditScan(Input)?$"], cwd=ROOT / "sdk/go", env=env, check=True)
-    run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-audit-scan.test.ts"], env=dict(env, HEIMDALL_TEST_SCAN_PEER="1"))
+    run(["pnpm", "--filter", "@techsavvyash/heimdall-sdk", "exec", "vitest", "run", "test/postgres-audit-scan.test.ts"], env=dict(env, HEIMDALL_TEST_SCAN_PEER="1"))
     assert sql("SELECT state FROM heimdall.schema_metadata") == "migrating"
     assert sql("SELECT count(*) FROM heimdall.migrations") == "1"
     print(json.dumps({"run": name, "postgres": IMAGE, "result": "passed", "checks": ["shared time and ID ordering", "scope cutoff and cursor validation", "reciprocal TS/Go reads", "terminal and future exclusion", "concurrent completion produces empty continuation", "digest and binding corruption refusal", "byte limited pages and storage oversized row refusal", "read-only empty page refusal", "cancelled lock wait and pool reuse"]}))

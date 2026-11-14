@@ -56,15 +56,15 @@ try:
   sql("CREATE FUNCTION public.reject_factory_delivery() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.event_id='broken-request' THEN RAISE EXCEPTION 'test outbox failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_factory_delivery BEFORE INSERT ON heimdall.audit_deliveries FOR EACH ROW EXECUTE FUNCTION public.reject_factory_delivery();", "factory_v4")
   env.update(HEIMDALL_TEST_FACTORY_V3=dsn("factory_v3",role=True),HEIMDALL_TEST_FACTORY_V2=dsn("factory_v2",role=True),HEIMDALL_TEST_MANAGED_V2_ADMIN=dsn("factory_v2"),HEIMDALL_TEST_FACTORY_URL=dsn("factory_v4",role=True),HEIMDALL_TEST_FACTORY_ADMIN=dsn("factory_v4"),HEIMDALL_TEST_FACTORY_V1=dsn("factory_v1",role=True),HEIMDALL_TEST_FACTORY_MIGRATING=dsn("factory_migrating",role=True))
   subprocess.run(["go","test","-race","-count=1","./postgres","-run","^TestFactory(V4|IdentityV4)$"],cwd=ROOT/"sdk/go",env=env,check=True)
-  run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-runtime-v4.test.ts"],env=env)
-  run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-identity-v4.test.ts"],env=env)
+  run(["pnpm","--filter","@techsavvyash/heimdall-sdk","exec","vitest","run","test/postgres-runtime-v4.test.ts"],env=env)
+  run(["pnpm","--filter","@techsavvyash/heimdall-sdk","exec","vitest","run","test/postgres-identity-v4.test.ts"],env=env)
   subprocess.run(["go","test","-race","-count=1","./postgres","-run","^TestFactoryV4Peer$"],cwd=ROOT/"sdk/go",env=env,check=True)
   subprocess.run(["go","test","-race","-count=1","./internal/postgres","-run","^TestManagedAuditReadiness$"],cwd=ROOT/"sdk/go",env=env,check=True)
   for language in ("go","ts"):
    with CommitLossProxy(int(port)) as proxy:
     fault=dict(env,HEIMDALL_TEST_FACTORY_LOSS=dsn("factory_v4",proxy.port,True))
     if language=="go":subprocess.run(["go","test","-race","-count=1","./postgres","-run","^TestFactoryV4Loss$"],cwd=ROOT/"sdk/go",env=fault,check=True)
-    else:run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-runtime-v4.test.ts","-t","public v4 request COMMIT loss"],env=fault)
+    else:run(["pnpm","--filter","@techsavvyash/heimdall-sdk","exec","vitest","run","test/postgres-runtime-v4.test.ts","-t","public v4 request COMMIT loss"],env=fault)
     assert proxy.dropped.is_set() and not proxy.errors
  assert sql("SELECT count(*) FROM heimdall.audit_events","factory_v1")=="0"
  assert sql("SELECT count(*) FROM heimdall.audit_events","factory_migrating")=="0"

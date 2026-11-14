@@ -64,7 +64,7 @@ flowchart TD
 After publishing the candidate but before activating any new grants, run the read-only provisioning check. It requires the current and candidate runtime config JSON and exact manifest JSON. Both configs must refer to the same product, environment, issuer, audience, ZITADEL project, and OpenFGA store. The candidate must have a higher manifest version and a different model ID. OpenFGA credentials are supplied separately.
 
 ```ts
-import { inspectModelRollout } from "@heimdall/sdk/provisioning";
+import { inspectModelRollout } from "@techsavvyash/heimdall-sdk/provisioning";
 
 const report = await inspectModelRollout(
   { configJSON: currentConfig, manifestJSON: currentManifest },

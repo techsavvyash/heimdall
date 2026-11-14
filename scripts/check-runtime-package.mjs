@@ -14,13 +14,17 @@ try {
   } else {
     const archive = join(work, "archive");
     mkdirSync(archive);
-    run("pnpm", ["--filter", "@heimdall/sdk", "pack", "--pack-destination", archive], root);
+    run(
+      "pnpm",
+      ["--filter", "@techsavvyash/heimdall-sdk", "pack", "--pack-destination", archive],
+      root,
+    );
     const tarball = readdirSync(archive).find((name) => name.endsWith(".tgz"));
     if (!tarball) throw new Error("Package tarball missing");
     tarPath = join(archive, tarball);
   }
   const metadata = JSON.parse(readFileSync(join(root, "sdk/typescript/package.json"), "utf8"));
-  if (basename(tarPath) !== `heimdall-sdk-${metadata.version}.tgz`)
+  if (basename(tarPath) !== `techsavvyash-heimdall-sdk-${metadata.version}.tgz`)
     throw new Error("Package version mismatch");
   const packedMetadata = JSON.parse(run("tar", ["-xOzf", tarPath, "package/package.json"]));
   for (const field of ["name", "version", "private", "engines", "exports", "bin", "dependencies"]) {
@@ -35,7 +39,7 @@ try {
     join(work, "package.json"),
     JSON.stringify({
       type: "module",
-      dependencies: { "@heimdall/sdk": "file:" + tarPath },
+      dependencies: { "@techsavvyash/heimdall-sdk": "file:" + tarPath },
     }),
   );
   writeFileSync(
@@ -60,8 +64,8 @@ try {
   );
   writeFileSync(
     join(work, "consumer.ts"),
-    `import { createHeimdall, auditEventDigest, type Principal, type RuntimeOptions } from '@heimdall/sdk';
-import { createPostgresStorage } from '@heimdall/sdk/postgres';
+    `import { createHeimdall, auditEventDigest, type Principal, type RuntimeOptions } from '@techsavvyash/heimdall-sdk';
+import { createPostgresStorage } from '@techsavvyash/heimdall-sdk/postgres';
 declare const pool: Parameters<typeof createPostgresStorage>[0];
 const storage = createPostgresStorage(pool,{productId:'ledger',environment:'production',auditSinks:['siem']});
 void storage;
@@ -78,10 +82,10 @@ void forged;
   );
   writeFileSync(
     join(work, "probe.mjs"),
-    `import {createHeimdall,HeimdallError,auditEventDigest} from '@heimdall/sdk';
-import {createPostgresStorage} from '@heimdall/sdk/postgres';
-import {verifySessionStore} from '@heimdall/sdk/sessionstoretest';
-import {setupProduct,inspectModelRollout} from '@heimdall/sdk/provisioning';
+    `import {createHeimdall,HeimdallError,auditEventDigest} from '@techsavvyash/heimdall-sdk';
+import {createPostgresStorage} from '@techsavvyash/heimdall-sdk/postgres';
+import {verifySessionStore} from '@techsavvyash/heimdall-sdk/sessionstoretest';
+import {setupProduct,inspectModelRollout} from '@techsavvyash/heimdall-sdk/provisioning';
 if (typeof setupProduct !== 'function') throw new Error('missing provisioning export');
 if (typeof inspectModelRollout !== 'function') throw new Error('missing rollout inspection export');
 if (typeof verifySessionStore !== 'function') throw new Error('missing session store conformance export');

@@ -57,7 +57,7 @@ heimdall/
 └── .github/workflows/              Build, model tests, integration and releases
 ```
 
-Create each directory when its first task starts. Build TypeScript and Go against the shared fixtures from the first implementation milestone. TypeScript publishes to npm and Go is distributed as a versioned Go module. Each package consumes the same versioned contracts and fixtures.
+Create each directory when its first task starts. Build TypeScript and Go against the shared fixtures from the first implementation milestone. TypeScript is distributed as a package tarball on GitHub Releases and Go is distributed as a versioned Go module. Each package consumes the same versioned contracts and fixtures.
 
 ## Adapter implementation locations
 

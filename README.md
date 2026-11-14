@@ -27,7 +27,7 @@ pnpm run check
 | `pnpm run format`     | Format owned workspace files with Oxfmt                     |
 | `pnpm run docs:dev`   | Preview Quartz at localhost:8080                            |
 
-Both SDKs expose audited bearer-token authentication and tenant authorization, PostgreSQL browser sessions, workspace discovery and managed onboarding. Ledger and Support demonstrate those integrations in TypeScript and Go. Follow the [reference product setup](docs/content/evidence/phase-4-reference-backends.md) and [implementation phases](docs/content/implementation-phases.md) for the verified scope and release progress. The TypeScript development package is private and ESM-only.
+Both SDKs expose audited bearer-token authentication and tenant authorization, PostgreSQL browser sessions, workspace discovery and managed onboarding. Ledger and Support demonstrate those integrations in TypeScript and Go. Follow the [reference product setup](docs/content/evidence/phase-4-reference-backends.md) and [implementation phases](docs/content/implementation-phases.md) for the verified scope and release progress. The ESM-only TypeScript package is distributed as a verified tarball on GitHub Releases.
 
 ## Layout
 

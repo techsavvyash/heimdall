@@ -58,7 +58,7 @@ or prove persistence. TS exports HeimdallError; Go exports Error and sentinel
 errors for errors.Is. Credential material and upstream error messages are redacted.
 
 ```ts
-import { createHeimdall } from "@heimdall/sdk";
+import { createHeimdall } from "@techsavvyash/heimdall-sdk";
 
 const h = await createHeimdall(
   configJSON,
@@ -96,7 +96,7 @@ public package tests and live-service probes exercise the actual exported APIs.
 ## PostgreSQL storage composition
 
 TS exports `createPostgresStorage(pool, {productId, environment, auditSinks})` from
-`@heimdall/sdk/postgres`. Go exports `postgres.NewStorage(db, StorageOptions)` from
+`@techsavvyash/heimdall-sdk/postgres`. Go exports `postgres.NewStorage(db, StorageOptions)` from
 `github.com/techsavvyash/heimdall/sdk/go/postgres`. Both return RuntimeStorage for the
 existing runtime constructor. No encryption key or session payload validator is
 needed for bearer authentication. Neither exposes an unfinished session API.
@@ -153,8 +153,8 @@ is not exposed here. Storage callbacks remain trusted backend ports; they do not
 turn caller-provided actor data into verified identity.
 
 ```ts
-import { createHeimdall } from "@heimdall/sdk";
-import { createPostgresStorage } from "@heimdall/sdk/postgres";
+import { createHeimdall } from "@techsavvyash/heimdall-sdk";
+import { createPostgresStorage } from "@techsavvyash/heimdall-sdk/postgres";
 
 const storage = createPostgresStorage(pool, {
   productId: "ledger",

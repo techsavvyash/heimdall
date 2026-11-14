@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { HeimdallError } from "@heimdall/sdk";
-import { createCustomAuditWriter } from "@heimdall/sdk/postgres";
-import { prepareEnterpriseProvider } from "@heimdall/sdk/provisioning";
+import { HeimdallError } from "@techsavvyash/heimdall-sdk";
+import { createCustomAuditWriter } from "@techsavvyash/heimdall-sdk/postgres";
+import { prepareEnterpriseProvider } from "@techsavvyash/heimdall-sdk/provisioning";
 
 const eventType = "product.sso.policy_published";
 const identifier = /^[A-Za-z0-9_-]{1,128}$/;

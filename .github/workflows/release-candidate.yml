@@ -47,11 +47,11 @@ jobs:
       - name: Pack and hash the TypeScript candidate
         run: |
           mkdir release-candidate
-          pnpm --filter @heimdall/sdk pack --pack-destination "$PWD/release-candidate"
+          pnpm --filter @techsavvyash/heimdall-sdk pack --pack-destination "$PWD/release-candidate"
           cd release-candidate
           sha256sum -- *.tgz > SHA256SUMS
       - name: Verify the exact TypeScript archive
-        run: pnpm run check:package "$PWD/release-candidate/heimdall-sdk-${GITHUB_REF_NAME#sdk/go/v}.tgz"
+        run: pnpm run check:package "$PWD/release-candidate/techsavvyash-heimdall-sdk-${GITHUB_REF_NAME#sdk/go/v}.tgz"
       - uses: actions/upload-artifact@v7
         with:
           name: heimdall-paired-sdk-candidate

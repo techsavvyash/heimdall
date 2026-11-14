@@ -29,7 +29,7 @@ def setup(database,ready=True):
  sql("GRANT USAGE ON SCHEMA heimdall,heimdall_capacity TO capacity_runtime; GRANT SELECT,INSERT ON heimdall.audit_events,heimdall.audit_deliveries TO capacity_runtime; GRANT SELECT,INSERT,UPDATE ON heimdall.audit_decisions,heimdall_capacity.reservations TO capacity_runtime; GRANT SELECT,INSERT ON heimdall_capacity.event_charges TO capacity_runtime; GRANT SELECT ON heimdall_capacity.policy TO capacity_runtime; GRANT UPDATE(used_events,used_bytes,used_deliveries,reserved_events,reserved_bytes,reserved_deliveries) ON heimdall_capacity.policy TO capacity_runtime;",database)
 def suite(language,selected):
  if language=='go':subprocess.run(['go','test','-race','-count=1','./internal/postgres','-run','^TestAuditCapacityLive$'],cwd=ROOT/'sdk/go',env=selected,check=True)
- else:run(['pnpm','--filter','@heimdall/sdk','exec','vitest','run','test/postgres-audit-capacity.test.ts'],env=selected)
+ else:run(['pnpm','--filter','@techsavvyash/heimdall-sdk','exec','vitest','run','test/postgres-audit-capacity.test.ts'],env=selected)
 try:
  run(['docker','run','--detach','--name',name,'-e','POSTGRES_PASSWORD','-p','127.0.0.1::5432',IMAGE],env=env,stdout=subprocess.DEVNULL);created=True
  for _ in range(60):

@@ -33,7 +33,7 @@ try:
  env["HEIMDALL_TEST_ACTIVATION_LOSS_DIRECT"]=dsn("activation_loss")
  env["HEIMDALL_TEST_ACTIVATION_CLI"]=dsn("activation_cli")
  subprocess.run(["go","test","-race","-count=1","./internal/postgres","-run","^TestAuditActivation(Input)?$"],cwd=ROOT/"sdk/go",env=env,check=True)
- run(["pnpm","--filter","@heimdall/sdk","exec","vitest","run","test/postgres-audit-readiness.test.ts"],env=env)
+ run(["pnpm","--filter","@techsavvyash/heimdall-sdk","exec","vitest","run","test/postgres-audit-readiness.test.ts"],env=env)
  with CommitLossProxy(int(port)) as proxy:
   fault=dict(env,HEIMDALL_TEST_ACTIVATION_LOSS=dsn("activation_loss",proxy.port))
   subprocess.run(["go","test","-race","-count=1","./internal/postgres","-run","^TestAuditActivationLoss$"],cwd=ROOT/"sdk/go",env=fault,check=True)
