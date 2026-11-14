@@ -43,20 +43,25 @@ This race is possible in the baseline. The agreed guarantee covers new decisions
 
 ## Model rollout
 
-Models are versioned and calls should specify the intended model ID. A migration deploys compatible tuples and configuration before retiring old relationships. [OpenFGA immutable models](https://openfga.dev/docs/getting-started/immutable-models)
+Each SDK deployment pins the store ID, authorization model ID and manifest version. OpenFGA models are immutable and callers using different models can read the same tuples. Heimdall's compiler assigns relation names in sorted role and permission order. A new name that sorts before an existing name can reuse an existing relation and give an old tuple a different meaning. [OpenFGA immutable models](https://openfga.dev/docs/getting-started/immutable-models)
+
+For an additive rollout on the same store, compare the compiled role and permission mappings and the policy for existing permissions before publishing. Keep every existing relation bound to the same business meaning throughout the overlap and add new roles and permissions at the end of their respective sort orders. A change that reuses a relation needs a separate migration plan with an isolated store or a coordinated cutover. The append-only procedure below covers the tested case where new roles grant new permissions and existing policy is preserved.
 
 ```mermaid
 flowchart TD
-  Edit[Edit model and permission manifest] --> Verify[Validate model and scenario assertions]
-  Verify --> Publish[Write new model version]
-  Publish --> Prepare[Apply compatible tuple migrations]
-  Prepare --> Deploy[Deploy SDK config with new model ID]
-  Deploy --> Observe[Observe decisions and errors]
-  Observe --> Retire[Retire old tuples after old callers drain]
-  Observe --> Rollback[Rollback config if tuple compatibility permits]
+  Edit[Compile current and candidate manifests] --> Verify{Existing policy and relations preserved}
+  Verify -->|No| Plan[Plan an isolated migration or coordinated cutover]
+  Verify -->|Yes| Publish[Publish candidate model with grants unchanged]
+  Publish --> Deploy[Deploy paired manifest and model ID]
+  Deploy --> Observe[Verify existing decisions with both configurations]
+  Observe --> Drain[Drain old membership and recovery workers]
+  Drain --> Activate[Activate new-role tuples with the candidate model]
+  Activate --> Restore[Reconcile new-role tuples before restoring old writers]
 ```
 
-During rolling deployment, callers may use different models over the same tuples. Plan compatibility in both directions. Store IDs, model IDs, and manifest versions appear in diagnostic events. Development and production have separate product configuration and stores.
+Include administration, SCIM and recovery workers in the drain. Resolve pending writes under their original binding, preserving any quarantine until verified quiescence and reconciliation. After activation an old SDK membership read can return `unavailable` on the new role relation even while its checks for old permissions continue to work. To roll back, pause writers, reconcile pending work, remove candidate-only tuples with the candidate model, and verify old membership reads and permission decisions before restoring the old configuration. If the older view cannot be restored safely, keep the affected workflow blocked and recover forward.
+
+Record store IDs, model IDs and manifest versions from diagnostics and verify each product and environment independently. See [[phase-7-model-rollout]] for the live rehearsal and its scope.
 
 ## Failure contract
 
