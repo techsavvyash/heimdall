@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shlex
 import subprocess
 import sys
 import time
@@ -37,6 +38,36 @@ def request(origin, path, auth, body=None, method=None):
         return response.status, json.loads(raw) if raw else {}
 
 
+def verification_policy():
+    project = "944fc9be-8648-4237-82bc-72e4bd24a4c9"
+    environment = "7bc7c286-b2dc-4415-85eb-90dd554ab2fb"
+    flags = ["-p", project, "-e", environment]
+    deployment = json.loads(subprocess.check_output([
+        "railway", "deployment", "list", *flags, "-s", "capability-zitadel", "--limit", "1", "--json",
+    ]))[0]
+    assert deployment["status"] == "SUCCESS"
+    variables = json.loads(subprocess.check_output([
+        "railway", "variable", "list", *flags, "-s", "capability-zitadel", "--json",
+    ]))
+    assert variables["ZITADEL_AUDITLOGRETENTION"] == "0s"
+    query = """SELECT count(*) FROM projections.limits WHERE audit_log_retention IS NOT NULL;
+        SHOW max_prepared_transactions;
+        SELECT coalesce(array_to_string(setconfig,','),'') FROM pg_db_role_setting
+        WHERE setrole=(SELECT oid FROM pg_roles WHERE rolname='heimdall_zitadel')
+          AND setdatabase=(SELECT oid FROM pg_database WHERE datname='zitadel');
+        SELECT trunc(EXTRACT(EPOCH FROM clock_timestamp())*1000)::bigint;"""
+    command = "psql -U heimdall_probe -d zitadel -At -v ON_ERROR_STOP=1 -c " + shlex.quote(query)
+    before = time.time_ns() // 1_000_000
+    lines = subprocess.check_output([
+        "railway", "ssh", *flags, "-s", "648133ac-305b-495d-a77e-4d0c49103feb",
+        "--identity-file", str(Path.home()/".ssh/heimdall-verification"), "--", command,
+    ], text=True, timeout=20).splitlines()
+    after = time.time_ns() // 1_000_000
+    assert lines[:3] == ["0", "0", "transaction_timeout=10s"]
+    assert before - 2000 <= int(lines[3]) <= after + 2000 and after - before <= 4000
+    return {"maxWriterTransactionMs": 10000, "maxClockOffsetMs": 5000, "minimumRetentionMs": 86400000}
+
+
 def run(delivery_env, elastic_start):
     run_id = str(uuid4())
     admin = "Bearer " + os.environ["HEIMDALL_PROBE_ZITADEL_PAT"]
@@ -51,6 +82,7 @@ def run(delivery_env, elastic_start):
     }
     indexes = {lang: "heimdall-live-" + lang + "-" + run_id for lang in scopes}
     created = []
+    policy = verification_policy() if os.environ.get("HEIMDALL_TEST_SCHEDULED_IDENTITY") == "1" else None
 
     def api(path, body=None, method=None, auth=admin):
         status, result = request(ISSUER, path, auth, body, method)
@@ -87,7 +119,7 @@ def run(delivery_env, elastic_start):
                 elastic.wait(timeout=30)
             elastic = None
 
-    def dispatch(lang, stage, subject, start_micros, pat, drop_receipt=False):
+    def dispatch(lang, stage, subject, start_micros, pat, drop_receipt=False, expected_events=0):
         product, environment, tenant = scopes[lang]
         token = secrets.token_urlsafe(32)
         handler = create_handler(endpoint=ELASTIC, authorization=elastic_auth, index=indexes[lang],
@@ -105,7 +137,7 @@ def run(delivery_env, elastic_start):
         with make_server("127.0.0.1", 0, observed) as server, ThreadPoolExecutor(max_workers=1) as workers:
             serving = workers.submit(server.serve_forever)
             config = {
-                "stage": stage, "issuer": ISSUER, "organizationId": org, "providerToken": pat,
+                "stage": stage, "policy": policy, "expectedEvents": expected_events, "issuer": ISSUER, "organizationId": org, "providerToken": pat,
                 "subject": subject, "startMicros": start_micros, "sinkToken": token,
                 "endpoint": f"http://127.0.0.1:{server.server_port}",
             }
@@ -130,7 +162,8 @@ def run(delivery_env, elastic_start):
             finally:
                 server.shutdown()
                 serving.result(timeout=10)
-        assert statuses == ([503] if stage == "outage" else [200]), "Unexpected receiver status"
+        expected_status = {"outage": [503], "collect": [200], "retry": [200], "scheduled": []}
+        assert statuses == expected_status[stage], "Unexpected receiver status"
 
     try:
         # Start and stop only the disposable process launched by this probe.
@@ -203,9 +236,16 @@ def run(delivery_env, elastic_start):
             assert subprocess.run(command, capture_output=True, text=True, check=True).stdout.strip() == "delivered|3"
             es(f"/{index}/_refresh", method="POST")
             assert es(f"/{index}/_count")["count"] == 1
+        if policy:
+            for lang in scopes:
+                dispatch(lang, "scheduled", subject, micros, pat)
+            api(f"/v2/users/{subject}/reactivate", {})
+            time.sleep((policy["maxWriterTransactionMs"] + 3 * policy["maxClockOffsetMs"]) / 1000 + 1)
+            for lang in scopes:
+                dispatch(lang, "scheduled", subject, micros, pat, expected_events=1)
         return {"run": run_id, "languages": ["typescript", "go"], "elasticsearch": "8.19.0",
                 "liveProvider": True, "sinkOutageRetainedPending": True, "lostReceiptRecovered": True,
-                "sinkRestartPreservedDocuments": True, "oneDocumentPerProduct": True, "tenantMismatchRejected": True}
+                "sinkRestartPreservedDocuments": True, "oneDocumentPerProduct": True, "tenantMismatchRejected": True, "scheduledCheckpointAdvanced": bool(policy)}
     finally:
         try:
             if elastic is not None:

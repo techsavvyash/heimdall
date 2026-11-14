@@ -21,6 +21,8 @@ func TestLiveIdentitySIEM(t *testing.T) {
 	var c struct {
 		Stage, Issuer, OrganizationID, ProviderToken, Subject, Endpoint, SinkToken string
 		StartMicros                                                                int64
+		Policy                                                                     IdentityCoveragePolicy
+		ExpectedEvents                                                             int
 	}
 	if json.Unmarshal([]byte(raw), &c) != nil {
 		t.Fatal("invalid verification configuration")
@@ -33,7 +35,7 @@ func TestLiveIdentitySIEM(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 	const product, environment = "support", "live-siem-go"
-	if c.Stage == "collect" {
+	if c.Stage == "collect" || c.Stage == "scheduled" {
 		collector, err := NewIdentityCollector(db, IdentityCollectorOptions{
 			IdentityEventReaderOptions: provisioning.IdentityEventReaderOptions{
 				Issuer: c.Issuer, OrganizationID: c.OrganizationID, Token: c.ProviderToken,
@@ -44,6 +46,21 @@ func TestLiveIdentitySIEM(t *testing.T) {
 		})
 		if err != nil {
 			t.Fatal(err)
+		}
+		if c.Stage == "scheduled" {
+			before, err := collector.Checkpoint(ctx)
+			if err != nil || before == nil {
+				t.Fatal("scheduled checkpoint unavailable", err)
+			}
+			coverage, err := DeriveIdentityEventCoverage(c.Policy, time.Now())
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := collector.Collect(ctx, coverage)
+			if err != nil || result.NextMicros <= before.NextMicros || result.Recorded != c.ExpectedEvents {
+				t.Fatal("scheduled checkpoint did not advance with the expected event count", result, err)
+			}
+			return
 		}
 		if result, err := collector.Collect(ctx, IdentityEventCoverage{
 			RetainedFromMicros: c.StartMicros - 1, VisibleBeforeMicros: c.StartMicros + 1,

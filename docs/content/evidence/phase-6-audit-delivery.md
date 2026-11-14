@@ -258,3 +258,28 @@ The helper subtracts the writer duration and three clock offsets from local time
 PostgreSQL run `heimdall-coverage-44e931ce79dc4a9992d9c5493c7e0863` confirmed that the pinned PostgreSQL 17.11 image applies a per-role transaction timeout, terminates an overlong writer, and rolls back its uncommitted event insert. Prepared transactions were disabled. [PostgreSQL transaction timeout](https://www.postgresql.org/docs/17/runtime-config-client.html#GUC-TRANSACTION-TIMEOUT) · [ZITADEL retention settings](https://zitadel.com/docs/self-hosting/manage/usage_control#limit-audit-trails)
 
 Use a positive PostgreSQL transaction timeout for every event writer, reconnect older sessions after configuring the role, and keep prepared transactions disabled. The helper trusts the supplied limits. The PostgreSQL probe qualifies the timeout premise on a disposable node. The current Railway ZITADEL deployment has yet to be qualified for a continuously advancing checkpoint under these limits.
+
+### Advancing the checkpoint on Railway ZITADEL
+
+The verification environment uses a 10-second PostgreSQL transaction timeout for the ZITADEL writer role. Its pinned API deployment was restarted after applying the database setting, and all observed ZITADEL database sessions started after the redeploy. Prepared transactions are disabled. ZITADEL has an explicit unlimited API retention default and the verification database had no instance override. The probe conservatively uses a one-day retention minimum.
+
+The probe samples the database clock around a Railway SSH read and applies a five-second maximum offset as a test policy for the database and API. The database sample checks the plausibility of that policy during this run. It does not certify the API clocks, clock behavior during failover, or future configuration drift.
+
+With `HEIMDALL_TEST_SCHEDULED_IDENTITY=1`, the live SIEM probe extends its existing collector checkpoint using a derived window in each SDK. It then reactivates the mapped ZITADEL user, waits for the configured visibility delay, and checks that the next scheduled scan records exactly one event and advances again. The deployment and database checks run before the probe creates any resources.
+
+```mermaid
+sequenceDiagram
+  participant W as Product scheduler
+  participant S as Heimdall SDK
+  participant Z as Railway ZITADEL
+  participant D as PostgreSQL outbox
+  W->>S: Derive bounds and advance checkpoint
+  S->>D: Commit the covered window
+  W->>Z: Reactivate the mapped test user
+  W->>S: Derive bounds after the visibility delay
+  S->>Z: Read the next covered window
+  Z-->>S: Return reactivation event
+  S->>D: Retain event and advance checkpoint again
+```
+
+Run `6a5ec703-4537-4a11-abe2-25673488fcf7` passed both scheduled advances for both SDKs against Railway ZITADEL deployment `e1a7b573-5ca8-4048-82bb-ba1c235dfa86`. The initial delivery and Elasticsearch restart scenario ran in the same probe. Evidence is in `tests/integration/evidence/scheduled-identity-siem-2026-11-14.json`.

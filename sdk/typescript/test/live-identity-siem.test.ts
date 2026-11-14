@@ -1,6 +1,10 @@
 import { Pool } from "pg";
 import { expect, test } from "vitest";
-import { createAuditDelivery, createIdentityCollector } from "../src/postgres.js";
+import {
+  createAuditDelivery,
+  createIdentityCollector,
+  deriveIdentityEventCoverage,
+} from "../src/postgres.js";
 
 test.skipIf(!process.env.HEIMDALL_TEST_IDENTITY_SIEM)(
   "collects and exports a live identity event",
@@ -10,7 +14,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_IDENTITY_SIEM)(
     const scope = { productId: "ledger", environment: "live-siem-ts" };
     try {
       const signal = AbortSignal.timeout(25000);
-      if (config.stage === "collect") {
+      if (config.stage === "collect" || config.stage === "scheduled") {
         const collector = createIdentityCollector(pool, {
           ...scope,
           issuer: config.issuer,
@@ -21,6 +25,18 @@ test.skipIf(!process.env.HEIMDALL_TEST_IDENTITY_SIEM)(
           startMicros: BigInt(config.startMicros),
           aggregates: [{ type: "user", id: config.subject }],
         });
+        if (config.stage === "scheduled") {
+          const before = await collector.checkpoint(signal);
+          const coverage = deriveIdentityEventCoverage(config.policy);
+          const collected = await collector.collect(coverage, signal);
+          if (
+            !before ||
+            collected.nextMicros <= before.nextMicros ||
+            collected.recorded !== config.expectedEvents
+          )
+            throw new Error("Scheduled checkpoint did not advance with the expected event count");
+          return;
+        }
         const collected = await collector.collect(
           {
             retainedFromMicros: BigInt(config.startMicros) - 1n,
