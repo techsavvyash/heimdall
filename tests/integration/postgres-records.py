@@ -155,6 +155,8 @@ try:
         from live_identity_siem import run as verify_live_identity_siem
         print(json.dumps(verify_live_identity_siem(delivery_env, elastic_start)), flush=True)
     directory_env = dict(runtime_env, HEIMDALL_TEST_DIRECTORY_DB=runtime_dsn + "&options=-c%20role%3Dheimdall_public_runtime")
+    if os.environ.get("HEIMDALL_PROBE_SCIM_WORKER") == "true":
+        run(["node", "tests/integration/scim.mjs"], env=directory_env)
     run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-directory-deactivation.test.ts"], env=directory_env)
     subprocess.run(["go", "test", "-race", "-count=1", "./postgres", "-run", "^TestDirectoryDeactivationPostgres$"],
                    cwd=ROOT / "sdk/go", env=directory_env, check=True)

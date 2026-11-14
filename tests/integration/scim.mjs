@@ -52,6 +52,37 @@ async function checkDirectorySDK(options, subject, state, externalId) {
   assert.equal(go.status, 0);
   observations.push({ sdkDirectoryRead: { state, matched: ["typescript", "go"] } });
 }
+function runLiveWorker(reader, subject, stage) {
+  if (process.env.HEIMDALL_PROBE_SCIM_WORKER !== "true") return;
+  const begin = performance.now();
+  const env = {
+    ...process.env,
+    HEIMDALL_TEST_LIVE_SCIM: JSON.stringify({ ...reader, subject, stage }),
+  };
+  for (const [command, args, cwd] of [
+    [
+      "pnpm",
+      ["--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/live-scim-worker.test.ts"],
+      new URL("../../", import.meta.url),
+    ],
+    [
+      "go",
+      ["test", "-race", "-count=1", "./postgres", "-run", "^TestLiveSCIMWorker$"],
+      new URL("../../sdk/go/", import.meta.url),
+    ],
+  ]) {
+    const result = spawnSync(command, args, { env, cwd, encoding: "utf8", timeout: 45000 });
+    if (result.status !== 0) console.error(command, stage, "live worker failed");
+    assert.equal(result.status, 0, "Live SCIM worker failed");
+  }
+  observations.push({
+    liveWorker: {
+      stage,
+      matched: ["typescript", "go"],
+      workerMs: Math.round(performance.now() - begin),
+    },
+  });
+}
 async function request(method, path, body, credential) {
   credential ??=
     (path.startsWith("/scim/") ? scopedTokens.get(path.split("/")[3]) : undefined) ?? pat;
@@ -277,7 +308,9 @@ try {
   }
   const reader = { issuer, organizationId: orgs[0], token: readerToken };
   await checkDirectorySDK(reader, users[0], "active", `employee-${runId}`);
+  runLiveWorker(reader, users[0], "seed");
   let inactiveReadChecked = false;
+  let workerDisabled = false;
   for (const active of [false, false, true, false]) {
     const start = performance.now();
     await ok("PATCH", `${paths[0]}/${users[0]}`, {
@@ -295,6 +328,14 @@ try {
       authoritativeReadMs: readMs,
       mutationAndObservationMs: Math.round(performance.now() - start),
     });
+    if (!active && !workerDisabled) {
+      runLiveWorker(reader, users[0], "inactive");
+      if (process.env.HEIMDALL_PROBE_SCIM_WORKER === "true")
+        assert(performance.now() - start < 60000, "SCIM denial propagation exceeded 60 seconds");
+      workerDisabled = true;
+    } else if (active) {
+      runLiveWorker(reader, users[0], "reactivated");
+    }
     if (useSDK && !inactiveReadChecked && !active) {
       await checkDirectorySDK(reader, users[0], "inactive");
       inactiveReadChecked = true;
@@ -307,6 +348,7 @@ try {
     authoritativeReadMs: await stateWithin(users[0], "deleted", acmeToken),
   });
   await checkDirectorySDK(reader, users[0], "missing");
+  runLiveWorker(reader, users[0], "missing");
   assert.equal((await ok("GET", `${paths[1]}/${users[1]}`)).active, true);
   if (process.env.HEIMDALL_PROBE_EVENTS === "true")
     observations.push({
@@ -342,7 +384,9 @@ console.log(
       limitations: [
         "custom role permits organization user lifecycle across APIs; not SCIM-endpoint-only",
         "single sequential sample; not a latency guarantee",
-        "no SDK workers, sessions or tuple reconciliation tested",
+        process.env.HEIMDALL_PROBE_SCIM_WORKER === "true"
+          ? "session-row fixtures; live browser sessions and OpenFGA reconciliation remain separate"
+          : "no SDK workers, sessions or tuple reconciliation tested",
         "selected user read/write/delete and administrator-grant boundaries tested; not an exhaustive permission audit",
       ],
     },

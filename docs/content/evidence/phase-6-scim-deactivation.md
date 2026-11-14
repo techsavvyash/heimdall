@@ -136,3 +136,25 @@ sequenceDiagram
 Enrollment for a prepared revision uses new operation keys, including when a rule was used previously. Release rechecks active status and directory provenance with ZITADEL. The transaction compares the approved workspace and rule pairs to the exact enrollment set for that revision, verifies the completed managed operations, and removes only the inactive denial that predates preparation. A replay leaves a later denial intact. Sessions revoked during deactivation remain revoked.
 
 PostgreSQL run `heimdall-records-e4b609d8190e4fe2b1357746524a362a` exercised revision-bound enrollment, refusal before confirmation and with an incomplete approval set, retained denial until release, release replay, and rejection after a newer local denial in both SDKs.
+
+## Live SCIM worker verification
+
+Railway ZITADEL run `888542c3-5aa5-4807-9f3f-9a8c84d708f3` used the organization-scoped SCIM credentials and disposable PostgreSQL run `heimdall-records-8fe4a3ef49bd429fb6e90e88e4d9b841`. Both SDKs discovered the active subject through SCIM and re-read authoritative status before applying each lifecycle change. After a live SCIM disable, each worker persisted the identity denial, deleted its product-scoped synthetic session row, and queued an inactive cleanup revision. The other environment’s row survived. The disable request and both worker checks completed within 60 seconds. A later reactivation read preserved the pending cleanup and denial. Deletion superseded the pending reason with a deleted revision.
+
+```mermaid
+sequenceDiagram
+  participant D as Directory client
+  participant Z as Railway ZITADEL
+  participant W as TS and Go workers
+  participant P as Product PostgreSQL
+  D->>Z: Disable the discovered SCIM user
+  W->>Z: Read authoritative user status
+  Z-->>W: Return inactive status
+  W->>P: Commit local denial, session deletion and cleanup intent
+  D->>Z: Reactivate the user
+  W->>P: Preserve denial pending approved cleanup and enrollment
+  D->>Z: Delete the user
+  W->>P: Persist the deleted cleanup revision
+```
+
+Set `HEIMDALL_PROBE_SCIM_WORKER=true` and supply the protected verification credentials when running `tests/integration/postgres-records.py`. The worker probe verifies durable session-row deletion and the identity gate. Live browser session issuance, permission enforcement, and managed cleanup against live OpenFGA remain separate acceptance checks.
