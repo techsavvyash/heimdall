@@ -337,3 +337,21 @@ The SDK exports the event type, aggregate identity, sequence and time. It omits 
 Set `HEIMDALL_PROBE_SIEM_CONFIGURATION_EDIT=1` in the disposable ZITADEL and Elasticsearch probe environment. This mode uses the exact observed historical event window and the same lost-receipt, outage and restart scenario as the user-lifecycle export probe.
 
 Run `bdb8f201-6900-4c92-baf1-9c960d6701d3` used PostgreSQL run `heimdall-records-f05de3201d8742e2bfdf7e460dc378f7`. It changed a disposable provider's name and secret directly, verified the new name by readback, and matched the reported sequence to `org.idp.oidc.changed`. Both SDKs exported one document to their respective tenant destinations, recovered the same event ID after the receipt was lost and Elasticsearch restarted, and verified delivery on attempt three. The receiver rejected a batch addressed to the wrong tenant.
+
+## Correlate a SCIM disable with membership removal
+
+The live probe captures the ZITADEL event sequence for the first SCIM disable and reads the durable local denial and its cleanup revision before either product acknowledges cleanup. It joins the revision-bound idempotency key to the completed membership operation. Each reference SIEM job delivers its tenant's ZITADEL event and the audited completion for that exact operation.
+
+```mermaid
+flowchart LR
+  Z[ZITADEL SCIM disable event] -->|Issuer and subject| D[Durable local denial]
+  D -->|Cleanup revision and workspace| O[Managed membership operation]
+  Z --> C[Tenant identity collector]
+  O --> A[Product audit outbox]
+  C --> A
+  A --> E[Tenant Elasticsearch index]
+```
+
+Use `HEIMDALL_PROBE_SCIM_SIEM=1`, `HEIMDALL_PROBE_SCIM_BROWSER=1` and `HEIMDALL_PROBE_REFERENCE_PRODUCTS=1` with the disposable PostgreSQL and Elasticsearch runner. The local denial is evidence from PostgreSQL. Its revision correlates with the audited membership operation through the operation journal. Elasticsearch receives the provider event and membership audit, while investigation of the local denial requires access to its product's lifecycle records. This probe uses the verification Events API credential and disposes of its source organization after collection.
+
+Run `067c4592-ee93-4366-884f-bb8d6d0cd948` used disposable PostgreSQL run `heimdall-records-e31c7d09adeb486ebd84ebcc658fcf32`. Both jobs delivered 25 documents to their own tenant index. The indexed sequence matched the first provider disable, and the operation ID matched the exact cleanup revision and subject in PostgreSQL. For each product, the provider event preceded the observed durable denial, which preceded the audited completion.

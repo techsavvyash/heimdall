@@ -99,6 +99,7 @@ type LiveSCIMFixture = {
   workspaceId: string;
   approvedRole: string;
   revision: string;
+  auditSinks?: string[];
 };
 
 async function rejectStaleReactivation(
@@ -151,7 +152,7 @@ async function verifyLiveSCIMReactivation(
     token,
     productId: "ledger",
     environment: "verification",
-    auditSinks: [],
+    auditSinks: fixture.auditSinks ?? [],
   };
   console.info("SCIM_STEP runtime");
   const storage = createManagedPostgresStorage(pool, scope);

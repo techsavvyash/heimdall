@@ -22,6 +22,7 @@ type liveSCIMConfiguration struct {
 	Subject, Stage, Revision, WorkspaceID, ApprovedRole string
 	ClientSecret, OpenFGAKey, OperatorToken             string
 	Config, Manifest                                    json.RawMessage
+	AuditSinks                                          []string
 }
 
 func TestLiveSCIMWorker(t *testing.T) {
@@ -173,7 +174,7 @@ func verifyLiveSCIMReactivation(t *testing.T, ctx context.Context, db *sql.DB, c
 	t.Helper()
 	const product, environment = "support", "verification"
 	fmt.Println("SCIM_STEP runtime")
-	storage, err := NewManagedStorage(db, StorageOptions{ProductID: product, Environment: environment})
+	storage, err := NewManagedStorage(db, StorageOptions{ProductID: product, Environment: environment, AuditSinks: c.AuditSinks})
 	if err != nil {
 		t.Fatal("SCIM_STEP storage-error", err)
 	}

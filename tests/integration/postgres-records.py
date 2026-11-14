@@ -152,7 +152,8 @@ try:
                 raise RuntimeError(language + " identity collector COMMIT fault was not verified")
     print(json.dumps({"run": name, "identityCollectorCommitLossAndDelivery": ["typescript", "go"], "result": "passed"}), flush=True)
     elastic_start = os.environ.get("HEIMDALL_TEST_ELASTICSEARCH_START")
-    if elastic_start and os.environ.get("HEIMDALL_PROBE_PRODUCT_SIEM") != "1":
+    scim_siem = os.environ.get("HEIMDALL_PROBE_SCIM_SIEM") == "1"
+    if elastic_start and not scim_siem and os.environ.get("HEIMDALL_PROBE_PRODUCT_SIEM") != "1":
         from live_identity_siem import run as verify_live_identity_siem
         if os.environ.get("HEIMDALL_TEST_SCHEDULED_IDENTITY") == "1":
             import tempfile
@@ -201,12 +202,35 @@ try:
             reference_env = dict(env, HEIMDALL_PROBE_SDK_RUNTIME="1",
                                  HEIMDALL_REFERENCE_DATABASE_URL=runtime_dsn,
                                  HEIMDALL_REFERENCE_SUPPORT_BINARY=binary)
-            reference = subprocess.run(["node", "tests/integration/oidc.mjs"], cwd=ROOT, env=reference_env,
+            org_file = Path(temp) / "scim-organization"
+            if scim_siem:
+                assert elastic_start and os.environ.get("HEIMDALL_PROBE_SCIM_BROWSER") == "1"
+                reference_env["HEIMDALL_SCIM_SIEM_ORGANIZATION_FILE"] = str(org_file)
+            try:
+                reference = subprocess.run(["node", "tests/integration/oidc.mjs"], cwd=ROOT, env=reference_env,
                                        capture_output=True, text=True, timeout=240)
-            if reference.returncode != 0:
-                import re
-                diagnostics = re.findall(r"(?:AssertionError \[ERR_ASSERTION\]:[^\n]+|reference-products\.mjs:\d+:\d+|OIDC probe run: [a-f0-9-]+)", reference.stderr)
-                raise RuntimeError("Reference product verification failed: " + " | ".join(diagnostics)[:1000])
+                if reference.returncode != 0:
+                    import re
+                    diagnostics = re.findall(r"(?:AssertionError \[ERR_ASSERTION\]:[^\n]+|reference-products\.mjs:\d+:\d+|OIDC probe run: [a-f0-9-]+)", reference.stderr)
+                    raise RuntimeError("Reference product verification failed: " + " | ".join(diagnostics)[:1000])
+                if scim_siem:
+                    from live_identity_siem import run as verify_live_identity_siem
+                    live = json.loads(reference.stdout)["observations"]
+                    event, = [item["scimProviderEvent"] for item in live if "scimProviderEvent" in item]
+                    assert event["organizationId"] == org_file.read_text()
+                    result = verify_live_identity_siem(
+                        dict(delivery_env, HEIMDALL_REFERENCE_SUPPORT_BINARY=binary),
+                        elastic_start, [item for item in live if "scimBrowser" in item], scim_event=event,
+                    )
+                    print(json.dumps({"scimSIEM": result}), flush=True)
+            finally:
+                if org_file.exists():
+                    from live_identity_siem import ISSUER, request
+                    org = org_file.read_text()
+                    assert org.isascii() and org.isdecimal()
+                    status, _ = request(ISSUER, "/v2/organizations/" + org,
+                                        "Bearer " + os.environ["HEIMDALL_PROBE_ZITADEL_PAT"], method="DELETE")
+                    assert 200 <= status < 300, "Disposable organization cleanup failed"
             observations = json.loads(reference.stdout)["observations"]
             products = [result for result in observations if "scopedRead" in result]
             if len(products) != 2:
@@ -244,6 +268,7 @@ try:
                             }
                     proof["auditedRemovalAndGrants"] = True
                     del proof["workspaceId"]
+                    proof.pop("trace", None)
             elif os.environ.get("HEIMDALL_PROBE_PRODUCT_SIEM") != "1":
                 run(["python3", "tests/integration/reference-onboarding-audit.py"],
                     input=json.dumps({"products": products, "payloads": audit_rows}), text=True)

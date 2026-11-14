@@ -68,7 +68,7 @@ def verification_policy():
     return {"maxWriterTransactionMs": 10000, "maxClockOffsetMs": 5000, "minimumRetentionMs": 86400000}
 
 
-def run(delivery_env, elastic_start, products=None):
+def run(delivery_env, elastic_start, products=None, scim_event=None):
     run_id = str(uuid4())
     admin = "Bearer " + os.environ["HEIMDALL_PROBE_ZITADEL_PAT"]
     elastic_auth = "Basic " + base64.b64encode(os.environ["HEIMDALL_TEST_ELASTICSEARCH_CREDENTIALS"].encode()).decode()
@@ -85,7 +85,7 @@ def run(delivery_env, elastic_start, products=None):
     configuration_edit = os.environ.get("HEIMDALL_PROBE_SIEM_CONFIGURATION_EDIT") == "1"
     aggregate_type = "user"
     job_binary = delivery_env.get("HEIMDALL_REFERENCE_SUPPORT_BINARY")
-    policy = verification_policy() if os.environ.get("HEIMDALL_TEST_SCHEDULED_IDENTITY") == "1" else None
+    policy = verification_policy() if scim_event or os.environ.get("HEIMDALL_TEST_SCHEDULED_IDENTITY") == "1" else None
 
     def api(path, body=None, method=None, auth=admin):
         status, result = request(ISSUER, path, auth, body, method)
@@ -157,7 +157,7 @@ def run(delivery_env, elastic_start, products=None):
                     })
                     assert status == 403, "Tenant-scoped receiver accepted an unrelated event"
                     statuses.clear()
-                if stage in ("product", "scheduled") and job_binary:
+                if stage in ("product", "scheduled", "scim") and job_binary:
                     command = ["pnpm", "--filter", "@heimdall/ledger", "audit:run"] if lang == "ts" else [job_binary, "audit-job"]
                     job_env = dict(
                         delivery_env,
@@ -167,7 +167,7 @@ def run(delivery_env, elastic_start, products=None):
                         HEIMDALL_AUDIT_TOKEN=token,
                         HEIMDALL_AUDIT_TRANSPORT_PROFILE="loopback",
                     )
-                    if stage == "scheduled":
+                    if stage in ("scheduled", "scim"):
                         job_env.update(
                             HEIMDALL_AUDIT_TENANT=tenant,
                             HEIMDALL_IDENTITY_READER_TOKEN=pat,
@@ -187,6 +187,9 @@ def run(delivery_env, elastic_start, products=None):
                             assert int(collected["nextMicros"]) > start_micros
                             assert summary["delivered"] == expected_events
                             break
+                        if stage == "scim":
+                            job_env.pop("HEIMDALL_IDENTITY_MAPPING", None)
+                            job_env.pop("HEIMDALL_IDENTITY_READER_TOKEN", None)
                         if summary["attempted"] == 0:
                             break
                     else:
@@ -200,7 +203,7 @@ def run(delivery_env, elastic_start, products=None):
             finally:
                 server.shutdown()
                 serving.result(timeout=10)
-        if stage == "product":
+        if stage in ("product", "scim"):
             assert statuses and set(statuses) == {200}
         else:
             expected_status = {"outage": [503], "collect": [200], "retry": [200],
@@ -216,6 +219,52 @@ def run(delivery_env, elastic_start, products=None):
         else:
             raise RuntimeError("Elasticsearch verification port is already occupied")
         cluster = start()
+        if scim_event:
+            org = scim_event["organizationId"]
+            subject = scim_event["subject"]
+            date = datetime.fromisoformat(scim_event["creationDate"].replace("Z", "+00:00"))
+            delta = date - datetime(1970, 1, 1, tzinfo=timezone.utc)
+            micros = (delta.days * 86400 + delta.seconds) * 1000000 + delta.microseconds
+            checks = {}
+            for lang, (product, _, _) in list(scopes.items()):
+                fixture = next(item["scimBrowser"] for item in products if item["product"] == product)
+                workspace = fixture["workspaceId"]
+                trace = fixture["trace"]
+                assert trace["subject"] == subject
+                scopes[lang] = (product, "verification", workspace)
+                index = indexes[lang]
+                es("/" + index, {"settings": {"index.translog.durability": "request", "number_of_replicas": 0}}, "PUT")
+                created.append(index)
+                dispatch(lang, "scim", subject, micros, os.environ["HEIMDALL_PROBE_ZITADEL_PAT"])
+                es(f"/{index}/_refresh", method="POST")
+                hits = es(f"/{index}/_search", {"size": 1000, "track_total_hits": True})["hits"]
+                events = [hit["_source"] for hit in hits["hits"]]
+                assert len(events) == hits["total"]["value"]
+                assert all(event["productId"] == product and event["tenantId"] == workspace for event in events)
+                provider, = [event for event in events if event["source"] == "zitadel"
+                             and event["action"] == "user.deactivated" and event["target"]["id"] == subject
+                             and event["attributes"]["sequence"] == scim_event["sequence"]]
+                # Join the SDK's revision-bound idempotency key to the recorded managed operation.
+                binding = ["heimdall.idempotency.v1", product, "verification", "remove_member",
+                           trace["actor"], f"directory-cleanup:{trace['revision']}:{workspace}"]
+                digest = hashlib.sha256(json.dumps(binding, ensure_ascii=True, separators=(",", ":")).encode()).hexdigest()
+                target = "user:" + base64.urlsafe_b64encode(
+                    json.dumps([ISSUER, subject], separators=(",", ":")).encode()).decode().rstrip("=")
+                target_hash = hashlib.sha256(target.encode()).hexdigest()
+                operation = subprocess.check_output([
+                    "psql", delivery_env["HEIMDALL_TEST_DATABASE_URL"], "-XAt", "-v", "ON_ERROR_STOP=1", "-c",
+                    f"SELECT operation_id FROM heimdall_managed.operations WHERE product_id='{product}' "
+                    "AND environment='verification' AND kind='remove_member' AND state='completed' "
+                    f"AND key_digest=decode('{digest}','hex') AND target_hash=decode('{target_hash}','hex')",
+                ], text=True).strip()
+                assert operation
+                removed, = [event for event in events if event.get("operationId") == operation
+                            and event["action"] == "remove_member.complete" and event["outcome"] == "succeeded"]
+                assert provider["occurredAt"] <= int(trace["denialAt"]) <= removed["occurredAt"]
+                checks[product] = {"providerEvent": True, "durableDenialRevision": True,
+                                   "revisionBoundRemoval": True, "tenantScopedDocuments": len(events)}
+            # The reference probe retains the disposable source only until the collectors run.
+            return {"run": run_id, "elasticsearch": "8.19.0", "products": checks}
         if products is not None:
             checks = {}
             for lang, (product, _, _) in list(scopes.items()):
@@ -401,5 +450,5 @@ def run(delivery_env, elastic_start, products=None):
                 if granted:
                     api(permission + "DeleteAdministrator", admin_scope)
             finally:
-                if org:
+                if org and not scim_event:
                     api("/v2/organizations/" + org, method="DELETE")

@@ -62,6 +62,7 @@ export function coordinateSCIMDisable(directory, scheduled) {
             });
             await support.confirmCleanup();
           }
+          await directory.captureFirstDisable?.();
           await directory.setActive(true);
           completed.resolve();
         } catch (error) {
@@ -758,6 +759,7 @@ export async function verifyReferenceProduct(input, authorize) {
               operatorToken: exportToken,
               clientSecret,
               openfgaKey: variables.HEIMDALL_OPENFGA_KEY,
+              ...(trace ? { auditSinks: ["siem"] } : {}),
             }),
           },
           encoding: "utf8",
@@ -777,7 +779,8 @@ export async function verifyReferenceProduct(input, authorize) {
         assert(revision, "Live SCIM worker did not report a revision");
         return revision;
       };
-      let deniedInMs, scheduledCleanupInMs, revision, failedRevision, scheduledJob;
+      const trace = process.env.HEIMDALL_PROBE_SCIM_SIEM === "1";
+      let deniedInMs, scheduledCleanupInMs, revision, failedRevision, scheduledJob, denialAt;
       const assertStillDeniedWithGrants = async () => {
         await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 401);
         assert.deepEqual(await readRelations(), originalTuples);
@@ -819,6 +822,15 @@ export async function verifyReferenceProduct(input, authorize) {
         async observeDisable(started) {
           runWorker("browser");
           await assertStillDeniedWithGrants();
+          if (trace) {
+            denialAt = await executeSQL(`
+              SELECT d.observed_at FROM heimdall_directory.deactivations d
+              JOIN heimdall.identity_denials n USING (product_id, environment, identity_hash)
+              WHERE d.product_id='${schema}' AND d.environment='verification'
+              AND d.subject='${recipient}' AND d.reason='inactive' AND n.reason='inactive' AND NOT d.completed
+            `);
+            assert.match(denialAt, /^[0-9]+$/);
+          }
           deniedInMs = Math.round(performance.now() - started);
           assert(deniedInMs < 60000);
         },
@@ -902,6 +914,7 @@ export async function verifyReferenceProduct(input, authorize) {
           freshCookieOtherWorkspace: 403,
           staleReactivationRejected: true,
           secondCleanupConfirmed: true,
+          ...(trace ? { trace: { revision, denialAt, actor: principal, subject: recipient } } : {}),
         },
       };
     }

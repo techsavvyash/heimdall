@@ -1,6 +1,6 @@
 import { coordinateSCIMDisable, verifyReferenceProduct } from "./reference-products.mjs";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import {
@@ -335,6 +335,8 @@ try {
   const org = await ok("POST", "/v2/organizations", { name: `heimdall-oidc-${runId}` });
   orgId = org.organizationId;
   assert(orgId);
+  const cleanupFile = process.env.HEIMDALL_SCIM_SIEM_ORGANIZATION_FILE;
+  if (cleanupFile) writeFileSync(cleanupFile, orgId, { mode: 0o600, flag: "wx" });
   const password = `Aa1!${randomBytes(24).toString("hex")}`;
   const user = await ok("POST", "/v2/users/new", {
     organizationId: orgId,
@@ -427,6 +429,31 @@ try {
       issuer,
       organizationId: orgId,
       token,
+      ...(process.env.HEIMDALL_PROBE_SCIM_SIEM === "1"
+        ? {
+            async captureFirstDisable() {
+              const { events } = await ok("POST", "/admin/v1/events/_search", {
+                resourceOwner: orgId,
+                aggregateId: recipient.id,
+                asc: true,
+                limit: 100,
+              });
+              const disabled = events.filter((event) => event.type.type === "user.deactivated");
+              assert.equal(disabled.length, 1);
+              const event = disabled[0];
+              assert.equal(event.aggregate.resourceOwner, orgId);
+              assert.equal(event.aggregate.id, recipient.id);
+              observations.push({
+                scimProviderEvent: {
+                  organizationId: orgId,
+                  subject: recipient.id,
+                  creationDate: event.creationDate,
+                  sequence: String(event.sequence),
+                },
+              });
+            },
+          }
+        : {}),
       async setActive(active) {
         await ok(
           "PATCH",
@@ -1007,7 +1034,8 @@ try {
   const cleanup = await Promise.allSettled(
     sessions.map((sessionId) => ok("DELETE", `/v2/sessions/${sessionId}`, undefined, loginPat)),
   );
-  if (orgId && !railwayReference) await ok("DELETE", `/v2/organizations/${orgId}`);
+  if (orgId && !railwayReference && !process.env.HEIMDALL_SCIM_SIEM_ORGANIZATION_FILE)
+    await ok("DELETE", `/v2/organizations/${orgId}`);
   assert(
     cleanup.every((r) => r.status === "fulfilled"),
     `Session cleanup failed for run ${runId}`,
