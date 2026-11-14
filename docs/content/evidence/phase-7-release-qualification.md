@@ -2,7 +2,7 @@
 title: Phase 7 release qualification
 ---
 
-Release qualification is in progress. The enterprise gate is recorded in [[phase-6-acceptance]]. This page tracks what the release checks establish for both SDKs.
+Heimdall 0.1.0 is available in the [paired GitHub release](https://github.com/techsavvyash/heimdall/releases/tag/sdk/go/v0.1.0). The enterprise gate is recorded in [[phase-6-acceptance]]. This page tracks what the release checks establish for both SDKs.
 
 | Gate | Verified evidence and outstanding checks |
 | --- | --- |
@@ -34,6 +34,12 @@ go get github.com/techsavvyash/heimdall/sdk/go@v0.1.0
 ```
 
 In TypeScript, import the runtime from `@techsavvyash/heimdall-sdk`, the PostgreSQL adapters from `@techsavvyash/heimdall-sdk/postgres`, and provisioning from `@techsavvyash/heimdall-sdk/provisioning`. Keep the downloaded tarball next to the project if its manifest refers to it with a file dependency.
+
+The [stable tag build](https://github.com/techsavvyash/heimdall/actions/runs/43582400136) passed at `dea5f11`. The archive downloaded from the release verified as SHA-256 `19aade67b94d1e84b1582e92274bf01d978a736e3471e2536a1930a5f9df73f5`. Both the public archive and Go module passed clean consumer checks.
+
+Run `heimdall-records-a5fb309d7c3e406cabbc6b1ba34910a0` installed the release archive and tagged Go module in independent reference consumers. Both passed setup replay, browser sessions, onboarding reconciliation, role enforcement, and audit outage denial. Each matched 48 authorization requests to terminal receipts and passed the `0.1.0` audit version check.
+
+Railway run `8adbdf56-5731-495d-8c32-908b20e1f7e3` verified the tagged source in Ledger deployment `565015f8-8d00-4416-8e7f-a6f4428b55ee` and Support deployment `68a1d678-3a75-406c-b1dd-7e04378c2105`. Both passed tenant federation switching, tested provider activation and replayed strict-workspace cleanup. The release record is `tests/integration/evidence/phase-7-github-release-2026-11-14.json`.
 
 ### Stable build rehearsal
 

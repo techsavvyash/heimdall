@@ -29,7 +29,7 @@ Audit persistence is built before authorization results can be released; enterpr
 
 ## Current phase
 
-**Phases 1 through 6 are complete. Phase 7 covers release qualification.**
+**Phases 1 through 7 are complete.** The paired 0.1.0 SDKs are available on [GitHub Releases](https://github.com/techsavvyash/heimdall/releases/tag/sdk/go/v0.1.0).
 
 [[evidence/phase-7-release-qualification|Phase 7 evidence]] tracks the release checks for both SDKs.
 
