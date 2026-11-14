@@ -1014,6 +1014,7 @@ func TestPublicManagedOnboarding(t *testing.T) {
 	var mutation struct {
 		Target                         string
 		InitialRoles, ReplacementRoles []string
+		UnknownRole                    string
 		ConfirmedWrites                int64
 		RecoveryCases                  []struct {
 			Kind, Fault  string
@@ -1032,6 +1033,14 @@ func TestPublicManagedOnboarding(t *testing.T) {
 	added, err := members.Add(ctx, actor, add)
 	if err != nil || added.Status != "confirmed" {
 		t.Fatal("add", added, err)
+	}
+	afterAdd := h.writes.Load()
+	unknown := heimdall.MembershipRolesInput{
+		MembershipInput: heimdall.MembershipInput{Target: target, IdempotencyKey: "unconfigured-role"},
+		Roles:           []string{mutation.UnknownRole},
+	}
+	if _, err := members.AssignRoles(ctx, actor, unknown); !errors.Is(err, heimdall.ErrInvalidArgument) || h.writes.Load() != afterAdd {
+		t.Fatal("unconfigured role changed membership", err)
 	}
 	if again, err := members.Add(ctx, actor, add); err != nil || again != added {
 		t.Fatal("replay", again, err)

@@ -816,6 +816,15 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
         call,
       );
       expect(added.status).toBe("confirmed");
+      const afterAdd = s.fga.writes;
+      await expect(
+        changes.assignRoles(
+          actor,
+          { target, roles: [fixtureMembership.unknownRole], idempotencyKey: "unconfigured-role" },
+          call,
+        ),
+      ).rejects.toMatchObject({ code: "invalid_argument" });
+      expect(s.fga.writes).toBe(afterAdd);
       expect(
         await changes.add(
           actor,

@@ -2,6 +2,7 @@
   "target": "member-to-administer",
   "initialRoles": ["viewer"],
   "replacementRoles": ["approver"],
+  "unknownRole": "unconfigured_role",
   "confirmedWrites": 3,
   "recoveryCases": [
     {
