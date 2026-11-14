@@ -51,3 +51,7 @@ sequenceDiagram
 ```
 
 Run `tests/integration/postgres-records.py` with `HEIMDALL_PROBE_REFERENCE_PRODUCTS=1`, `HEIMDALL_PROBE_SCIM_BROWSER=1` and `HEIMDALL_PROBE_DIRECTORY_JOB=1` plus the protected verification credentials. This probe uses a small disposable directory and real product sessions. It takes the Support denial sample after the freshness window, so the sample is an upper bound on when the original cookie became unusable under these test conditions.
+
+## Deployment verification
+
+Source commit `5d463cd` passed the workspace gate and both GitHub workspace checks. Railway reference deployments `b9bc2bc3-9dac-4124-bb68-68c0b3c39c70` for Ledger and `5493fd9a-ba25-47df-ae9b-f5544a310995` for Support passed live SAML-to-OIDC workspace switching after the product and job began sharing the same policy configuration. The SCIM job probe ran as separate local processes against the pinned Railway identity and authorization services. Railway docs deployment `0ed0869a-01de-4ed8-af47-e1db9bb203f9` served the guide, and Chromium rendered the sequence diagram.
