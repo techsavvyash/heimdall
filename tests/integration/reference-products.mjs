@@ -98,6 +98,7 @@ export async function verifyReferenceProduct(input, authorize) {
   const port = ledger ? 18640 : 18641;
   const remote = process.env.HEIMDALL_REFERENCE_RAILWAY === "1";
   const existing = process.env.HEIMDALL_PROBE_EXISTING_WORKSPACES === "1";
+  const measure = process.env.HEIMDALL_PROBE_ADAPTER_COST === "1";
   const endpoint = remote
     ? new URL(manifest.clients.web.redirectUris[0]).origin
     : `http://127.0.0.1:${port}`;
@@ -106,6 +107,7 @@ export async function verifyReferenceProduct(input, authorize) {
   const origin = new URL(callback).origin;
   const db = process.env.HEIMDALL_REFERENCE_DATABASE_URL;
   assert(db || remote);
+  assert(!measure || (!remote && !existing && !scim && !federation && !restoreIdentity));
   assert(
     !existing || (!remote && !scim && !federation && !grantNamedMembership && !restoreIdentity),
   );
@@ -765,7 +767,33 @@ export async function verifyReferenceProduct(input, authorize) {
     }
     const cookie = await signIn();
     const headers = { cookie };
-    const page = await request("/workspaces", { headers });
+    const snapshot = async () =>
+      JSON.parse(
+        await executeSQL(`SELECT json_build_object(
+        'reads', coalesce(sum(calls) FILTER (WHERE query ~* '^\\s*SELECT'),0),
+        'scans', coalesce(sum(calls) FILTER (WHERE query ILIKE '%FROM heimdall_managed.membership_candidates c JOIN%'),0))
+        FROM pg_stat_statements WHERE toplevel AND dbid=(SELECT oid FROM pg_database WHERE datname=current_database())
+        AND query !~* 'pg_stat_statements';`),
+      );
+    const adapterCost = {};
+    const measured = async (name, operation) => {
+      if (!measure) return operation();
+      const before = await snapshot();
+      const begin = performance.now();
+      const response = await operation();
+      const milliseconds = Math.round(performance.now() - begin);
+      const after = await snapshot();
+      adapterCost[name] = {
+        milliseconds,
+        primarySelects: after.reads - before.reads,
+        candidateScanStatements: after.scans - before.scans,
+      };
+      assert(adapterCost[name].primarySelects > 0);
+      return response;
+    };
+    const page = await measured("discoveryTwoCandidates", () =>
+      request("/workspaces", { headers }),
+    );
     assert.equal(page.status, 200);
     assert.deepEqual((await page.json()).items, [{ id: "acme", name: "Acme" }]);
     for (const [workspace, roles] of [
@@ -777,7 +805,9 @@ export async function verifyReferenceProduct(input, authorize) {
       assert.deepEqual(await response.json(), { roles });
     }
     const collection = ledger ? "invoices" : "tickets";
-    const allowed = await request(`/workspaces/acme/${collection}`, { headers });
+    const allowed = await measured("scopedRead", () =>
+      request(`/workspaces/acme/${collection}`, { headers }),
+    );
     const readFailure = allowed.ok ? "" : (await allowed.json().catch(() => ({}))).code;
     assert.equal(allowed.status, 200, `Reference ${schema} scoped read failed: ${readFailure}`);
     assert.deepEqual(
@@ -789,6 +819,39 @@ export async function verifyReferenceProduct(input, authorize) {
     const denied = await request(`/workspaces/globex/${collection}`, { headers });
     assert.equal(denied.status, 403);
     await denied.body?.cancel();
+    if (measure) {
+      const sparseIds = "workspace_id LIKE 'measurement-%'";
+      await executeSQL(`BEGIN;
+        INSERT INTO heimdall_managed.workspaces
+          (product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at)
+        SELECT '${schema}','verification','measurement-'||i,'Measurement','active',false,1,1
+          FROM generate_series(1,20) i;
+        INSERT INTO heimdall_managed.membership_candidates
+          (product_id,environment,workspace_id,identity_hash,principal,observed_at)
+        SELECT '${schema}','verification',workspace_id,sha256(convert_to('${principal}','UTF8')),'${principal}',1
+          FROM heimdall_managed.workspaces WHERE product_id='${schema}' AND environment='verification' AND ${sparseIds};
+        COMMIT;`);
+      try {
+        const sparse = await measured("discoveryTwentyTwoCandidates", () =>
+          request("/workspaces", { headers }),
+        );
+        assert.equal(
+          sparse.status,
+          200,
+          "Sparse discovery: " + (sparse.ok ? "" : (await sparse.json()).code),
+        );
+        assert.deepEqual((await sparse.json()).items, [{ id: "acme", name: "Acme" }]);
+        assert(
+          adapterCost.discoveryTwentyTwoCandidates.candidateScanStatements >
+            adapterCost.discoveryTwoCandidates.candidateScanStatements,
+        );
+      } finally {
+        await executeSQL(`BEGIN;
+          DELETE FROM heimdall_managed.membership_candidates WHERE product_id='${schema}' AND environment='verification' AND ${sparseIds};
+          DELETE FROM heimdall_managed.workspaces WHERE product_id='${schema}' AND environment='verification' AND ${sparseIds};
+          COMMIT;`);
+      }
+    }
     if (existing) {
       assert((await readMemberRelations(user, "closed")).includes("member"));
       const inactive = await request(`/workspaces/closed/${collection}`, { headers });
@@ -898,7 +961,7 @@ export async function verifyReferenceProduct(input, authorize) {
         method: "POST",
         headers: { cookie: session, origin: source },
       });
-    const created = await request("/workspaces", mutation);
+    const created = await measured("createWorkspace", () => request("/workspaces", mutation));
     assert.equal(created.status, 200, `Reference ${schema} create returned ${created.status}`);
     const workspace = await created.json();
     assert.equal(workspace.status, "active");
@@ -1072,10 +1135,28 @@ export async function verifyReferenceProduct(input, authorize) {
           : `INSERT INTO support.tickets(workspace_id,ticket_id,summary) VALUES ('${workspace.workspaceId}','release-resource','Release resource');`,
       );
     }
-    const added = await add();
+    const gateScope = `product_id='${schema}' AND environment='verification' AND workspace_id='${workspace.workspaceId}'`;
+    const gateCount = measure
+      ? Number(
+          await executeSQL(`SELECT count(*) FROM public.probe_workspace_gates WHERE ${gateScope};`),
+        )
+      : 0;
+    const added = await measured("addMember", add);
     assert.equal(added.status, 200, `Reference ${schema} member add returned ${added.status}`);
     const grant = await added.json();
     assert.equal(grant.status, "confirmed");
+    if (measure) {
+      const durations = JSON.parse(
+        await executeSQL(`SELECT json_agg(ms) FROM (
+        SELECT extract(epoch FROM at - lag(at) OVER (ORDER BY at)) * 1000 AS ms, blocked
+        FROM (SELECT at, blocked FROM public.probe_workspace_gates WHERE ${gateScope}
+          ORDER BY at OFFSET ${gateCount}) new_transitions
+      ) transitions WHERE NOT blocked AND ms IS NOT NULL;`),
+      );
+      assert.equal(durations.length, 1);
+      adapterCost.addMember.gateTransitionMilliseconds = Math.round(durations[0]);
+      assert(adapterCost.addMember.gateTransitionMilliseconds >= 0);
+    }
     let candidateCookie, originalAudit;
     const auditDigest = (operationId) => {
       assert.match(operationId, /^[A-Za-z0-9_-]{1,128}$/);
@@ -1802,13 +1883,14 @@ export async function verifyReferenceProduct(input, authorize) {
       UPDATE heimdall_managed.workspaces SET lifecycle='pending',mutation_blocked=true
         WHERE product_id='${schema}' AND environment='verification' AND workspace_id='${workspace.workspaceId}';
       COMMIT;`);
+    const gateObservedAt = performance.now();
     if (businessWrite) {
       await expectDenied(
         await writeResource(workspace.workspaceId, "release-resource", recipientCookie),
         403,
       );
     }
-    const swept = await reconcile(cookie);
+    const swept = await measured("reconcileConfirmed", () => reconcile(cookie));
     assert.equal(swept.status, 200);
     const summary = await swept.json();
     assert(
@@ -1818,6 +1900,10 @@ export async function verifyReferenceProduct(input, authorize) {
       ),
     );
     await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 200);
+    if (measure)
+      adapterCost.fromPendingCommitObservationToAllowedReadMs = Math.round(
+        performance.now() - gateObservedAt,
+      );
     const sweptAgain = await reconcile(cookie);
     assert.equal(sweptAgain.status, 200);
     assert(
@@ -1945,6 +2031,7 @@ export async function verifyReferenceProduct(input, authorize) {
       discovery: "Acme",
       roles: { acme: [manifest.ownerRole], globex: [] },
       scopedRead: 200,
+      ...(measure ? { adapterCost } : {}),
       ...(mixedPersistence ? { mixedPersistence } : {}),
       ...(revocationRace ? { revocationRace } : {}),
       ...(businessWrite

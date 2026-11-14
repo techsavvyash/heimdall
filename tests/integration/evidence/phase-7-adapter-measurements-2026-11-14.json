@@ -1,0 +1,74 @@
+{
+  "storageRun": "heimdall-records-1dc9a847f22348dbb47ad25e5a621ecb",
+  "oidcRun": "02234b98-344c-421a-bd87-b2b4460bce8f",
+  "products": {
+    "ledger": {
+      "discoveryTwoCandidates": {
+        "milliseconds": 612,
+        "primarySelects": 106,
+        "candidateScanStatements": 1
+      },
+      "scopedRead": {
+        "milliseconds": 488,
+        "primarySelects": 57,
+        "candidateScanStatements": 0
+      },
+      "discoveryTwentyTwoCandidates": {
+        "milliseconds": 3627,
+        "primarySelects": 708,
+        "candidateScanStatements": 2
+      },
+      "createWorkspace": {
+        "milliseconds": 1312,
+        "primarySelects": 99,
+        "candidateScanStatements": 0
+      },
+      "addMember": {
+        "milliseconds": 1145,
+        "primarySelects": 99,
+        "candidateScanStatements": 0,
+        "gateTransitionMilliseconds": 332
+      },
+      "reconcileConfirmed": {
+        "milliseconds": 339,
+        "primarySelects": 29,
+        "candidateScanStatements": 0
+      },
+      "fromPendingCommitObservationToAllowedReadMs": 1471
+    },
+    "support": {
+      "discoveryTwoCandidates": {
+        "milliseconds": 596,
+        "primarySelects": 114,
+        "candidateScanStatements": 1
+      },
+      "scopedRead": {
+        "milliseconds": 509,
+        "primarySelects": 62,
+        "candidateScanStatements": 0
+      },
+      "discoveryTwentyTwoCandidates": {
+        "milliseconds": 3925,
+        "primarySelects": 756,
+        "candidateScanStatements": 2
+      },
+      "createWorkspace": {
+        "milliseconds": 1115,
+        "primarySelects": 107,
+        "candidateScanStatements": 0
+      },
+      "addMember": {
+        "milliseconds": 1131,
+        "primarySelects": 107,
+        "candidateScanStatements": 0,
+        "gateTransitionMilliseconds": 288
+      },
+      "reconcileConfirmed": {
+        "milliseconds": 333,
+        "primarySelects": 32,
+        "candidateScanStatements": 0
+      },
+      "fromPendingCommitObservationToAllowedReadMs": 1287
+    }
+  }
+}

@@ -15,12 +15,14 @@ IMAGE = "postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de926
 name = "heimdall-records-" + uuid.uuid4().hex
 password = secrets.token_hex(24)
 env = dict(os.environ, POSTGRES_PASSWORD=password)
+measure = os.environ.get("HEIMDALL_PROBE_ADAPTER_COST") == "1"
 
 def run(args, **kwargs):
     return subprocess.run(args, cwd=ROOT, check=True, **kwargs)
 
 try:
-    run(["docker", "run", "--detach", "--name", name, "-e", "POSTGRES_PASSWORD", "--tmpfs", "/var/lib/postgresql/data:rw,size=256m", "-p", "127.0.0.1::5432", IMAGE], env=env, stdout=subprocess.DEVNULL)
+    postgres_options = ["-c", "shared_preload_libraries=pg_stat_statements"] if measure else []
+    run(["docker", "run", "--detach", "--name", name, "-e", "POSTGRES_PASSWORD", "--tmpfs", "/var/lib/postgresql/data:rw,size=256m", "-p", "127.0.0.1::5432", IMAGE, *postgres_options], env=env, stdout=subprocess.DEVNULL)
     for _ in range(60):
         ready = subprocess.run(["docker", "exec", name, "pg_isready", "-h", "127.0.0.1", "-U", "postgres"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if ready.returncode == 0:
@@ -210,7 +212,28 @@ try:
         application_dsn = runtime_dsn.replace("/public_runtime?", f"/{application_db}?")
         application_env = dict(runtime_env, HEIMDALL_MIGRATION_DATABASE_URL=
                                runtime_env["HEIMDALL_MIGRATION_DATABASE_URL"].replace("/public_runtime?", f"/{application_db}?"))
-        schemas = "\n".join((ROOT / "examples" / name / file).read_text()
+        schemas = "CREATE EXTENSION pg_stat_statements;\n" if measure else ""
+        if measure:
+            schemas += """
+            CREATE TABLE public.probe_workspace_gates (
+                product_id text, environment text, workspace_id text,
+                blocked boolean, at timestamptz
+            );
+            CREATE FUNCTION public.probe_workspace_gate() RETURNS trigger
+            LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+            BEGIN
+                IF OLD.mutation_blocked IS DISTINCT FROM NEW.mutation_blocked THEN
+                    INSERT INTO public.probe_workspace_gates
+                    VALUES (NEW.product_id, NEW.environment, NEW.workspace_id,
+                            NEW.mutation_blocked, clock_timestamp());
+                END IF;
+                RETURN NEW;
+            END;
+            $$;
+            CREATE TRIGGER probe_workspace_gate AFTER UPDATE ON heimdall_managed.workspaces
+            FOR EACH ROW EXECUTE FUNCTION public.probe_workspace_gate();
+            """
+        schemas += "\n".join((ROOT / "examples" / name / file).read_text()
                             for name in ("ledger", "support") for file in ("schema.sql", "invitations.sql"))
         schemas += "\nGRANT USAGE ON SCHEMA ledger,support TO heimdall_public_runtime; GRANT SELECT ON ledger.invoices,support.tickets TO heimdall_public_runtime; GRANT SELECT,INSERT,UPDATE ON ledger.invitations,support.invitations TO heimdall_public_runtime;"
         for product, migration, table, fields in (
@@ -411,6 +434,8 @@ try:
             products = [result for result in observations if "scopedRead" in result]
             if len(products) != 2:
                 raise RuntimeError("missing reference product observations")
+            if measure:
+                assert {item["product"] for item in products if item.get("adapterCost")} == {"ledger", "support"}
             if previous:
                 assert {item["product"] for item in products if item.get("mixedPersistence")} == {"ledger", "support"}
             if revocation_race:
@@ -495,7 +520,7 @@ try:
                     del product["auditActor"]
                     del product["auditRecipient"]
             print(json.dumps({"referenceProducts": products,
-                              **({"storageRun": name, "oidcRun": result["runId"]} if restore or revocation_race or operator or existing else {}),
+                              **({"storageRun": name, "oidcRun": result["runId"]} if restore or revocation_race or operator or existing or measure else {}),
                               **({"operatorSetup": operator_proof, "applicationSchema": "managed-v5"} if operator else {}),
                               **({"isolatedConsumers": consumer_info} if consumer_info else {})}), flush=True)
     if os.environ.get("HEIMDALL_PROBE_DURABLE_RUNTIME") == "1":
