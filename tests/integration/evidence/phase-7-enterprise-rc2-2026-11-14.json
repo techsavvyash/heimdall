@@ -69,5 +69,59 @@
         "tenantScopedDocuments": 25
       }
     }
+  },
+  "scheduledDirectory": {
+    "storageRun": "heimdall-records-3b99d4db89794e248b8cf2f9067ff8b6",
+    "oidcRun": "877b295a-a737-4696-b063-7b4713d1c908",
+    "referenceProducts": [
+      {
+        "product": "ledger",
+        "scopedRead": 200,
+        "scimBrowser": {
+          "deniedInMs": 3540,
+          "disabledSession": 401,
+          "sharedProviderDisable": true,
+          "deniedWithTuplesPresent": false,
+          "cleanupAcknowledged": true,
+          "cleanupReplayConfirmed": true,
+          "scheduledJob": true,
+          "scheduledCleanupInMs": 3540,
+          "missedObservationDenied": false,
+          "removedTuples": ["member", "r_1"],
+          "releasedAfterApprovedEnrollment": true,
+          "approvedRole": "viewer",
+          "originalCookieAfterRelease": 401,
+          "freshCookie": 200,
+          "freshCookieOtherWorkspace": 403,
+          "staleReactivationRejected": true,
+          "secondCleanupConfirmed": true,
+          "auditedRemovalAndGrants": true
+        }
+      },
+      {
+        "product": "support",
+        "scopedRead": 200,
+        "scimBrowser": {
+          "deniedInMs": 61613,
+          "disabledSession": 401,
+          "sharedProviderDisable": true,
+          "deniedWithTuplesPresent": true,
+          "cleanupAcknowledged": true,
+          "cleanupReplayConfirmed": true,
+          "scheduledJob": true,
+          "scheduledCleanupInMs": 64454,
+          "missedObservationDenied": true,
+          "removedTuples": ["member", "r_0"],
+          "releasedAfterApprovedEnrollment": true,
+          "approvedRole": "reader",
+          "originalCookieAfterRelease": 401,
+          "freshCookie": 200,
+          "freshCookieOtherWorkspace": 403,
+          "staleReactivationRejected": true,
+          "secondCleanupConfirmed": true,
+          "auditedRemovalAndGrants": true
+        }
+      }
+    ]
   }
 }
