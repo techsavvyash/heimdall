@@ -308,7 +308,7 @@ export async function verifyReferenceProduct(input, authorize) {
       ? fetch(endpoint + path, {
           ...options,
           redirect: "manual",
-          signal: AbortSignal.timeout(15000),
+          signal: AbortSignal.timeout(25000),
         })
       : new Promise((resolve, reject) => {
           const request = httpRequest(
@@ -550,7 +550,12 @@ export async function verifyReferenceProduct(input, authorize) {
         await post("test", 401, owner, { version });
         await setup.register(candidate);
         const workspacePath = `/workspaces/${workspace}/${collection}`;
-        const verification = await finish(await start(candidate.verificationWorkspaceId));
+        let verification;
+        try {
+          verification = await finish(await start(candidate.verificationWorkspaceId));
+        } catch (error) {
+          throw new Error(`${schema} candidate login failed: ${error.message}`, { cause: error });
+        }
         await expectStatus(workspacePath, 403, verification);
         assert.deepEqual(
           (await (await expectStatus("/workspaces", 200, verification)).json()).items,

@@ -1339,7 +1339,12 @@ try {
         if (message.type === "register-candidate") {
           try {
             assert(/^[0-9]+$/.test(message.providerId));
-            const acs = protocol === "saml" ? await registerSAML(message.providerId) : undefined;
+            let acs;
+            if (protocol === "saml") {
+              // The two product images may build after the initial Keycloak admin token expires.
+              await authenticateFixtureAdmin();
+              acs = await registerSAML(message.providerId);
+            }
             await za("POST", `/v2/users/${user.id}/links`, {
               idpLink: {
                 idpId: message.providerId,
@@ -1357,7 +1362,13 @@ try {
               )
                 ? error.message
                 : (error.code ?? error.name),
-              error.stack?.match(/federation\.mjs:\d+:\d+/)?.[0] ?? "",
+              error.message?.match(
+                /^(GET|POST|PUT) \/[A-Za-z0-9_/?=.-]+: HTTP [0-9]{3}, code [0-9a-z_-]+$/,
+              )?.[0] ?? "",
+              [...(error.stack ?? "").matchAll(/federation\.mjs:\d+:\d+/g)]
+                .slice(0, 3)
+                .map(([frame]) => frame)
+                .join(" "),
             );
             process.send({ type: "failure" });
           }
