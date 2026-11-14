@@ -31,3 +31,7 @@ Run `heimdall-records-7000c045123c458eb73b3b202edc8ed4` used the same artifacts 
 - Migration and rollback require the supported database schema, verified model and role tuple compatibility, and a writer drain where specified. See [[../design/operations|operations]] and [[phase-7-coordinated-restore|restore qualification]].
 - Required audit persistence gates protected work. Uncertain dispatched operations keep their workspace gate in place pending verified quiescence and reconciliation. Recovery with incomplete post-backup history remains part of release qualification.
 - The package version and Git tag identify the artifacts. Runtime audit envelopes in this candidate still use the development version value `0.0.0`. Updating that value requires preserving deterministic retries and historical event digests across versions.
+
+## Audit attribution in rc.2
+
+The second candidate adds build attribution for authentication, authorization, managed operations and export events. Both SDK build constants must match the package version and Go candidate tag. Existing payloads retain their original digest. The compatibility-sensitive paths that reconstruct deterministic event IDs retain the original envelope field. See the [[../design/audit-contract|audit contract]].

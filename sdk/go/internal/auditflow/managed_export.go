@@ -77,7 +77,7 @@ func (a *Authentication) RunManagedExport(
 			"actor":  map[string]any{"kind": "user", "issuer": scope.Actor.Issuer, "subject": scope.Actor.Subject},
 			"target": map[string]any{"type": "managed_export", "id": target},
 			"action": scope.Action, "outcome": "succeeded", "requestId": scope.OperationID, "operationId": scope.OperationID,
-			"policyVersion": scope.PolicyVersion, "source": "sdk", "sdkVersion": "0.0.0", "attributes": map[string]any{},
+			"policyVersion": scope.PolicyVersion, "source": "sdk", "sdkVersion": contract.SDKVersion, "attributes": map[string]any{},
 		}
 		if scope.TenantID != nil {
 			event["tenantId"] = *scope.TenantID

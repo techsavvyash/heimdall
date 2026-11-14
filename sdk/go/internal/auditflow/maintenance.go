@@ -88,7 +88,7 @@ func runMaintenance[T any](
 		"actor":  map[string]any{"kind": "user", "issuer": actor.Issuer, "subject": actor.Subject},
 		"target": map[string]any{"type": targetType, "id": r.TargetEventID},
 		"action": r.Action, "permission": r.Action, "outcome": "requested", "requestId": r.OperationID,
-		"source": "sdk", "sdkVersion": "0.0.0", "attributes": map[string]any{},
+		"source": "sdk", "sdkVersion": contract.SDKVersion, "attributes": map[string]any{},
 		"decisionId": "pending", "operationId": r.OperationID, "modelId": r.ModelID,
 		"manifestVersion": float64(r.ManifestVersion), "policyVersion": a.policy,
 	}

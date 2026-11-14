@@ -510,7 +510,8 @@ try:
                     proof.pop("trace", None)
             elif os.environ.get("HEIMDALL_PROBE_PRODUCT_SIEM") != "1":
                 run(["python3", "tests/integration/reference-onboarding-audit.py"],
-                    input=json.dumps({"products": products, "payloads": audit_rows}), text=True)
+                    input=json.dumps({"products": products, "payloads": audit_rows,
+                                      "sdkVersion": os.environ.get("HEIMDALL_PROBE_EXPECT_AUDIT_SDK_VERSION")}), text=True)
             if os.environ.get("HEIMDALL_PROBE_PRODUCT_SIEM") == "1":
                 from live_identity_siem import run as verify_live_identity_siem
                 assert elastic_start and all("auditActor" in product for product in products)

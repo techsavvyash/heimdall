@@ -6,7 +6,7 @@ import json
 import sys
 
 
-def verify(products, payloads):
+def verify(products, payloads, sdk_version=None):
     events = [json.loads(base64.urlsafe_b64decode(payload + "===")) for payload in payloads]
     assert {item["product"] for item in products} == {"ledger", "support"}
     assert len(products) == 2
@@ -14,8 +14,14 @@ def verify(products, payloads):
         product = item["product"]
         operation = item["onboarding"]
         scoped = [e for e in events if e["productId"] == product and e["environment"] == "verification"]
+        if sdk_version:
+            for event_type in ("heimdall.authentication.completed", "heimdall.authorization.requested",
+                               "heimdall.authorization.completed"):
+                assert {e["sdkVersion"] for e in scoped if e["eventType"] == event_type} == {sdk_version}
         lifecycle = [e for e in scoped if e.get("operationId") == operation["operationId"]]
         assert lifecycle and all(e["tenantId"] == operation["workspaceId"] for e in lifecycle)
+        if sdk_version:
+            assert {e["sdkVersion"] for e in lifecycle} == {sdk_version}
         assert Counter((e["action"], e["outcome"]) for e in lifecycle) == {
             ("workspace.create", "requested"): 1,
             ("create_workspace.dispatch", "attempted"): 1,
@@ -63,6 +69,8 @@ def verify(products, payloads):
                 assert receipt["status"] == "confirmed" and receipt["workspaceId"] == operation["workspaceId"]
                 events_for_step = [e for e in scoped if e.get("operationId") == receipt["operationId"]]
                 assert events_for_step
+                if sdk_version:
+                    assert {e["sdkVersion"] for e in events_for_step} == {sdk_version}
                 initiating_actor = events_for_step[0]["actor"] if step == "regrant" else actor
                 assert (initiating_actor != actor) == (step == "regrant")
                 assert all(e["tenantId"] == operation["workspaceId"] and e["actor"] == initiating_actor
@@ -116,4 +124,4 @@ def verify(products, payloads):
 
 if __name__ == "__main__":
     inputs = json.load(sys.stdin)
-    verify(inputs["products"], inputs["payloads"])
+    verify(inputs["products"], inputs["payloads"], inputs.get("sdkVersion"))

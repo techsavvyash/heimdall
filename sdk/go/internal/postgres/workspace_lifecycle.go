@@ -22,7 +22,7 @@ func (o *OperationRecords) SetWorkspaceLifecycle(ctx context.Context, before *Ma
 		"occurredAt": at, "recordedAt": at, "productId": b.ProductID, "environment": b.Environment, "tenantId": workspaceID,
 		"actor":  map[string]any{"kind": "user", "issuer": actor.Issuer, "subject": actor.Subject},
 		"target": map[string]any{"type": "workspace", "id": workspaceID},
-		"action": action, "outcome": "succeeded", "requestId": m.RequestID, "source": "sdk", "sdkVersion": "0.0.0",
+		"action": action, "outcome": "succeeded", "requestId": m.RequestID, "source": "sdk", "sdkVersion": contract.SDKVersion,
 		"attributes": map[string]any{}, "modelId": b.ModelID, "manifestVersion": float64(b.ManifestVersion), "policyVersion": m.PolicyVersion,
 	}
 	if err := validateOperationAudit(event); err != nil {

@@ -52,6 +52,8 @@ Before a mutation, persist immutable authorized intent. After remote success, pe
 
 Required envelope: schema version, event ID, event type/version, occurred/recorded timestamps, product/environment, tenant where applicable, verified actor or explicit unknown actor, target, action/permission, outcome, request/decision/operation IDs, source, SDK version and model/manifest/policy versions where applicable. Store trace correlation without raw tokens, cookies, secrets or unbounded request bodies.
 
+Authentication, authorization, managed operations and export events with new SDK-generated event IDs carry the build version. The current custom-event writer, provider event collector and deterministic audit hold/retirement envelopes retain their original `0.0.0` field value. Those paths can reconstruct the same event ID on a later build, so changing the field in place would change the retained payload digest and reject a valid retry. Existing envelopes and digests remain immutable.
+
 Built-in security types use a reserved heimdall.* namespace. Product events use registered product.* types with versioned attribute schemas. An authorized product/tenant administrator may configure enabled custom definitions through product-owned settings. Their permissions and changes are themselves audited. The backend supplies trusted actor/scope/outcome metadata; a browser cannot spoof them. Extensions cannot rename, suppress, sample, redact away mandatory identifiers or change outcomes of required security events. Unknown types, invalid attributes, sensitive fields and oversized payloads are rejected before persistence.
 
 ```ts

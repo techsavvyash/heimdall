@@ -83,7 +83,7 @@ func (a *Authentication) Verify(ctx context.Context, raw, sessionContext string)
 		id := principal.Identity()
 		actor = map[string]any{"kind": "user", "issuer": id.Issuer, "subject": id.Subject}
 	}
-	event := map[string]any{"schemaVersion": float64(1), "eventId": hex.EncodeToString(ids[:16]), "eventType": "heimdall.authentication.completed", "eventVersion": float64(1), "occurredAt": at, "recordedAt": at, "productId": a.writer.product, "environment": a.writer.environment, "tenantId": nil, "actor": actor, "target": map[string]any{"type": "product", "id": a.writer.product}, "action": "authenticate", "outcome": outcome, "requestId": hex.EncodeToString(ids[16:]), "source": "sdk", "sdkVersion": "0.0.0", "policyVersion": a.policy, "attributes": map[string]any{}}
+	event := map[string]any{"schemaVersion": float64(1), "eventId": hex.EncodeToString(ids[:16]), "eventType": "heimdall.authentication.completed", "eventVersion": float64(1), "occurredAt": at, "recordedAt": at, "productId": a.writer.product, "environment": a.writer.environment, "tenantId": nil, "actor": actor, "target": map[string]any{"type": "product", "id": a.writer.product}, "action": "authenticate", "outcome": outcome, "requestId": hex.EncodeToString(ids[16:]), "source": "sdk", "sdkVersion": contract.SDKVersion, "policyVersion": a.policy, "attributes": map[string]any{}}
 	if failure != nil {
 		event["reasonCode"] = string(code)
 	}

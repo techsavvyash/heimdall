@@ -27,7 +27,7 @@ func (a *Authentication) CheckLinkedPermission(ctx context.Context, principal *i
 		"occurredAt": at, "recordedAt": at, "productId": a.writer.product, "environment": a.writer.environment, "tenantId": tenant,
 		"actor":  map[string]any{"kind": "user", "issuer": actor.Issuer, "subject": actor.Subject},
 		"target": map[string]any{"type": "workspace", "id": tenant}, "action": permission, "permission": permission,
-		"outcome": "requested", "requestId": hex.EncodeToString(request[:]), "source": "sdk", "sdkVersion": "0.0.0",
+		"outcome": "requested", "requestId": hex.EncodeToString(request[:]), "source": "sdk", "sdkVersion": contract.SDKVersion,
 		"attributes": map[string]any{}, "decisionId": "pending", "modelId": model, "manifestVersion": float64(version), "policyVersion": a.policy,
 	}
 	if parent != "" {

@@ -30,6 +30,8 @@ jobs:
           version=${GITHUB_REF_NAME#sdk/go/v}
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]
           test "$version" = "$(node -p 'require("./sdk/typescript/package.json").version')"
+          grep -Fx "export const sdkVersion = \"$version\";" sdk/typescript/src/internal/version.ts
+          grep -Fx "const SDKVersion = \"$version\"" sdk/go/internal/contract/version.go
       - run: pnpm install --frozen-lockfile
       - run: pnpm run check
       - name: Verify pinned-service fault scenarios

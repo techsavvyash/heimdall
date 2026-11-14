@@ -240,7 +240,7 @@ func (o *OperationRecords) begin(ctx context.Context, intentJSON []byte, key str
 	if i.Kind == "transfer_owner" {
 		eventType = "heimdall.ownership.intent"
 	}
-	event := map[string]any{"schemaVersion": float64(1), "eventId": a.EventID, "eventType": eventType, "eventVersion": float64(1), "occurredAt": float64(a.OccurredAt), "recordedAt": float64(a.RecordedAt), "productId": b.ProductID, "environment": b.Environment, "tenantId": a.WorkspaceID, "actor": map[string]any{"kind": "user", "issuer": i.Actor.Issuer, "subject": i.Actor.Subject}, "target": map[string]any{"type": "workspace", "id": a.WorkspaceID}, "action": action, "outcome": "requested", "requestId": a.RequestID, "source": "sdk", "sdkVersion": "0.0.0", "attributes": map[string]any{}, "operationId": a.OperationID, "modelId": b.ModelID, "manifestVersion": float64(b.ManifestVersion), "policyVersion": a.PolicyVersion}
+	event := map[string]any{"schemaVersion": float64(1), "eventId": a.EventID, "eventType": eventType, "eventVersion": float64(1), "occurredAt": float64(a.OccurredAt), "recordedAt": float64(a.RecordedAt), "productId": b.ProductID, "environment": b.Environment, "tenantId": a.WorkspaceID, "actor": map[string]any{"kind": "user", "issuer": i.Actor.Issuer, "subject": i.Actor.Subject}, "target": map[string]any{"type": "workspace", "id": a.WorkspaceID}, "action": action, "outcome": "requested", "requestId": a.RequestID, "source": "sdk", "sdkVersion": contract.SDKVersion, "attributes": map[string]any{}, "operationId": a.OperationID, "modelId": b.ModelID, "manifestVersion": float64(b.ManifestVersion), "policyVersion": a.PolicyVersion}
 	if e = validateOperationAudit(event); e != nil {
 		return nil, e
 	}

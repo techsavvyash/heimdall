@@ -1,3 +1,4 @@
+import { sdkVersion } from "../version.js";
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { HeimdallError, checkCancellation } from "../errors.js";
@@ -278,7 +279,7 @@ export class OperationRecords {
       outcome: "succeeded",
       requestId: metadata.requestId,
       source: "sdk",
-      sdkVersion: "0.0.0",
+      sdkVersion,
       attributes: {},
       modelId: b.modelId,
       manifestVersion: b.manifestVersion,
@@ -538,7 +539,7 @@ export class OperationRecords {
       outcome: transition === "recover" ? "succeeded" : outcome,
       requestId: m.requestId,
       source: "sdk",
-      sdkVersion: "0.0.0",
+      sdkVersion,
       attributes: {},
       operationId,
       modelId: b.modelId,
@@ -754,7 +755,7 @@ export class OperationRecords {
       outcome: "succeeded",
       requestId: m.requestId,
       source: "sdk",
-      sdkVersion: "0.0.0",
+      sdkVersion,
       attributes: {},
       modelId: b.modelId,
       manifestVersion: b.manifestVersion,
@@ -895,7 +896,7 @@ SELECT NOT EXISTS (SELECT 1 FROM incompatible) AND
       outcome: "requested",
       requestId: a.requestId,
       source: "sdk",
-      sdkVersion: "0.0.0",
+      sdkVersion,
       attributes: {},
       operationId: a.operationId,
       modelId: b.modelId,

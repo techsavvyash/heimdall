@@ -62,7 +62,7 @@ func (o *OperationRecords) RepairCandidates(ctx context.Context, id, expectedRev
 		}
 	}
 	b := o.binding
-	event := map[string]any{"schemaVersion": float64(1), "eventId": m.EventID, "eventType": "heimdall.recovery.completed", "eventVersion": float64(1), "occurredAt": float64(m.OccurredAt), "recordedAt": float64(m.RecordedAt), "productId": b.ProductID, "environment": b.Environment, "tenantId": id, "actor": map[string]any{"kind": "system", "id": "candidate-rebuild"}, "target": map[string]any{"type": "workspace", "id": id}, "action": "candidate.repair", "outcome": "succeeded", "requestId": m.RequestID, "source": "sdk", "sdkVersion": "0.0.0", "attributes": map[string]any{}, "modelId": b.ModelID, "manifestVersion": float64(b.ManifestVersion), "policyVersion": m.PolicyVersion}
+	event := map[string]any{"schemaVersion": float64(1), "eventId": m.EventID, "eventType": "heimdall.recovery.completed", "eventVersion": float64(1), "occurredAt": float64(m.OccurredAt), "recordedAt": float64(m.RecordedAt), "productId": b.ProductID, "environment": b.Environment, "tenantId": id, "actor": map[string]any{"kind": "system", "id": "candidate-rebuild"}, "target": map[string]any{"type": "workspace", "id": id}, "action": "candidate.repair", "outcome": "succeeded", "requestId": m.RequestID, "source": "sdk", "sdkVersion": contract.SDKVersion, "attributes": map[string]any{}, "modelId": b.ModelID, "manifestVersion": float64(b.ManifestVersion), "policyVersion": m.PolicyVersion}
 	if e := validateOperationAudit(event); e != nil {
 		return nil, e
 	}
