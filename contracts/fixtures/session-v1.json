@@ -1,0 +1,609 @@
+[
+  {
+    "name": "active",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "policyVersion": "policy-1"
+    },
+    "now": 3000,
+    "expected": "active",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "token-exact-expiry",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "policyVersion": "policy-1"
+    },
+    "now": 301000,
+    "expected": "refresh_required",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "token-expiry-no-refresh",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "policyVersion": "policy-1"
+    },
+    "now": 301000,
+    "expected": "reauth_required",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "idle-exact-expiry",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "policyVersion": "policy-1"
+    },
+    "now": 1802000,
+    "error": "unauthenticated",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "absolute-expiry",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "policyVersion": "policy-1"
+    },
+    "now": 28801000,
+    "error": "unauthenticated",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "wrong-productId",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "scope": {
+      "productId": "other",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "policyVersion": "policy-1"
+    },
+    "now": 3000,
+    "error": "unauthenticated",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "wrong-environment",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "other",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "policyVersion": "policy-1"
+    },
+    "now": 3000,
+    "error": "unauthenticated",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "wrong-issuer",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "other",
+      "subject": "maya",
+      "policyVersion": "policy-1"
+    },
+    "now": 3000,
+    "error": "unauthenticated",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "wrong-subject",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "other",
+      "policyVersion": "policy-1"
+    },
+    "now": 3000,
+    "error": "unauthenticated",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "wrong-policyVersion",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "policyVersion": "other"
+    },
+    "now": 3000,
+    "error": "unauthenticated",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "explicit-reauth",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "reauth_required",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "policyVersion": "policy-1"
+    },
+    "now": 3000,
+    "expected": "reauth_required",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "refresh-pending",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "refreshing",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh",
+      "refreshAttempt": {
+        "id": "attempt-1",
+        "expiresAt": 7000
+      }
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "policyVersion": "policy-1"
+    },
+    "now": 3000,
+    "expected": "refreshing",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "refresh-lost-deadline",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "refreshing",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh",
+      "refreshAttempt": {
+        "id": "attempt-1",
+        "expiresAt": 7000
+      }
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "policyVersion": "policy-1"
+    },
+    "now": 7000,
+    "expected": "reauth_required",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "invalid-lastActivityAt",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 0,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "policyVersion": "policy-1"
+    },
+    "now": 3000,
+    "error": "invalid_argument",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "invalid-idleExpiresAt",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 28801001,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "policyVersion": "policy-1"
+    },
+    "now": 3000,
+    "error": "invalid_argument",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "invalid-identityValidatedAt",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 4000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "policyVersion": "policy-1"
+    },
+    "now": 3000,
+    "error": "invalid_argument",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "invalid-createdAt",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 4000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "policyVersion": "policy-1"
+    },
+    "now": 3000,
+    "error": "invalid_argument",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "identity-just-before-boundary",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "policyVersion": "policy-1"
+    },
+    "now": 61999,
+    "expected": "active",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "identity-at-freshness-boundary",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "policyVersion": "policy-1"
+    },
+    "now": 62000,
+    "expected": "identity_revalidation_required",
+    "freshnessMs": 60000
+  },
+  {
+    "name": "zero-freshness-online-required",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "createdAt": 1000,
+      "lastActivityAt": 2000,
+      "absoluteExpiresAt": 28801000,
+      "idleExpiresAt": 1802000,
+      "accessTokenExpiresAt": 301000,
+      "identityValidatedAt": 2000,
+      "policyVersion": "policy-1",
+      "state": "active",
+      "accessToken": "synthetic-access",
+      "refreshToken": "synthetic-refresh"
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "policyVersion": "policy-1"
+    },
+    "now": 3000,
+    "expected": "identity_revalidation_required",
+    "freshnessMs": 0
+  }
+]

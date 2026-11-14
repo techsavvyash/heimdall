@@ -1,0 +1,73 @@
+{
+  "tag": "sdk/go/v0.1.0",
+  "sourceCommit": "dea5f1100dcd2935fe441e67ec959df315fcb923",
+  "ciRun": 43582400136,
+  "storageRun": "heimdall-records-a5fb309d7c3e406cabbc6b1ba34910a0",
+  "oidcRun": "1aaefb66-b3d5-4a9c-9d3e-c150922e16db",
+  "isolatedConsumers": {
+    "archive": "techsavvyash-heimdall-sdk-0.1.0.tgz",
+    "goModuleVersion": "v0.1.0",
+    "archiveSHA256": "19aade67b94d1e84b1582e92274bf01d978a736e3471e2536a1930a5f9df73f5"
+  },
+  "operatorSetup": [
+    {
+      "product": "ledger",
+      "confirmedSteps": 4,
+      "replay": "unchanged"
+    },
+    {
+      "product": "support",
+      "confirmedSteps": 4,
+      "replay": "unchanged"
+    }
+  ],
+  "products": [
+    {
+      "product": "ledger",
+      "scopedRead": 200,
+      "businessWrite": {
+        "action": "approve",
+        "insufficientRole": 403,
+        "crossTenantId": 404,
+        "authorized": 204,
+        "repeat": 204,
+        "inactiveWorkspace": 403,
+        "pendingWorkspace": 403,
+        "auditUnavailable": 503
+      },
+      "reconcile": {
+        "operator": 200,
+        "unauthorized": 403,
+        "confirmedCompleted": true,
+        "terminalExcluded": true
+      },
+      "matchedAuthorizationDecisions": 48
+    },
+    {
+      "product": "support",
+      "scopedRead": 200,
+      "businessWrite": {
+        "action": "assign-to-me",
+        "insufficientRole": 403,
+        "crossTenantId": 404,
+        "authorized": 204,
+        "repeat": 204,
+        "inactiveWorkspace": 403,
+        "pendingWorkspace": 403,
+        "auditUnavailable": 503
+      },
+      "reconcile": {
+        "operator": 200,
+        "unauthorized": 403,
+        "confirmedCompleted": true,
+        "terminalExcluded": true
+      },
+      "matchedAuthorizationDecisions": 48
+    }
+  ],
+  "railway": {
+    "runId": "8adbdf56-5731-495d-8c32-908b20e1f7e3",
+    "ledger": "565015f8-8d00-4416-8e7f-a6f4428b55ee",
+    "support": "68a1d678-3a75-406c-b1dd-7e04378c2105"
+  }
+}

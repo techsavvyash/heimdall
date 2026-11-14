@@ -1,0 +1,21 @@
+{
+  "vectors": [
+    {
+      "name": "zero",
+      "keyHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "fingerprint": "72206520b9689fbf61bf31ddde8eacc26cc645c05c41ec196adbfb6a3c2e3ba9"
+    },
+    {
+      "name": "sequential",
+      "keyHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "fingerprint": "e4386fd97da98e9a26519190bee1055fb7f2c447d2b32fdeed1605a8c96ed026"
+    },
+    {
+      "name": "ones",
+      "keyHex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "fingerprint": "f3cd828fd20deda584a22a6b5cd649b8e5649222091865c8f8c06fbb544e8a4d"
+    }
+  ],
+  "validLimits": [1, 4294967295],
+  "invalidLimits": [-1, 0, 4294967296]
+}

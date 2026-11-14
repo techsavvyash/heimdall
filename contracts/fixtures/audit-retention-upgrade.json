@@ -1,0 +1,30 @@
+{
+  "files": [
+    {
+      "path": "0004-retention-identities.sql",
+      "checksum": "28a4d5070ee8b1ba0c68639838201a13082207ce144fd0f921d48320660675f9"
+    },
+    {
+      "path": "0004-retention-holds.sql",
+      "checksum": "ff4c2d36f1c120f601de7addf5df4877c38fe1a5e4eae6ea93e0a9b0caeb4c33"
+    },
+    {
+      "path": "0004-retention-retry-holds.sql",
+      "checksum": "f9286fb217de9c86ecc5e525174d48698499c93498a6c9a8696247384e8280cd"
+    },
+    {
+      "path": "0004-retention-capacity.sql",
+      "checksum": "0b9ae1f226e71a0d8661b2deea928c39959871e545f4dd3164d53bb9939b61c0"
+    },
+    {
+      "path": "0004-retirement-markers.sql",
+      "checksum": "bd1388b8758ffbba64b8bc823383737f920ea1cc187aae6fd4c806f1947a62ef"
+    },
+    {
+      "path": "0004-retention-upgrade.sql",
+      "checksum": "ef8d91118660fe24e0f0ad10bca5cdd4c9d8f02796eecf5263c9603bd8f22ad2"
+    }
+  ],
+  "schemaSQLChecksum": "1760baf6e7bbd2925a7901a087a8c96d946b9b84e934f7dfa13571258d1e1e86",
+  "signatureChecksum": "ed58272d42a970ff031bd2bb7599edbccdd01997ee979463203cd2a08a48f7c3"
+}

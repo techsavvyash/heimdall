@@ -1,0 +1,38 @@
+name: heimdall-verification
+services:
+  postgres:
+    image: postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac
+    environment:
+      POSTGRES_USER: heimdall_probe
+      POSTGRES_DB: openfga
+      POSTGRES_PASSWORD: ${HEIMDALL_PROBE_POSTGRES_PASSWORD:?Set a generated database password}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U heimdall_probe -d openfga']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  migrate:
+    image: openfga/openfga:v1.22.0@sha256:9cf9a20af32a40434cd3a788c429879439ee9ea9abf65c9c200ee17cd43f769e
+    command: migrate
+    profiles: [tools]
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://heimdall_probe:${HEIMDALL_PROBE_POSTGRES_PASSWORD:?Set database password}@postgres:5432/openfga?sslmode=disable
+  openfga:
+    image: openfga/openfga:v1.22.0@sha256:9cf9a20af32a40434cd3a788c429879439ee9ea9abf65c9c200ee17cd43f769e
+    command: run
+    ports: ['127.0.0.1:8080:8080']
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://heimdall_probe:${HEIMDALL_PROBE_POSTGRES_PASSWORD:?Set database password}@postgres:5432/openfga?sslmode=disable
+      OPENFGA_AUTHN_METHOD: preshared
+      OPENFGA_AUTHN_PRESHARED_KEYS: ${HEIMDALL_PROBE_OPENFGA_KEY:?Set a generated API key}
+      OPENFGA_PLAYGROUND_ENABLED: 'false'
+      OPENFGA_DATASTORE_MAX_OPEN_CONNS: '10'
+    depends_on:
+      postgres:
+        condition: service_healthy
+volumes:
+  postgres:

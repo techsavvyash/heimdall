@@ -1,0 +1,766 @@
+{
+  "request": {
+    "schemaVersion": 1,
+    "eventId": "z-request",
+    "eventType": "heimdall.authorization.requested",
+    "eventVersion": 1,
+    "occurredAt": 1000,
+    "recordedAt": 1001,
+    "productId": "ledger",
+    "environment": "production",
+    "tenantId": "tenant-1",
+    "actor": {
+      "kind": "user",
+      "issuer": "https://id.example.com",
+      "subject": "maya\u0000\u6771\u4eac"
+    },
+    "target": {
+      "type": "invoice",
+      "id": "invoice-1"
+    },
+    "action": "invoice.approve",
+    "outcome": "requested",
+    "requestId": "request-1",
+    "source": "sdk",
+    "sdkVersion": "0.0.0",
+    "attributes": {},
+    "decisionId": "decision-1",
+    "permission": "invoice.approve",
+    "modelId": "model-1",
+    "manifestVersion": 1,
+    "operationId": "operation-1",
+    "policyVersion": "policy-1"
+  },
+  "options": {
+    "terminalId": "recovery-terminal",
+    "requestId": "recovery-request",
+    "actor": {
+      "kind": "system",
+      "id": "recovery-job"
+    },
+    "at": 2001,
+    "cutoff": 1500,
+    "sdkVersion": "0.0.0"
+  },
+  "proposal": {
+    "formatVersion": 1,
+    "cutoff": 1500,
+    "requestDigest": "c5ea7cfa3037ce1cfce4e1d42160194db5b47f825cb687daa3c5295ab5599993",
+    "terminal": {
+      "schemaVersion": 1,
+      "eventId": "recovery-terminal",
+      "eventType": "heimdall.authorization.completed",
+      "eventVersion": 1,
+      "occurredAt": 2001,
+      "recordedAt": 2001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya\u0000\u6771\u4eac"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "outcome_unknown",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventVersion": 1,
+      "occurredAt": 2001,
+      "recordedAt": 2001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "eventId": "recovery-99a2bae70c61704e05a7c70735a98613c6b48722752393f64c95188525cd4776",
+      "eventType": "heimdall.recovery.completed",
+      "actor": {
+        "kind": "system",
+        "id": "recovery-job"
+      },
+      "target": {
+        "type": "authorization_decision",
+        "id": "decision-1"
+      },
+      "action": "authorization.recover",
+      "outcome": "succeeded",
+      "requestId": "recovery-request"
+    }
+  },
+  "invalidOptions": [
+    {
+      "name": "too_recent",
+      "options": {
+        "terminalId": "recovery-terminal",
+        "requestId": "recovery-request",
+        "actor": {
+          "kind": "system",
+          "id": "recovery-job"
+        },
+        "at": 2001,
+        "cutoff": 1000,
+        "sdkVersion": "0.0.0"
+      }
+    },
+    {
+      "name": "time_before_cutoff",
+      "options": {
+        "terminalId": "recovery-terminal",
+        "requestId": "recovery-request",
+        "actor": {
+          "kind": "system",
+          "id": "recovery-job"
+        },
+        "at": 1499,
+        "cutoff": 1500,
+        "sdkVersion": "0.0.0"
+      }
+    },
+    {
+      "name": "negative_cutoff",
+      "options": {
+        "terminalId": "recovery-terminal",
+        "requestId": "recovery-request",
+        "actor": {
+          "kind": "system",
+          "id": "recovery-job"
+        },
+        "at": 2001,
+        "cutoff": -1,
+        "sdkVersion": "0.0.0"
+      }
+    },
+    {
+      "name": "unsafe_time",
+      "options": {
+        "terminalId": "recovery-terminal",
+        "requestId": "recovery-request",
+        "actor": {
+          "kind": "system",
+          "id": "recovery-job"
+        },
+        "at": 9007199254740992,
+        "cutoff": 1500,
+        "sdkVersion": "0.0.0"
+      }
+    },
+    {
+      "name": "unknown_actor",
+      "options": {
+        "terminalId": "recovery-terminal",
+        "requestId": "recovery-request",
+        "actor": {
+          "kind": "unknown"
+        },
+        "at": 2001,
+        "cutoff": 1500,
+        "sdkVersion": "0.0.0"
+      }
+    },
+    {
+      "name": "same_terminal",
+      "options": {
+        "terminalId": "z-request",
+        "requestId": "recovery-request",
+        "actor": {
+          "kind": "system",
+          "id": "recovery-job"
+        },
+        "at": 2001,
+        "cutoff": 1500,
+        "sdkVersion": "0.0.0"
+      }
+    },
+    {
+      "name": "empty_terminal",
+      "options": {
+        "terminalId": "",
+        "requestId": "recovery-request",
+        "actor": {
+          "kind": "system",
+          "id": "recovery-job"
+        },
+        "at": 2001,
+        "cutoff": 1500,
+        "sdkVersion": "0.0.0"
+      }
+    },
+    {
+      "name": "empty_request",
+      "options": {
+        "terminalId": "recovery-terminal",
+        "requestId": "",
+        "actor": {
+          "kind": "system",
+          "id": "recovery-job"
+        },
+        "at": 2001,
+        "cutoff": 1500,
+        "sdkVersion": "0.0.0"
+      }
+    },
+    {
+      "name": "empty_sdk",
+      "options": {
+        "terminalId": "recovery-terminal",
+        "requestId": "recovery-request",
+        "actor": {
+          "kind": "system",
+          "id": "recovery-job"
+        },
+        "at": 2001,
+        "cutoff": 1500,
+        "sdkVersion": ""
+      }
+    }
+  ],
+  "invalidProposals": [
+    {
+      "name": "wrong_digest",
+      "proposal": {
+        "formatVersion": 1,
+        "cutoff": 1500,
+        "requestDigest": "0000000000000000000000000000000000000000000000000000000000000000",
+        "terminal": {
+          "schemaVersion": 1,
+          "eventId": "recovery-terminal",
+          "eventType": "heimdall.authorization.completed",
+          "eventVersion": 1,
+          "occurredAt": 2001,
+          "recordedAt": 2001,
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "tenant-1",
+          "actor": {
+            "kind": "user",
+            "issuer": "https://id.example.com",
+            "subject": "maya\u0000\u6771\u4eac"
+          },
+          "target": {
+            "type": "invoice",
+            "id": "invoice-1"
+          },
+          "action": "invoice.approve",
+          "outcome": "outcome_unknown",
+          "requestId": "request-1",
+          "source": "sdk",
+          "sdkVersion": "0.0.0",
+          "attributes": {},
+          "decisionId": "decision-1",
+          "permission": "invoice.approve",
+          "modelId": "model-1",
+          "manifestVersion": 1,
+          "operationId": "operation-1",
+          "policyVersion": "policy-1"
+        },
+        "administration": {
+          "schemaVersion": 1,
+          "eventVersion": 1,
+          "occurredAt": 2001,
+          "recordedAt": 2001,
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "tenant-1",
+          "source": "sdk",
+          "sdkVersion": "0.0.0",
+          "attributes": {},
+          "decisionId": "decision-1",
+          "eventId": "recovery-99a2bae70c61704e05a7c70735a98613c6b48722752393f64c95188525cd4776",
+          "eventType": "heimdall.recovery.completed",
+          "actor": {
+            "kind": "system",
+            "id": "recovery-job"
+          },
+          "target": {
+            "type": "authorization_decision",
+            "id": "decision-1"
+          },
+          "action": "authorization.recover",
+          "outcome": "succeeded",
+          "requestId": "recovery-request"
+        }
+      }
+    },
+    {
+      "name": "wrong_version",
+      "proposal": {
+        "formatVersion": 2,
+        "cutoff": 1500,
+        "requestDigest": "c5ea7cfa3037ce1cfce4e1d42160194db5b47f825cb687daa3c5295ab5599993",
+        "terminal": {
+          "schemaVersion": 1,
+          "eventId": "recovery-terminal",
+          "eventType": "heimdall.authorization.completed",
+          "eventVersion": 1,
+          "occurredAt": 2001,
+          "recordedAt": 2001,
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "tenant-1",
+          "actor": {
+            "kind": "user",
+            "issuer": "https://id.example.com",
+            "subject": "maya\u0000\u6771\u4eac"
+          },
+          "target": {
+            "type": "invoice",
+            "id": "invoice-1"
+          },
+          "action": "invoice.approve",
+          "outcome": "outcome_unknown",
+          "requestId": "request-1",
+          "source": "sdk",
+          "sdkVersion": "0.0.0",
+          "attributes": {},
+          "decisionId": "decision-1",
+          "permission": "invoice.approve",
+          "modelId": "model-1",
+          "manifestVersion": 1,
+          "operationId": "operation-1",
+          "policyVersion": "policy-1"
+        },
+        "administration": {
+          "schemaVersion": 1,
+          "eventVersion": 1,
+          "occurredAt": 2001,
+          "recordedAt": 2001,
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "tenant-1",
+          "source": "sdk",
+          "sdkVersion": "0.0.0",
+          "attributes": {},
+          "decisionId": "decision-1",
+          "eventId": "recovery-99a2bae70c61704e05a7c70735a98613c6b48722752393f64c95188525cd4776",
+          "eventType": "heimdall.recovery.completed",
+          "actor": {
+            "kind": "system",
+            "id": "recovery-job"
+          },
+          "target": {
+            "type": "authorization_decision",
+            "id": "decision-1"
+          },
+          "action": "authorization.recover",
+          "outcome": "succeeded",
+          "requestId": "recovery-request"
+        }
+      }
+    },
+    {
+      "name": "extra_field",
+      "proposal": {
+        "formatVersion": 1,
+        "cutoff": 1500,
+        "requestDigest": "c5ea7cfa3037ce1cfce4e1d42160194db5b47f825cb687daa3c5295ab5599993",
+        "terminal": {
+          "schemaVersion": 1,
+          "eventId": "recovery-terminal",
+          "eventType": "heimdall.authorization.completed",
+          "eventVersion": 1,
+          "occurredAt": 2001,
+          "recordedAt": 2001,
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "tenant-1",
+          "actor": {
+            "kind": "user",
+            "issuer": "https://id.example.com",
+            "subject": "maya\u0000\u6771\u4eac"
+          },
+          "target": {
+            "type": "invoice",
+            "id": "invoice-1"
+          },
+          "action": "invoice.approve",
+          "outcome": "outcome_unknown",
+          "requestId": "request-1",
+          "source": "sdk",
+          "sdkVersion": "0.0.0",
+          "attributes": {},
+          "decisionId": "decision-1",
+          "permission": "invoice.approve",
+          "modelId": "model-1",
+          "manifestVersion": 1,
+          "operationId": "operation-1",
+          "policyVersion": "policy-1"
+        },
+        "administration": {
+          "schemaVersion": 1,
+          "eventVersion": 1,
+          "occurredAt": 2001,
+          "recordedAt": 2001,
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "tenant-1",
+          "source": "sdk",
+          "sdkVersion": "0.0.0",
+          "attributes": {},
+          "decisionId": "decision-1",
+          "eventId": "recovery-99a2bae70c61704e05a7c70735a98613c6b48722752393f64c95188525cd4776",
+          "eventType": "heimdall.recovery.completed",
+          "actor": {
+            "kind": "system",
+            "id": "recovery-job"
+          },
+          "target": {
+            "type": "authorization_decision",
+            "id": "decision-1"
+          },
+          "action": "authorization.recover",
+          "outcome": "succeeded",
+          "requestId": "recovery-request"
+        },
+        "extra": true
+      }
+    },
+    {
+      "name": "terminal_context",
+      "proposal": {
+        "formatVersion": 1,
+        "cutoff": 1500,
+        "requestDigest": "c5ea7cfa3037ce1cfce4e1d42160194db5b47f825cb687daa3c5295ab5599993",
+        "terminal": {
+          "schemaVersion": 1,
+          "eventId": "recovery-terminal",
+          "eventType": "heimdall.authorization.completed",
+          "eventVersion": 1,
+          "occurredAt": 2001,
+          "recordedAt": 2001,
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "tenant-1",
+          "actor": {
+            "kind": "user",
+            "issuer": "https://id.example.com",
+            "subject": "maya\u0000\u6771\u4eac"
+          },
+          "target": {
+            "type": "invoice",
+            "id": "invoice-1"
+          },
+          "action": "invoice.read",
+          "outcome": "outcome_unknown",
+          "requestId": "request-1",
+          "source": "sdk",
+          "sdkVersion": "0.0.0",
+          "attributes": {},
+          "decisionId": "decision-1",
+          "permission": "invoice.approve",
+          "modelId": "model-1",
+          "manifestVersion": 1,
+          "operationId": "operation-1",
+          "policyVersion": "policy-1"
+        },
+        "administration": {
+          "schemaVersion": 1,
+          "eventVersion": 1,
+          "occurredAt": 2001,
+          "recordedAt": 2001,
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "tenant-1",
+          "source": "sdk",
+          "sdkVersion": "0.0.0",
+          "attributes": {},
+          "decisionId": "decision-1",
+          "eventId": "recovery-99a2bae70c61704e05a7c70735a98613c6b48722752393f64c95188525cd4776",
+          "eventType": "heimdall.recovery.completed",
+          "actor": {
+            "kind": "system",
+            "id": "recovery-job"
+          },
+          "target": {
+            "type": "authorization_decision",
+            "id": "decision-1"
+          },
+          "action": "authorization.recover",
+          "outcome": "succeeded",
+          "requestId": "recovery-request"
+        }
+      }
+    },
+    {
+      "name": "terminal_actor",
+      "proposal": {
+        "formatVersion": 1,
+        "cutoff": 1500,
+        "requestDigest": "c5ea7cfa3037ce1cfce4e1d42160194db5b47f825cb687daa3c5295ab5599993",
+        "terminal": {
+          "schemaVersion": 1,
+          "eventId": "recovery-terminal",
+          "eventType": "heimdall.authorization.completed",
+          "eventVersion": 1,
+          "occurredAt": 2001,
+          "recordedAt": 2001,
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "tenant-1",
+          "actor": {
+            "kind": "system",
+            "id": "other"
+          },
+          "target": {
+            "type": "invoice",
+            "id": "invoice-1"
+          },
+          "action": "invoice.approve",
+          "outcome": "outcome_unknown",
+          "requestId": "request-1",
+          "source": "sdk",
+          "sdkVersion": "0.0.0",
+          "attributes": {},
+          "decisionId": "decision-1",
+          "permission": "invoice.approve",
+          "modelId": "model-1",
+          "manifestVersion": 1,
+          "operationId": "operation-1",
+          "policyVersion": "policy-1"
+        },
+        "administration": {
+          "schemaVersion": 1,
+          "eventVersion": 1,
+          "occurredAt": 2001,
+          "recordedAt": 2001,
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "tenant-1",
+          "source": "sdk",
+          "sdkVersion": "0.0.0",
+          "attributes": {},
+          "decisionId": "decision-1",
+          "eventId": "recovery-99a2bae70c61704e05a7c70735a98613c6b48722752393f64c95188525cd4776",
+          "eventType": "heimdall.recovery.completed",
+          "actor": {
+            "kind": "system",
+            "id": "recovery-job"
+          },
+          "target": {
+            "type": "authorization_decision",
+            "id": "decision-1"
+          },
+          "action": "authorization.recover",
+          "outcome": "succeeded",
+          "requestId": "recovery-request"
+        }
+      }
+    },
+    {
+      "name": "admin_id",
+      "proposal": {
+        "formatVersion": 1,
+        "cutoff": 1500,
+        "requestDigest": "c5ea7cfa3037ce1cfce4e1d42160194db5b47f825cb687daa3c5295ab5599993",
+        "terminal": {
+          "schemaVersion": 1,
+          "eventId": "recovery-terminal",
+          "eventType": "heimdall.authorization.completed",
+          "eventVersion": 1,
+          "occurredAt": 2001,
+          "recordedAt": 2001,
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "tenant-1",
+          "actor": {
+            "kind": "user",
+            "issuer": "https://id.example.com",
+            "subject": "maya\u0000\u6771\u4eac"
+          },
+          "target": {
+            "type": "invoice",
+            "id": "invoice-1"
+          },
+          "action": "invoice.approve",
+          "outcome": "outcome_unknown",
+          "requestId": "request-1",
+          "source": "sdk",
+          "sdkVersion": "0.0.0",
+          "attributes": {},
+          "decisionId": "decision-1",
+          "permission": "invoice.approve",
+          "modelId": "model-1",
+          "manifestVersion": 1,
+          "operationId": "operation-1",
+          "policyVersion": "policy-1"
+        },
+        "administration": {
+          "schemaVersion": 1,
+          "eventVersion": 1,
+          "occurredAt": 2001,
+          "recordedAt": 2001,
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "tenant-1",
+          "source": "sdk",
+          "sdkVersion": "0.0.0",
+          "attributes": {},
+          "decisionId": "decision-1",
+          "eventId": "other",
+          "eventType": "heimdall.recovery.completed",
+          "actor": {
+            "kind": "system",
+            "id": "recovery-job"
+          },
+          "target": {
+            "type": "authorization_decision",
+            "id": "decision-1"
+          },
+          "action": "authorization.recover",
+          "outcome": "succeeded",
+          "requestId": "recovery-request"
+        }
+      }
+    },
+    {
+      "name": "admin_target",
+      "proposal": {
+        "formatVersion": 1,
+        "cutoff": 1500,
+        "requestDigest": "c5ea7cfa3037ce1cfce4e1d42160194db5b47f825cb687daa3c5295ab5599993",
+        "terminal": {
+          "schemaVersion": 1,
+          "eventId": "recovery-terminal",
+          "eventType": "heimdall.authorization.completed",
+          "eventVersion": 1,
+          "occurredAt": 2001,
+          "recordedAt": 2001,
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "tenant-1",
+          "actor": {
+            "kind": "user",
+            "issuer": "https://id.example.com",
+            "subject": "maya\u0000\u6771\u4eac"
+          },
+          "target": {
+            "type": "invoice",
+            "id": "invoice-1"
+          },
+          "action": "invoice.approve",
+          "outcome": "outcome_unknown",
+          "requestId": "request-1",
+          "source": "sdk",
+          "sdkVersion": "0.0.0",
+          "attributes": {},
+          "decisionId": "decision-1",
+          "permission": "invoice.approve",
+          "modelId": "model-1",
+          "manifestVersion": 1,
+          "operationId": "operation-1",
+          "policyVersion": "policy-1"
+        },
+        "administration": {
+          "schemaVersion": 1,
+          "eventVersion": 1,
+          "occurredAt": 2001,
+          "recordedAt": 2001,
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "tenant-1",
+          "source": "sdk",
+          "sdkVersion": "0.0.0",
+          "attributes": {},
+          "decisionId": "decision-1",
+          "eventId": "recovery-99a2bae70c61704e05a7c70735a98613c6b48722752393f64c95188525cd4776",
+          "eventType": "heimdall.recovery.completed",
+          "actor": {
+            "kind": "system",
+            "id": "recovery-job"
+          },
+          "target": {
+            "type": "authorization_decision",
+            "id": "other"
+          },
+          "action": "authorization.recover",
+          "outcome": "succeeded",
+          "requestId": "recovery-request"
+        }
+      }
+    },
+    {
+      "name": "admin_time",
+      "proposal": {
+        "formatVersion": 1,
+        "cutoff": 1500,
+        "requestDigest": "c5ea7cfa3037ce1cfce4e1d42160194db5b47f825cb687daa3c5295ab5599993",
+        "terminal": {
+          "schemaVersion": 1,
+          "eventId": "recovery-terminal",
+          "eventType": "heimdall.authorization.completed",
+          "eventVersion": 1,
+          "occurredAt": 2001,
+          "recordedAt": 2001,
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "tenant-1",
+          "actor": {
+            "kind": "user",
+            "issuer": "https://id.example.com",
+            "subject": "maya\u0000\u6771\u4eac"
+          },
+          "target": {
+            "type": "invoice",
+            "id": "invoice-1"
+          },
+          "action": "invoice.approve",
+          "outcome": "outcome_unknown",
+          "requestId": "request-1",
+          "source": "sdk",
+          "sdkVersion": "0.0.0",
+          "attributes": {},
+          "decisionId": "decision-1",
+          "permission": "invoice.approve",
+          "modelId": "model-1",
+          "manifestVersion": 1,
+          "operationId": "operation-1",
+          "policyVersion": "policy-1"
+        },
+        "administration": {
+          "schemaVersion": 1,
+          "eventVersion": 1,
+          "occurredAt": 2001,
+          "recordedAt": 2002,
+          "productId": "ledger",
+          "environment": "production",
+          "tenantId": "tenant-1",
+          "source": "sdk",
+          "sdkVersion": "0.0.0",
+          "attributes": {},
+          "decisionId": "decision-1",
+          "eventId": "recovery-99a2bae70c61704e05a7c70735a98613c6b48722752393f64c95188525cd4776",
+          "eventType": "heimdall.recovery.completed",
+          "actor": {
+            "kind": "system",
+            "id": "recovery-job"
+          },
+          "target": {
+            "type": "authorization_decision",
+            "id": "decision-1"
+          },
+          "action": "authorization.recover",
+          "outcome": "succeeded",
+          "requestId": "recovery-request"
+        }
+      }
+    }
+  ],
+  "digest": "8d4217f53e2081a68cd47c25ac6b730b782525067076d33f1f1cc4732a9e31a8"
+}

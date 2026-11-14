@@ -1,0 +1,18 @@
+{
+  "cases": [
+    { "queue": "runnable", "now": 150, "ids": ["invalid-order"] },
+    { "queue": "runnable", "now": 300, "ids": ["due", "invalid-order"] },
+    { "queue": "recovery", "now": 0, "ids": ["race", "safe-retry"] },
+    { "queue": "completion", "now": 0, "ids": ["rollback"] },
+    {
+      "queue": "reconcile",
+      "now": 150,
+      "ids": ["invalid-order", "race", "rollback", "safe-retry"]
+    },
+    {
+      "queue": "reconcile",
+      "now": 300,
+      "ids": ["due", "invalid-order", "race", "rollback", "safe-retry"]
+    }
+  ]
+}

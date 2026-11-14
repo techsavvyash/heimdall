@@ -1,0 +1,99 @@
+[
+  {
+    "name": "retired request",
+    "productId": "ledger",
+    "environment": "staging",
+    "base": "request",
+    "expected": "receipt"
+  },
+  {
+    "name": "retired completion",
+    "productId": "ledger",
+    "environment": "staging",
+    "base": "normal",
+    "expected": "receipt"
+  },
+  {
+    "name": "retired recovered request",
+    "productId": "support",
+    "environment": "production",
+    "base": "request",
+    "expected": "receipt"
+  },
+  {
+    "name": "retired unknown outcome",
+    "productId": "support",
+    "environment": "production",
+    "base": "terminal",
+    "expected": "receipt"
+  },
+  {
+    "name": "retired recovery administration",
+    "productId": "support",
+    "environment": "production",
+    "base": "administration",
+    "expected": "receipt"
+  },
+  {
+    "name": "changed payload",
+    "productId": "ledger",
+    "environment": "staging",
+    "base": "request",
+    "patch": {
+      "sdkVersion": "changed"
+    },
+    "expected": "conflict"
+  },
+  {
+    "name": "changed tenant cannot recycle ID",
+    "productId": "ledger",
+    "environment": "staging",
+    "base": "request",
+    "patch": {
+      "tenantId": "other"
+    },
+    "expected": "conflict"
+  },
+  {
+    "name": "unknown ID",
+    "productId": "ledger",
+    "environment": "staging",
+    "base": "request",
+    "patch": {
+      "eventId": "never-written"
+    },
+    "expected": "absent"
+  },
+  {
+    "name": "wrong product input",
+    "productId": "ledger",
+    "environment": "staging",
+    "base": "request",
+    "patch": {
+      "productId": "other"
+    },
+    "expected": "invalid_argument"
+  },
+  {
+    "name": "invalid shape",
+    "productId": "ledger",
+    "environment": "staging",
+    "base": "request",
+    "patch": {
+      "extra": true
+    },
+    "expected": "invalid_argument"
+  },
+  {
+    "name": "live retained reference",
+    "productId": "ledger",
+    "environment": "staging",
+    "base": "ordinary",
+    "patch": {
+      "eventId": "retirement-reference",
+      "occurredAt": 3001,
+      "recordedAt": 3001
+    },
+    "expected": "receipt"
+  }
+]

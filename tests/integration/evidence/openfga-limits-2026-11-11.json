@@ -1,0 +1,27 @@
+{
+  "suite": "openfga-capabilities-v1",
+  "runId": "37c6cabb-5e27-4ff3-b602-f8a9aecf6f90",
+  "observedAt": "2026-11-10T22:58:13.046Z",
+  "observations": {
+    "unauthenticatedAndInvalidKey": "401",
+    "twoProductsFourWorkspaceObjects": "isolated relationship results",
+    "listing": "membership ListObjects and Read page_size=1 continuation verified",
+    "postRevocation": "immediate HIGHER_CONSISTENCY check denied",
+    "listingLimits": {
+      "writtenMemberships": 1001,
+      "maxTuplesPerAcceptedWrite": 100,
+      "oversizedWriteStatus": 400,
+      "rejectedWritePartiallyApplied": false,
+      "listObjectsCount": 1000,
+      "listObjectsContinuation": false,
+      "listObjectsElapsedMs": 228,
+      "readPageSize": 100,
+      "readPages": 11,
+      "readDistinctMemberships": 1001,
+      "readElapsedMs": 1548,
+      "scope": "stable direct-user tuples; no concurrent writes or inherited membership"
+    },
+    "credentialBoundary": "preshared key has deployment-wide access to both stores; no per-store credential isolation"
+  },
+  "cleanedUpStores": ["01M73TXPCHXWE30AE8PBNHN69C", "01M73TXPGWD95RGBXTWHPHBWY6"]
+}

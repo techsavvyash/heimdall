@@ -1,0 +1,55 @@
+{
+  "run": "heimdall-marker-scale-9351765ec5894e288032d5f975273bc7",
+  "postgresImage": "postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac",
+  "baseline1000": {
+    "nodes": ["Aggregate", "Limit", "Seq Scan"],
+    "indexes": [],
+    "rowsRemovedByFilter": 2000,
+    "sharedBlocks": 35,
+    "executionMs": 0.448
+  },
+  "baseline100000": {
+    "nodes": ["Aggregate", "Limit", "Seq Scan"],
+    "indexes": [],
+    "rowsRemovedByFilter": 200000,
+    "sharedBlocks": 3818,
+    "executionMs": 37.268
+  },
+  "indexedMiss500000": {
+    "nodes": ["Aggregate", "Limit", "Bitmap Heap Scan", "Bitmap Index Scan"],
+    "indexes": ["retirement_member_lookup"],
+    "rowsRemovedByFilter": 0,
+    "sharedBlocks": 4,
+    "executionMs": 0.227
+  },
+  "indexedHit500000": {
+    "nodes": ["Aggregate", "Limit", "Bitmap Heap Scan", "Bitmap Index Scan"],
+    "indexes": ["retirement_member_lookup"],
+    "rowsRemovedByFilter": 1,
+    "sharedBlocks": 5,
+    "executionMs": 0.193
+  },
+  "scopedCount": 1,
+  "duplicateCount": 2,
+  "buildSeconds": 16.605,
+  "buildMarkers": 1000000,
+  "insertedMarkers": 20000,
+  "collisionProducts": 128,
+  "concurrentReads": 30,
+  "concurrentMaxSharedBlocks": 167,
+  "pendingHit": {
+    "nodes": ["Aggregate", "Limit", "Bitmap Heap Scan", "Bitmap Index Scan"],
+    "indexes": ["retirement_member_lookup"],
+    "rowsRemovedByFilter": 1,
+    "sharedBlocks": 164,
+    "executionMs": 3.941
+  },
+  "flushedPages": 159,
+  "cleanedHit": {
+    "nodes": ["Aggregate", "Limit", "Bitmap Heap Scan", "Bitmap Index Scan"],
+    "indexes": ["retirement_member_lookup"],
+    "rowsRemovedByFilter": 1,
+    "sharedBlocks": 5,
+    "executionMs": 0.14
+  }
+}

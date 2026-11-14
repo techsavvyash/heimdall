@@ -1,0 +1,15 @@
+{
+  "suite": "railway-event-visibility-v1",
+  "runId": "16aece51-3eda-48e4-a976-ad799e5ea3d8",
+  "observations": {
+    "unrelatedOpenTransactionReadCompleted": true,
+    "readerObservedWaitingForWriterBarrier": true,
+    "committedMarkerVisibleAfterDrain": true,
+    "returnedEvents": 5
+  },
+  "cleanup": "owned database sessions terminated and organization deleted",
+  "limitations": [
+    "synthetic writer advisory lock; no event table modifications",
+    "not a proof against database clock reversal, retention gaps or all concurrent writer races"
+  ]
+}

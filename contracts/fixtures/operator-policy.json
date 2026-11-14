@@ -1,0 +1,40 @@
+{
+  "config": {
+    "productId": "ledger",
+    "environment": "production",
+    "policyVersion": "p1",
+    "grants": [
+      {
+        "issuer": "https://id.example",
+        "subject": "operator",
+        "tenantId": null,
+        "action": "managed.export.workspaces"
+      },
+      {
+        "issuer": "https://id.example",
+        "subject": "operator",
+        "tenantId": "tenant-a",
+        "action": "audit.hold.retry.release"
+      }
+    ]
+  },
+  "cases": [
+    { "name": "whole inventory", "grant": 0, "allow": true },
+    { "name": "null is exact", "grant": 0, "tenantId": "tenant-a" },
+    { "name": "issuer isolation", "grant": 0, "issuer": "https://other.example" },
+    { "name": "subject isolation", "grant": 0, "subject": "Operator" },
+    { "name": "product isolation", "grant": 0, "productId": "support" },
+    { "name": "environment isolation", "grant": 0, "environment": "staging" },
+    { "name": "policy version isolation", "grant": 0, "policyVersion": "p2" },
+    { "name": "action isolation", "grant": 0, "action": "audit.retention.retire" },
+    { "name": "retry still active", "grant": 1, "evidence": "active" },
+    { "name": "retry ended", "grant": 1, "evidence": "ended", "allow": true },
+    {
+      "name": "retry evidence unavailable",
+      "grant": 1,
+      "evidence": "unavailable",
+      "error": "unavailable"
+    },
+    { "name": "different tenant never checks evidence", "grant": 1, "tenantId": "tenant-b" }
+  ]
+}

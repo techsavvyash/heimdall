@@ -1,0 +1,24 @@
+{
+  "storageRun": "heimdall-records-ffc2de850cff4875a2a840a1b759922a",
+  "oidcRun": "6e8d70f7-6fe2-4ca7-8cc3-7e862adcab5e",
+  "products": {
+    "ledger": {
+      "revocationMissingFromRestoredJournal": true,
+      "identityDenialMissingFromRestore": true,
+      "withheldSinkReceipts": 1,
+      "backendReady": false,
+      "deliveryWorkerBlocked": true,
+      "confirmedReceiptsNotRedelivered": 20,
+      "runtimeFenced": true
+    },
+    "support": {
+      "revocationMissingFromRestoredJournal": true,
+      "identityDenialMissingFromRestore": true,
+      "withheldSinkReceipts": 1,
+      "backendReady": false,
+      "deliveryWorkerBlocked": true,
+      "confirmedReceiptsNotRedelivered": 20,
+      "runtimeFenced": true
+    }
+  }
+}

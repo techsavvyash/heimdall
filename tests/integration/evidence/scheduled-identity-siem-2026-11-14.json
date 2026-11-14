@@ -1,0 +1,12 @@
+{
+  "run": "6a5ec703-4537-4a11-abe2-25673488fcf7",
+  "languages": ["typescript", "go"],
+  "elasticsearch": "8.19.0",
+  "liveProvider": true,
+  "sinkOutageRetainedPending": true,
+  "lostReceiptRecovered": true,
+  "sinkRestartPreservedDocuments": true,
+  "oneDocumentPerProduct": true,
+  "tenantMismatchRejected": true,
+  "scheduledCheckpointAdvanced": true
+}

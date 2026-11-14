@@ -1,0 +1,321 @@
+{
+  "scope": {
+    "productId": "ledger",
+    "environment": "production",
+    "tenantId": "tenant-1"
+  },
+  "events": {
+    "request": {
+      "schemaVersion": 1,
+      "eventId": "z-request",
+      "eventType": "heimdall.authorization.requested",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya\u0000\u6771\u4eac"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "requested",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    "terminal": {
+      "schemaVersion": 1,
+      "eventId": "recovery-terminal",
+      "eventType": "heimdall.authorization.completed",
+      "eventVersion": 1,
+      "occurredAt": 2001,
+      "recordedAt": 2001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya\u0000\u6771\u4eac"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "outcome_unknown",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    "admin": {
+      "schemaVersion": 1,
+      "eventVersion": 1,
+      "occurredAt": 2001,
+      "recordedAt": 2001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "eventId": "recovery-99a2bae70c61704e05a7c70735a98613c6b48722752393f64c95188525cd4776",
+      "eventType": "heimdall.recovery.completed",
+      "actor": {
+        "kind": "system",
+        "id": "recovery-job"
+      },
+      "target": {
+        "type": "authorization_decision",
+        "id": "decision-1"
+      },
+      "action": "authorization.recover",
+      "outcome": "succeeded",
+      "requestId": "recovery-request"
+    },
+    "completed": {
+      "schemaVersion": 1,
+      "eventId": "recovery-terminal",
+      "eventType": "heimdall.authorization.completed",
+      "eventVersion": 1,
+      "occurredAt": 2001,
+      "recordedAt": 2001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya\u0000\u6771\u4eac"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "allow",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    "ordinary": {
+      "schemaVersion": 1,
+      "eventId": "z-request",
+      "eventType": "heimdall.authentication.completed",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya\u0000\u6771\u4eac"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    }
+  },
+  "cases": [
+    {
+      "name": "ordinary",
+      "resolution": "ordinary",
+      "bases": ["ordinary"],
+      "valid": true
+    },
+    {
+      "name": "pending",
+      "resolution": "pending",
+      "bases": ["request"],
+      "valid": true
+    },
+    {
+      "name": "completed unordered",
+      "resolution": "completed",
+      "bases": ["completed", "request"],
+      "valid": true
+    },
+    {
+      "name": "recovered unordered",
+      "resolution": "recovered",
+      "bases": ["admin", "request", "terminal"],
+      "valid": true
+    },
+    {
+      "name": "cross tenant",
+      "resolution": "pending",
+      "bases": ["request"],
+      "valid": false,
+      "scopePatch": {
+        "tenantId": "other"
+      }
+    },
+    {
+      "name": "cross product",
+      "resolution": "pending",
+      "bases": ["request"],
+      "valid": false,
+      "scopePatch": {
+        "productId": "other"
+      }
+    },
+    {
+      "name": "wrong digest",
+      "resolution": "pending",
+      "bases": ["request"],
+      "valid": false,
+      "badDigest": true
+    },
+    {
+      "name": "duplicate sinks",
+      "resolution": "pending",
+      "bases": ["request"],
+      "valid": false,
+      "routing": ["sink", "sink"]
+    },
+    {
+      "name": "missing routing",
+      "resolution": "pending",
+      "bases": ["request"],
+      "valid": false,
+      "routing": null
+    },
+    {
+      "name": "missing charged sink",
+      "resolution": "pending",
+      "bases": ["request"],
+      "valid": false,
+      "deliveryRows": 3
+    },
+    {
+      "name": "invalid sink",
+      "resolution": "pending",
+      "bases": ["request"],
+      "valid": false,
+      "routing": ["bad/sink"]
+    },
+    {
+      "name": "missing admin",
+      "resolution": "recovered",
+      "bases": ["request", "terminal"],
+      "valid": false
+    },
+    {
+      "name": "orphan admin",
+      "resolution": "ordinary",
+      "bases": ["admin"],
+      "valid": false
+    },
+    {
+      "name": "orphan terminal",
+      "resolution": "ordinary",
+      "bases": ["completed"],
+      "valid": false
+    },
+    {
+      "name": "wrong resolution",
+      "resolution": "completed",
+      "bases": ["request", "terminal"],
+      "valid": false
+    },
+    {
+      "name": "different terminal context",
+      "resolution": "completed",
+      "bases": ["request", "completed"],
+      "valid": false,
+      "patchIndex": 1,
+      "eventPatch": {
+        "action": "other"
+      }
+    },
+    {
+      "name": "wrong recovery actor",
+      "resolution": "recovered",
+      "bases": ["request", "terminal", "admin"],
+      "valid": false,
+      "patchIndex": 2,
+      "eventPatch": {
+        "actor": {
+          "kind": "unknown"
+        }
+      }
+    },
+    {
+      "name": "wrong recovery target",
+      "resolution": "recovered",
+      "bases": ["request", "terminal", "admin"],
+      "valid": false,
+      "patchIndex": 2,
+      "eventPatch": {
+        "target": {
+          "type": "authorization_decision",
+          "id": "other"
+        }
+      }
+    },
+    {
+      "name": "wrong recovery time",
+      "resolution": "recovered",
+      "bases": ["request", "terminal", "admin"],
+      "valid": false,
+      "patchIndex": 2,
+      "eventPatch": {
+        "recordedAt": 2002
+      }
+    },
+    {
+      "name": "unknown field",
+      "resolution": "pending",
+      "bases": ["request"],
+      "valid": false,
+      "patchIndex": 0,
+      "eventPatch": {
+        "extra": "value"
+      }
+    }
+  ]
+}

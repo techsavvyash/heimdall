@@ -1,0 +1,19 @@
+{
+  "productId": "ledger",
+  "environment": "login-http-test",
+  "returnToKey": "workspaces",
+  "redirectUri": "https://ledger.example.test/auth/callback",
+  "clientId": "69629023906488334@ledger",
+  "audience": "ledger-project",
+  "code": "opaque-code",
+  "cases": [
+    "missing cookie",
+    "other tab cookie",
+    "duplicate cookie",
+    "duplicate state",
+    "wrong issuer",
+    "wrong host",
+    "wrong path",
+    "wrong method"
+  ]
+}

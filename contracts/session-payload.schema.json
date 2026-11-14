@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://heimdall.dev/contracts/v1/session-payload.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "productId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "environment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "issuer": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "subject": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "createdAt": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "lastActivityAt": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "absoluteExpiresAt": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "idleExpiresAt": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "accessTokenExpiresAt": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "identityValidatedAt": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "policyVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "state": {
+      "enum": ["active", "refreshing", "reauth_required"]
+    },
+    "accessToken": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 65536
+    },
+    "refreshToken": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 65536
+    },
+    "refreshAttempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "not": {
+            "pattern": "[^A-Za-z0-9_-]"
+          }
+        },
+        "expiresAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": ["id", "expiresAt"]
+    },
+    "enterpriseEvidence": {
+      "$ref": "https://heimdall.dev/contracts/v1/enterprise-evidence.schema.json"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "productId",
+    "environment",
+    "issuer",
+    "subject",
+    "createdAt",
+    "lastActivityAt",
+    "absoluteExpiresAt",
+    "idleExpiresAt",
+    "accessTokenExpiresAt",
+    "identityValidatedAt",
+    "policyVersion",
+    "state",
+    "accessToken"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "refreshing"
+          }
+        }
+      },
+      "then": {
+        "required": ["refreshAttempt"],
+        "properties": {
+          "refreshAttempt": {}
+        }
+      },
+      "else": {
+        "properties": {
+          "refreshAttempt": false
+        }
+      }
+    }
+  ]
+}

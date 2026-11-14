@@ -1,0 +1,44 @@
+{
+  "name": "heimdall-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare": "node scripts/install-hooks.mjs",
+    "format": "oxfmt --write sdk/typescript scripts contracts policies examples tests package.json knip.json .oxlintrc.json .oxfmtrc.json .github README.md AGENTS.md pnpm-workspace.yaml",
+    "format:check": "oxfmt --check sdk/typescript scripts contracts policies examples tests package.json knip.json .oxlintrc.json .oxfmtrc.json .github README.md AGENTS.md pnpm-workspace.yaml",
+    "lint": "oxlint --deny-warnings sdk/typescript examples/ledger scripts tests/integration",
+    "typecheck": "pnpm --filter @techsavvyash/heimdall-sdk run typecheck",
+    "knip": "knip",
+    "test": "pnpm --filter @techsavvyash/heimdall-sdk run test",
+    "test:watch": "pnpm --filter @techsavvyash/heimdall-sdk run test:watch",
+    "build": "pnpm --filter @techsavvyash/heimdall-sdk run build",
+    "check:go": "sh scripts/check-go.sh",
+    "test:go": "cd sdk/go && go test -race -count=1 ./...",
+    "docs:build": "pnpm --filter @jackyzha0/quartz run build",
+    "docs:dev": "pnpm --filter @jackyzha0/quartz run dev",
+    "check:fast": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run knip && pnpm run check:go",
+    "check": "pnpm run check:fast && pnpm test && pnpm run test:go && pnpm run build && pnpm run check:package && pnpm run docs:build",
+    "probe:openfga": "node tests/integration/openfga.mjs",
+    "probe:federation": "node tests/integration/federation.mjs",
+    "probe:oidc": "node tests/integration/oidc.mjs",
+    "probe:scim": "node tests/integration/scim.mjs",
+    "probe:zitadel": "node tests/integration/zitadel.mjs",
+    "probe:openfga-recovery": "node tests/integration/openfga-recovery.mjs",
+    "probe:federation-tenants": "node tests/integration/federation-tenants.mjs",
+    "probe:browser-oidc": "node tests/integration/browser-oidc.mjs",
+    "probe:tenant-model": "node tests/integration/tenant-model.mjs",
+    "check:package": "node scripts/check-runtime-package.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.1",
+    "knip": "6.40.0",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": "12.10.1"
+  },
+  "packageManager": "pnpm@12.10.1"
+}

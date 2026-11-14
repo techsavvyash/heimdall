@@ -1,0 +1,54 @@
+{
+  "since": "2026-11-14T00:00:00.000000Z",
+  "until": "2026-11-14T00:00:00.000008Z",
+  "cases": [
+    {
+      "name": "split at exclusive midpoint and retain uint64 identity",
+      "events": [
+        [1, "a", "1", "org"],
+        [4, "a", "18446744073709551615", "org"],
+        [5, "b", "1", "org"]
+      ],
+      "expectedSequences": ["1", "18446744073709551615", "1"],
+      "requests": 3
+    },
+    {
+      "name": "no events in the configured organization",
+      "events": [],
+      "expectedSequences": [],
+      "requests": 1
+    },
+    {
+      "name": "saturated timestamp",
+      "events": [
+        [4, "a", "1", "org"],
+        [4, "b", "1", "org"],
+        [4, "c", "1", "org"]
+      ],
+      "error": "unavailable",
+      "requests": 6
+    },
+    {
+      "name": "wrong organization even on saturated page",
+      "events": [
+        [1, "a", "1", "other"],
+        [2, "b", "2", "org"],
+        [3, "c", "3", "org"]
+      ],
+      "error": "conflict",
+      "requests": 1
+    },
+    {
+      "name": "numeric sequence is lossy",
+      "events": [[1, "a", 1, "org"]],
+      "error": "unavailable",
+      "requests": 1
+    },
+    {
+      "name": "unsigned sequence overflow",
+      "events": [[1, "a", "18446744073709551616", "org"]],
+      "error": "unavailable",
+      "requests": 1
+    }
+  ]
+}

@@ -1,0 +1,1004 @@
+{
+  "scope": {
+    "productId": "ledger",
+    "environment": "production"
+  },
+  "actor": {
+    "issuer": "https://id.example.com",
+    "subject": "Maya\u0000\u6771\u4eac"
+  },
+  "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+  "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+  "cases": [
+    {
+      "name": "exact bigint position",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": true,
+      "after": "0",
+      "limit": 1,
+      "positions": ["9007199254740993"],
+      "nextPosition": null
+    },
+    {
+      "name": "empty primary",
+      "value": {
+        "primary": true,
+        "records": []
+      },
+      "valid": true,
+      "after": "0",
+      "limit": 1,
+      "positions": [],
+      "nextPosition": null
+    },
+    {
+      "name": "lookahead preserves final consumed position",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          },
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9223372036854775807",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "second",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": true,
+      "after": "0",
+      "limit": 1,
+      "positions": ["9007199254740993"],
+      "nextPosition": "9007199254740993"
+    },
+    {
+      "name": "identityHash aaaaaaaaaaaaaaaaaaaaaaaaa",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "principal user:wrong",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:wrong",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "position 0",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "0",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "position 01",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "01",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "position 9223372036854775808",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9223372036854775808",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "revision 0",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "0",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "revision 1\n",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "1\n",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "observedAt 9007199254740992",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740992",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "observedAt -1",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "-1",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "workspace product_id support",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "support",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "workspace environment staging",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "staging",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "workspace workspace_id bad/id",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "bad/id",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "workspace workspace_id ",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "workspace lifecycle pending",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "pending",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "workspace lifecycle suspended",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "suspended",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "workspace lifecycle tombstoned",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "tombstoned",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "workspace mutation_blocked True",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": true,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "workspace name ",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "workspace revision 0",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "0",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "workspace primary False",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": false,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "workspace created_at 9007199254740992",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "9007199254740992",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "nonprimary empty",
+      "value": {
+        "primary": false,
+        "records": []
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "null records",
+      "value": {
+        "primary": true,
+        "records": null
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "position not advanced",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "9007199254740993",
+      "limit": 1
+    },
+    {
+      "name": "duplicate position",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          },
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "oversized page",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          },
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          },
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "corrupt lookahead fails whole page",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          },
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:wrong",
+            "position": "9223372036854775807",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    },
+    {
+      "name": "duplicate workspace at different position",
+      "value": {
+        "primary": true,
+        "records": [
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9007199254740993",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          },
+          {
+            "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+            "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+            "position": "9223372036854775807",
+            "revision": "9223372036854775807",
+            "observedAt": "9007199254740991",
+            "workspace": {
+              "primary": true,
+              "product_id": "ledger",
+              "environment": "production",
+              "workspace_id": "workspace",
+              "name": "\u6771\u4eac \ud83d\ude00",
+              "lifecycle": "active",
+              "mutation_blocked": false,
+              "revision": "9223372036854775807",
+              "created_at": "0",
+              "updated_at": "9007199254740991"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "after": "0",
+      "limit": 1
+    }
+  ]
+}

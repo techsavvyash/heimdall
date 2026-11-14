@@ -1,0 +1,12 @@
+[
+  "unauthenticated",
+  "forbidden",
+  "invalid_argument",
+  "not_found",
+  "conflict",
+  "unavailable",
+  "deadline_exceeded",
+  "cancelled",
+  "audit_unavailable",
+  "outcome_unknown"
+]

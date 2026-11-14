@@ -1,0 +1,18 @@
+{
+  "runId": "839f0c56ca8c480591987cf0bd244eb7",
+  "projectId": "944fc9be-8648-4237-82bc-72e4bd24a4c9",
+  "environmentId": "7bc7c286-b2dc-4415-85eb-90dd554ab2fb",
+  "serviceId": "648133ac-305b-495d-a77e-4d0c49103feb",
+  "binarySha256": "0fba2ef418197b651a23ac684bbfe3ec58af6bb6bb675688e57c02fc5b21db51",
+  "migrationSha256": "f71db3eece51c3230c27c89a4e154bda18e15de3276b2e7eb0001a3e38c79cc4",
+  "checks": [
+    "uploaded compiled Linux binary checksum",
+    "two independent runner invocations",
+    "exact ledger and ready metadata",
+    "six shared schema tables",
+    "incompatible state rejected without repair",
+    "idempotent rerun"
+  ],
+  "result": "passed",
+  "cleanupVerified": true
+}

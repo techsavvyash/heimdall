@@ -1,0 +1,302 @@
+[
+  {
+    "name": "dns",
+    "url": "https://identity.example",
+    "profile": "production",
+    "valid": true
+  },
+  {
+    "name": "path",
+    "url": "https://identity.example/oidc/v1",
+    "profile": "production",
+    "valid": true
+  },
+  {
+    "name": "escaped-unicode",
+    "url": "https://identity.example/%C3%A9",
+    "profile": "production",
+    "valid": true
+  },
+  {
+    "name": "ipv4",
+    "url": "https://192.0.2.1:8443",
+    "profile": "production",
+    "valid": true
+  },
+  {
+    "name": "ipv6",
+    "url": "https://[2001:db8::1]:443",
+    "profile": "production",
+    "valid": true
+  },
+  {
+    "name": "punycode",
+    "url": "https://xn--bcher-kva.example",
+    "profile": "production",
+    "valid": true
+  },
+  {
+    "name": "single-label",
+    "url": "https://identity",
+    "profile": "production",
+    "valid": true
+  },
+  {
+    "name": "root",
+    "url": "https://identity.example/",
+    "profile": "production",
+    "valid": true
+  },
+  {
+    "name": "http",
+    "url": "http://identity.example",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "production-loopback",
+    "url": "http://localhost:8080",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "userinfo",
+    "url": "https://user:password@identity.example",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "query",
+    "url": "https://identity.example/?a=b",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "fragment",
+    "url": "https://identity.example/#x",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "backslash",
+    "url": "https://identity.example\\evil",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "space",
+    "url": "https://identity.example/ ",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "uppercase",
+    "url": "https://IDENTITY.example",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "unicode-host",
+    "url": "https://b\u00fccher.example",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "empty-host",
+    "url": "https://",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "bad-ipv6",
+    "url": "https://[:::1]",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "zone",
+    "url": "https://[fe80::1%25eth0]",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "short-ipv4",
+    "url": "https://127.1",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "octal",
+    "url": "https://0177.0.0.1",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "hex-ip",
+    "url": "https://0x7f000001",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "numeric-ip",
+    "url": "https://2130706433",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "bad-ip",
+    "url": "https://256.1.1.1",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "empty-port",
+    "url": "https://identity.example:",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "zero-port",
+    "url": "https://identity.example:0",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "large-port",
+    "url": "https://identity.example:65536",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "padded-port",
+    "url": "https://identity.example:0443",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "empty-label",
+    "url": "https://a..example",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "hyphen-label",
+    "url": "https://-a.example",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "trailing-dot",
+    "url": "https://identity.example.",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "dot-path",
+    "url": "https://identity.example/a/../b",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "encoded-dot",
+    "url": "https://identity.example/%2e",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "encoded-slash",
+    "url": "https://identity.example/%2F",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "encoded-backslash",
+    "url": "https://identity.example/%5c",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "encoded-control",
+    "url": "https://identity.example/%00",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "invalid-percent",
+    "url": "https://identity.example/%x",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "invalid-utf8",
+    "url": "https://identity.example/%ff",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "development-localhost",
+    "url": "http://localhost:8080",
+    "profile": "loopback",
+    "valid": true
+  },
+  {
+    "name": "development-ipv4",
+    "url": "http://127.0.0.1:8080",
+    "profile": "loopback",
+    "valid": true
+  },
+  {
+    "name": "development-ipv6",
+    "url": "http://[::1]:8080",
+    "profile": "loopback",
+    "valid": true
+  },
+  {
+    "name": "development-remote",
+    "url": "http://identity.example",
+    "profile": "loopback",
+    "valid": false
+  },
+  {
+    "name": "development-localhost-suffix",
+    "url": "http://localhost.example",
+    "profile": "loopback",
+    "valid": false
+  },
+  {
+    "name": "development-other-loopback",
+    "url": "http://127.0.0.2",
+    "profile": "loopback",
+    "valid": false
+  },
+  {
+    "name": "development-wildcard",
+    "url": "http://0.0.0.0",
+    "profile": "loopback",
+    "valid": false
+  },
+  {
+    "name": "development-https-remote",
+    "url": "https://identity.example",
+    "profile": "loopback",
+    "valid": true
+  },
+  {
+    "name": "unknown-profile",
+    "url": "https://identity.example",
+    "profile": "unsafe",
+    "valid": false
+  },
+  {
+    "name": "unescaped-path-character",
+    "url": "https://id.example/<x>",
+    "profile": "production",
+    "valid": false
+  },
+  {
+    "name": "encoded-path-character",
+    "url": "https://id.example/%3Cx%3E",
+    "profile": "production",
+    "valid": true
+  }
+]

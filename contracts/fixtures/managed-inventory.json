@@ -1,0 +1,10 @@
+[
+  { "name": "complete", "nextIds": ["first", null], "expected": "inventory", "reads": 2 },
+  {
+    "name": "repeated cursor",
+    "nextIds": ["first", "first"],
+    "expected": "unavailable",
+    "reads": 2
+  },
+  { "name": "page budget", "nextIds": [], "expected": "unavailable", "reads": 100 }
+]

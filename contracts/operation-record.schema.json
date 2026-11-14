@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://heimdall.dev/contracts/v1/operation-record.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "operationId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "workspaceId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "intent": {
+      "$ref": "operation-intent.schema.json"
+    },
+    "fingerprint": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "not": {
+        "pattern": "[^a-f0-9]"
+      }
+    },
+    "keyDigest": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "not": {
+        "pattern": "[^a-f0-9]"
+      }
+    },
+    "state": {
+      "enum": [
+        "pending",
+        "retryable",
+        "dispatching",
+        "confirmed",
+        "uncertain",
+        "completed",
+        "cancelled"
+      ]
+    },
+    "dispatchCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "generation": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "createdAt": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "updatedAt": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "operationId",
+    "workspaceId",
+    "intent",
+    "fingerprint",
+    "keyDigest",
+    "state",
+    "dispatchCount",
+    "generation",
+    "createdAt",
+    "updatedAt"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "enum": ["dispatching", "confirmed", "uncertain", "completed"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "dispatchCount": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "cancelled"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "dispatchCount": {
+            "const": 0
+          }
+        }
+      }
+    }
+  ]
+}

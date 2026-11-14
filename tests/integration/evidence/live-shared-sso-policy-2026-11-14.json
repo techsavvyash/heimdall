@@ -1,0 +1,55 @@
+{
+  "runId": "03bcb3f4-55a0-4ff3-84d1-086eb67f5e03",
+  "results": [
+    {
+      "product": "ledger",
+      "deployment": "079e1c54-7d54-4098-87f1-672391103d7e",
+      "switch": "passed",
+      "sharedPolicy": {
+        "passwordFallback": 403,
+        "guestWithoutGrant": 403,
+        "guestAfterGrant": 200,
+        "earlierPolicy": 403,
+        "pendingCallback": 401,
+        "unchangedPeer": 200,
+        "freshPolicy": 200,
+        "rotatedDeployment": "43361cd9-ba0c-4d8d-a1a1-ca43a05d51c7"
+      },
+      "priorCookie": 401,
+      "staleCallback": 401,
+      "replay": 401,
+      "priorCursor": 400,
+      "discoveryBefore": "acme",
+      "discoveryAfter": "globex",
+      "resourceAfter": {
+        "acme": 403,
+        "globex": 200
+      }
+    },
+    {
+      "product": "support",
+      "deployment": "2b970e52-2149-4ebb-9afc-b9186fe6485d",
+      "switch": "passed",
+      "sharedPolicy": {
+        "passwordFallback": 403,
+        "guestWithoutGrant": 403,
+        "guestAfterGrant": 200,
+        "earlierPolicy": 403,
+        "pendingCallback": 401,
+        "unchangedPeer": 200,
+        "freshPolicy": 200,
+        "rotatedDeployment": "8ccb3cf0-e255-4b57-8c8c-e8414e951233"
+      },
+      "priorCookie": 401,
+      "staleCallback": 401,
+      "replay": 401,
+      "priorCursor": 400,
+      "discoveryBefore": "acme",
+      "discoveryAfter": "globex",
+      "resourceAfter": {
+        "acme": 403,
+        "globex": 200
+      }
+    }
+  ]
+}

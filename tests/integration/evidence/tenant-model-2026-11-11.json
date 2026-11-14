@@ -1,0 +1,28 @@
+{
+  "suite": "tenant-model-v1",
+  "runId": "d56b8bf6-fbf4-4536-b3c6-2c7e450054a9",
+  "observations": [
+    {
+      "product": "ledger",
+      "modelHash": "ad30cc1241fc3390ced7ac9301eb4069dfc075ab17fcdb06d7a9588d9ffa4277",
+      "combinations": 32,
+      "checks": 330,
+      "staleRoleDenial": true,
+      "crossTenantDenial": true,
+      "crossProductPrincipalDenial": true
+    },
+    {
+      "product": "support",
+      "modelHash": "deab0f4ac8e7e449595f3b8fe6b9712b7b0b6f139365f67611f3279abb8a00b7",
+      "combinations": 16,
+      "checks": 153,
+      "staleRoleDenial": true,
+      "crossTenantDenial": true,
+      "crossProductPrincipalDenial": true
+    }
+  ],
+  "cleanup": "owned stores deleted",
+  "limitations": [
+    "internal compiler only; runtime tuple mutation authorization and model migration not implemented"
+  ]
+}

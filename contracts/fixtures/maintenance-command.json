@@ -1,0 +1,67 @@
+[
+  {
+    "name": "acquire administrative hold",
+    "tenantId": null,
+    "action": "audit.hold.administrative.acquire",
+    "operationId": "hold-admin",
+    "expected": "receipt"
+  },
+  {
+    "name": "deny cross-tenant release",
+    "tenantId": "other",
+    "action": "audit.hold.administrative.release",
+    "operationId": "hold-admin",
+    "expected": "forbidden"
+  },
+  {
+    "name": "release administrative hold",
+    "tenantId": null,
+    "action": "audit.hold.administrative.release",
+    "operationId": "hold-admin",
+    "expected": "receipt"
+  },
+  {
+    "name": "acquire retry hold",
+    "tenantId": null,
+    "action": "audit.hold.retry.acquire",
+    "operationId": "hold-retry",
+    "expected": "receipt"
+  },
+  {
+    "name": "deny retry hold release without matching evidence",
+    "tenantId": null,
+    "action": "audit.hold.retry.release",
+    "operationId": "unknown-retry",
+    "expected": "forbidden"
+  },
+  {
+    "name": "release retry hold",
+    "tenantId": null,
+    "action": "audit.hold.retry.release",
+    "operationId": "hold-retry",
+    "expected": "receipt"
+  },
+  {
+    "name": "reject future retirement clock",
+    "tenantId": null,
+    "action": "audit.retention.retire",
+    "operationId": "retire-target",
+    "future": true,
+    "expected": "invalid_argument"
+  },
+  {
+    "name": "retire under deployment policy",
+    "tenantId": null,
+    "action": "audit.retention.retire",
+    "operationId": "retire-target",
+    "expected": "receipt"
+  },
+  {
+    "name": "retry original retirement",
+    "tenantId": null,
+    "action": "audit.retention.retire",
+    "operationId": "retire-target",
+    "expected": "receipt",
+    "retry": true
+  }
+]

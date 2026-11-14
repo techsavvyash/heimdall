@@ -1,0 +1,20 @@
+{
+  "target": {
+    "productId": "ledger",
+    "environment": "login-test",
+    "issuer": "https://identity.example.test",
+    "clientId": "ledger-web",
+    "redirectUri": "https://ledger.example.test/auth/callback",
+    "returnToKey": "workspaces",
+    "tenantPolicy": {
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "v1",
+      "strictSSO": true,
+      "providerId": "acme-sso",
+      "protocol": "oidc"
+    }
+  },
+  "federation": { "intentId": "intent_1", "authRequestId": "request_1" },
+  "lifetimeMs": 600000
+}

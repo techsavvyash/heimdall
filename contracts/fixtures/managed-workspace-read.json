@@ -1,0 +1,402 @@
+[
+  {
+    "name": "active",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "active",
+      "mutation_blocked": false,
+      "revision": "9223372036854775807",
+      "created_at": "0",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "check_relationships"
+  },
+  {
+    "name": "pending",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "pending",
+      "mutation_blocked": false,
+      "revision": "9223372036854775807",
+      "created_at": "0",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "deny"
+  },
+  {
+    "name": "suspended",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "suspended",
+      "mutation_blocked": false,
+      "revision": "9223372036854775807",
+      "created_at": "0",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "deny"
+  },
+  {
+    "name": "tombstoned",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "tombstoned",
+      "mutation_blocked": false,
+      "revision": "9223372036854775807",
+      "created_at": "0",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "deny"
+  },
+  {
+    "name": "blocked",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "active",
+      "mutation_blocked": true,
+      "revision": "9223372036854775807",
+      "created_at": "0",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "deny"
+  },
+  {
+    "name": "absent",
+    "row": {
+      "primary": true,
+      "product_id": null,
+      "environment": null,
+      "workspace_id": null,
+      "name": null,
+      "lifecycle": null,
+      "mutation_blocked": null,
+      "revision": null,
+      "created_at": null,
+      "updated_at": null
+    },
+    "expected": "missing"
+  },
+  {
+    "name": "invalid primary False",
+    "row": {
+      "primary": false,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "active",
+      "mutation_blocked": false,
+      "revision": "9223372036854775807",
+      "created_at": "0",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "invalid product_id 'support'",
+    "row": {
+      "primary": true,
+      "product_id": "support",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "active",
+      "mutation_blocked": false,
+      "revision": "9223372036854775807",
+      "created_at": "0",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "invalid environment 'prod'",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "prod",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "active",
+      "mutation_blocked": false,
+      "revision": "9223372036854775807",
+      "created_at": "0",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "invalid workspace_id 'other'",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "other",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "active",
+      "mutation_blocked": false,
+      "revision": "9223372036854775807",
+      "created_at": "0",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "invalid lifecycle 'unknown'",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "unknown",
+      "mutation_blocked": false,
+      "revision": "9223372036854775807",
+      "created_at": "0",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "invalid name ''",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "",
+      "lifecycle": "active",
+      "mutation_blocked": false,
+      "revision": "9223372036854775807",
+      "created_at": "0",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "invalid name '\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00",
+      "lifecycle": "active",
+      "mutation_blocked": false,
+      "revision": "9223372036854775807",
+      "created_at": "0",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "invalid revision '0'",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "active",
+      "mutation_blocked": false,
+      "revision": "0",
+      "created_at": "0",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "invalid revision '01'",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "active",
+      "mutation_blocked": false,
+      "revision": "01",
+      "created_at": "0",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "invalid revision '9223372036854775808'",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "active",
+      "mutation_blocked": false,
+      "revision": "9223372036854775808",
+      "created_at": "0",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "invalid revision '1\\n'",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "active",
+      "mutation_blocked": false,
+      "revision": "1\n",
+      "created_at": "0",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "invalid created_at '-1'",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "active",
+      "mutation_blocked": false,
+      "revision": "9223372036854775807",
+      "created_at": "-1",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "invalid created_at '01'",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "active",
+      "mutation_blocked": false,
+      "revision": "9223372036854775807",
+      "created_at": "01",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "invalid created_at '9007199254740992'",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "active",
+      "mutation_blocked": false,
+      "revision": "9223372036854775807",
+      "created_at": "9007199254740992",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "invalid updated_at '1.0'",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "active",
+      "mutation_blocked": false,
+      "revision": "9223372036854775807",
+      "created_at": "0",
+      "updated_at": "1.0"
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "invalid updated_at None",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "active",
+      "mutation_blocked": false,
+      "revision": "9223372036854775807",
+      "created_at": "0",
+      "updated_at": null
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "invalid mutation_blocked None",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "active",
+      "mutation_blocked": null,
+      "revision": "9223372036854775807",
+      "created_at": "0",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "clock reversal",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": "acme",
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "active",
+      "mutation_blocked": false,
+      "revision": "9223372036854775807",
+      "created_at": "2",
+      "updated_at": "1"
+    },
+    "expected": "unavailable"
+  },
+  {
+    "name": "partial absent",
+    "row": {
+      "primary": true,
+      "product_id": "ledger",
+      "environment": "test",
+      "workspace_id": null,
+      "name": "Acme \ud83c\udfe2",
+      "lifecycle": "active",
+      "mutation_blocked": false,
+      "revision": "9223372036854775807",
+      "created_at": "0",
+      "updated_at": "9007199254740991"
+    },
+    "expected": "unavailable"
+  }
+]

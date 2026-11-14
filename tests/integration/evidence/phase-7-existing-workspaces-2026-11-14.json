@@ -1,0 +1,40 @@
+{
+  "referenceProducts": [
+    {
+      "product": "ledger",
+      "scopedRead": 200,
+      "existingWorkspaces": {
+        "discovered": ["acme"],
+        "nonMember": 403,
+        "inactive": 403,
+        "persistedAcrossRestart": true,
+        "scopedWrite": 204,
+        "nonMemberWrite": 403,
+        "managedCreate": 404,
+        "afterLogout": 401
+      }
+    },
+    {
+      "product": "support",
+      "scopedRead": 200,
+      "existingWorkspaces": {
+        "discovered": ["acme"],
+        "nonMember": 403,
+        "inactive": 403,
+        "persistedAcrossRestart": true,
+        "scopedWrite": 204,
+        "nonMemberWrite": 403,
+        "managedCreate": 405,
+        "afterLogout": 401
+      }
+    }
+  ],
+  "storageRun": "heimdall-records-12cd9128257e41709727c21e4411ca6a",
+  "oidcRun": "3254057b-04a0-4838-b336-f8958b0b9d00",
+  "isolatedConsumers": {
+    "archive": "heimdall-sdk-0.0.0.tgz",
+    "goModuleVersion": "v0.0.0-20261114063620-6485431bd826"
+  },
+  "managedSchemaPresent": false,
+  "durableWriteDecisionReceiptsPerProduct": 4
+}

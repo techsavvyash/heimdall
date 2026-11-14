@@ -1,0 +1,107 @@
+[
+  {
+    "name": "valid",
+    "value": {
+      "schemaVersion": 1,
+      "kind": "workspace_discovery",
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1",
+      "position": "p-20",
+      "issuedAt": 1000,
+      "expiresAt": 901000
+    },
+    "valid": true
+  },
+  {
+    "name": "invalid-schemaVersion",
+    "value": {
+      "schemaVersion": 2,
+      "kind": "workspace_discovery",
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1",
+      "position": "p-20",
+      "issuedAt": 1000,
+      "expiresAt": 901000
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-productId",
+    "value": {
+      "schemaVersion": 1,
+      "kind": "workspace_discovery",
+      "productId": "ledger\n",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1",
+      "position": "p-20",
+      "issuedAt": 1000,
+      "expiresAt": 901000
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-time--1",
+    "value": {
+      "schemaVersion": 1,
+      "kind": "workspace_discovery",
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1",
+      "position": "p-20",
+      "issuedAt": -1,
+      "expiresAt": 901000
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-time-1.5",
+    "value": {
+      "schemaVersion": 1,
+      "kind": "workspace_discovery",
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1",
+      "position": "p-20",
+      "issuedAt": 1.5,
+      "expiresAt": 901000
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-time-1000",
+    "value": {
+      "schemaVersion": 1,
+      "kind": "workspace_discovery",
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1",
+      "position": "p-20",
+      "issuedAt": "1000",
+      "expiresAt": 901000
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-time-9007199254740992",
+    "value": {
+      "schemaVersion": 1,
+      "kind": "workspace_discovery",
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1",
+      "position": "p-20",
+      "issuedAt": 9007199254740992,
+      "expiresAt": 901000
+    },
+    "valid": false
+  }
+]

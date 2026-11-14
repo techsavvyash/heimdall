@@ -1,0 +1,105 @@
+{
+  "suite": "upstream-saml-intent-v1",
+  "runId": "c51343c4-8706-480c-893f-213a49dc0ee7",
+  "observedAt": "2026-11-11T00:02:27.031Z",
+  "issuer": "https://capability-zitadel-verification.up.railway.app",
+  "fixture": "https://capability-enterprise-idp-verification.up.railway.app",
+  "observations": [
+    {
+      "providerConfiguration": {
+        "ownerMatchesTargetOrganization": true,
+        "active": true,
+        "protocolMatches": true
+      }
+    },
+    {
+      "narrowLoginCredential": {
+        "role": "IAM_HEIMDALL_FEDERATION",
+        "permissions": ["session.read", "session.write", "session.link"],
+        "scope": "instance",
+        "rolelessCreateSessionStatus": 404,
+        "unrelatedUserReadStatus": 403,
+        "administratorGrantStatus": 403
+      }
+    },
+    {
+      "tamperedNameId": "rejected at failure callback without intent token"
+    },
+    {
+      "expiredIntent": {
+        "upstreamLifetimeSeconds": 20,
+        "waitedMs": 22000,
+        "validBeforeWait": true,
+        "rejections": [
+          {
+            "operation": "retrieve",
+            "status": 400,
+            "code": 9
+          },
+          {
+            "operation": "create session",
+            "status": 400,
+            "code": 9
+          }
+        ]
+      }
+    },
+    {
+      "verifiedIntentReuse": {
+        "status": 400,
+        "createdSecondVerifiedSession": false
+      }
+    },
+    {
+      "selfServiceEvidence": {
+        "credential": "user access token with ZITADEL API audience; no PAT or session token",
+        "sessionFactorsMatchFlowCredential": true,
+        "intentFields": ["verifiedAt"]
+      }
+    },
+    {
+      "downstreamCodeReplay": {
+        "status": 400,
+        "error": "invalid_request"
+      }
+    },
+    {
+      "downstreamOidc": {
+        "signatureIssuerSubjectAudienceNonce": "verified",
+        "organizationScopedRequest": true,
+        "amr": null,
+        "tokenSessionMatchesProviderSession": true,
+        "authTimeMatchesIntent": true
+      }
+    },
+    {
+      "replayedSamlResponse": {
+        "status": 302,
+        "callbackPath": "/failure",
+        "returnedIntentToken": false
+      }
+    },
+    {
+      "protocol": "upstream SAML",
+      "providerIdVerified": true,
+      "upstreamSubjectVerified": true,
+      "linkedZitadelSubjectVerified": true,
+      "organizationVerified": true,
+      "crossOrganizationLinkRejectionTested": false,
+      "successfulUserHomeMatchesProviderOrganization": true,
+      "sessionOrganizationMatchesProviderOrganization": true,
+      "sessionIntentVerified": true,
+      "sessionIntentFields": ["verifiedAt"],
+      "passwordFallbackUsed": false,
+      "invalidIntentTokenStatus": 403,
+      "mismatchedUserStatus": 400
+    }
+  ],
+  "cleanup": "owned organizations, realm and sessions deleted",
+  "limitations": [
+    "protocol fixture form automation; not browser UI validation",
+    "strict tenant switching, policy-version invalidation and browser binding still unverified",
+    "SDK strict policy lifecycle not implemented",
+    "Dedicated instance session role performs fixture authentication; browser binding remains unverified"
+  ]
+}

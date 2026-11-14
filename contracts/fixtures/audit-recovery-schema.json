@@ -1,0 +1,74 @@
+{
+  "sourceVersion": 1,
+  "targetVersion": 2,
+  "path": "session/0002.sql",
+  "checksum": "f7e859c78a6d099ad4a4d35c96e553ba10a53e3ae7e23440237c769efcd50722",
+  "status": "prepared-not-runtime-enabled",
+  "cases": [
+    {
+      "name": "missing-request",
+      "sql": "INSERT INTO heimdall.audit_decisions VALUES('ledger','test','missing','absent',10,'pending',NULL,NULL)",
+      "sqlState": "23503"
+    },
+    {
+      "name": "cross-product-request",
+      "sql": "INSERT INTO heimdall.audit_decisions VALUES('support','test','cross','request',10,'pending',NULL,NULL)",
+      "sqlState": "23503"
+    },
+    {
+      "name": "pending-terminal",
+      "sql": "UPDATE heimdall.audit_decisions SET terminal_event_id='terminal',resolved_at=20 WHERE decision_id='decision'",
+      "sqlState": "23514"
+    },
+    {
+      "name": "terminal-without-event",
+      "sql": "UPDATE heimdall.audit_decisions SET resolution='completed',resolved_at=20 WHERE decision_id='decision'",
+      "sqlState": "23514"
+    },
+    {
+      "name": "time-regression",
+      "sql": "UPDATE heimdall.audit_decisions SET resolution='completed',terminal_event_id='terminal',resolved_at=9 WHERE decision_id='decision'",
+      "sqlState": "23514"
+    },
+    {
+      "name": "same-event",
+      "sql": "UPDATE heimdall.audit_decisions SET resolution='completed',terminal_event_id='request',resolved_at=20 WHERE decision_id='decision'",
+      "sqlState": "23514"
+    },
+    {
+      "name": "request-rebind",
+      "sql": "UPDATE heimdall.audit_decisions SET request_event_id='terminal' WHERE decision_id='decision'",
+      "sqlState": "23514"
+    },
+    {
+      "name": "scope-rebind",
+      "sql": "UPDATE heimdall.audit_decisions SET product_id='other' WHERE decision_id='decision'",
+      "sqlState": "23514"
+    },
+    {
+      "name": "request-time-rebind",
+      "sql": "UPDATE heimdall.audit_decisions SET requested_at=11 WHERE decision_id='decision'",
+      "sqlState": "23514"
+    },
+    {
+      "name": "duplicate-request",
+      "sql": "INSERT INTO heimdall.audit_decisions VALUES('ledger','test','duplicate','request',10,'pending',NULL,NULL)",
+      "sqlState": "23505"
+    },
+    {
+      "name": "request-retention",
+      "sql": "DELETE FROM heimdall.audit_events WHERE event_id='request'",
+      "sqlState": "23503"
+    },
+    {
+      "name": "unsafe-timestamp",
+      "sql": "INSERT INTO heimdall.audit_decisions VALUES('ledger','test','bad-time','terminal',9007199254740992,'pending',NULL,NULL)",
+      "sqlState": "23514"
+    },
+    {
+      "name": "skip-pending",
+      "sql": "INSERT INTO heimdall.audit_decisions VALUES('ledger','test','skip','terminal',10,'recovered','request',20)",
+      "sqlState": "23514"
+    }
+  ]
+}

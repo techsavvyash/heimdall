@@ -1,0 +1,88 @@
+{
+  "tag": "sdk/go/v0.1.0-rc.2",
+  "sourceCommit": "1458a7f8760903401fbbc5b9577520e89e28bcd9",
+  "ciRun": 43573001067,
+  "archive": "heimdall-sdk-0.1.0-rc.2.tgz",
+  "goModuleVersion": "v0.1.0-rc.2",
+  "archiveSHA256": "01093773609dea5e64ddb36ddd4ddf3113f4c964c93c7ebd0b3a0b33d6e7565b",
+  "auditSDKVersion": "0.1.0-rc.2",
+  "storageRun": "heimdall-records-8923ebc1df8547e18a5e44dff03065d2",
+  "oidcRun": "37fb7b1b-cf63-4743-8a76-e2c9306c86d6",
+  "applicationSchema": "managed-v5",
+  "operatorSetup": [
+    {
+      "product": "ledger",
+      "confirmedSteps": 4,
+      "replay": "unchanged"
+    },
+    {
+      "product": "support",
+      "confirmedSteps": 4,
+      "replay": "unchanged"
+    }
+  ],
+  "products": [
+    {
+      "product": "ledger",
+      "session": "issued and logged out",
+      "discovery": "Acme",
+      "scopedRead": 200,
+      "businessWrite": {
+        "action": "approve",
+        "insufficientRole": 403,
+        "crossTenantId": 404,
+        "authorized": 204,
+        "repeat": 204,
+        "inactiveWorkspace": 403,
+        "pendingWorkspace": 403,
+        "auditUnavailable": 503
+      },
+      "reconcile": {
+        "operator": 200,
+        "unauthorized": 403,
+        "confirmedCompleted": true,
+        "terminalExcluded": true
+      },
+      "onboardingReplay": 200,
+      "administration": {
+        "grant": "confirmed",
+        "assignment": "confirmed",
+        "removal": "confirmed",
+        "regrant": "confirmed",
+        "transfer": "confirmed"
+      },
+      "matchedAuthorizationDecisions": 48
+    },
+    {
+      "product": "support",
+      "session": "issued and logged out",
+      "discovery": "Acme",
+      "scopedRead": 200,
+      "businessWrite": {
+        "action": "assign-to-me",
+        "insufficientRole": 403,
+        "crossTenantId": 404,
+        "authorized": 204,
+        "repeat": 204,
+        "inactiveWorkspace": 403,
+        "pendingWorkspace": 403,
+        "auditUnavailable": 503
+      },
+      "reconcile": {
+        "operator": 200,
+        "unauthorized": 403,
+        "confirmedCompleted": true,
+        "terminalExcluded": true
+      },
+      "onboardingReplay": 200,
+      "administration": {
+        "grant": "confirmed",
+        "assignment": "confirmed",
+        "removal": "confirmed",
+        "regrant": "confirmed",
+        "transfer": "confirmed"
+      },
+      "matchedAuthorizationDecisions": 48
+    }
+  ]
+}

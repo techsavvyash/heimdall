@@ -1,0 +1,46 @@
+{
+  "cases": [
+    {
+      "name": "active with domain evidence",
+      "user": "USER_STATE_ACTIVE",
+      "scim": { "id": "employee", "active": true, "externalId": "directory-key" },
+      "expected": "active",
+      "externalId": "directory-key"
+    },
+    {
+      "name": "active without domain evidence",
+      "user": "USER_STATE_ACTIVE",
+      "scim": { "id": "employee", "active": true },
+      "expected": "active"
+    },
+    { "name": "inactive", "user": "USER_STATE_INACTIVE", "expected": "inactive" },
+    { "name": "locked", "user": "USER_STATE_LOCKED", "expected": "inactive" },
+    { "name": "initial", "user": "USER_STATE_INITIAL", "expected": "initial" },
+    { "name": "unknown state", "user": "USER_STATE_UNSPECIFIED", "expected": "unavailable" },
+    { "name": "missing with directory access", "expected": "missing" },
+    { "name": "missing without directory access", "listStatus": 404, "expected": "unavailable" },
+    {
+      "name": "missing with conflicting SCIM state",
+      "scim": { "id": "employee", "active": false },
+      "expected": "unavailable"
+    },
+    {
+      "name": "active but SCIM already disabled",
+      "user": "USER_STATE_ACTIVE",
+      "scim": { "id": "employee", "active": false },
+      "expected": "unavailable"
+    },
+    {
+      "name": "wrong organization",
+      "user": "USER_STATE_INACTIVE",
+      "owner": "org-b",
+      "expected": "conflict"
+    },
+    {
+      "name": "wrong SCIM subject",
+      "user": "USER_STATE_ACTIVE",
+      "scim": { "id": "other", "active": true },
+      "expected": "conflict"
+    }
+  ]
+}

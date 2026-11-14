@@ -1,0 +1,213 @@
+[
+  {
+    "name": "unknown actor extra",
+    "path": ["actor"],
+    "value": {
+      "kind": "unknown",
+      "issuer": "x"
+    },
+    "valid": false
+  },
+  {
+    "name": "system actor",
+    "path": ["actor"],
+    "value": {
+      "kind": "system",
+      "id": "operator"
+    },
+    "valid": true
+  },
+  {
+    "name": "system actor invalid id",
+    "path": ["actor"],
+    "value": {
+      "kind": "system",
+      "id": "operator\n"
+    },
+    "valid": false
+  },
+  {
+    "name": "user actor missing subject",
+    "path": ["actor"],
+    "value": {
+      "kind": "user",
+      "issuer": "x"
+    },
+    "valid": false
+  },
+  {
+    "name": "unknown actor",
+    "path": ["actor"],
+    "value": {
+      "kind": "unknown"
+    },
+    "valid": true
+  },
+  {
+    "name": "target extra",
+    "path": ["target", "extra"],
+    "value": true,
+    "valid": false
+  },
+  {
+    "name": "actor extra",
+    "path": ["actor", "extra"],
+    "value": true,
+    "valid": false
+  },
+  {
+    "name": "unknown top field",
+    "path": ["extra"],
+    "value": true,
+    "valid": false
+  },
+  {
+    "name": "actor.subject unicode 1024",
+    "path": ["actor", "subject"],
+    "repeat": "🧭",
+    "count": 1024,
+    "valid": true
+  },
+  {
+    "name": "actor.subject unicode 1025",
+    "path": ["actor", "subject"],
+    "repeat": "🧭",
+    "count": 1025,
+    "valid": false
+  },
+  {
+    "name": "actor.issuer unicode 2048",
+    "path": ["actor", "issuer"],
+    "repeat": "🧭",
+    "count": 2048,
+    "valid": true
+  },
+  {
+    "name": "actor.issuer unicode 2049",
+    "path": ["actor", "issuer"],
+    "repeat": "🧭",
+    "count": 2049,
+    "valid": false
+  },
+  {
+    "name": "sdkVersion unicode 64",
+    "path": ["sdkVersion"],
+    "repeat": "🧭",
+    "count": 64,
+    "valid": true
+  },
+  {
+    "name": "sdkVersion unicode 65",
+    "path": ["sdkVersion"],
+    "repeat": "🧭",
+    "count": 65,
+    "valid": false
+  },
+  {
+    "name": "target.id unicode 8192",
+    "path": ["target", "id"],
+    "repeat": "🧭",
+    "count": 8192,
+    "valid": true
+  },
+  {
+    "name": "target.id unicode 8193",
+    "path": ["target", "id"],
+    "repeat": "🧭",
+    "count": 8193,
+    "valid": false
+  },
+  {
+    "name": "permission unicode 128",
+    "path": ["permission"],
+    "repeat": "🧭",
+    "count": 128,
+    "valid": true
+  },
+  {
+    "name": "permission unicode 129",
+    "path": ["permission"],
+    "repeat": "🧭",
+    "count": 129,
+    "valid": false
+  },
+  {
+    "name": "attributes 32",
+    "path": ["attributes"],
+    "value": {
+      "0": true,
+      "1": true,
+      "2": true,
+      "3": true,
+      "4": true,
+      "5": true,
+      "6": true,
+      "7": true,
+      "8": true,
+      "9": true,
+      "10": true,
+      "11": true,
+      "12": true,
+      "13": true,
+      "14": true,
+      "15": true,
+      "16": true,
+      "17": true,
+      "18": true,
+      "19": true,
+      "20": true,
+      "21": true,
+      "22": true,
+      "23": true,
+      "24": true,
+      "25": true,
+      "26": true,
+      "27": true,
+      "28": true,
+      "29": true,
+      "30": true,
+      "31": true
+    },
+    "valid": true
+  },
+  {
+    "name": "attributes 33",
+    "path": ["attributes"],
+    "value": {
+      "0": true,
+      "1": true,
+      "2": true,
+      "3": true,
+      "4": true,
+      "5": true,
+      "6": true,
+      "7": true,
+      "8": true,
+      "9": true,
+      "10": true,
+      "11": true,
+      "12": true,
+      "13": true,
+      "14": true,
+      "15": true,
+      "16": true,
+      "17": true,
+      "18": true,
+      "19": true,
+      "20": true,
+      "21": true,
+      "22": true,
+      "23": true,
+      "24": true,
+      "25": true,
+      "26": true,
+      "27": true,
+      "28": true,
+      "29": true,
+      "30": true,
+      "31": true,
+      "32": true
+    },
+    "valid": false
+  }
+]

@@ -1,0 +1,116 @@
+{
+  "setup": [
+    "INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at) VALUES('$scope','production','one','東京 workspace','pending',true,100,100)",
+    "INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at) VALUES('$scope','production','two','東京 workspace','pending',true,100,100)",
+    "INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at) VALUES('$scope','production','three','東京 workspace','pending',true,100,100)",
+    "INSERT INTO heimdall_managed.operations(product_id,environment,operation_id,workspace_id,kind,actor_hash,target_hash,key_digest,fingerprint,intent_payload,store_id,model_id,model_hash,manifest_version,state,dispatch_count,generation,next_attempt_at,created_at,updated_at) VALUES('$scope','production','original','one','create_workspace',decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode(repeat('a',64),'hex'),decode(repeat('b',64),'hex'),convert_to('{\"subject\":\"Maya\\u0000東京\"}','UTF8'),'store','model',decode(repeat('c',64),'hex'),1,'uncertain',1,1,0,100,100)",
+    "INSERT INTO heimdall_managed.operations(product_id,environment,operation_id,workspace_id,kind,actor_hash,target_hash,key_digest,fingerprint,intent_payload,store_id,model_id,model_hash,manifest_version,state,dispatch_count,generation,next_attempt_at,created_at,updated_at) VALUES('$scope','production','confirmed','two','create_workspace',decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode(repeat('f',64),'hex'),decode(repeat('b',64),'hex'),convert_to('{\"subject\":\"Maya\\u0000東京\"}','UTF8'),'store','model',decode(repeat('c',64),'hex'),1,'confirmed',1,1,0,100,100)",
+    "INSERT INTO heimdall_managed.membership_candidates(product_id,environment,identity_hash,principal,workspace_id,observed_at) VALUES('$scope','production',decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),'user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd','one',100)"
+  ],
+  "cases": [
+    {
+      "name": "uncertain operation retains workspace slot",
+      "sql": "INSERT INTO heimdall_managed.operations(product_id,environment,operation_id,workspace_id,kind,actor_hash,target_hash,key_digest,fingerprint,intent_payload,store_id,model_id,model_hash,manifest_version,state,dispatch_count,generation,next_attempt_at,created_at,updated_at) VALUES('$scope','production','successor','one','create_workspace',decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode(repeat('d',64),'hex'),decode(repeat('b',64),'hex'),convert_to('{\"subject\":\"Maya\\u0000東京\"}','UTF8'),'store','model',decode(repeat('c',64),'hex'),1,'uncertain',1,1,0,100,100)",
+      "sqlState": "23505"
+    },
+    {
+      "name": "another environment cannot reference workspace",
+      "sql": "INSERT INTO heimdall_managed.operations(product_id,environment,operation_id,workspace_id,kind,actor_hash,target_hash,key_digest,fingerprint,intent_payload,store_id,model_id,model_hash,manifest_version,state,dispatch_count,generation,next_attempt_at,created_at,updated_at) VALUES('$scope','staging','cross-env','one','create_workspace',decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode(repeat('d',64),'hex'),decode(repeat('b',64),'hex'),convert_to('{\"subject\":\"Maya\\u0000東京\"}','UTF8'),'store','model',decode(repeat('c',64),'hex'),1,'uncertain',1,1,0,100,100)",
+      "sqlState": "23503"
+    },
+    {
+      "name": "missing workspace cannot receive operation",
+      "sql": "INSERT INTO heimdall_managed.operations(product_id,environment,operation_id,workspace_id,kind,actor_hash,target_hash,key_digest,fingerprint,intent_payload,store_id,model_id,model_hash,manifest_version,state,dispatch_count,generation,next_attempt_at,created_at,updated_at) VALUES('$scope','production','orphan','absent','create_workspace',decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode(repeat('d',64),'hex'),decode(repeat('b',64),'hex'),convert_to('{\"subject\":\"Maya\\u0000東京\"}','UTF8'),'store','model',decode(repeat('c',64),'hex'),1,'uncertain',1,1,0,100,100)",
+      "sqlState": "23503"
+    },
+    {
+      "name": "idempotency survives another workspace",
+      "sql": "INSERT INTO heimdall_managed.operations(product_id,environment,operation_id,workspace_id,kind,actor_hash,target_hash,key_digest,fingerprint,intent_payload,store_id,model_id,model_hash,manifest_version,state,dispatch_count,generation,next_attempt_at,created_at,updated_at) VALUES('$scope','production','duplicate','three','create_workspace',decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode(repeat('a',64),'hex'),decode(repeat('b',64),'hex'),convert_to('{\"subject\":\"Maya\\u0000東京\"}','UTF8'),'store','model',decode(repeat('c',64),'hex'),1,'uncertain',1,1,0,100,100)",
+      "sqlState": "23505"
+    },
+    {
+      "name": "intent bytes are immutable",
+      "sql": "UPDATE heimdall_managed.operations SET intent_payload=decode('00','hex') WHERE product_id='$scope'",
+      "sqlState": "23514"
+    },
+    {
+      "name": "model binding is immutable",
+      "sql": "UPDATE heimdall_managed.operations SET model_id='new' WHERE product_id='$scope'",
+      "sqlState": "23514"
+    },
+    {
+      "name": "actor binding is immutable",
+      "sql": "UPDATE heimdall_managed.operations SET actor_hash=decode(repeat('d',64),'hex') WHERE product_id='$scope'",
+      "sqlState": "23514"
+    },
+    {
+      "name": "workspace identity is immutable",
+      "sql": "UPDATE heimdall_managed.workspaces SET workspace_id='changed' WHERE product_id='$scope' AND workspace_id='one'",
+      "sqlState": "23514"
+    },
+    {
+      "name": "operation generation bounded",
+      "sql": "UPDATE heimdall_managed.operations SET generation=0 WHERE product_id='$scope'",
+      "sqlState": "23514"
+    },
+    {
+      "name": "dispatched operation cannot be cancelled",
+      "sql": "UPDATE heimdall_managed.operations SET state='cancelled' WHERE product_id='$scope'",
+      "sqlState": "23514"
+    },
+    {
+      "name": "uncertain requires dispatch",
+      "sql": "UPDATE heimdall_managed.operations SET dispatch_count=0 WHERE product_id='$scope'",
+      "sqlState": "23514"
+    },
+    {
+      "name": "candidate scope foreign key",
+      "sql": "INSERT INTO heimdall_managed.membership_candidates(product_id,environment,identity_hash,principal,workspace_id,observed_at) VALUES('$scope','staging',decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),'user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd','one',100)",
+      "sqlState": "23503"
+    },
+    {
+      "name": "duplicate candidate",
+      "sql": "INSERT INTO heimdall_managed.membership_candidates(product_id,environment,identity_hash,principal,workspace_id,observed_at) VALUES('$scope','production',decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),'user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd','one',100)",
+      "sqlState": "23505"
+    },
+    {
+      "name": "candidate position cannot move",
+      "sql": "UPDATE heimdall_managed.membership_candidates SET position=position+100 WHERE product_id='$scope'",
+      "sqlState": "23514"
+    },
+    {
+      "name": "runtime cannot delete operation history",
+      "sql": "DELETE FROM heimdall_managed.operations WHERE product_id='$scope'",
+      "sqlState": "42501"
+    },
+    {
+      "name": "runtime cannot delete workspace tombstones",
+      "sql": "DELETE FROM heimdall_managed.workspaces WHERE product_id='$scope'",
+      "sqlState": "42501"
+    },
+    {
+      "name": "runtime cannot reset revisions",
+      "sql": "SELECT setval('heimdall_managed.revision_seq',1)",
+      "sqlState": "42501"
+    },
+    {
+      "name": "runtime cannot migrate",
+      "sql": "CREATE TABLE heimdall_managed.not_allowed(id int)",
+      "sqlState": "42501"
+    }
+  ],
+  "payload": "{\"subject\":\"Maya\\u0000東京\"}",
+  "principal": "user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd",
+  "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+  "rollback": [
+    "INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at) VALUES('$scope','production','rollback','東京 workspace','pending',true,100,100)",
+    "INSERT INTO heimdall_managed.operations(product_id,environment,operation_id,workspace_id,kind,actor_hash,target_hash,key_digest,fingerprint,intent_payload,store_id,model_id,model_hash,manifest_version,state,dispatch_count,generation,next_attempt_at,created_at,updated_at) VALUES('$scope','production','rollback-op','rollback','create_workspace',decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode(repeat('e',64),'hex'),decode(repeat('b',64),'hex'),convert_to('{\"subject\":\"Maya\\u0000東京\"}','UTF8'),'store','model',decode(repeat('c',64),'hex'),1,'pending',0,1,0,100,100)",
+    "INSERT INTO heimdall_managed.membership_candidates(product_id,environment,identity_hash,principal,workspace_id,observed_at) VALUES('$scope','production',decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),'user:WyJodHRwczovL2lkLmV4YW1wbGUuY29tIiwiTWF5YVx1MDAwMFx1Njc3MVx1NGVhYyJd','rollback',100)",
+    "INSERT INTO heimdall.audit_events(product_id,environment,event_id,payload_digest,recorded_at,event) VALUES('$scope','production','managed-rollback',decode(repeat('d',64),'hex'),100,'{\"productId\":\"$scope\",\"environment\":\"production\",\"eventId\":\"managed-rollback\",\"recordedAt\":100}')",
+    "INSERT INTO heimdall.audit_deliveries(product_id,environment,event_id,sink_id) VALUES('$scope','production','managed-rollback','siem')"
+  ],
+  "terminal": "UPDATE heimdall_managed.operations SET state='completed',generation=generation+1 WHERE product_id='$scope' AND operation_id='confirmed'",
+  "terminalConflict": "INSERT INTO heimdall_managed.operations(product_id,environment,operation_id,workspace_id,kind,actor_hash,target_hash,key_digest,fingerprint,intent_payload,store_id,model_id,model_hash,manifest_version,state,dispatch_count,generation,next_attempt_at,created_at,updated_at) VALUES('$scope','production','reuse','two','create_workspace',decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode(repeat('f',64),'hex'),decode(repeat('b',64),'hex'),convert_to('{\"subject\":\"Maya\\u0000東京\"}','UTF8'),'store','model',decode(repeat('c',64),'hex'),1,'uncertain',1,1,0,100,100)",
+  "successor": "INSERT INTO heimdall_managed.operations(product_id,environment,operation_id,workspace_id,kind,actor_hash,target_hash,key_digest,fingerprint,intent_payload,store_id,model_id,model_hash,manifest_version,state,dispatch_count,generation,next_attempt_at,created_at,updated_at) VALUES('$scope','production','after-confirmed','two','create_workspace',decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode(repeat('d',64),'hex'),decode(repeat('b',64),'hex'),convert_to('{\"subject\":\"Maya\\u0000東京\"}','UTF8'),'store','model',decode(repeat('c',64),'hex'),1,'pending',0,1,0,100,100)",
+  "raceOperation": "INSERT INTO heimdall_managed.operations(product_id,environment,operation_id,workspace_id,kind,actor_hash,target_hash,key_digest,fingerprint,intent_payload,store_id,model_id,model_hash,manifest_version,state,dispatch_count,generation,next_attempt_at,created_at,updated_at) VALUES('$scope','production','original','one','create_workspace',decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode('bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108','hex'),decode(repeat('a',64),'hex'),decode(repeat('b',64),'hex'),convert_to('{\"subject\":\"Maya\\u0000東京\"}','UTF8'),'store','model',decode(repeat('c',64),'hex'),1,'uncertain',1,1,0,100,100)"
+}

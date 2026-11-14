@@ -1,0 +1,32 @@
+{
+  "run": "heimdall-records-5d8671a05e1e486bbcfe111cacdf3a85",
+  "postgres": "postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac",
+  "result": "passed",
+  "checks": [
+    "TS and Go CRUD",
+    "8-way CAS single winner",
+    "expiry and product isolation",
+    "delete/recreate revision",
+    "tampered expiry denied",
+    "cancelled blocked write unknown",
+    "pool recovery",
+    "TS reads Go",
+    "Go reads TS",
+    "11 readiness states in both languages",
+    "read-only connection rejected",
+    "missing metadata table rejected",
+    "migration transaction visibility",
+    "concurrent deployment migration processes",
+    "idempotent migration and incompatible state refusal",
+    "mid-migration permission failure rolls back entire schema",
+    "held migration lock deadline and retry",
+    "confirmed COMMIT response loss returns outcome_unknown and safe rerun",
+    "TS and Go atomic audit append rollback race and conflict",
+    "bidirectional audit receipts and original sink routing",
+    "TS and Go audit committed response loss and receipt recovery",
+    "audit append with SELECT INSERT privileges only",
+    "shared U+0000 and Unicode event survives TS write and Go replay",
+    "both SDKs delivery receipt matrix and atomic partial acknowledgement",
+    "both SDKs acknowledgement committed response loss and idempotent recovery"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "sourceBase": "61b52b63bb1a0653d4ded8f06b8a59df3acebdc5",
+  "runId": "73dbee26-1946-49e7-b5ee-53491f639bfb",
+  "observedAt": "2026-11-13T13:30:10.748Z",
+  "providerDeployments": {
+    "zitadel": "7ef5c76d-4911-4326-97dc-50d5614f2a55",
+    "openfga": "cfd87a9f-da43-493c-b659-72ce4a5ba98e"
+  },
+  "postgresVersion": "17.11",
+  "runtimeChecks": [
+    {
+      "product": "ledger",
+      "publicRuntime": {
+        "typescript": "passed",
+        "go": "passed",
+        "checks": [
+          "discovery and pinned model startup",
+          "authoritative human bearer verification",
+          "invalid token audited rejection"
+        ],
+        "storage": "restricted PostgreSQL role, public factory, three committed events and delivery rows per language, persistent denial blocks warm cache"
+      }
+    },
+    {
+      "product": "support",
+      "publicRuntime": {
+        "typescript": "passed",
+        "go": "passed",
+        "checks": [
+          "discovery and pinned model startup",
+          "authoritative human bearer verification",
+          "invalid token audited rejection"
+        ],
+        "storage": "restricted PostgreSQL role, public factory, three committed events and delivery rows per language, persistent denial blocks warm cache"
+      }
+    }
+  ],
+  "auditV5": {
+    "scopes": [
+      "ledger/verification-go",
+      "ledger/verification-ts",
+      "support/verification-go",
+      "support/verification-ts"
+    ],
+    "events": 12,
+    "bytes": 10793,
+    "deliveries": 12,
+    "retainedRows": 12
+  }
+}

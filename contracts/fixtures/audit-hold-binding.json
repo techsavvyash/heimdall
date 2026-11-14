@@ -1,0 +1,1725 @@
+[
+  {
+    "name": "administrative-acquire-one",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": true
+  },
+  {
+    "name": "administrative-acquire-None",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": null,
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": null,
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": true
+  },
+  {
+    "name": "administrative-release-one",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "release",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-0b47d5c928f1546cfc5a63e5d817fddb204fa9df52dcf5930a15f363783a2e10",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.release",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": true
+  },
+  {
+    "name": "administrative-release-None",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": null,
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "release",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-0b47d5c928f1546cfc5a63e5d817fddb204fa9df52dcf5930a15f363783a2e10",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": null,
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.release",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": true
+  },
+  {
+    "name": "retry-acquire-one",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "retry",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.retry.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": true
+  },
+  {
+    "name": "retry-acquire-None",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": null,
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "retry",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": null,
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.retry.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": true
+  },
+  {
+    "name": "retry-release-one",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "retry",
+      "operation": "release",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-0b47d5c928f1546cfc5a63e5d817fddb204fa9df52dcf5930a15f363783a2e10",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.retry.release",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": true
+  },
+  {
+    "name": "retry-release-None",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": null,
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "retry",
+      "operation": "release",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-0b47d5c928f1546cfc5a63e5d817fddb204fa9df52dcf5930a15f363783a2e10",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": null,
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.retry.release",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": true
+  },
+  {
+    "name": "audit-productId-support",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "support",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "audit-environment-staging",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "audit-tenantId-None",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": null,
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "audit-operationId-other-hold",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "other-hold",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "audit-policyVersion-other-policy",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "other-policy"
+    },
+    "valid": false
+  },
+  {
+    "name": "audit-eventId-other-audit",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "other-audit",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "audit-action-audit.hold.retry.acquire",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.retry.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "audit-source-operator",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "operator",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "audit-eventType-heimdall.export.completed",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.export.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "audit-outcome-failed",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "failed",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "audit-recordedAt-1002",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1002,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "audit-occurredAt-1000",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "audit-actor-{'kind': 'unknown'}",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "unknown"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "audit-target-{'type': 'audit_event', 'id': 'other-target'}",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "other-target"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "audit-target-{'type': 'workspace', 'id': 'protected-1'}",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "workspace",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "audit-attributes-{'reason': 'freeform'}",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {
+        "reason": "freeform"
+      },
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "audit-decisionId-unrelated-decision",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1",
+      "decisionId": "unrelated-decision"
+    },
+    "valid": false
+  },
+  {
+    "name": "request-productId-",
+    "request": {
+      "productId": "",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "request-environment-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "request": {
+      "productId": "ledger",
+      "environment": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "request-tenantId-",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "request-holdId-bad id",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "bad id",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "request-eventId-bad id",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "bad id",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "request-purpose-expired",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "expired",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "request-operation-renew",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "renew",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "request-at--1",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": -1,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "request-at-9007199254740992",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 9007199254740992,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "request-policyVersion-",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": ""
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "user-actor",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": true
+  },
+  {
+    "name": "missing-target",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": null,
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "malformed-actor",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "secret-attribute",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {
+        "token": "secret"
+      },
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "fractional-audit-time",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "protected-1",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1000.5,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "protected-1"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  },
+  {
+    "name": "cannot-hold-own-administration",
+    "request": {
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "holdId": "hold-1",
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "purpose": "administrative",
+      "operation": "acquire",
+      "at": 1001,
+      "policyVersion": "retention-1"
+    },
+    "administration": {
+      "schemaVersion": 1,
+      "eventId": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1001,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "one",
+      "actor": {
+        "kind": "system",
+        "id": "maintenance"
+      },
+      "target": {
+        "type": "audit_event",
+        "id": "hold-a8642efa1f953baeb09f6927f746bad4eb7cb1952e63d3b2cbfa44ed02b4e7f3"
+      },
+      "action": "audit.hold.administrative.acquire",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "operationId": "hold-1",
+      "policyVersion": "retention-1"
+    },
+    "valid": false
+  }
+]

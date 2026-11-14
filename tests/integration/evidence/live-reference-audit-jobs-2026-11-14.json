@@ -1,0 +1,32 @@
+{
+  "delivery": {
+    "run": "cae27495-ed0e-4264-99fa-fd29ba94379b",
+    "elasticsearch": "8.19.0",
+    "products": {
+      "ledger": {
+        "documents": 91,
+        "loginDecisionBusinessAndRoleChange": true,
+        "recipientReadAfterGrant": true
+      },
+      "support": {
+        "documents": 93,
+        "loginDecisionBusinessAndRoleChange": true,
+        "recipientReadAfterGrant": true
+      }
+    },
+    "referenceJobs": true
+  },
+  "collection": {
+    "run": "aee816fa-f87a-4188-abb0-a0709735810c",
+    "languages": ["typescript", "go"],
+    "elasticsearch": "8.19.0",
+    "liveProvider": true,
+    "sinkOutageRetainedPending": true,
+    "lostReceiptRecovered": true,
+    "sinkRestartPreservedDocuments": true,
+    "oneDocumentPerProduct": true,
+    "tenantMismatchRejected": true,
+    "scheduledCheckpointAdvanced": true,
+    "referenceCollectorJobs": true
+  }
+}

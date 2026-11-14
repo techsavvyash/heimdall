@@ -1,0 +1,681 @@
+[
+  {
+    "name": "valid-ledger",
+    "manifest": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "config": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1,
+      "clientKey": "web"
+    },
+    "valid": true
+  },
+  {
+    "name": "undeclared-permission",
+    "manifest": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read", "invoice.delete"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "config": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1,
+      "clientKey": "web"
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-owner-role",
+    "manifest": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "founder",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "config": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1,
+      "clientKey": "web"
+    },
+    "valid": false
+  },
+  {
+    "name": "unknown-delegator",
+    "manifest": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"],
+        "ghost": ["viewer"]
+      }
+    },
+    "config": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1,
+      "clientKey": "web"
+    },
+    "valid": false
+  },
+  {
+    "name": "unknown-delegated-role",
+    "manifest": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver", "ghost"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "config": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1,
+      "clientKey": "web"
+    },
+    "valid": false
+  },
+  {
+    "name": "owner-grant-forbidden",
+    "manifest": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin", "owner"]
+      }
+    },
+    "config": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1,
+      "clientKey": "web"
+    },
+    "valid": false
+  },
+  {
+    "name": "admin-self-owner",
+    "manifest": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver", "owner"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "config": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1,
+      "clientKey": "web"
+    },
+    "valid": false
+  },
+  {
+    "name": "prototype-role-missing",
+    "manifest": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "constructor",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "config": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1,
+      "clientKey": "web"
+    },
+    "valid": false
+  },
+  {
+    "name": "mismatched-productId",
+    "manifest": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "config": {
+      "schemaVersion": 1,
+      "productId": "support",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1,
+      "clientKey": "web"
+    },
+    "valid": false
+  },
+  {
+    "name": "mismatched-manifestVersion",
+    "manifest": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "config": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 2,
+      "clientKey": "web"
+    },
+    "valid": false
+  },
+  {
+    "name": "mismatched-clientKey",
+    "manifest": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "config": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1,
+      "clientKey": "mobile"
+    },
+    "valid": false
+  },
+  {
+    "name": "declared-constructor-role",
+    "manifest": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"],
+        "constructor": []
+      },
+      "ownerRole": "constructor",
+      "delegation": {
+        "constructor": ["viewer"]
+      }
+    },
+    "config": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1,
+      "clientKey": "web"
+    },
+    "valid": true
+  },
+  {
+    "name": "product-defined-owner-role",
+    "manifest": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "founder": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "founder",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "founder": ["viewer", "approver", "admin"]
+      }
+    },
+    "config": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1,
+      "clientKey": "web"
+    },
+    "valid": true
+  },
+  {
+    "name": "explicit-loopback-client",
+    "manifest": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["http://127.0.0.1:3000/auth/callback"],
+          "transportProfile": "loopback"
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "config": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1,
+      "clientKey": "web",
+      "transportProfile": "loopback"
+    },
+    "valid": true
+  },
+  {
+    "name": "client-runtime-profile-mismatch",
+    "manifest": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["http://127.0.0.1:3000/auth/callback"],
+          "transportProfile": "loopback"
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "config": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1,
+      "clientKey": "web",
+      "transportProfile": "production"
+    },
+    "valid": false
+  },
+  {
+    "name": "loopback-client-remote-http",
+    "manifest": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["http://product.example/auth/callback"],
+          "transportProfile": "loopback"
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "config": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "audience": "ledger-api",
+      "clientId": "client-1",
+      "zitadelProjectId": "project-1",
+      "openfga": {
+        "url": "https://fga.example.com",
+        "storeId": "store-1",
+        "modelId": "model-1"
+      },
+      "manifestVersion": 1,
+      "clientKey": "web",
+      "transportProfile": "loopback"
+    },
+    "valid": false
+  }
+]

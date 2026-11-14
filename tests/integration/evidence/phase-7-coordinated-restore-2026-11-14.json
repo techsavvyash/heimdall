@@ -1,0 +1,35 @@
+{
+  "storageRun": "heimdall-records-7d34a45667214f2b88410bea0b7f3aad",
+  "zitadelDeployment": "e1a7b573-5ca8-4048-82bb-ba1c235dfa86",
+  "openfgaDeployment": "cfd87a9f-da43-493c-b659-72ce4a5ba98e",
+  "products": [
+    {
+      "product": "ledger",
+      "scopedRead": 200,
+      "coordinatedRestore": {
+        "runtimeFenced": true,
+        "revokedMembershipStayedAbsent": true,
+        "identityDenialReconciled": true,
+        "staleCookie": 401,
+        "reactivatedIdentity": 401,
+        "freshOwner": 200,
+        "confirmedReceiptsNotRedelivered": 20,
+        "remainingDeliveries": 71
+      }
+    },
+    {
+      "product": "support",
+      "scopedRead": 200,
+      "coordinatedRestore": {
+        "runtimeFenced": true,
+        "revokedMembershipStayedAbsent": true,
+        "identityDenialReconciled": true,
+        "staleCookie": 401,
+        "reactivatedIdentity": 401,
+        "freshOwner": 200,
+        "confirmedReceiptsNotRedelivered": 20,
+        "remainingDeliveries": 67
+      }
+    }
+  ]
+}

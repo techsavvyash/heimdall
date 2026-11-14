@@ -1,0 +1,17 @@
+[
+  { "name": "valid", "failure": "", "expected": "ready" },
+  { "name": "storage unavailable", "failure": "storage", "expected": "unavailable" },
+  { "name": "discovery unavailable", "failure": "discovery", "expected": "unavailable" },
+  { "name": "issuer mismatch", "failure": "issuer", "expected": "unavailable" },
+  {
+    "name": "unsupported introspection route",
+    "failure": "introspection",
+    "expected": "unavailable"
+  },
+  { "name": "model mismatch", "failure": "model", "expected": "unavailable" },
+  { "name": "credential unavailable", "failure": "credential", "expected": "unavailable" },
+  { "name": "wrong storage product", "failure": "scope", "expected": "invalid_argument" },
+  { "name": "invalid policy", "failure": "policy", "expected": "invalid_argument" },
+  { "name": "missing ready", "failure": "missing", "expected": "invalid_argument" },
+  { "name": "precancelled", "failure": "cancelled", "expected": "cancelled" }
+]

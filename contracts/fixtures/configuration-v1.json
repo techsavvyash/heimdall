@@ -1,0 +1,1270 @@
+{
+  "config": {
+    "schemaVersion": 1,
+    "productId": "ledger",
+    "environment": "production",
+    "issuer": "https://id.example.com",
+    "audience": "ledger-api",
+    "clientId": "client-1",
+    "zitadelProjectId": "project-1",
+    "openfga": {
+      "url": "https://fga.example.com",
+      "storeId": "store-1",
+      "modelId": "model-1"
+    },
+    "manifestVersion": 1,
+    "clientKey": "web"
+  },
+  "manifest": {
+    "schemaVersion": 1,
+    "productId": "ledger",
+    "version": 1,
+    "clients": {
+      "web": {
+        "redirectUris": ["https://ledger.example.com/auth/callback"]
+      }
+    },
+    "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+    "roles": {
+      "viewer": ["invoice.read"],
+      "approver": ["invoice.read", "invoice.approve"],
+      "admin": ["invoice.read", "members.manage"],
+      "owner": ["invoice.read", "invoice.approve", "members.manage"]
+    },
+    "ownerRole": "owner",
+    "delegation": {
+      "admin": ["viewer", "approver"],
+      "owner": ["viewer", "approver", "admin"]
+    }
+  },
+  "cases": [
+    {
+      "name": "production",
+      "valid": true
+    },
+    {
+      "name": "ZITADEL qualified client ID",
+      "config": [[["clientId"], "69629023906488334@ledger"]],
+      "valid": true
+    },
+    {
+      "name": "multiple client ID qualifiers",
+      "config": [[["clientId"], "69629023906488334@ledger@other"]],
+      "valid": false
+    },
+    {
+      "name": "unknown config field",
+      "config": [[["secret"], "do-not-log"]],
+      "valid": false
+    },
+    {
+      "name": "wrong product",
+      "config": [[["productId"], "support"]],
+      "valid": false
+    },
+    {
+      "name": "wrong version",
+      "config": [[["manifestVersion"], 2]],
+      "valid": false
+    },
+    {
+      "name": "unknown client",
+      "config": [[["clientKey"], "mobile"]],
+      "valid": false
+    },
+    {
+      "name": "encoded traversal",
+      "config": [[["openfga", "url"], "https://fga.example.com/%2e%2e/admin"]],
+      "valid": false
+    },
+    {
+      "name": "credential URL",
+      "config": [[["issuer"], "https://secret@id.example.com"]],
+      "valid": false
+    },
+    {
+      "name": "profile mismatch",
+      "config": [[["transportProfile"], "loopback"]],
+      "valid": false
+    },
+    {
+      "name": "unknown owner",
+      "manifest": [[["ownerRole"], "missing"]],
+      "valid": false
+    },
+    {
+      "name": "undeclared permission",
+      "manifest": [[["roles", "viewer"], ["unknown.permission"]]],
+      "valid": false
+    },
+    {
+      "name": "duplicate grants",
+      "manifest": [
+        [
+          ["roles", "viewer"],
+          ["invoice.read", "invoice.read"]
+        ]
+      ],
+      "valid": false
+    },
+    {
+      "name": "owner delegation",
+      "manifest": [[["delegation", "admin"], ["owner"]]],
+      "valid": false
+    },
+    {
+      "name": "unknown delegation actor",
+      "manifest": [[["delegation", "nobody"], ["viewer"]]],
+      "valid": false
+    },
+    {
+      "name": "unknown delegation target",
+      "manifest": [[["delegation", "admin"], ["nobody"]]],
+      "valid": false
+    },
+    {
+      "name": "empty clients",
+      "manifest": [[["clients"], {}]],
+      "valid": false
+    },
+    {
+      "name": "empty roles",
+      "manifest": [[["roles"], {}]],
+      "valid": false
+    },
+    {
+      "name": "null delegation",
+      "manifest": [[["delegation"], null]],
+      "valid": false
+    },
+    {
+      "name": "array masquerading as roles",
+      "manifest": [[["roles"], []]],
+      "valid": false
+    },
+    {
+      "name": "duplicate redirects",
+      "manifest": [
+        [
+          ["clients", "web", "redirectUris"],
+          ["https://ledger.example.com/auth/callback", "https://ledger.example.com/auth/callback"]
+        ]
+      ],
+      "valid": false
+    },
+    {
+      "name": "redirect without path",
+      "manifest": [[["clients", "web", "redirectUris"], ["https://ledger.example.com"]]],
+      "valid": false
+    },
+    {
+      "name": "unknown nested field",
+      "manifest": [[["clients", "web", "secret"], "redacted"]],
+      "valid": false
+    },
+    {
+      "name": "empty role valid",
+      "manifest": [[["roles", "empty"], []]],
+      "valid": true
+    },
+    {
+      "name": "explicit loopback",
+      "config": [
+        [["transportProfile"], "loopback"],
+        [["issuer"], "http://127.0.0.1:8080"],
+        [["openfga", "url"], "http://localhost:8081"]
+      ],
+      "manifest": [
+        [["clients", "web", "transportProfile"], "loopback"],
+        [["clients", "web", "redirectUris"], ["http://127.0.0.1:3000/callback"]]
+      ],
+      "valid": true
+    },
+    {
+      "name": "declared constructor role",
+      "manifest": [[["roles", "constructor"], ["invoice.read"]]],
+      "valid": true
+    },
+    {
+      "name": "supplementary audience at bound",
+      "config": [
+        [
+          ["audience"],
+          "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+        ]
+      ],
+      "valid": true
+    },
+    {
+      "name": "supplementary audience over bound",
+      "config": [
+        [
+          ["audience"],
+          "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+        ]
+      ],
+      "valid": false
+    },
+    {
+      "name": "role count at bound",
+      "manifest": [
+        [
+          ["roles"],
+          {
+            "viewer": ["invoice.read"],
+            "approver": ["invoice.read", "invoice.approve"],
+            "admin": ["invoice.read", "members.manage"],
+            "owner": ["invoice.read", "invoice.approve", "members.manage"],
+            "r0": [],
+            "r1": [],
+            "r2": [],
+            "r3": [],
+            "r4": [],
+            "r5": [],
+            "r6": [],
+            "r7": [],
+            "r8": [],
+            "r9": [],
+            "r10": [],
+            "r11": [],
+            "r12": [],
+            "r13": [],
+            "r14": [],
+            "r15": [],
+            "r16": [],
+            "r17": [],
+            "r18": [],
+            "r19": [],
+            "r20": [],
+            "r21": [],
+            "r22": [],
+            "r23": [],
+            "r24": [],
+            "r25": [],
+            "r26": [],
+            "r27": [],
+            "r28": [],
+            "r29": [],
+            "r30": [],
+            "r31": [],
+            "r32": [],
+            "r33": [],
+            "r34": [],
+            "r35": [],
+            "r36": [],
+            "r37": [],
+            "r38": [],
+            "r39": [],
+            "r40": [],
+            "r41": [],
+            "r42": [],
+            "r43": [],
+            "r44": [],
+            "r45": [],
+            "r46": [],
+            "r47": [],
+            "r48": [],
+            "r49": [],
+            "r50": [],
+            "r51": [],
+            "r52": [],
+            "r53": [],
+            "r54": [],
+            "r55": [],
+            "r56": [],
+            "r57": [],
+            "r58": [],
+            "r59": [],
+            "r60": [],
+            "r61": [],
+            "r62": [],
+            "r63": [],
+            "r64": [],
+            "r65": [],
+            "r66": [],
+            "r67": [],
+            "r68": [],
+            "r69": [],
+            "r70": [],
+            "r71": [],
+            "r72": [],
+            "r73": [],
+            "r74": [],
+            "r75": [],
+            "r76": [],
+            "r77": [],
+            "r78": [],
+            "r79": [],
+            "r80": [],
+            "r81": [],
+            "r82": [],
+            "r83": [],
+            "r84": [],
+            "r85": [],
+            "r86": [],
+            "r87": [],
+            "r88": [],
+            "r89": [],
+            "r90": [],
+            "r91": [],
+            "r92": [],
+            "r93": [],
+            "r94": [],
+            "r95": [],
+            "r96": [],
+            "r97": [],
+            "r98": [],
+            "r99": [],
+            "r100": [],
+            "r101": [],
+            "r102": [],
+            "r103": [],
+            "r104": [],
+            "r105": [],
+            "r106": [],
+            "r107": [],
+            "r108": [],
+            "r109": [],
+            "r110": [],
+            "r111": [],
+            "r112": [],
+            "r113": [],
+            "r114": [],
+            "r115": [],
+            "r116": [],
+            "r117": [],
+            "r118": [],
+            "r119": [],
+            "r120": [],
+            "r121": [],
+            "r122": [],
+            "r123": []
+          }
+        ]
+      ],
+      "valid": true
+    },
+    {
+      "name": "role count over bound",
+      "manifest": [
+        [
+          ["roles"],
+          {
+            "viewer": ["invoice.read"],
+            "approver": ["invoice.read", "invoice.approve"],
+            "admin": ["invoice.read", "members.manage"],
+            "owner": ["invoice.read", "invoice.approve", "members.manage"],
+            "r0": [],
+            "r1": [],
+            "r2": [],
+            "r3": [],
+            "r4": [],
+            "r5": [],
+            "r6": [],
+            "r7": [],
+            "r8": [],
+            "r9": [],
+            "r10": [],
+            "r11": [],
+            "r12": [],
+            "r13": [],
+            "r14": [],
+            "r15": [],
+            "r16": [],
+            "r17": [],
+            "r18": [],
+            "r19": [],
+            "r20": [],
+            "r21": [],
+            "r22": [],
+            "r23": [],
+            "r24": [],
+            "r25": [],
+            "r26": [],
+            "r27": [],
+            "r28": [],
+            "r29": [],
+            "r30": [],
+            "r31": [],
+            "r32": [],
+            "r33": [],
+            "r34": [],
+            "r35": [],
+            "r36": [],
+            "r37": [],
+            "r38": [],
+            "r39": [],
+            "r40": [],
+            "r41": [],
+            "r42": [],
+            "r43": [],
+            "r44": [],
+            "r45": [],
+            "r46": [],
+            "r47": [],
+            "r48": [],
+            "r49": [],
+            "r50": [],
+            "r51": [],
+            "r52": [],
+            "r53": [],
+            "r54": [],
+            "r55": [],
+            "r56": [],
+            "r57": [],
+            "r58": [],
+            "r59": [],
+            "r60": [],
+            "r61": [],
+            "r62": [],
+            "r63": [],
+            "r64": [],
+            "r65": [],
+            "r66": [],
+            "r67": [],
+            "r68": [],
+            "r69": [],
+            "r70": [],
+            "r71": [],
+            "r72": [],
+            "r73": [],
+            "r74": [],
+            "r75": [],
+            "r76": [],
+            "r77": [],
+            "r78": [],
+            "r79": [],
+            "r80": [],
+            "r81": [],
+            "r82": [],
+            "r83": [],
+            "r84": [],
+            "r85": [],
+            "r86": [],
+            "r87": [],
+            "r88": [],
+            "r89": [],
+            "r90": [],
+            "r91": [],
+            "r92": [],
+            "r93": [],
+            "r94": [],
+            "r95": [],
+            "r96": [],
+            "r97": [],
+            "r98": [],
+            "r99": [],
+            "r100": [],
+            "r101": [],
+            "r102": [],
+            "r103": [],
+            "r104": [],
+            "r105": [],
+            "r106": [],
+            "r107": [],
+            "r108": [],
+            "r109": [],
+            "r110": [],
+            "r111": [],
+            "r112": [],
+            "r113": [],
+            "r114": [],
+            "r115": [],
+            "r116": [],
+            "r117": [],
+            "r118": [],
+            "r119": [],
+            "r120": [],
+            "r121": [],
+            "r122": [],
+            "r123": [],
+            "r124": []
+          }
+        ]
+      ],
+      "valid": false
+    },
+    {
+      "name": "client count at bound",
+      "manifest": [
+        [
+          ["clients"],
+          {
+            "web": {
+              "redirectUris": ["https://ledger.example.com/auth/callback"]
+            },
+            "c0": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c1": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c2": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c3": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c4": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c5": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c6": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c7": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c8": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c9": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c10": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c11": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c12": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c13": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c14": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c15": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c16": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c17": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c18": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c19": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c20": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c21": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c22": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c23": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c24": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c25": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c26": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c27": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c28": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c29": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c30": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            }
+          }
+        ]
+      ],
+      "valid": true
+    },
+    {
+      "name": "client count over bound",
+      "manifest": [
+        [
+          ["clients"],
+          {
+            "web": {
+              "redirectUris": ["https://ledger.example.com/auth/callback"]
+            },
+            "c0": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c1": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c2": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c3": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c4": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c5": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c6": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c7": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c8": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c9": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c10": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c11": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c12": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c13": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c14": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c15": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c16": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c17": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c18": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c19": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c20": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c21": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c22": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c23": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c24": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c25": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c26": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c27": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c28": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c29": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c30": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            },
+            "c31": {
+              "redirectUris": ["https://ledger.example.com/callback"]
+            }
+          }
+        ]
+      ],
+      "valid": false
+    },
+    {
+      "name": "permissions at bound",
+      "manifest": [
+        [
+          ["permissions"],
+          [
+            "invoice.read",
+            "invoice.approve",
+            "members.manage",
+            "permission.p0",
+            "permission.p1",
+            "permission.p2",
+            "permission.p3",
+            "permission.p4",
+            "permission.p5",
+            "permission.p6",
+            "permission.p7",
+            "permission.p8",
+            "permission.p9",
+            "permission.p10",
+            "permission.p11",
+            "permission.p12",
+            "permission.p13",
+            "permission.p14",
+            "permission.p15",
+            "permission.p16",
+            "permission.p17",
+            "permission.p18",
+            "permission.p19",
+            "permission.p20",
+            "permission.p21",
+            "permission.p22",
+            "permission.p23",
+            "permission.p24",
+            "permission.p25",
+            "permission.p26",
+            "permission.p27",
+            "permission.p28",
+            "permission.p29",
+            "permission.p30",
+            "permission.p31",
+            "permission.p32",
+            "permission.p33",
+            "permission.p34",
+            "permission.p35",
+            "permission.p36",
+            "permission.p37",
+            "permission.p38",
+            "permission.p39",
+            "permission.p40",
+            "permission.p41",
+            "permission.p42",
+            "permission.p43",
+            "permission.p44",
+            "permission.p45",
+            "permission.p46",
+            "permission.p47",
+            "permission.p48",
+            "permission.p49",
+            "permission.p50",
+            "permission.p51",
+            "permission.p52",
+            "permission.p53",
+            "permission.p54",
+            "permission.p55",
+            "permission.p56",
+            "permission.p57",
+            "permission.p58",
+            "permission.p59",
+            "permission.p60",
+            "permission.p61",
+            "permission.p62",
+            "permission.p63",
+            "permission.p64",
+            "permission.p65",
+            "permission.p66",
+            "permission.p67",
+            "permission.p68",
+            "permission.p69",
+            "permission.p70",
+            "permission.p71",
+            "permission.p72",
+            "permission.p73",
+            "permission.p74",
+            "permission.p75",
+            "permission.p76",
+            "permission.p77",
+            "permission.p78",
+            "permission.p79",
+            "permission.p80",
+            "permission.p81",
+            "permission.p82",
+            "permission.p83",
+            "permission.p84",
+            "permission.p85",
+            "permission.p86",
+            "permission.p87",
+            "permission.p88",
+            "permission.p89",
+            "permission.p90",
+            "permission.p91",
+            "permission.p92",
+            "permission.p93",
+            "permission.p94",
+            "permission.p95",
+            "permission.p96",
+            "permission.p97",
+            "permission.p98",
+            "permission.p99",
+            "permission.p100",
+            "permission.p101",
+            "permission.p102",
+            "permission.p103",
+            "permission.p104",
+            "permission.p105",
+            "permission.p106",
+            "permission.p107",
+            "permission.p108",
+            "permission.p109",
+            "permission.p110",
+            "permission.p111",
+            "permission.p112",
+            "permission.p113",
+            "permission.p114",
+            "permission.p115",
+            "permission.p116",
+            "permission.p117",
+            "permission.p118",
+            "permission.p119",
+            "permission.p120",
+            "permission.p121",
+            "permission.p122",
+            "permission.p123",
+            "permission.p124",
+            "permission.p125",
+            "permission.p126",
+            "permission.p127",
+            "permission.p128",
+            "permission.p129",
+            "permission.p130",
+            "permission.p131",
+            "permission.p132",
+            "permission.p133",
+            "permission.p134",
+            "permission.p135",
+            "permission.p136",
+            "permission.p137",
+            "permission.p138",
+            "permission.p139",
+            "permission.p140",
+            "permission.p141",
+            "permission.p142",
+            "permission.p143",
+            "permission.p144",
+            "permission.p145",
+            "permission.p146",
+            "permission.p147",
+            "permission.p148",
+            "permission.p149",
+            "permission.p150",
+            "permission.p151",
+            "permission.p152",
+            "permission.p153",
+            "permission.p154",
+            "permission.p155",
+            "permission.p156",
+            "permission.p157",
+            "permission.p158",
+            "permission.p159",
+            "permission.p160",
+            "permission.p161",
+            "permission.p162",
+            "permission.p163",
+            "permission.p164",
+            "permission.p165",
+            "permission.p166",
+            "permission.p167",
+            "permission.p168",
+            "permission.p169",
+            "permission.p170",
+            "permission.p171",
+            "permission.p172",
+            "permission.p173",
+            "permission.p174",
+            "permission.p175",
+            "permission.p176",
+            "permission.p177",
+            "permission.p178",
+            "permission.p179",
+            "permission.p180",
+            "permission.p181",
+            "permission.p182",
+            "permission.p183",
+            "permission.p184",
+            "permission.p185",
+            "permission.p186",
+            "permission.p187",
+            "permission.p188",
+            "permission.p189",
+            "permission.p190",
+            "permission.p191",
+            "permission.p192",
+            "permission.p193",
+            "permission.p194",
+            "permission.p195",
+            "permission.p196",
+            "permission.p197",
+            "permission.p198",
+            "permission.p199",
+            "permission.p200",
+            "permission.p201",
+            "permission.p202",
+            "permission.p203",
+            "permission.p204",
+            "permission.p205",
+            "permission.p206",
+            "permission.p207",
+            "permission.p208",
+            "permission.p209",
+            "permission.p210",
+            "permission.p211",
+            "permission.p212",
+            "permission.p213",
+            "permission.p214",
+            "permission.p215",
+            "permission.p216",
+            "permission.p217",
+            "permission.p218",
+            "permission.p219",
+            "permission.p220",
+            "permission.p221",
+            "permission.p222",
+            "permission.p223",
+            "permission.p224",
+            "permission.p225",
+            "permission.p226",
+            "permission.p227",
+            "permission.p228",
+            "permission.p229",
+            "permission.p230",
+            "permission.p231",
+            "permission.p232",
+            "permission.p233",
+            "permission.p234",
+            "permission.p235",
+            "permission.p236",
+            "permission.p237",
+            "permission.p238",
+            "permission.p239",
+            "permission.p240",
+            "permission.p241",
+            "permission.p242",
+            "permission.p243",
+            "permission.p244",
+            "permission.p245",
+            "permission.p246",
+            "permission.p247",
+            "permission.p248",
+            "permission.p249",
+            "permission.p250",
+            "permission.p251",
+            "permission.p252"
+          ]
+        ]
+      ],
+      "valid": true
+    },
+    {
+      "name": "permissions over bound",
+      "manifest": [
+        [
+          ["permissions"],
+          [
+            "invoice.read",
+            "invoice.approve",
+            "members.manage",
+            "permission.p0",
+            "permission.p1",
+            "permission.p2",
+            "permission.p3",
+            "permission.p4",
+            "permission.p5",
+            "permission.p6",
+            "permission.p7",
+            "permission.p8",
+            "permission.p9",
+            "permission.p10",
+            "permission.p11",
+            "permission.p12",
+            "permission.p13",
+            "permission.p14",
+            "permission.p15",
+            "permission.p16",
+            "permission.p17",
+            "permission.p18",
+            "permission.p19",
+            "permission.p20",
+            "permission.p21",
+            "permission.p22",
+            "permission.p23",
+            "permission.p24",
+            "permission.p25",
+            "permission.p26",
+            "permission.p27",
+            "permission.p28",
+            "permission.p29",
+            "permission.p30",
+            "permission.p31",
+            "permission.p32",
+            "permission.p33",
+            "permission.p34",
+            "permission.p35",
+            "permission.p36",
+            "permission.p37",
+            "permission.p38",
+            "permission.p39",
+            "permission.p40",
+            "permission.p41",
+            "permission.p42",
+            "permission.p43",
+            "permission.p44",
+            "permission.p45",
+            "permission.p46",
+            "permission.p47",
+            "permission.p48",
+            "permission.p49",
+            "permission.p50",
+            "permission.p51",
+            "permission.p52",
+            "permission.p53",
+            "permission.p54",
+            "permission.p55",
+            "permission.p56",
+            "permission.p57",
+            "permission.p58",
+            "permission.p59",
+            "permission.p60",
+            "permission.p61",
+            "permission.p62",
+            "permission.p63",
+            "permission.p64",
+            "permission.p65",
+            "permission.p66",
+            "permission.p67",
+            "permission.p68",
+            "permission.p69",
+            "permission.p70",
+            "permission.p71",
+            "permission.p72",
+            "permission.p73",
+            "permission.p74",
+            "permission.p75",
+            "permission.p76",
+            "permission.p77",
+            "permission.p78",
+            "permission.p79",
+            "permission.p80",
+            "permission.p81",
+            "permission.p82",
+            "permission.p83",
+            "permission.p84",
+            "permission.p85",
+            "permission.p86",
+            "permission.p87",
+            "permission.p88",
+            "permission.p89",
+            "permission.p90",
+            "permission.p91",
+            "permission.p92",
+            "permission.p93",
+            "permission.p94",
+            "permission.p95",
+            "permission.p96",
+            "permission.p97",
+            "permission.p98",
+            "permission.p99",
+            "permission.p100",
+            "permission.p101",
+            "permission.p102",
+            "permission.p103",
+            "permission.p104",
+            "permission.p105",
+            "permission.p106",
+            "permission.p107",
+            "permission.p108",
+            "permission.p109",
+            "permission.p110",
+            "permission.p111",
+            "permission.p112",
+            "permission.p113",
+            "permission.p114",
+            "permission.p115",
+            "permission.p116",
+            "permission.p117",
+            "permission.p118",
+            "permission.p119",
+            "permission.p120",
+            "permission.p121",
+            "permission.p122",
+            "permission.p123",
+            "permission.p124",
+            "permission.p125",
+            "permission.p126",
+            "permission.p127",
+            "permission.p128",
+            "permission.p129",
+            "permission.p130",
+            "permission.p131",
+            "permission.p132",
+            "permission.p133",
+            "permission.p134",
+            "permission.p135",
+            "permission.p136",
+            "permission.p137",
+            "permission.p138",
+            "permission.p139",
+            "permission.p140",
+            "permission.p141",
+            "permission.p142",
+            "permission.p143",
+            "permission.p144",
+            "permission.p145",
+            "permission.p146",
+            "permission.p147",
+            "permission.p148",
+            "permission.p149",
+            "permission.p150",
+            "permission.p151",
+            "permission.p152",
+            "permission.p153",
+            "permission.p154",
+            "permission.p155",
+            "permission.p156",
+            "permission.p157",
+            "permission.p158",
+            "permission.p159",
+            "permission.p160",
+            "permission.p161",
+            "permission.p162",
+            "permission.p163",
+            "permission.p164",
+            "permission.p165",
+            "permission.p166",
+            "permission.p167",
+            "permission.p168",
+            "permission.p169",
+            "permission.p170",
+            "permission.p171",
+            "permission.p172",
+            "permission.p173",
+            "permission.p174",
+            "permission.p175",
+            "permission.p176",
+            "permission.p177",
+            "permission.p178",
+            "permission.p179",
+            "permission.p180",
+            "permission.p181",
+            "permission.p182",
+            "permission.p183",
+            "permission.p184",
+            "permission.p185",
+            "permission.p186",
+            "permission.p187",
+            "permission.p188",
+            "permission.p189",
+            "permission.p190",
+            "permission.p191",
+            "permission.p192",
+            "permission.p193",
+            "permission.p194",
+            "permission.p195",
+            "permission.p196",
+            "permission.p197",
+            "permission.p198",
+            "permission.p199",
+            "permission.p200",
+            "permission.p201",
+            "permission.p202",
+            "permission.p203",
+            "permission.p204",
+            "permission.p205",
+            "permission.p206",
+            "permission.p207",
+            "permission.p208",
+            "permission.p209",
+            "permission.p210",
+            "permission.p211",
+            "permission.p212",
+            "permission.p213",
+            "permission.p214",
+            "permission.p215",
+            "permission.p216",
+            "permission.p217",
+            "permission.p218",
+            "permission.p219",
+            "permission.p220",
+            "permission.p221",
+            "permission.p222",
+            "permission.p223",
+            "permission.p224",
+            "permission.p225",
+            "permission.p226",
+            "permission.p227",
+            "permission.p228",
+            "permission.p229",
+            "permission.p230",
+            "permission.p231",
+            "permission.p232",
+            "permission.p233",
+            "permission.p234",
+            "permission.p235",
+            "permission.p236",
+            "permission.p237",
+            "permission.p238",
+            "permission.p239",
+            "permission.p240",
+            "permission.p241",
+            "permission.p242",
+            "permission.p243",
+            "permission.p244",
+            "permission.p245",
+            "permission.p246",
+            "permission.p247",
+            "permission.p248",
+            "permission.p249",
+            "permission.p250",
+            "permission.p251",
+            "permission.p252",
+            "permission.p253"
+          ]
+        ]
+      ],
+      "valid": false
+    },
+    {
+      "name": "reject final newline environment",
+      "config": [[["environment"], "production\n"]],
+      "valid": false
+    },
+    {
+      "name": "reject final newline clientId",
+      "config": [[["clientId"], "client-1\n"]],
+      "valid": false
+    },
+    {
+      "name": "reject final newline zitadelProjectId",
+      "config": [[["zitadelProjectId"], "project-1\n"]],
+      "valid": false
+    },
+    {
+      "name": "reject final newline openfga.storeId",
+      "config": [[["openfga", "storeId"], "store-1\n"]],
+      "valid": false
+    },
+    {
+      "name": "reject final newline openfga.modelId",
+      "config": [[["openfga", "modelId"], "model-1\n"]],
+      "valid": false
+    },
+    {
+      "name": "reject final newline permission",
+      "manifest": [[["permissions"], ["invoice.read\n"]]],
+      "valid": false
+    }
+  ]
+}

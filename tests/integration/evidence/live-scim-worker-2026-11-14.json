@@ -1,0 +1,25 @@
+{
+  "runId": "888542c3-5aa5-4807-9f3f-9a8c84d708f3",
+  "postgresRun": "heimdall-records-8fe4a3ef49bd429fb6e90e88e4d9b841",
+  "stages": [
+    {
+      "stage": "seed",
+      "matched": ["typescript", "go"]
+    },
+    {
+      "stage": "inactive",
+      "matched": ["typescript", "go"]
+    },
+    {
+      "stage": "reactivated",
+      "matched": ["typescript", "go"]
+    },
+    {
+      "stage": "missing",
+      "matched": ["typescript", "go"]
+    }
+  ],
+  "under60SecondDenial": true,
+  "sessionRows": "synthetic",
+  "cleanup": "disposable organizations deleted"
+}

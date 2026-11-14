@@ -1,0 +1,93 @@
+{
+  "files": [
+    {
+      "path": "0003-capacity.sql",
+      "checksum": "15da3b2fa8a64b285516dc554a9c1cb7268fec5427046722ab9854cc0710e492"
+    },
+    {
+      "path": "0003-upgrade.sql",
+      "checksum": "60366da3390b8255dcabc6d1308a4fdfe22f012ee2e7e93a4434afb19c40ab86"
+    }
+  ],
+  "schemaSQLChecksum": "b9f86e1ba31ec94822c9b5d463677926e9e824c6703808b7c7145d667c89f489",
+  "signatureChecksum": "ac3deb273159bb03187ea7a82e49927fe1948f2075d9cffed01563999e81410d",
+  "limits": {
+    "events": 100,
+    "envelopeBytes": 150000000,
+    "deliveries": 3200
+  },
+  "cases": [
+    {
+      "name": "disabled charge accounting",
+      "sql": "ALTER TABLE heimdall_capacity.event_charges DISABLE TRIGGER account_event_charge"
+    },
+    {
+      "name": "disabled reservation accounting",
+      "sql": "ALTER TABLE heimdall_capacity.reservations DISABLE TRIGGER account_reservation"
+    },
+    {
+      "name": "disabled delivery guard",
+      "sql": "ALTER TABLE heimdall.audit_deliveries DISABLE TRIGGER guard_charged_delivery"
+    },
+    {
+      "name": "disabled policy guard",
+      "sql": "ALTER TABLE heimdall_capacity.policy DISABLE TRIGGER guard_policy"
+    },
+    {
+      "name": "removed decision binding",
+      "sql": "ALTER TABLE heimdall_capacity.reservations DROP CONSTRAINT reservations_product_id_environment_decision_id_fkey"
+    },
+    {
+      "name": "removed terminal charge binding",
+      "sql": "ALTER TABLE heimdall_capacity.reservations DROP CONSTRAINT reservations_product_id_environment_terminal_event_id_fkey"
+    },
+    {
+      "name": "modified quota constraint",
+      "sql": "ALTER TABLE heimdall_capacity.policy DROP CONSTRAINT policy_event_limit_check"
+    },
+    {
+      "name": "extra charge column",
+      "sql": "ALTER TABLE heimdall_capacity.event_charges ADD COLUMN hidden text"
+    },
+    {
+      "name": "volatile ledger",
+      "sql": "ALTER TABLE heimdall_capacity.backfill SET UNLOGGED"
+    },
+    {
+      "name": "extra trigger function",
+      "sql": "CREATE FUNCTION heimdall_capacity.extra() RETURNS integer LANGUAGE sql AS 'SELECT 1'"
+    },
+    {
+      "name": "row filtering",
+      "sql": "ALTER TABLE heimdall_capacity.event_charges ENABLE ROW LEVEL SECURITY"
+    },
+    {
+      "name": "rewritten historical import guard",
+      "sql": "CREATE OR REPLACE FUNCTION heimdall_capacity.guard_reservation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$"
+    },
+    {
+      "name": "wrong receipt checksum",
+      "sql": "UPDATE heimdall_capacity.upgrade SET preparation_checksum=repeat('0',64)"
+    },
+    {
+      "name": "changed policy limits",
+      "sql": "UPDATE heimdall_capacity.policy SET event_limit=101"
+    },
+    {
+      "name": "missing checkpoint",
+      "sql": "DELETE FROM heimdall_capacity.backfill"
+    },
+    {
+      "name": "premature policy readiness",
+      "sql": "UPDATE heimdall_capacity.policy SET state='ready'"
+    },
+    {
+      "name": "premature runtime readiness",
+      "sql": "UPDATE heimdall.schema_metadata SET state='ready'"
+    },
+    {
+      "name": "replica trigger bypass",
+      "sql": "SET LOCAL session_replication_role='replica'"
+    }
+  ]
+}

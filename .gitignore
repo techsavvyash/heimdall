@@ -1,67 +1,54 @@
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-bin/
+# Dependencies and generated output
+node_modules/
+vendor/
 dist/
-
-# Test binary, built with `go test -c`
+coverage/
+.vitest/
+*.tsbuildinfo
+*.tgz
+bin/
+*.exe
 *.test
-
-# Output of the go coverage tool
 *.out
 coverage.html
 coverage.txt
 
-# Go workspace file
+# Local Go workspace
 go.work
 go.work.sum
 
-# Dependency directories
-vendor/
-
-# Environment variables
+# Local environment and credentials
 .env
-.env.local
-.env.*.local
-
-# IDE and editor files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-
-# Keys and secrets
-keys/*.pem
-keys/*.key
+.env.*
+!.env.example
+keys/
+!contracts/persistence/keys/
+!contracts/persistence/keys/*.sql
+secrets/
 *.pem
 *.key
-secrets/
+*credentials*.txt
+token*.txt
+login-response.json
 
-# Database
+# Local databases and service volumes
 *.db
 *.sqlite
 *.sqlite3
+docker-volumes/
 
-# Logs
+# Editor, OS and debugging artifacts
+.claude/
+.playwright-mcp/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
 *.log
 logs/
-
-# Temporary files
 tmp/
 temp/
 *.tmp
-
-# Build output
-/cmd/server/server
-/cmd/migrate/migrate
-
-# Docker volumes
-docker-volumes/
-
-# OS specific
-Thumbs.db

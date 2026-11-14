@@ -1,0 +1,264 @@
+[
+  {
+    "name": "pending-blocked",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "pending",
+      "mutationBlocked": true,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1"
+    },
+    "expected": "deny"
+  },
+  {
+    "name": "pending-unblocked",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "pending",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1"
+    },
+    "expected": "deny"
+  },
+  {
+    "name": "active-blocked",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": true,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1"
+    },
+    "expected": "deny"
+  },
+  {
+    "name": "active-unblocked",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1"
+    },
+    "expected": "check_relationships"
+  },
+  {
+    "name": "suspended-blocked",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "suspended",
+      "mutationBlocked": true,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1"
+    },
+    "expected": "deny"
+  },
+  {
+    "name": "suspended-unblocked",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "suspended",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1"
+    },
+    "expected": "deny"
+  },
+  {
+    "name": "tombstoned-blocked",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "tombstoned",
+      "mutationBlocked": true,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1"
+    },
+    "expected": "deny"
+  },
+  {
+    "name": "tombstoned-unblocked",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "tombstoned",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1"
+    },
+    "expected": "deny"
+  },
+  {
+    "name": "missing",
+    "record": null,
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1"
+    },
+    "expected": "deny"
+  },
+  {
+    "name": "wrong-productId",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "scope": {
+      "productId": "other",
+      "environment": "production",
+      "workspaceId": "ws-1"
+    },
+    "error": "unavailable"
+  },
+  {
+    "name": "wrong-environment",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "other",
+      "workspaceId": "ws-1"
+    },
+    "error": "unavailable"
+  },
+  {
+    "name": "wrong-workspaceId",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 1000
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "other"
+    },
+    "error": "unavailable"
+  },
+  {
+    "name": "backward-update",
+    "record": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1",
+      "name": "Acme",
+      "lifecycle": "active",
+      "mutationBlocked": false,
+      "revision": "revision-1",
+      "createdAt": 1000,
+      "updatedAt": 999
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "workspaceId": "ws-1"
+    },
+    "error": "invalid_argument"
+  }
+]

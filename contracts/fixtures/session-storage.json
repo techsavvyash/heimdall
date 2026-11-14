@@ -1,0 +1,23 @@
+{
+  "record": {
+    "schemaVersion": 1,
+    "productId": "ledger-identity",
+    "environment": "production",
+    "issuer": "https://id.example.com",
+    "subject": "Maya\u0000\u6771\u4eac",
+    "createdAt": 1000,
+    "lastActivityAt": 2000,
+    "absoluteExpiresAt": 28801000,
+    "idleExpiresAt": 1802000,
+    "accessTokenExpiresAt": 301000,
+    "identityValidatedAt": 2000,
+    "policyVersion": "policy-1",
+    "state": "active",
+    "accessToken": "synthetic-access",
+    "refreshToken": "synthetic-refresh"
+  },
+  "identityHash": "bf10ae497464ab3048e5ce814696469eca4834b4f7a940e8079fe962f9d4a108",
+  "lock": "5629870990002409647",
+  "now": 3000,
+  "expiresAt": 1802000
+}

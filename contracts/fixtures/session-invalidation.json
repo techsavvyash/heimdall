@@ -1,0 +1,27 @@
+{
+  "invalidRevisions": [
+    "",
+    "0",
+    "-1",
+    "01",
+    "1.0",
+    "1e1",
+    "9223372036854775808",
+    "1\n",
+    "1\r",
+    "1\r\n"
+  ],
+  "raceCount": 12,
+  "sharedKey": "conditional-from-ts",
+  "cases": [
+    "wrong subject",
+    "wrong issuer",
+    "wrong product",
+    "wrong environment",
+    "stale revision",
+    "already removed",
+    "delete and recreate",
+    "CAS versus invalidation",
+    "committed response loss"
+  ]
+}

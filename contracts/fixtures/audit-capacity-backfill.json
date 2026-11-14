@@ -1,0 +1,58 @@
+{
+  "scopes": [
+    {
+      "productId": "ledger",
+      "environment": "production",
+      "resolution": "pending",
+      "language": "ts"
+    },
+    {
+      "productId": "ledger",
+      "environment": "staging",
+      "resolution": "completed",
+      "language": "go"
+    },
+    {
+      "productId": "support",
+      "environment": "production",
+      "resolution": "recovered",
+      "language": "ts"
+    },
+    { "productId": "support", "environment": "staging", "resolution": "pending", "language": "go" }
+  ],
+  "events": 11,
+  "decisions": 4,
+  "reservedEvents": 4,
+  "negative": [
+    {
+      "name": "bad_digest",
+      "phase": "events",
+      "sql": "UPDATE heimdall.audit_events SET payload_digest=decode(repeat('b',64),'hex') WHERE product_id='support' AND environment='staging' AND event_id='ordinary'"
+    },
+    {
+      "name": "missing_administration",
+      "phase": "decisions",
+      "sql": "DELETE FROM heimdall.audit_deliveries WHERE product_id='support' AND environment='production' AND event_id LIKE 'recovery-%' AND event_id<>'recovery-terminal'; DELETE FROM heimdall.audit_events WHERE product_id='support' AND environment='production' AND event_id LIKE 'recovery-%' AND event_id<>'recovery-terminal'"
+    },
+    {
+      "name": "bad_request_time",
+      "phase": "decisions",
+      "sql": "ALTER TABLE heimdall.audit_decisions DISABLE TRIGGER decision_resolution; UPDATE heimdall.audit_decisions SET requested_at=requested_at+1 WHERE product_id='ledger' AND environment='production'; ALTER TABLE heimdall.audit_decisions ENABLE TRIGGER decision_resolution"
+    },
+    {
+      "name": "orphan_request",
+      "phase": "events",
+      "sql": "DELETE FROM heimdall.audit_decisions WHERE product_id='ledger' AND environment='production'"
+    },
+    {
+      "name": "skipped_cursor",
+      "phase": "events",
+      "sql": "UPDATE heimdall_capacity.backfill SET after_product='ledger',after_environment='production',after_id='ordinary',scanned_events=1"
+    },
+    {
+      "name": "wrong_imported_admin",
+      "phase": "decisions",
+      "sql": "INSERT INTO heimdall_capacity.event_charges(product_id,environment,event_id) SELECT product_id,environment,event_id FROM heimdall.audit_events; INSERT INTO heimdall_capacity.reservations(product_id,environment,decision_id,request_event_id,resolution,terminal_event_id,recovery_event_id) SELECT product_id,environment,decision_id,request_event_id,resolution,terminal_event_id,'ordinary' FROM heimdall.audit_decisions WHERE resolution='recovered'"
+    }
+  ]
+}

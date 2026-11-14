@@ -1,0 +1,27 @@
+{
+  "runId": "2caed4cb-31c2-4dac-8f5d-77c7c298ac39",
+  "suite": "upstream-saml-intent-v1",
+  "cleanup": "owned organizations, realm and sessions deleted",
+  "observations": [
+    {
+      "sdkBrowserFederation": [
+        {
+          "language": "typescript",
+          "exactIntent": "accepted",
+          "missingCookie": "denied",
+          "wrongIntent": "denied",
+          "replay": "denied",
+          "changedPolicy": "denied"
+        },
+        {
+          "language": "go",
+          "exactIntent": "accepted",
+          "missingCookie": "denied",
+          "wrongIntent": "denied",
+          "replay": "denied",
+          "changedPolicy": "denied"
+        }
+      ]
+    }
+  ]
+}

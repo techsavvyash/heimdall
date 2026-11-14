@@ -1,0 +1,19 @@
+{
+  "postgresRun": "heimdall-records-e31c7d09adeb486ebd84ebcc658fcf32",
+  "run": "067c4592-ee93-4366-884f-bb8d6d0cd948",
+  "elasticsearch": "8.19.0",
+  "products": {
+    "ledger": {
+      "providerEvent": true,
+      "durableDenialRevision": true,
+      "revisionBoundRemoval": true,
+      "tenantScopedDocuments": 25
+    },
+    "support": {
+      "providerEvent": true,
+      "durableDenialRevision": true,
+      "revisionBoundRemoval": true,
+      "tenantScopedDocuments": 25
+    }
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "postgresMajor": 17,
+  "schemaSQLChecksum": "bf9a5276f56149dae2a3c18fb8cd7f999dedcfbd6071448f7d730719ae1aebc0",
+  "signatureChecksum": "cd4520924fff2807698d34831a203bd59f5664100d27bc5ccb07d7bab033fe9d",
+  "cases": [
+    {
+      "name": "disabled decision trigger",
+      "sql": "ALTER TABLE heimdall.audit_decisions DISABLE TRIGGER decision_resolution"
+    },
+    {
+      "name": "replica-only decision trigger",
+      "sql": "ALTER TABLE heimdall.audit_decisions ENABLE REPLICA TRIGGER decision_resolution"
+    },
+    {
+      "name": "disabled foreign key triggers",
+      "sql": "ALTER TABLE heimdall.audit_decisions DISABLE TRIGGER ALL"
+    },
+    {
+      "name": "changed guard body",
+      "sql": "CREATE OR REPLACE FUNCTION heimdall.guard_decision_resolution() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$ BEGIN RETURN NEW; END; $$"
+    },
+    {
+      "name": "security definer guard",
+      "sql": "ALTER FUNCTION heimdall.guard_decision_resolution() SECURITY DEFINER"
+    },
+    {
+      "name": "guard search path",
+      "sql": "ALTER FUNCTION heimdall.guard_decision_resolution() SET search_path=public"
+    },
+    {
+      "name": "invalid index",
+      "sql": "UPDATE pg_catalog.pg_index SET indisvalid=false WHERE indexrelid='heimdall.audit_decisions_unresolved'::regclass"
+    },
+    {
+      "name": "index not write ready",
+      "sql": "UPDATE pg_catalog.pg_index SET indisready=false WHERE indexrelid='heimdall.audit_decisions_unresolved'::regclass"
+    },
+    {
+      "name": "index being dropped",
+      "sql": "UPDATE pg_catalog.pg_index SET indislive=false WHERE indexrelid='heimdall.audit_decisions_unresolved'::regclass"
+    },
+    {
+      "name": "missing unresolved index",
+      "sql": "DROP INDEX heimdall.audit_decisions_unresolved"
+    },
+    {
+      "name": "wrong unresolved index",
+      "sql": "DROP INDEX heimdall.audit_decisions_unresolved; CREATE INDEX audit_decisions_unresolved ON heimdall.audit_decisions(product_id,environment,decision_id)"
+    },
+    {
+      "name": "missing terminal uniqueness",
+      "sql": "ALTER TABLE heimdall.audit_decisions DROP CONSTRAINT audit_decisions_product_id_environment_terminal_event_id_key"
+    },
+    {
+      "name": "missing foreign key",
+      "sql": "ALTER TABLE heimdall.audit_decisions DROP CONSTRAINT audit_decisions_product_id_environment_request_event_id_fkey"
+    },
+    {
+      "name": "not validated foreign key",
+      "sql": "ALTER TABLE heimdall.audit_decisions DROP CONSTRAINT audit_decisions_product_id_environment_request_event_id_fkey; ALTER TABLE heimdall.audit_decisions ADD CONSTRAINT audit_decisions_product_id_environment_request_event_id_fkey FOREIGN KEY(product_id,environment,request_event_id) REFERENCES heimdall.audit_events(product_id,environment,event_id) ON DELETE RESTRICT NOT VALID"
+    },
+    {
+      "name": "missing phase check",
+      "sql": "ALTER TABLE heimdall.audit_decision_backfill DROP CONSTRAINT audit_decision_backfill_phase_check"
+    },
+    {
+      "name": "changed phase default",
+      "sql": "ALTER TABLE heimdall.audit_decision_backfill ALTER COLUMN phase SET DEFAULT 'outcomes'"
+    },
+    {
+      "name": "nullable counter",
+      "sql": "ALTER TABLE heimdall.audit_decision_backfill ALTER COLUMN scanned_count DROP NOT NULL"
+    },
+    {
+      "name": "extra column",
+      "sql": "ALTER TABLE heimdall.audit_upgrade ADD COLUMN bypass boolean"
+    },
+    {
+      "name": "unlogged checkpoints",
+      "sql": "ALTER TABLE heimdall.audit_decision_backfill SET UNLOGGED"
+    },
+    {
+      "name": "row level security",
+      "sql": "ALTER TABLE heimdall.audit_events ENABLE ROW LEVEL SECURITY"
+    },
+    {
+      "name": "extra rule",
+      "sql": "CREATE RULE suppress_history AS ON INSERT TO heimdall.audit_events DO INSTEAD NOTHING"
+    },
+    {
+      "name": "extra table",
+      "sql": "CREATE TABLE heimdall.unrecognized(id text)"
+    },
+    {
+      "name": "cycling revision sequence",
+      "sql": "ALTER SEQUENCE heimdall.record_revision_seq CYCLE"
+    },
+    {
+      "name": "disabled base revision trigger",
+      "sql": "ALTER TABLE heimdall.records DISABLE TRIGGER record_revision"
+    },
+    {
+      "name": "replica session",
+      "sql": "SET LOCAL session_replication_role='replica'"
+    }
+  ]
+}

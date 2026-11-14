@@ -1,0 +1,25 @@
+{
+  "product.invoice.approved": {
+    "version": 1,
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "approvalTier": {
+          "enum": ["standard", "high"]
+        },
+        "amount": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": ["approvalTier", "amount"]
+    }
+  },
+  "product.test": {
+    "version": 1,
+    "schema": {
+      "type": "object"
+    }
+  }
+}

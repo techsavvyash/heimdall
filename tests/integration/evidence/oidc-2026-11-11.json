@@ -1,0 +1,70 @@
+{
+  "suite": "zitadel-human-oidc-v1",
+  "runId": "22a95172-bd30-4a99-9d8b-d2af9c519427",
+  "observedAt": "2026-11-10T22:15:13.660Z",
+  "issuer": "https://capability-zitadel-verification.up.railway.app",
+  "observations": [
+    {
+      "product": "ledger",
+      "signatureIssuerAudienceNonce": "verified",
+      "subject": "same human",
+      "amr": ["pwd"],
+      "accessAudiences": ["399050957616323296", "399050957347887840"],
+      "introspectionActive": true,
+      "otherProductIntrospectionActive": false,
+      "refreshBeforeDeactivation": "succeeded"
+    },
+    {
+      "product": "support",
+      "signatureIssuerAudienceNonce": "verified",
+      "subject": "same human",
+      "amr": ["pwd"],
+      "accessAudiences": ["399050958102862560", "399050957834427104"],
+      "introspectionActive": true,
+      "otherProductIntrospectionActive": false,
+      "refreshBeforeDeactivation": "succeeded"
+    },
+    {
+      "providerSessionDeletion": {
+        "introspectionActive": false,
+        "refreshStatus": 200,
+        "refreshedAccessTokenActive": true,
+        "explicitRefreshRevocationStatus": 200,
+        "accessActiveAfterRefreshRevocation": false,
+        "explicitAccessRevocationStatus": 200,
+        "accessActiveAfterBothRevocations": false,
+        "refreshAfterExplicitRevocationStatus": 400,
+        "refreshAfterExplicitRevocationError": "invalid_request"
+      }
+    },
+    {
+      "product": "ledger",
+      "afterDeactivation": {
+        "authoritativeUserState": "USER_STATE_INACTIVE",
+        "introspectionActive": false,
+        "refreshStatus": 400,
+        "refreshError": "invalid_request"
+      }
+    },
+    {
+      "product": "support",
+      "afterDeactivation": {
+        "authoritativeUserState": "USER_STATE_INACTIVE",
+        "introspectionActive": false,
+        "refreshStatus": 400,
+        "refreshError": "invalid_request"
+      }
+    },
+    {
+      "afterDeletion": "user API 404; both product tokens introspect inactive"
+    }
+  ],
+  "wrongPKCE": "invalid_grant",
+  "cleanedUpOrganization": "399050954982300384",
+  "limitations": [
+    "Login client API performs password check; browser Login UI not exercised",
+    "strict upstream SAML/OIDC evidence not verified",
+    "probe JWT assertions are not SDK authentication implementation",
+    "deactivation samples are not a revocation latency guarantee"
+  ]
+}

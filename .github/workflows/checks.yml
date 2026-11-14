@@ -1,0 +1,54 @@
+name: Workspace checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: sdk/go/go.mod
+          cache: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run check
+
+  service-faults:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: sdk/go/go.mod
+          cache: false
+      - run: pnpm install --frozen-lockfile
+      - name: Run SDK and persistence fault scenarios against pinned services
+        env:
+          HEIMDALL_PROBE_PINNED_ADMIN: "1"
+          HEIMDALL_PROBE_SDK_RECOVERY: "1"
+        run: python3 tests/integration/postgres-records.py
+      - name: Verify offline session and key-ledger restore
+        run: python3 tests/integration/key-rotation.py

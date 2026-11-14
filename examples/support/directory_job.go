@@ -1,0 +1,160 @@
+package main
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"time"
+
+	heimdall "github.com/techsavvyash/heimdall/sdk/go"
+	"github.com/techsavvyash/heimdall/sdk/go/postgres"
+	"github.com/techsavvyash/heimdall/sdk/go/provisioning"
+)
+
+func runDirectoryJob(ctx context.Context, stage *string) error {
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+
+	configJSON := []byte(os.Getenv("HEIMDALL_CONFIG"))
+	var config struct{ ProductID, Environment, Issuer string }
+	workspaces, err := directoryMapping()
+	if err != nil || json.Unmarshal(configJSON, &config) != nil || config.ProductID != "support" {
+		return heimdall.ErrInvalidArgument
+	}
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		return heimdall.ErrInvalidArgument
+	}
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	options := provisioning.DirectoryReaderOptions{
+		Issuer: config.Issuer, OrganizationID: os.Getenv("HEIMDALL_DIRECTORY_ORGANIZATION"),
+		Token: os.Getenv("HEIMDALL_DIRECTORY_READER_TOKEN"),
+	}
+	polling, err := postgres.NewDirectoryPolling(db, config.ProductID, config.Environment, options)
+	if err != nil {
+		return err
+	}
+	*stage = "discovery"
+	discovery, err := polling.Discover(ctx, 25)
+	if err != nil {
+		return err
+	}
+	*stage = "observation"
+	var observed int
+	var invalidated int64
+	for after := ""; ; {
+		page, err := polling.ObserveKnown(ctx, after, 10)
+		if err != nil {
+			return err
+		}
+		observed += page.Observed
+		invalidated += page.SessionsInvalidated
+		after = page.NextSubject
+		if after == "" {
+			break
+		}
+	}
+	fmt.Printf("{\"discovered\":%d,\"cycleComplete\":%t,\"observed\":%d,\"sessionsInvalidated\":%d}\n",
+		discovery.Discovered, discovery.CycleComplete, observed, invalidated)
+
+	*stage = "pending_cleanup"
+	cleanup, err := postgres.NewDirectoryCleanup(db, config.ProductID, config.Environment, options.Issuer, options.OrganizationID, "production")
+	if err != nil {
+		return err
+	}
+	pending, err := cleanup.Pending(ctx, "", 10)
+	if err != nil {
+		return err
+	}
+	var oldestAge int64
+	if len(pending) > 0 {
+		tenantSSO, err := tenantSSOPolicy()
+		if err != nil {
+			return err
+		}
+		if os.Getenv("SUPPORT_DATABASE_URL") == "" {
+			return heimdall.ErrInvalidArgument
+		}
+		business, err := sql.Open("postgres", os.Getenv("SUPPORT_DATABASE_URL"))
+		if err != nil {
+			return err
+		}
+		defer business.Close()
+		settings, err := newProviderSettings(business, config.Environment, config.Issuer, tenantSSO, false)
+		if err != nil {
+			return err
+		}
+		storage, err := postgres.NewManagedStorage(db, postgres.StorageOptions{
+			ProductID: config.ProductID, Environment: config.Environment,
+		})
+		if err != nil {
+			return err
+		}
+		credential := func(name string) func(context.Context) (string, error) {
+			return func(context.Context) (string, error) {
+				value := os.Getenv(name)
+				if value == "" {
+					return "", heimdall.ErrInvalidArgument
+				}
+				return value, nil
+			}
+		}
+		manifestJSON := []byte(os.Getenv("HEIMDALL_MANIFEST"))
+		*stage = "runtime"
+		runtime, err := heimdall.New(ctx, configJSON, manifestJSON, heimdall.Options{
+			PolicyVersion: os.Getenv("HEIMDALL_POLICY_VERSION"), Storage: storage, TenantSSOPolicy: settings.policy,
+			Credentials: heimdall.Credentials{
+				ClientSecret: credential("HEIMDALL_CLIENT_SECRET"),
+				OpenFGAKey:   credential("HEIMDALL_OPENFGA_KEY"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+		*stage = "authorization"
+		actor, err := runtime.Tokens().Verify(ctx, os.Getenv("HEIMDALL_DIRECTORY_OPERATOR_TOKEN"))
+		if err != nil {
+			return err
+		}
+		if operator := os.Getenv("HEIMDALL_DIRECTORY_OPERATOR_SUBJECT"); operator != "" && actor.Identity().Subject != operator {
+			return heimdall.ErrForbidden
+		}
+		if err := authorizeDirectoryCleanup(ctx, runtime, actor, workspaces, manifestJSON); err != nil {
+			return err
+		}
+		*stage = "reconciliation"
+		for _, item := range pending {
+			result, err := cleanup.Reconcile(ctx, runtime, actor, item.Subject, item.Revision, workspaces)
+			if err != nil {
+				return err
+			}
+			if result != nil {
+				return heimdall.ErrOutcomeUnknown
+			}
+		}
+		oldestAge = max(0, time.Now().UnixMilli()-pending[0].ObservedAt)
+	}
+	fmt.Printf("{\"cleaned\":%d,\"oldestCleanupAgeMs\":%d}\n", len(pending), oldestAge)
+	return nil
+}
+
+func directoryJobExitCode(ctx context.Context) int {
+	stage := "configuration"
+	if err := runDirectoryJob(ctx, &stage); err != nil {
+		code := "failed"
+		var failure *heimdall.Error
+		if errors.As(err, &failure) {
+			code = string(failure.Code)
+		}
+		fmt.Fprintf(os.Stderr, "{\"directoryJob\":%q,\"stage\":%q}\n", code, stage)
+		return 1
+	}
+	return 0
+}

@@ -1,0 +1,50 @@
+{
+  "name": "@techsavvyash/heimdall-sdk",
+  "version": "0.1.0",
+  "description": "Heimdall TypeScript SDK for product authentication and authorization",
+  "bin": {
+    "heimdall-setup": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./sessionstoretest": {
+      "types": "./dist/sessionstoretest.d.ts",
+      "import": "./dist/sessionstoretest.js"
+    },
+    "./provisioning": {
+      "types": "./dist/provisioning/index.d.ts",
+      "import": "./dist/provisioning/index.js"
+    },
+    "./postgres": {
+      "types": "./dist/postgres.d.ts",
+      "import": "./dist/postgres.js"
+    }
+  },
+  "scripts": {
+    "build": "rolldown -c && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@types/pg": "8.23.1",
+    "jose": "6.2.12",
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0",
+    "rolldown": "1.2.13",
+    "vitest": "5.0.3"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

@@ -1,0 +1,1907 @@
+{
+  "profiles": {
+    "ts": {
+      "target": {
+        "schemaVersion": 1,
+        "eventId": "ordinary",
+        "eventType": "heimdall.authentication.completed",
+        "eventVersion": 1,
+        "occurredAt": 1000,
+        "recordedAt": 1001,
+        "productId": "holds-ts",
+        "environment": "production",
+        "tenantId": "tenant-1",
+        "actor": {
+          "kind": "user",
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "target": {
+          "type": "invoice",
+          "id": "invoice-1"
+        },
+        "action": "invoice.approve",
+        "outcome": "succeeded",
+        "requestId": "request-1",
+        "source": "sdk",
+        "sdkVersion": "0.0.0",
+        "attributes": {},
+        "decisionId": "decision-1",
+        "permission": "invoice.approve",
+        "modelId": "model-1",
+        "manifestVersion": 1,
+        "operationId": "operation-1",
+        "policyVersion": "policy-1"
+      },
+      "cases": [
+        {
+          "name": "acquire",
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-c3940f8f4112b3a055cf25eb508feb0c06742507b4f192f265cea91256c666b6",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "receipt",
+          "stable": false
+        },
+        {
+          "name": "exact acquire retry",
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-c3940f8f4112b3a055cf25eb508feb0c06742507b4f192f265cea91256c666b6",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "receipt",
+          "stable": true
+        },
+        {
+          "name": "changed actor",
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-c3940f8f4112b3a055cf25eb508feb0c06742507b4f192f265cea91256c666b6",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "other-actor"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "conflict",
+          "stable": true
+        },
+        {
+          "name": "changed purpose",
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "retry",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-c3940f8f4112b3a055cf25eb508feb0c06742507b4f192f265cea91256c666b6",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.retry.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "conflict",
+          "stable": true
+        },
+        {
+          "name": "changed tenant",
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": null,
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-c3940f8f4112b3a055cf25eb508feb0c06742507b4f192f265cea91256c666b6",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": null,
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "conflict",
+          "stable": true
+        },
+        {
+          "name": "changed target",
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "other",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-c3940f8f4112b3a055cf25eb508feb0c06742507b4f192f265cea91256c666b6",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "other"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "conflict",
+          "stable": true
+        },
+        {
+          "name": "release before placement",
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "release",
+            "at": 1999,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-0b4fc41c3869b90fa5fafb6ddfb6a4d8661377ea567409dc43b39a86ba0842fb",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 1999,
+            "recordedAt": 1999,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.release",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "invalid_argument",
+          "stable": true
+        },
+        {
+          "name": "release",
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "release",
+            "at": 3001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-0b4fc41c3869b90fa5fafb6ddfb6a4d8661377ea567409dc43b39a86ba0842fb",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 3001,
+            "recordedAt": 3001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.release",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "receipt",
+          "stable": false
+        },
+        {
+          "name": "exact release retry",
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "release",
+            "at": 3001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-0b4fc41c3869b90fa5fafb6ddfb6a4d8661377ea567409dc43b39a86ba0842fb",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 3001,
+            "recordedAt": 3001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.release",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "receipt",
+          "stable": true
+        },
+        {
+          "name": "acquire retry cannot reactivate",
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-c3940f8f4112b3a055cf25eb508feb0c06742507b4f192f265cea91256c666b6",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "receipt",
+          "stable": true
+        },
+        {
+          "name": "changed release time",
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "release",
+            "at": 3002,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-0b4fc41c3869b90fa5fafb6ddfb6a4d8661377ea567409dc43b39a86ba0842fb",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 3002,
+            "recordedAt": 3002,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.release",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "conflict",
+          "stable": true
+        },
+        {
+          "name": "missing release",
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "missing",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "release",
+            "at": 3001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-2cc8e118eb2bb87d853a51a2eae0df9d3ab398e61317b6425d7ff27a2e447887",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 3001,
+            "recordedAt": 3001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.release",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "missing",
+            "policyVersion": "retention-1"
+          },
+          "expected": "not_found",
+          "stable": true
+        },
+        {
+          "name": "missing target",
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "missing-target",
+            "eventId": "absent",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-1456719a91127acb51adb7c54da60fe71ddaf4fc3d4b229784acc7d5962fe10d",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "absent"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "missing-target",
+            "policyVersion": "retention-1"
+          },
+          "expected": "not_found",
+          "stable": true
+        },
+        {
+          "name": "late SQL rollback",
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "rollback",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-109b03bca2d05d60af14899813c57a8ef5005ca8dc65267f990b65e47fa5a95b",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "rollback",
+            "policyVersion": "retention-1"
+          },
+          "expected": "audit_unavailable",
+          "stable": true
+        },
+        {
+          "name": "independent retry obligation",
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "retry-1",
+            "eventId": "ordinary",
+            "purpose": "retry",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-c8d4d2e7921fc89eeca606a7f4f46de75999a56c72c0905a8e5067ca754508fa",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.retry.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "retry-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "receipt",
+          "stable": false
+        }
+      ],
+      "loss": {
+        "acquire": {
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "commit-loss",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 4001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-d838a97d2a2e5c811be01966b1bf1c9058ffbeed8b6ef531d3e266824c0d633f",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 4001,
+            "recordedAt": 4001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "commit-loss",
+            "policyVersion": "retention-1"
+          }
+        },
+        "release": {
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "commit-loss",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "release",
+            "at": 5001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-daf689d7585da54d248a6b9dcbf96c98b9cede01cd60def5c8aa4cf02df31f02",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 5001,
+            "recordedAt": 5001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.release",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "commit-loss",
+            "policyVersion": "retention-1"
+          }
+        },
+        "concurrent": {
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "concurrent",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 4001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-c6704027cc3b337065ec65bbaf697b7f3ca1b29d09fa5288482f468fca5e32c1",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 4001,
+            "recordedAt": 4001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "concurrent",
+            "policyVersion": "retention-1"
+          }
+        }
+      },
+      "group": {
+        "events": [
+          {
+            "schemaVersion": 1,
+            "eventId": "z-request",
+            "eventType": "heimdall.authorization.requested",
+            "eventVersion": 1,
+            "occurredAt": 1000,
+            "recordedAt": 1001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "user",
+              "issuer": "https://id.example.com",
+              "subject": "maya\u0000\u6771\u4eac"
+            },
+            "target": {
+              "type": "invoice",
+              "id": "invoice-1"
+            },
+            "action": "invoice.approve",
+            "outcome": "requested",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "decisionId": "decision-1",
+            "permission": "invoice.approve",
+            "modelId": "model-1",
+            "manifestVersion": 1,
+            "operationId": "operation-1",
+            "policyVersion": "policy-1"
+          },
+          {
+            "schemaVersion": 1,
+            "eventId": "normal-terminal",
+            "eventType": "heimdall.authorization.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "user",
+              "issuer": "https://id.example.com",
+              "subject": "maya\u0000\u6771\u4eac"
+            },
+            "target": {
+              "type": "invoice",
+              "id": "invoice-1"
+            },
+            "action": "invoice.approve",
+            "outcome": "allow",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "decisionId": "decision-1",
+            "permission": "invoice.approve",
+            "modelId": "model-1",
+            "manifestVersion": 1,
+            "operationId": "operation-1",
+            "policyVersion": "policy-1"
+          }
+        ],
+        "hold": {
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "group-hold",
+            "eventId": "normal-terminal",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 3001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-3d1168f32741078c8b8fe5f1c98c01142a2d67ad25e1cc99b823e44e90838b97",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 3001,
+            "recordedAt": 3001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "normal-terminal"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "group-hold",
+            "policyVersion": "retention-1"
+          }
+        },
+        "corrupt": {
+          "request": {
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "corrupt-group",
+            "eventId": "normal-terminal",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 3001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-d6fa2754a46ede10df506c58f60c4dbe80a24cc74499beef22760dc28eeeffc1",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 3001,
+            "recordedAt": 3001,
+            "productId": "holds-ts",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "normal-terminal"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "corrupt-group",
+            "policyVersion": "retention-1"
+          }
+        }
+      }
+    },
+    "go": {
+      "target": {
+        "schemaVersion": 1,
+        "eventId": "ordinary",
+        "eventType": "heimdall.authentication.completed",
+        "eventVersion": 1,
+        "occurredAt": 1000,
+        "recordedAt": 1001,
+        "productId": "holds-go",
+        "environment": "production",
+        "tenantId": "tenant-1",
+        "actor": {
+          "kind": "user",
+          "issuer": "https://id.example.com",
+          "subject": "maya"
+        },
+        "target": {
+          "type": "invoice",
+          "id": "invoice-1"
+        },
+        "action": "invoice.approve",
+        "outcome": "succeeded",
+        "requestId": "request-1",
+        "source": "sdk",
+        "sdkVersion": "0.0.0",
+        "attributes": {},
+        "decisionId": "decision-1",
+        "permission": "invoice.approve",
+        "modelId": "model-1",
+        "manifestVersion": 1,
+        "operationId": "operation-1",
+        "policyVersion": "policy-1"
+      },
+      "cases": [
+        {
+          "name": "acquire",
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-f2f8b5cb84afc964a2ded3e4f16a33f1f1eac90a673a8c030e5d62e7855275e2",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "receipt",
+          "stable": false
+        },
+        {
+          "name": "exact acquire retry",
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-f2f8b5cb84afc964a2ded3e4f16a33f1f1eac90a673a8c030e5d62e7855275e2",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "receipt",
+          "stable": true
+        },
+        {
+          "name": "changed actor",
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-f2f8b5cb84afc964a2ded3e4f16a33f1f1eac90a673a8c030e5d62e7855275e2",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "other-actor"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "conflict",
+          "stable": true
+        },
+        {
+          "name": "changed purpose",
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "retry",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-f2f8b5cb84afc964a2ded3e4f16a33f1f1eac90a673a8c030e5d62e7855275e2",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.retry.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "conflict",
+          "stable": true
+        },
+        {
+          "name": "changed tenant",
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": null,
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-f2f8b5cb84afc964a2ded3e4f16a33f1f1eac90a673a8c030e5d62e7855275e2",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": null,
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "conflict",
+          "stable": true
+        },
+        {
+          "name": "changed target",
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "other",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-f2f8b5cb84afc964a2ded3e4f16a33f1f1eac90a673a8c030e5d62e7855275e2",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "other"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "conflict",
+          "stable": true
+        },
+        {
+          "name": "release before placement",
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "release",
+            "at": 1999,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-7f87c6f18a5c9f6d1538343b38ae93e0aea297be74c424559763d668b57db548",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 1999,
+            "recordedAt": 1999,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.release",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "invalid_argument",
+          "stable": true
+        },
+        {
+          "name": "release",
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "release",
+            "at": 3001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-7f87c6f18a5c9f6d1538343b38ae93e0aea297be74c424559763d668b57db548",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 3001,
+            "recordedAt": 3001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.release",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "receipt",
+          "stable": false
+        },
+        {
+          "name": "exact release retry",
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "release",
+            "at": 3001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-7f87c6f18a5c9f6d1538343b38ae93e0aea297be74c424559763d668b57db548",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 3001,
+            "recordedAt": 3001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.release",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "receipt",
+          "stable": true
+        },
+        {
+          "name": "acquire retry cannot reactivate",
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-f2f8b5cb84afc964a2ded3e4f16a33f1f1eac90a673a8c030e5d62e7855275e2",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "receipt",
+          "stable": true
+        },
+        {
+          "name": "changed release time",
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "hold-1",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "release",
+            "at": 3002,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-7f87c6f18a5c9f6d1538343b38ae93e0aea297be74c424559763d668b57db548",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 3002,
+            "recordedAt": 3002,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.release",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "hold-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "conflict",
+          "stable": true
+        },
+        {
+          "name": "missing release",
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "missing",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "release",
+            "at": 3001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-7306fd063692a328886fdad2932bf11876593fe3de6cb66769213c3f06650dcd",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 3001,
+            "recordedAt": 3001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.release",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "missing",
+            "policyVersion": "retention-1"
+          },
+          "expected": "not_found",
+          "stable": true
+        },
+        {
+          "name": "missing target",
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "missing-target",
+            "eventId": "absent",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-e2e1f99cde5c63eade8057e3e508f93058fcbedc7d3a0704c96a9261ffcda57c",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "absent"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "missing-target",
+            "policyVersion": "retention-1"
+          },
+          "expected": "not_found",
+          "stable": true
+        },
+        {
+          "name": "late SQL rollback",
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "rollback",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-814d40d2609d2bdd2c1c3f08d8fa2d1767c8a2b83541a931beb0838cc378c163",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "rollback",
+            "policyVersion": "retention-1"
+          },
+          "expected": "audit_unavailable",
+          "stable": true
+        },
+        {
+          "name": "independent retry obligation",
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "retry-1",
+            "eventId": "ordinary",
+            "purpose": "retry",
+            "operation": "acquire",
+            "at": 2001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-121a1556d0d1ca25e7513bcfb67e1cac8a52d3e72b7c69254751d3bd0ce4f293",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.retry.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "retry-1",
+            "policyVersion": "retention-1"
+          },
+          "expected": "receipt",
+          "stable": false
+        }
+      ],
+      "loss": {
+        "acquire": {
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "commit-loss",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 4001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-2fa54e486cb24ca6dcb57c6e2cb344d1d6d781b8020169f1dbcaf9c4a19f9a51",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 4001,
+            "recordedAt": 4001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "commit-loss",
+            "policyVersion": "retention-1"
+          }
+        },
+        "release": {
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "commit-loss",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "release",
+            "at": 5001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-00b2264ec96b04cd31e880be8f1abf72ed3e4913d189946bd25b512ab67a4930",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 5001,
+            "recordedAt": 5001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.release",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "commit-loss",
+            "policyVersion": "retention-1"
+          }
+        },
+        "concurrent": {
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "concurrent",
+            "eventId": "ordinary",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 4001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-1b11cbec731bdab69bdce6fb994f7b418f09931c320563e630cc3a9140173ac9",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 4001,
+            "recordedAt": 4001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "ordinary"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "concurrent",
+            "policyVersion": "retention-1"
+          }
+        }
+      },
+      "group": {
+        "events": [
+          {
+            "schemaVersion": 1,
+            "eventId": "z-request",
+            "eventType": "heimdall.authorization.requested",
+            "eventVersion": 1,
+            "occurredAt": 1000,
+            "recordedAt": 1001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "user",
+              "issuer": "https://id.example.com",
+              "subject": "maya\u0000\u6771\u4eac"
+            },
+            "target": {
+              "type": "invoice",
+              "id": "invoice-1"
+            },
+            "action": "invoice.approve",
+            "outcome": "requested",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "decisionId": "decision-1",
+            "permission": "invoice.approve",
+            "modelId": "model-1",
+            "manifestVersion": 1,
+            "operationId": "operation-1",
+            "policyVersion": "policy-1"
+          },
+          {
+            "schemaVersion": 1,
+            "eventId": "normal-terminal",
+            "eventType": "heimdall.authorization.completed",
+            "eventVersion": 1,
+            "occurredAt": 2001,
+            "recordedAt": 2001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "user",
+              "issuer": "https://id.example.com",
+              "subject": "maya\u0000\u6771\u4eac"
+            },
+            "target": {
+              "type": "invoice",
+              "id": "invoice-1"
+            },
+            "action": "invoice.approve",
+            "outcome": "allow",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "decisionId": "decision-1",
+            "permission": "invoice.approve",
+            "modelId": "model-1",
+            "manifestVersion": 1,
+            "operationId": "operation-1",
+            "policyVersion": "policy-1"
+          }
+        ],
+        "hold": {
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "group-hold",
+            "eventId": "normal-terminal",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 3001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-a0f35f3f22e072e035b7e5d7abd5f243a35016cc701c28c4a2a912bc2c0ddef7",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 3001,
+            "recordedAt": 3001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "normal-terminal"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "group-hold",
+            "policyVersion": "retention-1"
+          }
+        },
+        "corrupt": {
+          "request": {
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "holdId": "corrupt-group",
+            "eventId": "normal-terminal",
+            "purpose": "administrative",
+            "operation": "acquire",
+            "at": 3001,
+            "policyVersion": "retention-1"
+          },
+          "administration": {
+            "schemaVersion": 1,
+            "eventId": "hold-bb180ed06e033ee42713fbf54a0b6a559fe490c297fa2a643951cb002c55495a",
+            "eventType": "heimdall.policy.completed",
+            "eventVersion": 1,
+            "occurredAt": 3001,
+            "recordedAt": 3001,
+            "productId": "holds-go",
+            "environment": "production",
+            "tenantId": "tenant-1",
+            "actor": {
+              "kind": "system",
+              "id": "maintenance"
+            },
+            "target": {
+              "type": "audit_event",
+              "id": "normal-terminal"
+            },
+            "action": "audit.hold.administrative.acquire",
+            "outcome": "succeeded",
+            "requestId": "request-1",
+            "source": "sdk",
+            "sdkVersion": "0.0.0",
+            "attributes": {},
+            "operationId": "corrupt-group",
+            "policyVersion": "retention-1"
+          }
+        }
+      }
+    }
+  },
+  "snapshot": "SELECT jsonb_build_object('holds',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_retention.event_holds t),'events',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall.audit_events t),'deliveries',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall.audit_deliveries t),'decisions',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall.audit_decisions t),'charges',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_capacity.event_charges t),'reservations',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_capacity.reservations t),'payloadCapacity',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_capacity.policy t),'identities',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_retention.event_identities t),'retainedDecisions',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_retention.decision_identities t),'metadata',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM heimdall_retention.capacity t))::text AS snapshot"
+}

@@ -1,0 +1,25 @@
+{
+  "suite": "openfga-quiescence-local-v1",
+  "runId": "cc8460a0-f525-489c-944a-f7c6f2215d40",
+  "observedAt": "2026-11-10T23:04:06.100Z",
+  "observations": {
+    "committedWriteResponseLost": true,
+    "writeObservedWaitingInDatabase": true,
+    "oldServerStoppedAndDatabaseBackendsDrained": true,
+    "interruptedClientOutcome": {
+      "transportFailure": true
+    },
+    "delayedOldCredentialWriteStatus": 401,
+    "interruptedTupleAbsentAfterRestart": true,
+    "committedWriteReconciledAfterQuiescence": true,
+    "newCredentialReconcileAndCleanup": "confirmed; delayed old credential cannot regrant",
+    "ownedProjectAndVolumeRemoved": true
+  },
+  "limitations": [
+    "single local OpenFGA replica and isolated database",
+    "all API credentials rotated; no other credential paths",
+    "not yet verified with Railway deployment controls",
+    "product lifecycle gate, durable journal and recovery authorization not implemented",
+    "deployment-wide maintenance; not per-workspace fencing"
+  ]
+}

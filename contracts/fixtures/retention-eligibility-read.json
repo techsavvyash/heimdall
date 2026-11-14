@@ -1,0 +1,236 @@
+{
+  "snapshot": "SELECT jsonb_build_object('events',(SELECT jsonb_agg(to_jsonb(e) ORDER BY product_id,environment,event_id) FROM heimdall.audit_events e),'deliveries',(SELECT jsonb_agg(to_jsonb(d) ORDER BY product_id,environment,event_id,sink_id) FROM heimdall.audit_deliveries d),'holds',(SELECT jsonb_agg(to_jsonb(h) ORDER BY product_id,environment,hold_id) FROM heimdall_retention.event_holds h),'capacity',(SELECT to_jsonb(c) FROM heimdall_retention.capacity c))::text AS snapshot",
+  "cases": [
+    {
+      "name": "missing event",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "eventId": "missing",
+      "now": 3001,
+      "retainForMs": 1000,
+      "expected": "absent"
+    },
+    {
+      "name": "wrong tenant",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "other",
+      "eventId": "z-request",
+      "now": 3001,
+      "retainForMs": 1000,
+      "expected": "absent"
+    },
+    {
+      "name": "product-level scope is exact",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": null,
+      "eventId": "z-request",
+      "now": 3001,
+      "retainForMs": 1000,
+      "expected": "absent"
+    },
+    {
+      "name": "terminal is not representative",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "eventId": "normal-terminal",
+      "now": 3001,
+      "retainForMs": 1000,
+      "error": "invalid_argument"
+    },
+    {
+      "name": "invalid retention",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "eventId": "z-request",
+      "now": 3001,
+      "retainForMs": 0,
+      "error": "invalid_argument"
+    },
+    {
+      "name": "pending group",
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "eventId": "z-request",
+      "now": 3001,
+      "retainForMs": 1000,
+      "expected": "retain_unresolved"
+    },
+    {
+      "name": "completed undelivered",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "eventId": "z-request",
+      "now": 3001,
+      "retainForMs": 1000,
+      "expected": "retain_undelivered"
+    },
+    {
+      "name": "recovered undelivered",
+      "productId": "support",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "eventId": "z-request",
+      "now": 3001,
+      "retainForMs": 1000,
+      "expected": "retain_undelivered"
+    },
+    {
+      "name": "ordinary undelivered",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "eventId": "ordinary",
+      "now": 3001,
+      "retainForMs": 1000,
+      "expected": "retain_undelivered"
+    },
+    {
+      "name": "completed boundary",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "eventId": "z-request",
+      "now": 3001,
+      "retainForMs": 1000,
+      "expected": "candidate",
+      "before": "UPDATE heimdall.audit_deliveries SET state='delivered',delivered_at=2001"
+    },
+    {
+      "name": "one millisecond early",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "eventId": "z-request",
+      "now": 3000,
+      "retainForMs": 1000,
+      "expected": "retain_age"
+    },
+    {
+      "name": "recovered boundary",
+      "productId": "support",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "eventId": "z-request",
+      "now": 3001,
+      "retainForMs": 1000,
+      "expected": "candidate"
+    },
+    {
+      "name": "ordinary boundary",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "eventId": "ordinary",
+      "now": 3001,
+      "retainForMs": 1000,
+      "expected": "candidate"
+    },
+    {
+      "name": "retry protects complete group",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "eventId": "z-request",
+      "now": 3001,
+      "retainForMs": 1000,
+      "expected": "retain_retry",
+      "before": "INSERT INTO heimdall_retention.event_holds(product_id,environment,hold_id,event_id,tenant_id,placed_at,placement_event_id,purpose) VALUES('ledger','staging','retry-a','z-request','tenant-1',1001,'ordinary','retry');INSERT INTO heimdall_retention.event_holds(product_id,environment,hold_id,event_id,tenant_id,placed_at,placement_event_id,purpose) VALUES('ledger','staging','retry-b','z-request','tenant-1',1001,'ordinary','retry')"
+    },
+    {
+      "name": "administrative hold has priority",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "eventId": "z-request",
+      "now": 3001,
+      "retainForMs": 1000,
+      "expected": "retain_held",
+      "before": "INSERT INTO heimdall_retention.event_holds(product_id,environment,hold_id,event_id,tenant_id,placed_at,placement_event_id,purpose) VALUES('ledger','staging','admin-a','z-request','tenant-1',1001,'ordinary','administrative')"
+    },
+    {
+      "name": "digest corruption is not hidden by hold",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "eventId": "z-request",
+      "now": 3001,
+      "retainForMs": 1000,
+      "error": "audit_unavailable",
+      "before": "UPDATE heimdall.audit_events SET payload_digest=decode(repeat('00',32),'hex') WHERE product_id='ledger' AND environment='staging' AND event_id='normal-terminal'",
+      "after": "UPDATE heimdall.audit_events e SET payload_digest=i.payload_digest FROM heimdall_retention.event_identities i WHERE e.product_id=i.product_id AND e.environment=i.environment AND e.event_id=i.event_id"
+    },
+    {
+      "name": "release administrative hold preserves retries",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "eventId": "z-request",
+      "now": 3001,
+      "retainForMs": 1000,
+      "expected": "retain_retry",
+      "before": "UPDATE heimdall_retention.event_holds SET released_at=2001,release_event_id='normal-terminal' WHERE hold_id='admin-a'"
+    },
+    {
+      "name": "one retry release preserves another",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "eventId": "z-request",
+      "now": 3001,
+      "retainForMs": 1000,
+      "expected": "retain_retry",
+      "before": "UPDATE heimdall_retention.event_holds SET released_at=2001,release_event_id='normal-terminal' WHERE hold_id='retry-a'"
+    },
+    {
+      "name": "all obligations released",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "eventId": "z-request",
+      "now": 3001,
+      "retainForMs": 1000,
+      "expected": "candidate",
+      "before": "UPDATE heimdall_retention.event_holds SET released_at=2001,release_event_id='normal-terminal' WHERE hold_id='retry-b'"
+    },
+    {
+      "name": "missing source reservation is corruption",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "eventId": "z-request",
+      "now": 3001,
+      "retainForMs": 1000,
+      "error": "audit_unavailable",
+      "before": "DELETE FROM heimdall_capacity.reservations WHERE product_id='ledger' AND environment='staging'"
+    },
+    {
+      "name": "missing unmarked payload is corruption",
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "eventId": "ordinary",
+      "now": 3001,
+      "retainForMs": 1000,
+      "error": "audit_unavailable",
+      "before": "DELETE FROM heimdall.audit_deliveries WHERE product_id='ledger' AND environment='production' AND event_id='ordinary'; DELETE FROM heimdall_capacity.event_charges WHERE product_id='ledger' AND environment='production' AND event_id='ordinary'; DELETE FROM heimdall.audit_events WHERE product_id='ledger' AND environment='production' AND event_id='ordinary'"
+    },
+    {
+      "name": "readiness refusal",
+      "productId": "ledger",
+      "environment": "staging",
+      "tenantId": "tenant-1",
+      "eventId": "z-request",
+      "now": 3001,
+      "retainForMs": 1000,
+      "error": "unavailable",
+      "before": "UPDATE heimdall.schema_metadata SET state='migrating'"
+    }
+  ]
+}

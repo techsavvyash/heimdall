@@ -1,0 +1,32 @@
+{
+  "suite": "sdk-federated-session-v1",
+  "runId": "ebd5ddd5-671e-4840-8c08-5befbf147ea3",
+  "protocol": "oidc",
+  "checks": [
+    {
+      "language": "typescript",
+      "exactIntent": "accepted",
+      "missingCookie": "denied",
+      "wrongIntent": "denied",
+      "changedPolicy": "denied",
+      "replay": "denied",
+      "sessionIssued": true,
+      "sessionCookieAuthenticated": true,
+      "enterpriseEvidenceRead": true,
+      "authenticationAuditEvents": 2
+    },
+    {
+      "language": "go",
+      "exactIntent": "accepted",
+      "missingCookie": "denied",
+      "wrongIntent": "denied",
+      "changedPolicy": "denied",
+      "replay": "denied",
+      "sessionIssued": true,
+      "sessionCookieAuthenticated": true,
+      "enterpriseEvidenceRead": true,
+      "authenticationAuditEvents": 2
+    }
+  ],
+  "cleanup": "owned organizations, realm and sessions deleted"
+}

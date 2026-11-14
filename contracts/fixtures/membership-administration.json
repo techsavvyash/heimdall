@@ -1,0 +1,27 @@
+{
+  "target": "member-to-administer",
+  "initialRoles": ["viewer"],
+  "replacementRoles": ["approver"],
+  "unknownRole": "unconfigured_role",
+  "confirmedWrites": 3,
+  "recoveryCases": [
+    {
+      "kind": "add_member",
+      "fault": "lost_response",
+      "repairWrites": 0,
+      "candidates": 2
+    },
+    {
+      "kind": "assign_roles",
+      "fault": "lost_before_apply",
+      "repairWrites": 1,
+      "candidates": 2
+    },
+    {
+      "kind": "remove_member",
+      "fault": "lost_response",
+      "repairWrites": 0,
+      "candidates": 1
+    }
+  ]
+}

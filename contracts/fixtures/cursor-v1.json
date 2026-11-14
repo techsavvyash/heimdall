@@ -1,0 +1,185 @@
+[
+  {
+    "name": "valid",
+    "payload": {
+      "schemaVersion": 1,
+      "kind": "workspace_discovery",
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1",
+      "position": "p-20",
+      "issuedAt": 1000,
+      "expiresAt": 901000
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1"
+    },
+    "now": 3000,
+    "valid": true
+  },
+  {
+    "name": "exact-expiry",
+    "payload": {
+      "schemaVersion": 1,
+      "kind": "workspace_discovery",
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1",
+      "position": "p-20",
+      "issuedAt": 1000,
+      "expiresAt": 901000
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1"
+    },
+    "now": 901000,
+    "valid": false,
+    "error": "invalid_argument"
+  },
+  {
+    "name": "issued-in-future",
+    "payload": {
+      "schemaVersion": 1,
+      "kind": "workspace_discovery",
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1",
+      "position": "p-20",
+      "issuedAt": 1000,
+      "expiresAt": 901000
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1"
+    },
+    "now": 999,
+    "valid": false,
+    "error": "invalid_argument"
+  },
+  {
+    "name": "wrong-productId",
+    "payload": {
+      "schemaVersion": 1,
+      "kind": "workspace_discovery",
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1",
+      "position": "p-20",
+      "issuedAt": 1000,
+      "expiresAt": 901000
+    },
+    "scope": {
+      "productId": "other",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1"
+    },
+    "now": 3000,
+    "valid": false,
+    "error": "invalid_argument"
+  },
+  {
+    "name": "wrong-environment",
+    "payload": {
+      "schemaVersion": 1,
+      "kind": "workspace_discovery",
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1",
+      "position": "p-20",
+      "issuedAt": 1000,
+      "expiresAt": 901000
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "other",
+      "principal": "user:fixture",
+      "modelId": "model-1"
+    },
+    "now": 3000,
+    "valid": false,
+    "error": "invalid_argument"
+  },
+  {
+    "name": "wrong-principal",
+    "payload": {
+      "schemaVersion": 1,
+      "kind": "workspace_discovery",
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1",
+      "position": "p-20",
+      "issuedAt": 1000,
+      "expiresAt": 901000
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "other",
+      "modelId": "model-1"
+    },
+    "now": 3000,
+    "valid": false,
+    "error": "invalid_argument"
+  },
+  {
+    "name": "wrong-modelId",
+    "payload": {
+      "schemaVersion": 1,
+      "kind": "workspace_discovery",
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1",
+      "position": "p-20",
+      "issuedAt": 1000,
+      "expiresAt": 901000
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "other"
+    },
+    "now": 3000,
+    "valid": false,
+    "error": "invalid_argument"
+  },
+  {
+    "name": "empty-lifetime",
+    "payload": {
+      "schemaVersion": 1,
+      "kind": "workspace_discovery",
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1",
+      "position": "p-20",
+      "issuedAt": 1000,
+      "expiresAt": 1000
+    },
+    "scope": {
+      "productId": "ledger",
+      "environment": "production",
+      "principal": "user:fixture",
+      "modelId": "model-1"
+    },
+    "now": 3000,
+    "valid": false,
+    "error": "invalid_argument"
+  }
+]

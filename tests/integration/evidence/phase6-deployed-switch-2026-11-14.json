@@ -1,0 +1,45 @@
+{
+  "runId": "78bae401-deff-41d3-bb12-5cfd51d6df03",
+  "results": [
+    {
+      "product": "ledger",
+      "deployment": "decb30af-0e04-4447-981f-e7c9fe85f3b0",
+      "switch": "passed",
+      "priorCookie": 401,
+      "staleCallback": 401,
+      "replay": 401,
+      "priorCursor": 400,
+      "discoveryBefore": "acme",
+      "discoveryAfter": "globex",
+      "resourceAfter": {
+        "acme": 403,
+        "globex": 200
+      },
+      "audit": {
+        "subjects": 2,
+        "pairedResourceDecisions": 4,
+        "bothSubjectsAuthenticated": true
+      }
+    },
+    {
+      "product": "support",
+      "deployment": "4fc305e2-5924-4c2a-a859-78948a4a8a7a",
+      "switch": "passed",
+      "priorCookie": 401,
+      "staleCallback": 401,
+      "replay": 401,
+      "priorCursor": 400,
+      "discoveryBefore": "acme",
+      "discoveryAfter": "globex",
+      "resourceAfter": {
+        "acme": 403,
+        "globex": 200
+      },
+      "audit": {
+        "subjects": 2,
+        "pairedResourceDecisions": 4,
+        "bothSubjectsAuthenticated": true
+      }
+    }
+  ]
+}

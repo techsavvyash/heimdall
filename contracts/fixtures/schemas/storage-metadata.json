@@ -1,0 +1,326 @@
+[
+  {
+    "name": "valid",
+    "value": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "valid": true
+  },
+  {
+    "name": "missing-schemaVersion",
+    "value": {
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-databaseVersion",
+    "value": {
+      "schemaVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-state",
+    "value": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-readers",
+    "value": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-writers",
+    "value": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-migrations",
+    "value": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "future-format",
+    "value": {
+      "schemaVersion": 2,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-db-version",
+    "value": {
+      "schemaVersion": 1,
+      "databaseVersion": 0,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "unbounded-version",
+    "value": {
+      "schemaVersion": 1,
+      "databaseVersion": 1001,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-state",
+    "value": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "unknown",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-ledger",
+    "value": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": []
+    },
+    "valid": false
+  },
+  {
+    "name": "unknown-field",
+    "value": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ],
+      "extra": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-range",
+    "value": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 0,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "63622c0264e9b6edb8002213c0c027b9db4fd2f9ee917790ece53a2f21a4ae7d"
+        }
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-checksum",
+    "value": {
+      "schemaVersion": 1,
+      "databaseVersion": 1,
+      "state": "ready",
+      "readers": {
+        "min": 1,
+        "max": 2
+      },
+      "writers": {
+        "min": 1,
+        "max": 2
+      },
+      "migrations": [
+        {
+          "version": 1,
+          "checksum": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+        }
+      ]
+    },
+    "valid": false
+  }
+]

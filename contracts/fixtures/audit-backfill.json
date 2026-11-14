@@ -1,0 +1,214 @@
+{
+  "events": [
+    {
+      "schemaVersion": 1,
+      "eventId": "z-request",
+      "eventType": "heimdall.authorization.requested",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya\u0000\u6771\u4eac"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "requested",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    {
+      "schemaVersion": 1,
+      "eventId": "a-terminal",
+      "eventType": "heimdall.authorization.completed",
+      "eventVersion": 1,
+      "occurredAt": 2000,
+      "recordedAt": 2001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya\u0000\u6771\u4eac"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "allow",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    {
+      "schemaVersion": 1,
+      "eventId": "m-pending",
+      "eventType": "heimdall.authorization.requested",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya\u0000\u6771\u4eac"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "requested",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-2",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    },
+    {
+      "schemaVersion": 1,
+      "eventId": "b-policy",
+      "eventType": "heimdall.policy.completed",
+      "eventVersion": 1,
+      "occurredAt": 1000,
+      "recordedAt": 1001,
+      "productId": "ledger",
+      "environment": "production",
+      "tenantId": "tenant-1",
+      "actor": {
+        "kind": "user",
+        "issuer": "https://id.example.com",
+        "subject": "maya\u0000\u6771\u4eac"
+      },
+      "target": {
+        "type": "invoice",
+        "id": "invoice-1"
+      },
+      "action": "invoice.approve",
+      "outcome": "succeeded",
+      "requestId": "request-1",
+      "source": "sdk",
+      "sdkVersion": "0.0.0",
+      "attributes": {},
+      "decisionId": "decision-1",
+      "permission": "invoice.approve",
+      "modelId": "model-1",
+      "manifestVersion": 1,
+      "operationId": "operation-1",
+      "policyVersion": "policy-1"
+    }
+  ],
+  "steps": [
+    {
+      "phase": "requests",
+      "after": "a-terminal",
+      "scannedCount": 1,
+      "expectedCount": null,
+      "processed": 1
+    },
+    {
+      "phase": "requests",
+      "after": "b-policy",
+      "scannedCount": 2,
+      "expectedCount": null,
+      "processed": 1
+    },
+    {
+      "phase": "requests",
+      "after": "m-pending",
+      "scannedCount": 3,
+      "expectedCount": null,
+      "processed": 1
+    },
+    {
+      "phase": "requests",
+      "after": "z-request",
+      "scannedCount": 4,
+      "expectedCount": null,
+      "processed": 1
+    },
+    {
+      "phase": "outcomes",
+      "after": null,
+      "scannedCount": 0,
+      "expectedCount": 4,
+      "processed": 0
+    },
+    {
+      "phase": "outcomes",
+      "after": "a-terminal",
+      "scannedCount": 1,
+      "expectedCount": 4,
+      "processed": 1
+    },
+    {
+      "phase": "outcomes",
+      "after": "b-policy",
+      "scannedCount": 2,
+      "expectedCount": 4,
+      "processed": 1
+    },
+    {
+      "phase": "outcomes",
+      "after": "m-pending",
+      "scannedCount": 3,
+      "expectedCount": 4,
+      "processed": 1
+    },
+    {
+      "phase": "outcomes",
+      "after": "z-request",
+      "scannedCount": 4,
+      "expectedCount": 4,
+      "processed": 1
+    },
+    {
+      "phase": "complete",
+      "after": null,
+      "scannedCount": 4,
+      "expectedCount": 4,
+      "processed": 0
+    }
+  ],
+  "prepared": [
+    {
+      "path": "session/0002.sql",
+      "checksum": "f7e859c78a6d099ad4a4d35c96e553ba10a53e3ae7e23440237c769efcd50722"
+    },
+    {
+      "path": "session/0002-backfill.sql",
+      "checksum": "d2f4d3969cf3df68395db98219e0c209d79ce8de8c1486e6aac12de6bdd4f12b"
+    }
+  ]
+}

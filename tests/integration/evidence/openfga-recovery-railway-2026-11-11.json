@@ -1,0 +1,27 @@
+{
+  "suite": "openfga-quiescence-railway-v1",
+  "runId": "336f37c9-296e-4b73-b52c-8eb7173d2bdf",
+  "observedAt": "2026-11-10T23:11:46Z",
+  "observations": {
+    "oldDeployment": "2ab25f20-64e1-4e79-a4a5-7284fdb71056",
+    "proxyObservedUpstreamCommit": true,
+    "clientLostCommittedResponse": true,
+    "writeObservedWaitingInDatabase": true,
+    "oldDeploymentRemoved": true,
+    "databaseBackendsDrained": true,
+    "interruptedClientOutcome": {
+      "status": 500
+    },
+    "newDeployment": "cfd87a9f-da43-493c-b659-72ce4a5ba98e",
+    "interruptedAbsentCommittedPresent": true,
+    "staleCredentialCannotRegrant": true,
+    "newCredentialReconcilePassed": true,
+    "ownedStoreDeleted": true
+  },
+  "limitations": [
+    "one replica and sole preshared credential in dedicated verification environment",
+    "deployment-wide maintenance, not per-workspace fencing",
+    "no production writers, autoscaling or independent credential brokers",
+    "SDK journal, quarantine and authorized recovery integration remain unimplemented"
+  ]
+}

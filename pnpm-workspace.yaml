@@ -1,0 +1,13 @@
+packages:
+  - sdk/typescript
+  - examples/ledger
+  - docs
+
+# 30 days, expressed in minutes.
+minimumReleaseAge: 43200
+minimumReleaseAgeStrict: true
+
+allowBuilds:
+  "@parcel/watcher": true
+  esbuild: true
+  sharp: true

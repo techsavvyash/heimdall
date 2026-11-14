@@ -1,0 +1,84 @@
+[
+  {
+    "name": "remove only the directory-exclusive role",
+    "currentRoles": ["viewer", "approver", "billing"],
+    "sources": [
+      { "kind": "directory", "ruleId": "employees", "roles": ["viewer", "approver"] },
+      { "kind": "directory", "ruleId": "auditors", "roles": ["viewer"] },
+      { "kind": "independent", "roles": ["billing"] }
+    ],
+    "action": "assign_roles",
+    "roles": ["billing", "viewer"]
+  },
+  {
+    "name": "shared independent grant is unchanged",
+    "currentRoles": ["viewer"],
+    "sources": [
+      { "kind": "directory", "ruleId": "employees", "roles": ["viewer"] },
+      { "kind": "independent", "roles": ["viewer"] }
+    ],
+    "action": "unchanged",
+    "roles": ["viewer"]
+  },
+  {
+    "name": "independent membership with no roles survives",
+    "currentRoles": ["viewer"],
+    "sources": [
+      { "kind": "directory", "ruleId": "employees", "roles": ["viewer"] },
+      { "kind": "independent", "roles": [] }
+    ],
+    "action": "assign_roles",
+    "roles": []
+  },
+  {
+    "name": "sole roleless rule owns membership",
+    "currentRoles": [],
+    "sources": [{ "kind": "directory", "ruleId": "employees", "roles": [] }],
+    "action": "remove_member",
+    "roles": []
+  },
+  {
+    "name": "never restore a role from historical provenance",
+    "currentRoles": ["viewer"],
+    "sources": [
+      { "kind": "directory", "ruleId": "employees", "roles": ["viewer"] },
+      { "kind": "independent", "roles": ["billing"] }
+    ],
+    "action": "assign_roles",
+    "roles": []
+  },
+  {
+    "name": "retain an unclassified current role",
+    "currentRoles": ["billing", "viewer"],
+    "sources": [{ "kind": "directory", "ruleId": "employees", "roles": ["viewer"] }],
+    "action": "assign_roles",
+    "roles": ["billing"]
+  },
+  {
+    "name": "ownership requires a separate workflow",
+    "currentRoles": ["owner"],
+    "sources": [{ "kind": "directory", "ruleId": "employees", "roles": [] }],
+    "error": "forbidden"
+  },
+  {
+    "name": "reject directory owner grants",
+    "currentRoles": [],
+    "sources": [{ "kind": "directory", "ruleId": "employees", "roles": ["owner"] }],
+    "error": "invalid_argument"
+  },
+  {
+    "name": "reject duplicate directory rules",
+    "currentRoles": [],
+    "sources": [
+      { "kind": "directory", "ruleId": "employees", "roles": [] },
+      { "kind": "directory", "ruleId": "employees", "roles": [] }
+    ],
+    "error": "invalid_argument"
+  },
+  {
+    "name": "refuse to infer missing provenance",
+    "currentRoles": ["viewer"],
+    "sources": [{ "kind": "independent", "roles": ["viewer"] }],
+    "error": "not_found"
+  }
+]

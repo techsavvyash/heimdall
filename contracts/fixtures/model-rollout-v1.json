@@ -1,0 +1,16 @@
+[
+  {
+    "product": "ledger",
+    "existingRole": "approver",
+    "existingPermission": "invoice.approve",
+    "addedRole": "z_reviewer",
+    "addedPermission": "z.review"
+  },
+  {
+    "product": "support",
+    "existingRole": "agent",
+    "existingPermission": "ticket.assign",
+    "addedRole": "z_reviewer",
+    "addedPermission": "z.review"
+  }
+]

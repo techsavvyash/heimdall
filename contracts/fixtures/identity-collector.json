@@ -1,0 +1,19 @@
+{
+  "nextMicros": 1794528000000001,
+  "untilMicros": 1794528000000003,
+  "events": [
+    {
+      "aggregate": { "type": { "type": "user" }, "id": "assigned", "resourceOwner": "org" },
+      "type": { "type": "user.deactivated" },
+      "sequence": "18446744073709551615",
+      "creationDate": "2026-11-13T00:00:00.000001Z",
+      "payload": { "password": "discard" }
+    },
+    {
+      "aggregate": { "type": { "type": "user" }, "id": "unassigned", "resourceOwner": "org" },
+      "type": { "type": "user.deactivated" },
+      "sequence": "1",
+      "creationDate": "2026-11-13T00:00:00.000002Z"
+    }
+  ]
+}

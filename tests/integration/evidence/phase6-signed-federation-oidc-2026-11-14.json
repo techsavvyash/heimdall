@@ -1,0 +1,30 @@
+{
+  "runId": "128e9606-2a24-46ba-a807-60341791fac6",
+  "suite": "upstream-oidc-intent-v1",
+  "cleanup": "owned organizations, realm and sessions deleted",
+  "observations": [
+    {
+      "sdkFederatedExchange": [
+        {
+          "language": "typescript",
+          "matchedSignedBinding": "accepted",
+          "wrongSignedSession": "denied"
+        },
+        {
+          "language": "go",
+          "matchedSignedBinding": "accepted",
+          "wrongSignedSession": "denied"
+        }
+      ]
+    },
+    {
+      "downstreamOidc": {
+        "signatureIssuerSubjectAudienceNonce": "verified",
+        "organizationScopedRequest": true,
+        "amr": null,
+        "tokenSessionMatchesProviderSession": true,
+        "authTimeMatchesIntent": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run": "heimdall-marker-scale-7a6424aed58843f18489d382199f1157",
+  "postgresImage": "postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac",
+  "baseline1000": {
+    "nodes": ["Aggregate", "Limit", "Seq Scan"],
+    "indexes": [],
+    "rowsRemovedByFilter": 2000,
+    "sharedBlocks": 35,
+    "executionMs": 0.555
+  },
+  "baseline100000": {
+    "nodes": ["Aggregate", "Limit", "Seq Scan"],
+    "indexes": [],
+    "rowsRemovedByFilter": 200000,
+    "sharedBlocks": 3818,
+    "executionMs": 58.705
+  },
+  "indexedMiss100000": {
+    "nodes": ["Aggregate", "Limit", "Bitmap Heap Scan", "Bitmap Index Scan"],
+    "indexes": ["retirement_member_lookup"],
+    "rowsRemovedByFilter": 0,
+    "sharedBlocks": 4,
+    "executionMs": 0.242
+  },
+  "indexedHit100000": {
+    "nodes": ["Aggregate", "Limit", "Bitmap Heap Scan", "Bitmap Index Scan"],
+    "indexes": ["retirement_member_lookup"],
+    "rowsRemovedByFilter": 1,
+    "sharedBlocks": 5,
+    "executionMs": 0.397
+  },
+  "scopedCount": 1,
+  "duplicateCount": 2
+}

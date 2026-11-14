@@ -1,0 +1,363 @@
+{
+  "source": "dedb0fdff6cb92fc69d4946ffaf28240c96a462c",
+  "sourceChecks": [43437999956, 43438013063],
+  "providerDeployments": {
+    "zitadel": "7ef5c76d-4911-4326-97dc-50d5614f2a55",
+    "openfga": "cfd87a9f-da43-493c-b659-72ce4a5ba98e",
+    "postgres": "574c0fb1-1252-41cb-a02b-7f3fdd74c18b"
+  },
+  "managedStorage": {
+    "run": "28e308ad025f41aa830c6bdcee069594",
+    "backend": "postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac",
+    "checksums": {
+      "session": "f71db3eece51c3230c27c89a4e154bda18e15de3276b2e7eb0001a3e38c79cc4",
+      "managed": "3df4dc62f6271691c56ac605c51012a97301b98c70454af62984cf253c066c55"
+    },
+    "constraintCases": 18,
+    "checks": [
+      "session-only install excludes managed schema",
+      "failed managed DDL transaction leaves no schema",
+      "independent managed metadata",
+      "scoped foreign keys",
+      "immutable intent and identifiers",
+      "uncertain operation retains unique slot",
+      "concurrent unfinished inserts have one winner",
+      "runtime cannot delete history, reset sequences or run DDL",
+      "workspace operation candidate audit and outbox transaction rollback"
+    ],
+    "sdkSQLTests": "TS and Go creation, membership intents and transitions, generation races, candidate completion, bounded scans, column-restricted sanitized exports, revision-guarded candidate repair, audit rollback, confirmed COMMIT loss and bidirectional reads passed",
+    "migrationCLI": "missing prerequisite refusal, read-only status, mid-DDL rollback, concurrent install, confirmed commit loss and replay passed",
+    "result": "passed",
+    "limitations": [
+      "physical SQL foundation, not managed SDK orchestration",
+      "remote outcome verification and public managed orchestration remain pending",
+      "public discovery and remote rebuild orchestration remain pending"
+    ]
+  },
+  "keyRotation": {
+    "run": "heimdall-key-rotation-ed29606f404c409c9f2d5d85e2a97756",
+    "postgres": "postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac",
+    "result": "passed",
+    "checks": [
+      "two product databases and shared key ledger",
+      "concurrent TS Go rotation phases",
+      "old-key laggards refused after retirement",
+      "retained keys read prior envelopes",
+      "real dump restore demonstrates logout and counter rollback",
+      "runtime CONNECT denied during restore preparation",
+      "restored sessions and login states discarded offline",
+      "restored keys retired and fresh material registered before runtime access",
+      "both SDKs reject retired and unknown restored keys",
+      "fresh shared recovery key consumed exactly twice",
+      "original databases unaffected by isolated restore"
+    ]
+  },
+  "retainedStorage": {
+    "run": "heimdall-capacity-backfill-f5c168876847457cbffb6ffff0d444bd",
+    "result": "passed",
+    "checks": [
+      "independent read-only retention activation with atomic v4 publication semantic corruption refusal TS/Go readiness and lost COMMIT retry",
+      "bounded retention group backfill with byte budgets atomic checkpoints concurrent and lost-COMMIT resume corruption and skipped cursor refusal",
+      "atomic retention preparation with quota preflight catalog refusal rollback concurrent retry and lost COMMIT proof",
+      "mixed TS and Go history across two products and two environments",
+      "bounded count and encoded-envelope page budgets",
+      "full digest and decision/recovery binding validation",
+      "pending recovery reservations only",
+      "matching imported charges and reservations do not double-count",
+      "eight concurrent deployment processes serialize checkpoints",
+      "lost event and decision page COMMIT resumes durable progress",
+      "invalid history and skipped cursor rollback current page",
+      "insufficient capacity refuses without partial reservations",
+      "late legacy history blocks completed coverage",
+      "completion remains migrating and preparing",
+      "atomic internal activation with stale history and schema refusal",
+      "activation COMMIT loss and retry after new writes",
+      "publication permission failure rolls back ledger and policy",
+      "activation CLI argument and protocol checks",
+      "TS and Go shared standalone and managed v3 readiness matrix",
+      "accounted requests recover in both cross-language directions",
+      "held deployment lock deadline and reuse",
+      "both v3 maintenance recovery ports use reserved capacity at a full ledger",
+      "reciprocal recovery COMMIT loss and protocol-gated exact retries",
+      "both maintenance batches observe COMMIT-loss winners over separate read connections and restart without duplicate work",
+      "SIGKILL after the first committed candidate resumes in the other language with original initiators and exact event outbox and capacity counts",
+      "reciprocal retention COMMIT loss returns unknown and the other SDK retries without changing compact metadata",
+      "both SDKs resolve identical retired retries and reject changed payloads without recreating events or deliveries",
+      "ordinary request and completion retained writes survive reciprocal COMMIT loss with exact accounting and unchanged routing",
+      "retained recovery consumes full-capacity reservations atomically and reciprocal lost COMMIT retries preserve all payload and metadata state",
+      "both SDKs atomically append retained ordinary request and normal completion records with full-capacity admission and rollback proof",
+      "both SDKs classify complete primary snapshots with durable holds and retry obligations and no storage mutations",
+      "explicit retry holds preserve immutable purpose and independent audited release without expiry or quota refunds",
+      "holds on every completed and recovered decision member exclude whole-group retirement in both observed lock orders",
+      "whole completed and recovered decisions retire atomically with preserved compact links and reciprocal SDK inspection",
+      "both SDKs distinguish live retired absent and corrupt missing history with primary readiness and cancellation",
+      "observed PostgreSQL lock waits serialize hold-first and retirement-first transactions without losing holds or creating late holds",
+      "retirement markers require atomic removal and reject held undelivered young or incomplete history",
+      "retained metadata quota blocks overflow and reserves recovery slots while independent hold release remains possible",
+      "prepared hold ledger preserves independent holds and immutable releases with scoped reference checks",
+      "prepared immutable identities bind source routing and decision members and survive privileged test payload removal"
+    ]
+  },
+  "recordStorage": {
+    "run": "heimdall-records-a04f7195205d4df2ba6291cdd6b6e22c",
+    "postgres": "postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac",
+    "result": "passed",
+    "checks": [
+      "bounded expiry cleanup in both SDKs: scopes, identity denial preservation, refresh locks, concurrency, deadline, cross-language rows and committed response loss",
+      "public TS and Go runtime with restricted PostgreSQL role, durable audit, captured sink routing and warm-cache denial",
+      "TS and Go CRUD",
+      "8-way CAS single winner",
+      "expiry and product isolation",
+      "delete/recreate revision",
+      "tampered expiry denied",
+      "cancelled blocked write unknown",
+      "pool recovery",
+      "TS reads Go",
+      "Go reads TS",
+      "11 readiness states in both languages",
+      "read-only connection rejected",
+      "missing metadata table rejected",
+      "migration transaction visibility",
+      "concurrent deployment migration processes",
+      "idempotent migration and incompatible state refusal",
+      "mid-migration permission failure rolls back entire schema",
+      "held migration lock deadline and retry",
+      "confirmed COMMIT response loss returns outcome_unknown and safe rerun",
+      "TS and Go atomic audit append rollback race and conflict",
+      "both SDKs decision request commits before evaluation and terminal receipt before release",
+      "both SDKs request and terminal audit COMMIT loss block decision release",
+      "bidirectional audit receipts and original sink routing",
+      "TS and Go audit committed response loss and receipt recovery",
+      "audit append with SELECT INSERT privileges only",
+      "shared U+0000 and Unicode event survives TS write and Go replay",
+      "both SDKs delivery receipt matrix and atomic partial acknowledgement",
+      "both SDKs acknowledgement committed response loss and idempotent recovery",
+      "pending selection scope time count and byte budgets",
+      "invalid payload and cross-scope corruption withheld",
+      "pending readers decode both language writers",
+      "delivery attempt races stale callbacks defer and quarantine",
+      "explicit quarantine unblocks healthy backlog without deletion",
+      "both SDKs claim defer quarantine COMMIT response loss",
+      "identity-bound session cross-language reads and shared advisory lock",
+      "both SDKs verified token and fixture provider status feed standalone durable identity gate without session cipher",
+      "both SDKs authentication results wait for committed audit receipts with six events and outbox rows per scope",
+      "token-negative gate preserves bearer sessions and replacement revisions",
+      "identity-negative gate persists denial and blocks warm verifier cache",
+      "identity gate COMMIT response loss preserves uncertain outcome",
+      "session creation versus invalidation race and persistent denial",
+      "identity and product isolation with generic CRUD bypass prevention",
+      "both SDKs identity invalidation COMMIT response loss and safe replay",
+      "identity and revision bound session invalidation",
+      "CAS versus conditional invalidation single winner in both SDKs",
+      "Go conditionally invalidates TS session",
+      "both SDKs conditional deletion COMMIT loss and replacement preservation"
+    ]
+  },
+  "liveIdentity": {
+    "runId": "2a53ea90-cc7c-446d-9dbf-10404064f3f7",
+    "observations": [
+      {
+        "product": "ledger",
+        "sdkIdentityStatus": {
+          "stage": "active",
+          "expected": "human",
+          "typescript": "passed",
+          "go": "passed",
+          "gate": "invalidation recording fixture; not a durable adapter integration"
+        }
+      },
+      {
+        "product": "ledger",
+        "publicRuntime": {
+          "typescript": "passed",
+          "go": "passed",
+          "checks": [
+            "discovery and pinned model startup",
+            "authoritative human bearer verification",
+            "invalid token audited rejection"
+          ],
+          "storage": "restricted PostgreSQL role, public factory, three committed events and delivery rows per language, persistent denial blocks warm cache"
+        }
+      },
+      {
+        "product": "support",
+        "sdkIdentityStatus": {
+          "stage": "active",
+          "expected": "human",
+          "typescript": "passed",
+          "go": "passed",
+          "gate": "invalidation recording fixture; not a durable adapter integration"
+        }
+      },
+      {
+        "product": "support",
+        "publicRuntime": {
+          "typescript": "passed",
+          "go": "passed",
+          "checks": [
+            "discovery and pinned model startup",
+            "authoritative human bearer verification",
+            "invalid token audited rejection"
+          ],
+          "storage": "restricted PostgreSQL role, public factory, three committed events and delivery rows per language, persistent denial blocks warm cache"
+        }
+      },
+      {
+        "product": "ledger",
+        "sdkIdentityStatus": {
+          "stage": "disabled",
+          "expected": "unauthenticated",
+          "typescript": "passed",
+          "go": "passed",
+          "gate": "invalidation recording fixture; not a durable adapter integration"
+        }
+      },
+      {
+        "product": "support",
+        "sdkIdentityStatus": {
+          "stage": "disabled",
+          "expected": "unauthenticated",
+          "typescript": "passed",
+          "go": "passed",
+          "gate": "invalidation recording fixture; not a durable adapter integration"
+        }
+      },
+      {
+        "product": "ledger",
+        "sdkIdentityStatus": {
+          "stage": "deleted",
+          "expected": "unauthenticated",
+          "typescript": "passed",
+          "go": "passed",
+          "gate": "invalidation recording fixture; not a durable adapter integration"
+        }
+      },
+      {
+        "product": "support",
+        "sdkIdentityStatus": {
+          "stage": "deleted",
+          "expected": "unauthenticated",
+          "typescript": "passed",
+          "go": "passed",
+          "gate": "invalidation recording fixture; not a durable adapter integration"
+        }
+      }
+    ],
+    "auditV5": {
+      "scopes": [
+        "ledger/verification-go",
+        "ledger/verification-ts",
+        "support/verification-go",
+        "support/verification-ts"
+      ],
+      "events": 12,
+      "bytes": 10793,
+      "deliveries": 12,
+      "retainedRows": 12
+    }
+  },
+  "liveModel": {
+    "suite": "tenant-model-v1",
+    "runId": "2a0f46f5-320d-49dd-ab64-5d9e5ce139bd",
+    "observations": [
+      {
+        "product": "ledger",
+        "sdk": "TypeScript",
+        "pinnedModelVerified": true
+      },
+      {
+        "product": "ledger",
+        "sdk": "Go",
+        "pinnedModelVerified": true
+      },
+      {
+        "product": "ledger",
+        "modelHash": "e06754bf8d1160b28103621c6ee1a1ccc0e2c1f8fa63760a2040b22c49c9cbb3",
+        "combinations": 32,
+        "checks": 590,
+        "staleRoleDenial": true,
+        "delegationRequiresMembership": true,
+        "ordinaryOwnerAssignmentDenied": true,
+        "crossTenantDenial": true,
+        "crossProductPrincipalDenial": true
+      },
+      {
+        "product": "support",
+        "sdk": "TypeScript",
+        "pinnedModelVerified": true
+      },
+      {
+        "product": "support",
+        "sdk": "Go",
+        "pinnedModelVerified": true
+      },
+      {
+        "product": "support",
+        "modelHash": "af8f76c3d684052bea009c86f1b895c3ce44281847d064e3154108f836a46b24",
+        "combinations": 16,
+        "checks": 252,
+        "staleRoleDenial": true,
+        "delegationRequiresMembership": true,
+        "ordinaryOwnerAssignmentDenied": true,
+        "crossTenantDenial": true,
+        "crossProductPrincipalDenial": true
+      },
+      {
+        "product": "custom-owner",
+        "sdk": "TypeScript",
+        "pinnedModelVerified": true
+      },
+      {
+        "product": "custom-owner",
+        "sdk": "Go",
+        "pinnedModelVerified": true
+      },
+      {
+        "product": "custom-owner",
+        "modelHash": "af8f76c3d684052bea009c86f1b895c3ce44281847d064e3154108f836a46b24",
+        "combinations": 16,
+        "checks": 252,
+        "staleRoleDenial": true,
+        "delegationRequiresMembership": true,
+        "ordinaryOwnerAssignmentDenied": true,
+        "crossTenantDenial": true,
+        "crossProductPrincipalDenial": true
+      }
+    ],
+    "cleanup": "owned stores deleted",
+    "limitations": [
+      "internal compiler and optional pinned-model guard only; runtime tuple mutation authorization and model migration not implemented"
+    ]
+  },
+  "railwayMigration": {
+    "runId": "bad849815ccc46d8be8c1fec03d929fc",
+    "projectId": "944fc9be-8648-4237-82bc-72e4bd24a4c9",
+    "environmentId": "7bc7c286-b2dc-4415-85eb-90dd554ab2fb",
+    "serviceId": "648133ac-305b-495d-a77e-4d0c49103feb",
+    "postgresVersion": "17.11",
+    "binarySha256": "6895e9a8d8fbc4f1986e5af4ecda6e975d46b01763c61ea6b1d153543443a3a9",
+    "migrationSha256": "f71db3eece51c3230c27c89a4e154bda18e15de3276b2e7eb0001a3e38c79cc4",
+    "managedMigrationSha256": "3df4dc62f6271691c56ac605c51012a97301b98c70454af62984cf253c066c55",
+    "checks": [
+      "uploaded compiled Linux binary checksum",
+      "two independent runner invocations",
+      "exact ledger and ready metadata",
+      "six shared schema tables",
+      "incompatible state rejected without repair",
+      "idempotent rerun",
+      "managed initialization refuses missing prerequisite without implicit installation",
+      "two managed installers serialize",
+      "exact managed ledger and metadata",
+      "session and managed read-only status",
+      "managed status with SELECT-only role",
+      "either incompatible family blocks managed initialization/status without repair",
+      "ordered audit v1 through v5 migration and managed readiness",
+      "old and new managed status refuse prepared schemas",
+      "v5 SELECT-only status and denied activation",
+      "v4 refusal and idempotent v5 activation",
+      "v5 retirement index install and retry, restricted role refusal and v5 activation compatibility"
+    ],
+    "result": "passed",
+    "cleanupVerified": true
+  }
+}

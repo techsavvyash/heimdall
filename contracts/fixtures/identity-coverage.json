@@ -1,0 +1,42 @@
+[
+  {
+    "name": "allows writer duration and opposing clock offsets",
+    "nowMs": 1800000000000,
+    "policy": {
+      "maxWriterTransactionMs": 10000,
+      "maxClockOffsetMs": 500,
+      "minimumRetentionMs": 60000
+    },
+    "expected": {
+      "retainedFromMicros": "1799999970500000",
+      "visibleBeforeMicros": "1799999988500000",
+      "validUntilMs": 1800000030000
+    }
+  },
+  {
+    "name": "overlapping bounds require an operator response",
+    "nowMs": 1800000000000,
+    "policy": {
+      "maxWriterTransactionMs": 10000,
+      "maxClockOffsetMs": 500,
+      "minimumRetentionMs": 42000
+    },
+    "error": "unavailable"
+  },
+  {
+    "name": "disabled writer deadline cannot certify coverage",
+    "nowMs": 1800000000000,
+    "policy": { "maxWriterTransactionMs": 0, "maxClockOffsetMs": 500, "minimumRetentionMs": 60000 },
+    "error": "invalid_argument"
+  },
+  {
+    "name": "large bounds preserve exact micros",
+    "nowMs": 253402300700000,
+    "policy": { "maxWriterTransactionMs": 1, "maxClockOffsetMs": 0, "minimumRetentionMs": 60000 },
+    "expected": {
+      "retainedFromMicros": "253402300670000000",
+      "visibleBeforeMicros": "253402300699999000",
+      "validUntilMs": 253402300730000
+    }
+  }
+]

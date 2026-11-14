@@ -1,0 +1,122 @@
+[
+  {
+    "operation": "begin",
+    "attempt": 0,
+    "now": 100,
+    "retryAt": 200,
+    "result": 1,
+    "storedAttempts": 1,
+    "storedDue": 200,
+    "storedState": "pending"
+  },
+  {
+    "operation": "begin",
+    "attempt": 0,
+    "now": 100,
+    "retryAt": 200,
+    "result": null,
+    "storedAttempts": 1,
+    "storedDue": 200,
+    "storedState": "pending"
+  },
+  {
+    "operation": "defer",
+    "attempt": 1,
+    "now": 0,
+    "retryAt": 300,
+    "result": true,
+    "storedAttempts": 1,
+    "storedDue": 300,
+    "storedState": "pending"
+  },
+  {
+    "operation": "defer",
+    "attempt": 1,
+    "now": 0,
+    "retryAt": 250,
+    "result": true,
+    "storedAttempts": 1,
+    "storedDue": 300,
+    "storedState": "pending"
+  },
+  {
+    "operation": "begin",
+    "attempt": 1,
+    "now": 299,
+    "retryAt": 400,
+    "result": null,
+    "storedAttempts": 1,
+    "storedDue": 300,
+    "storedState": "pending"
+  },
+  {
+    "operation": "begin",
+    "attempt": 1,
+    "now": 300,
+    "retryAt": 400,
+    "result": 2,
+    "storedAttempts": 2,
+    "storedDue": 400,
+    "storedState": "pending"
+  },
+  {
+    "operation": "defer",
+    "attempt": 1,
+    "now": 0,
+    "retryAt": 900,
+    "result": false,
+    "storedAttempts": 2,
+    "storedDue": 400,
+    "storedState": "pending"
+  },
+  {
+    "operation": "quarantine",
+    "attempt": 1,
+    "now": 0,
+    "retryAt": 0,
+    "result": false,
+    "storedAttempts": 2,
+    "storedDue": 400,
+    "storedState": "pending"
+  },
+  {
+    "operation": "quarantine",
+    "attempt": 2,
+    "now": 0,
+    "retryAt": 0,
+    "result": true,
+    "storedAttempts": 2,
+    "storedDue": 400,
+    "storedState": "quarantined"
+  },
+  {
+    "operation": "quarantine",
+    "attempt": 2,
+    "now": 0,
+    "retryAt": 0,
+    "result": true,
+    "storedAttempts": 2,
+    "storedDue": 400,
+    "storedState": "quarantined"
+  },
+  {
+    "operation": "begin",
+    "attempt": 2,
+    "now": 500,
+    "retryAt": 600,
+    "result": null,
+    "storedAttempts": 2,
+    "storedDue": 400,
+    "storedState": "quarantined"
+  },
+  {
+    "operation": "defer",
+    "attempt": 2,
+    "now": 0,
+    "retryAt": 700,
+    "result": false,
+    "storedAttempts": 2,
+    "storedDue": 400,
+    "storedState": "quarantined"
+  }
+]

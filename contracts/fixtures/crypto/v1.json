@@ -1,0 +1,64 @@
+{
+  "keyHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "keyId": "key-1",
+  "scope": {
+    "productId": "ledger",
+    "environment": "production",
+    "kind": "session",
+    "recordKey": "record-123"
+  },
+  "plaintextHex": "7b227375626a656374223a22e0a4aee0a4bee0a4afe0a4bef09f9880222c22746f6b656e223a2273796e7468657469632d6f6e6c79227d",
+  "record": "hr1.key-1.ICEiIyQlJicoKSorqRjVBQ7yf21uXnjsIbxaGXT3DDgoYMdQnGn0kmumfH0a5YBqrB8XqW2TGvo9fXarz0WC4uMeUMYEEfCWaZT0pLdgfAgtFjA",
+  "payloadHex": "7b22736368656d6156657273696f6e223a312c2270726f647563744964223a226c6564676572222c22706f736974696f6e223a22e4bd8de7bdaef09f9880227d",
+  "cursor": "hc1.key-1.eyJzY2hlbWFWZXJzaW9uIjoxLCJwcm9kdWN0SWQiOiJsZWRnZXIiLCJwb3NpdGlvbiI6IuS9jee9rvCfmIAifQ.v3G9InehIuIKgzJOkkcfgvdTUWTDLeqwcH4Vj00mobU",
+  "badRecords": [
+    "hr1.key-1.ICEiIyQlJicoKSorqRjVBQ7yf21uXnjsIbxaGXT3DDgoYMdQnGn0kmumfH0a5YBqrB8XqW2TGvo9fXarz0WC4uMeUMYEEfCWaZT0pLdgfAgtFjA=",
+    "hr1.key-1.ICEiIyQlJicoKSorqRjVBQ7yf21uXnjsIbxaGXT3DDgoYMdQnGn0kmumfH0a5YBqrB8XqW2TGvo9fXarz0WC4uMeUMYEEfCWaZT0pLdgfAgtFjA\n",
+    "hr1.key-1.ICEiIyQlJicoKSorqRjVBQ7yf21uXnjsIbxaGXT3DDgoYMdQnGn0kmumfH0a5YBqrB8XqW2TGvo9fXarz0WC4uMeUMYEEfCWaZT0pLdgfAgtFjA.extra",
+    "hr2.key-1.ICEiIyQlJicoKSorqRjVBQ7yf21uXnjsIbxaGXT3DDgoYMdQnGn0kmumfH0a5YBqrB8XqW2TGvo9fXarz0WC4uMeUMYEEfCWaZT0pLdgfAgtFjA",
+    "hr1.missing.ICEiIyQlJicoKSorqRjVBQ7yf21uXnjsIbxaGXT3DDgoYMdQnGn0kmumfH0a5YBqrB8XqW2TGvo9fXarz0WC4uMeUMYEEfCWaZT0pLdgfAgtFjA",
+    "hr1.key-1.AA",
+    "hr1.key-1.ISEiIyQlJicoKSorqRjVBQ7yf21uXnjsIbxaGXT3DDgoYMdQnGn0kmumfH0a5YBqrB8XqW2TGvo9fXarz0WC4uMeUMYEEfCWaZT0pLdgfAgtFjA",
+    "hr1.key-1.ICEiIyQlJicoKSorqBjVBQ7yf21uXnjsIbxaGXT3DDgoYMdQnGn0kmumfH0a5YBqrB8XqW2TGvo9fXarz0WC4uMeUMYEEfCWaZT0pLdgfAgtFjA",
+    "hr1.key-1.ICEiIyQlJicoKSorqRjVBQ7yf21uXnjsIbxaGXT3DDgoYMdQnGn0kmumfH0a5YBqrB8XqW2TGvo9fXarz0WC4uMeUMYEEfCWaZT0pLdgfAgtFjE"
+  ],
+  "badCursors": [
+    "hc1.key-1.eyJzY2hlbWFWZXJzaW9uIjoxLCJwcm9kdWN0SWQiOiJsZWRnZXIiLCJwb3NpdGlvbiI6IuS9jee9rvCfmIAifQ.v3G9InehIuIKgzJOkkcfgvdTUWTDLeqwcH4Vj00mobU=",
+    "hc1.key-1.eyJzY2hlbWFWZXJzaW9uIjoxLCJwcm9kdWN0SWQiOiJsZWRnZXIiLCJwb3NpdGlvbiI6IuS9jee9rvCfmIAifQ.v3G9InehIuIKgzJOkkcfgvdTUWTDLeqwcH4Vj00mobU\n",
+    "hc1.key-1.eyJzY2hlbWFWZXJzaW9uIjoxLCJwcm9kdWN0SWQiOiJsZWRnZXIiLCJwb3NpdGlvbiI6IuS9jee9rvCfmIAifQ.v3G9InehIuIKgzJOkkcfgvdTUWTDLeqwcH4Vj00mobU.extra",
+    "hc2.key-1.eyJzY2hlbWFWZXJzaW9uIjoxLCJwcm9kdWN0SWQiOiJsZWRnZXIiLCJwb3NpdGlvbiI6IuS9jee9rvCfmIAifQ.v3G9InehIuIKgzJOkkcfgvdTUWTDLeqwcH4Vj00mobU",
+    "hc1.missing.eyJzY2hlbWFWZXJzaW9uIjoxLCJwcm9kdWN0SWQiOiJsZWRnZXIiLCJwb3NpdGlvbiI6IuS9jee9rvCfmIAifQ.v3G9InehIuIKgzJOkkcfgvdTUWTDLeqwcH4Vj00mobU",
+    "hc1.key-1.eiJzY2hlbWFWZXJzaW9uIjoxLCJwcm9kdWN0SWQiOiJsZWRnZXIiLCJwb3NpdGlvbiI6IuS9jee9rvCfmIAifQ.v3G9InehIuIKgzJOkkcfgvdTUWTDLeqwcH4Vj00mobU",
+    "hc1.key-1.eyJzY2hlbWFWZXJzaW9uIjoxLCJwcm9kdWN0SWQiOiJsZWRnZXIiLCJwb3NpdGlvbiI6IuS9jee9rvCfmIAifQ.AA",
+    "hr1.key-1.ICEiIyQlJicoKSorqRjVBQ7yf21uXnjsIbxaGXT3DDgoYMdQnGn0kmumfH0a5YBqrB8XqW2TGvo9fXarz0WC4uMeUMYEEfCWaZT0pLdgfAgtFjA",
+    "hc1.key-1.eyJzY2hlbWFWZXJzaW9uIjoxLCJwcm9kdWN0SWQiOiJsZWRnZXIiLCJwb3NpdGlvbiI6IuS9jee9rvCfmIAifQ.v3G9InehIuIKgzJOkkcfgvdTUWTDLeqwcH4Vj00mobV"
+  ],
+  "wrongScopes": [
+    {
+      "productId": "other",
+      "environment": "production",
+      "kind": "session",
+      "recordKey": "record-123"
+    },
+    {
+      "productId": "ledger",
+      "environment": "other",
+      "kind": "session",
+      "recordKey": "record-123"
+    },
+    {
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "login",
+      "recordKey": "record-123"
+    },
+    {
+      "productId": "ledger",
+      "environment": "production",
+      "kind": "session",
+      "recordKey": "other"
+    }
+  ],
+  "goRecord": "hr1.key-1.C25a3-5qNCrjF0ED6tJHZ1JHPDZjwikcB0VGflY3IcBrPrRJGGns-BnGXJLLebS_1n-ow0CUH18DIxO7t9BHZN3mqMogllZ2ZOaZZQDabuM2JSk",
+  "tsRecord": "hr1.key-1.9pkLpr2Qi7Okf962Dinrfdk31mJHWFGGv8QeDUKojl0UJAc4Zz8uYWuIzp0PZDl8hrt83-8i-gG1l3DGIvJYTT0_hhKEs9EhRqRJgHk9Ea9tZ_Y"
+}

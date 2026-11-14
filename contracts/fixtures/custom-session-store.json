@@ -1,0 +1,10 @@
+{
+  "productId": "ledger",
+  "environment": "production",
+  "alternateEnvironment": "verification",
+  "recordKey": "same-record-key",
+  "loginStorageKey": "heimdall.v1|ledger|production|login|61b0bbfa52f4b89b04366eca066b435db77dddc69e460851402a57e662eb7eb3",
+  "sessionStorageKey": "heimdall.v1|ledger|production|session|61b0bbfa52f4b89b04366eca066b435db77dddc69e460851402a57e662eb7eb3",
+  "secret": "synthetic-refresh-token",
+  "invalidRevisions": ["0", "01", "9223372036854775808", "bad"]
+}

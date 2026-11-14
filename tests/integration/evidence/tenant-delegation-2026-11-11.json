@@ -1,0 +1,43 @@
+{
+  "suite": "tenant-model-v1",
+  "runId": "c8dfc2f6-31f6-444c-af40-c1669d54782b",
+  "observations": [
+    {
+      "product": "ledger",
+      "modelHash": "e06754bf8d1160b28103621c6ee1a1ccc0e2c1f8fa63760a2040b22c49c9cbb3",
+      "combinations": 32,
+      "checks": 590,
+      "staleRoleDenial": true,
+      "delegationRequiresMembership": true,
+      "ordinaryOwnerAssignmentDenied": true,
+      "crossTenantDenial": true,
+      "crossProductPrincipalDenial": true
+    },
+    {
+      "product": "support",
+      "modelHash": "af8f76c3d684052bea009c86f1b895c3ce44281847d064e3154108f836a46b24",
+      "combinations": 16,
+      "checks": 252,
+      "staleRoleDenial": true,
+      "delegationRequiresMembership": true,
+      "ordinaryOwnerAssignmentDenied": true,
+      "crossTenantDenial": true,
+      "crossProductPrincipalDenial": true
+    },
+    {
+      "product": "custom-owner",
+      "modelHash": "af8f76c3d684052bea009c86f1b895c3ce44281847d064e3154108f836a46b24",
+      "combinations": 16,
+      "checks": 252,
+      "staleRoleDenial": true,
+      "delegationRequiresMembership": true,
+      "ordinaryOwnerAssignmentDenied": true,
+      "crossTenantDenial": true,
+      "crossProductPrincipalDenial": true
+    }
+  ],
+  "cleanup": "owned stores deleted",
+  "limitations": [
+    "internal compiler only; runtime tuple mutation authorization and model migration not implemented"
+  ]
+}

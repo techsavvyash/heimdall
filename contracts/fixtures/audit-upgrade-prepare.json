@@ -1,0 +1,16 @@
+{
+  "files": [
+    {
+      "path": "0002.sql",
+      "checksum": "f7e859c78a6d099ad4a4d35c96e553ba10a53e3ae7e23440237c769efcd50722"
+    },
+    {
+      "path": "0002-backfill.sql",
+      "checksum": "d2f4d3969cf3df68395db98219e0c209d79ce8de8c1486e6aac12de6bdd4f12b"
+    },
+    {
+      "path": "0002-upgrade.sql",
+      "checksum": "37db57363148bb86a8140576f727b628ec9a19ace68e464992f1f3f7226c22b0"
+    }
+  ]
+}

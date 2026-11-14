@@ -1,0 +1,8 @@
+{
+  "productId": "ledger",
+  "environment": "staging",
+  "tenantId": "tenant-1",
+  "resolution": "completed",
+  "eventCount": 2,
+  "decisionCount": 1
+}

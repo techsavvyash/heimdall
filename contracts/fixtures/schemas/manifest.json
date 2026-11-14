@@ -1,0 +1,333 @@
+[
+  {
+    "name": "ledger",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "invalid-version-1",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 0,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-schemaVersion-2",
+    "value": {
+      "schemaVersion": 2,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-permissions-3",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.read"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-permissions-4",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["Invoice.read"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-permissions-5",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice..read"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-roles-6",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {},
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-ownerRole-7",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner\n",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-clients-8",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {},
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "insecure-redirect",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["http://ledger.example.com/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "duplicate-delegation",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "viewer"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-role-key",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"],
+        "bad-name": ["invoice.read"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "unsupported-runtime-roles",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "version": 1,
+      "clients": {
+        "web": {
+          "redirectUris": ["https://ledger.example.com/auth/callback"]
+        }
+      },
+      "permissions": ["invoice.read", "invoice.approve", "members.manage"],
+      "roles": {
+        "viewer": ["invoice.read"],
+        "approver": ["invoice.read", "invoice.approve"],
+        "admin": ["invoice.read", "members.manage"],
+        "owner": ["invoice.read", "invoice.approve", "members.manage"]
+      },
+      "ownerRole": "owner",
+      "delegation": {
+        "admin": ["viewer", "approver"],
+        "owner": ["viewer", "approver", "admin"]
+      },
+      "customRoles": true
+    },
+    "valid": false
+  }
+]

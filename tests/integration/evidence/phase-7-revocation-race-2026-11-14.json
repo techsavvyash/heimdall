@@ -1,0 +1,16 @@
+{
+  "storageRun": "heimdall-records-68e9e63eb66f4e8b9f6ed6b4aa31dd7e",
+  "oidcRun": "a973426e-22b8-433e-8355-fd7a3a8f91f9",
+  "products": {
+    "ledger": {
+      "previouslyAuthorized": 204,
+      "newDecision": 403,
+      "audit": ["allow", "deny"]
+    },
+    "support": {
+      "previouslyAuthorized": 204,
+      "newDecision": 403,
+      "audit": ["allow", "deny"]
+    }
+  }
+}

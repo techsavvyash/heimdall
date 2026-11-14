@@ -1,0 +1,471 @@
+[
+  {
+    "name": "saml",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "authTime": 1000,
+      "verifiedAt": 1500
+    },
+    "valid": true
+  },
+  {
+    "name": "oidc",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "oidc",
+      "authTime": 1000,
+      "verifiedAt": 1500
+    },
+    "valid": true
+  },
+  {
+    "name": "missing-schemaVersion",
+    "value": {
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "authTime": 1000,
+      "verifiedAt": 1500
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-productId",
+    "value": {
+      "schemaVersion": 1,
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "authTime": 1000,
+      "verifiedAt": 1500
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-environment",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "authTime": 1000,
+      "verifiedAt": 1500
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-issuer",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "authTime": 1000,
+      "verifiedAt": 1500
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-subject",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "authTime": 1000,
+      "verifiedAt": 1500
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-clientId",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "authTime": 1000,
+      "verifiedAt": 1500
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-tenantId",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "authTime": 1000,
+      "verifiedAt": 1500
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-organizationId",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "authTime": 1000,
+      "verifiedAt": 1500
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-policyVersion",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "authTime": 1000,
+      "verifiedAt": 1500
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-providerId",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "authTime": 1000,
+      "verifiedAt": 1500
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-upstreamSubject",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "authTime": 1000,
+      "verifiedAt": 1500
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-providerSessionId",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "protocol": "saml",
+      "authTime": 1000,
+      "verifiedAt": 1500
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-protocol",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "authTime": 1000,
+      "verifiedAt": 1500
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-authTime",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "verifiedAt": 1500
+    },
+    "valid": false
+  },
+  {
+    "name": "missing-verifiedAt",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "authTime": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-protocol",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "password",
+      "authTime": 1000,
+      "verifiedAt": 1500
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-verifiedAt",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "authTime": 1000,
+      "verifiedAt": 1.5
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-authTime",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "authTime": -1,
+      "verifiedAt": 1500
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-providerId",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "authTime": 1000,
+      "verifiedAt": 1500
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-schemaVersion",
+    "value": {
+      "schemaVersion": 2,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "authTime": 1000,
+      "verifiedAt": 1500
+    },
+    "valid": false
+  },
+  {
+    "name": "invalid-metadata",
+    "value": {
+      "schemaVersion": 1,
+      "productId": "ledger",
+      "environment": "production",
+      "issuer": "https://id.example.com",
+      "subject": "maya",
+      "clientId": "ledger-web",
+      "tenantId": "acme",
+      "organizationId": "org-acme",
+      "policyVersion": "policy-2",
+      "providerId": "idp-acme",
+      "upstreamSubject": "upstream-maya",
+      "providerSessionId": "session-1",
+      "protocol": "saml",
+      "authTime": 1000,
+      "verifiedAt": 1500,
+      "metadata": {}
+    },
+    "valid": false
+  }
+]

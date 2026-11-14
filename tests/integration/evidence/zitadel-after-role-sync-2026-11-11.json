@@ -1,0 +1,21 @@
+{
+  "suite": "zitadel-bootstrap-capabilities-v1",
+  "runId": "38a551d8-be1c-47d4-85b5-86803e30b28b",
+  "observedAt": "2026-11-10T22:08:22.272Z",
+  "issuer": "https://capability-zitadel-verification.up.railway.app",
+  "observations": {
+    "discovery": "exact HTTPS issuer and same-origin endpoints",
+    "pkce": "S256 advertised",
+    "publicSigningKeys": 2,
+    "unauthenticatedAndInvalidToken": "401",
+    "provisioning": "bootstrap machine credential created, read and deleted two distinct projects using v2 Connect API"
+  },
+  "cleanedUpProjects": ["399050279363812064", "399050279951014624"],
+  "notYetVerified": [
+    "human token audiences and unknown-key rejection",
+    "organization context",
+    "strict SAML/OIDC SSO evidence",
+    "SCIM Users lifecycle",
+    "identity disable/delete freshness"
+  ]
+}

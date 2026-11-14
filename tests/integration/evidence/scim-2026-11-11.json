@@ -1,0 +1,39 @@
+{
+  "suite": "zitadel-scim-users-v1",
+  "runId": "23770f27-0dc6-40e0-9eff-1e1a139c2253",
+  "observedAt": "2026-11-10T22:01:41.560Z",
+  "issuer": "https://capability-zitadel-verification.up.railway.app",
+  "observations": [
+    {
+      "active": false,
+      "authoritativeReadMs": 149,
+      "mutationAndObservationMs": 438
+    },
+    {
+      "active": false,
+      "authoritativeReadMs": 163,
+      "mutationAndObservationMs": 459
+    },
+    {
+      "active": true,
+      "authoritativeReadMs": 139,
+      "mutationAndObservationMs": 445
+    },
+    {
+      "active": false,
+      "authoritativeReadMs": 148,
+      "mutationAndObservationMs": 451
+    },
+    {
+      "deleted": true,
+      "authoritativeReadMs": 137
+    }
+  ],
+  "cleanedUpOrganizations": ["399049600842909870", "399049601513998510"],
+  "limitations": [
+    "bootstrap credential; least-privilege SCIM credential not yet tested",
+    "single sequential sample; not a latency guarantee",
+    "no SDK workers, sessions or tuple reconciliation tested",
+    "cross-organization resource lookup checked; hostile credential isolation not inferred"
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "referenceFederation": [
+    {
+      "product": "ledger",
+      "switch": "passed",
+      "providerSetup": {
+        "protocol": "saml",
+        "version": "18285934dafd2f0042044ce2a0659810",
+        "eventId": "83569d84-baa6-4e37-be7b-bc7ceac5665c",
+        "scopeAndClaimChecked": true,
+        "lostProviderIdRecovered": true,
+        "activationRequiresTest": true,
+        "previousPolicyRejected": true,
+        "candidateCallbackRetired": true
+      },
+      "strictDirectoryCleanup": "confirmed and replayed",
+      "priorCookie": 401,
+      "staleCallback": 401,
+      "replay": 401,
+      "priorCursor": 400,
+      "discoveryBefore": "acme",
+      "discoveryAfter": "globex",
+      "resourceAfter": {
+        "acme": 403,
+        "globex": 200
+      }
+    },
+    {
+      "product": "support",
+      "switch": "passed",
+      "providerSetup": {
+        "protocol": "oidc",
+        "version": "7e02a5e5b00a778ca3977db56e142f02",
+        "eventId": "3321fcb11c18b06390d725322f9d02b7",
+        "scopeAndClaimChecked": true,
+        "lostProviderIdRecovered": true,
+        "activationRequiresTest": true,
+        "previousPolicyRejected": true,
+        "candidateCallbackRetired": true
+      },
+      "strictDirectoryCleanup": "confirmed and replayed",
+      "priorCookie": 401,
+      "staleCallback": 401,
+      "replay": 401,
+      "priorCursor": 400,
+      "discoveryBefore": "acme",
+      "discoveryAfter": "globex",
+      "resourceAfter": {
+        "acme": 403,
+        "globex": 200
+      }
+    }
+  ],
+  "storageRun": "heimdall-records-207fab6073fd4c52ab4a6741dea106f5",
+  "oidcRun": "28507f28-e518-495d-b3f4-8f06efcd8b91",
+  "policyRotation": {
+    "referenceFederation": [
+      {
+        "product": "ledger",
+        "switch": "passed",
+        "sharedPolicy": {
+          "passwordFallback": 403,
+          "guestWithoutGrant": 403,
+          "guestAfterGrant": 200,
+          "earlierPolicy": 403,
+          "pendingCallback": 401,
+          "unchangedPeer": 200,
+          "freshPolicy": 200
+        },
+        "strictDirectoryCleanup": "confirmed and replayed",
+        "priorCookie": 401,
+        "staleCallback": 401,
+        "replay": 401,
+        "priorCursor": 400,
+        "discoveryBefore": "acme",
+        "discoveryAfter": "globex",
+        "resourceAfter": {
+          "acme": 403,
+          "globex": 200
+        }
+      },
+      {
+        "product": "support",
+        "switch": "passed",
+        "sharedPolicy": {
+          "passwordFallback": 403,
+          "guestWithoutGrant": 403,
+          "guestAfterGrant": 200,
+          "earlierPolicy": 403,
+          "pendingCallback": 401,
+          "unchangedPeer": 200,
+          "freshPolicy": 200
+        },
+        "strictDirectoryCleanup": "confirmed and replayed",
+        "priorCookie": 401,
+        "staleCallback": 401,
+        "replay": 401,
+        "priorCursor": 400,
+        "discoveryBefore": "acme",
+        "discoveryAfter": "globex",
+        "resourceAfter": {
+          "acme": 403,
+          "globex": 200
+        }
+      }
+    ],
+    "storageRun": "heimdall-records-c6c98113596a4ed787dfd9ccc302cb9b",
+    "oidcRun": "cc18d603-8b08-48ae-bcc9-38d40d09223a"
+  }
+}

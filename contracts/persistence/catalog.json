@@ -1,0 +1,51 @@
+{
+  "formatVersion": 1,
+  "session": [
+    {
+      "version": 1,
+      "path": "session/0001.sql",
+      "checksum": "f71db3eece51c3230c27c89a4e154bda18e15de3276b2e7eb0001a3e38c79cc4"
+    },
+    {
+      "version": 2,
+      "path": "session/0002.sql",
+      "checksum": "f7e859c78a6d099ad4a4d35c96e553ba10a53e3ae7e23440237c769efcd50722"
+    },
+    {
+      "version": 3,
+      "path": "session/0003-capacity.sql",
+      "checksum": "15da3b2fa8a64b285516dc554a9c1cb7268fec5427046722ab9854cc0710e492"
+    },
+    {
+      "version": 4,
+      "path": "session/0004-retention-identities.sql",
+      "checksum": "28a4d5070ee8b1ba0c68639838201a13082207ce144fd0f921d48320660675f9"
+    },
+    {
+      "version": 5,
+      "path": "session/0005-hold-release-reservations.sql",
+      "checksum": "b6f5f89911249318a85da849686db43d99db10e8c80d87c60ca67cd1091bb072"
+    }
+  ],
+  "managed": [
+    {
+      "version": 1,
+      "path": "managed/0001.sql",
+      "checksum": "3df4dc62f6271691c56ac605c51012a97301b98c70454af62984cf253c066c55"
+    }
+  ],
+  "keys": [
+    {
+      "version": 1,
+      "path": "keys/0001.sql",
+      "checksum": "eb47f12e3a390f450d63fea50e8da47708e5e473c78bb14761b56cfdcc799bef"
+    }
+  ],
+  "setup": [
+    {
+      "version": 1,
+      "path": "setup/0001.sql",
+      "checksum": "d17603a8fe7865f9a94eab614c5e4f5110ad6ab9634f1bff808a2f5e39fa5ff6"
+    }
+  ]
+}

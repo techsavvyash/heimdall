@@ -1,0 +1,7 @@
+{
+  "expiresAt": 4102444800000,
+  "payload": "rotation proof: café 日本語",
+  "limit": 100,
+  "keys": { "old": 21, "next": 22, "recovery": 23 },
+  "phases": ["initial", "rolling", "retired", "recovered"]
+}

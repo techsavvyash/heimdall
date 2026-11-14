@@ -1,0 +1,61 @@
+{
+  "historyCorruption": [
+    {
+      "name": "missing slot",
+      "sql": "DELETE FROM heimdall.audit_decisions WHERE request_event_id='m-pending'"
+    },
+    {
+      "name": "corrupt unchanged-count history",
+      "sql": "UPDATE heimdall.audit_events SET payload_digest=decode(repeat('0',64),'hex') WHERE event_id='b-policy'"
+    },
+    {
+      "name": "extra slot",
+      "sql": "INSERT INTO heimdall.audit_decisions(product_id,environment,decision_id,request_event_id,requested_at) VALUES('ledger','production','extra','b-policy',1001)"
+    },
+    {
+      "name": "wrong request time",
+      "sql": "ALTER TABLE heimdall.audit_decisions DISABLE TRIGGER decision_resolution; UPDATE heimdall.audit_decisions SET requested_at=999 WHERE request_event_id='m-pending'; ALTER TABLE heimdall.audit_decisions ENABLE TRIGGER decision_resolution"
+    },
+    {
+      "name": "wrong terminal",
+      "sql": "ALTER TABLE heimdall.audit_decisions DISABLE TRIGGER decision_resolution; UPDATE heimdall.audit_decisions SET terminal_event_id='m-pending' WHERE terminal_event_id='a-terminal'; ALTER TABLE heimdall.audit_decisions ENABLE TRIGGER decision_resolution"
+    }
+  ],
+  "readiness": [
+    {
+      "name": "ready v2",
+      "sql": [],
+      "ready": true
+    },
+    {
+      "name": "migrating",
+      "sql": ["UPDATE heimdall.schema_metadata SET state='migrating'"],
+      "ready": false
+    },
+    {
+      "name": "old protocol",
+      "sql": ["UPDATE heimdall.schema_metadata SET reader_min=1,writer_min=1"],
+      "ready": false
+    },
+    {
+      "name": "missing ledger",
+      "sql": ["DELETE FROM heimdall.migrations WHERE version=2"],
+      "ready": false
+    },
+    {
+      "name": "changed checksum",
+      "sql": ["UPDATE heimdall.migrations SET checksum=repeat('0',64) WHERE version=2"],
+      "ready": false
+    },
+    {
+      "name": "extra ledger",
+      "sql": ["INSERT INTO heimdall.migrations(version,checksum) VALUES(3,repeat('0',64))"],
+      "ready": false
+    },
+    {
+      "name": "future database",
+      "sql": ["UPDATE heimdall.schema_metadata SET database_version=3"],
+      "ready": false
+    }
+  ]
+}

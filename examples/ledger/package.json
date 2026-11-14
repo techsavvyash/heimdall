@@ -1,0 +1,14 @@
+{
+  "name": "@heimdall/ledger",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "audit:run": "node audit-job.mjs",
+    "directory:run": "node directory-job.mjs"
+  },
+  "dependencies": {
+    "@techsavvyash/heimdall-sdk": "workspace:*",
+    "pg": "8.23.1"
+  }
+}

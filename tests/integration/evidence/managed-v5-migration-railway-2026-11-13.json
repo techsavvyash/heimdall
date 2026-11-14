@@ -1,0 +1,30 @@
+{
+  "runId": "ca91918ee3e347c3ad32d42fbdfcd132",
+  "projectId": "944fc9be-8648-4237-82bc-72e4bd24a4c9",
+  "environmentId": "7bc7c286-b2dc-4415-85eb-90dd554ab2fb",
+  "serviceId": "648133ac-305b-495d-a77e-4d0c49103feb",
+  "postgresVersion": "17.11",
+  "binarySha256": "c6fc83937558a63ad1c9b7d996653fa74506d1df4f884c0d2375b19bf8692149",
+  "migrationSha256": "f71db3eece51c3230c27c89a4e154bda18e15de3276b2e7eb0001a3e38c79cc4",
+  "managedMigrationSha256": "3df4dc62f6271691c56ac605c51012a97301b98c70454af62984cf253c066c55",
+  "checks": [
+    "uploaded compiled Linux binary checksum",
+    "two independent runner invocations",
+    "exact ledger and ready metadata",
+    "six shared schema tables",
+    "incompatible state rejected without repair",
+    "idempotent rerun",
+    "managed initialization refuses missing prerequisite without implicit installation",
+    "two managed installers serialize",
+    "exact managed ledger and metadata",
+    "session and managed read-only status",
+    "managed status with SELECT-only role",
+    "either incompatible family blocks managed initialization/status without repair",
+    "ordered audit v1 through v5 migration and managed readiness",
+    "old and new managed status refuse prepared schemas",
+    "v5 SELECT-only status and denied activation",
+    "v4 refusal and idempotent v5 activation"
+  ],
+  "result": "passed",
+  "cleanupVerified": true
+}

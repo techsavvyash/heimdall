@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://heimdall.dev/contracts/v1/error.schema.json",
+  "title": "Heimdall v1 sanitized error",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code"],
+  "properties": {
+    "code": {
+      "enum": [
+        "unauthenticated",
+        "forbidden",
+        "invalid_argument",
+        "not_found",
+        "conflict",
+        "unavailable",
+        "deadline_exceeded",
+        "cancelled",
+        "audit_unavailable",
+        "outcome_unknown"
+      ]
+    },
+    "operationId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    }
+  }
+}

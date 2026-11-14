@@ -1,0 +1,6 @@
+{
+  "cases": [
+    { "fault": "lost_response", "ownersAfterFault": 2, "totalWrites": 2 },
+    { "fault": "lost_owner_delete", "ownersAfterFault": 1, "totalWrites": 2 }
+  ]
+}

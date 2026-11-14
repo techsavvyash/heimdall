@@ -1,0 +1,120 @@
+{
+  "live": [
+    {
+      "name": "pending",
+      "product": "ledger",
+      "environment": "production",
+      "id": "decision-1",
+      "expected": "pending"
+    },
+    {
+      "name": "completed",
+      "product": "ledger",
+      "environment": "staging",
+      "id": "decision-1",
+      "expected": "completed"
+    },
+    {
+      "name": "recovered",
+      "product": "support",
+      "environment": "production",
+      "id": "decision-1",
+      "expected": "recovered"
+    },
+    {
+      "name": "absent",
+      "product": "ledger",
+      "environment": "production",
+      "id": "missing",
+      "expected": "absent"
+    },
+    {
+      "name": "migrating-absent",
+      "product": "ledger",
+      "environment": "production",
+      "id": "missing",
+      "before": "UPDATE heimdall.schema_metadata SET state='migrating'",
+      "expected": "unavailable"
+    },
+    {
+      "name": "missing-decision",
+      "product": "ledger",
+      "environment": "production",
+      "id": "decision-1",
+      "before": "SET LOCAL session_replication_role=replica; DELETE FROM heimdall_retention.decision_identities WHERE product_id='ledger' AND environment='production'",
+      "expected": "audit_unavailable"
+    },
+    {
+      "name": "missing-request",
+      "product": "ledger",
+      "environment": "production",
+      "id": "decision-1",
+      "before": "SET LOCAL session_replication_role=replica; DELETE FROM heimdall_retention.event_identities WHERE product_id='ledger' AND environment='production' AND event_id='z-request'",
+      "expected": "audit_unavailable"
+    },
+    {
+      "name": "changed-tenant",
+      "product": "ledger",
+      "environment": "production",
+      "id": "decision-1",
+      "before": "SET LOCAL session_replication_role=replica; UPDATE heimdall_retention.decision_identities SET tenant_id='other' WHERE product_id='ledger' AND environment='production'",
+      "expected": "audit_unavailable"
+    },
+    {
+      "name": "missing-source",
+      "product": "ledger",
+      "environment": "production",
+      "id": "decision-1",
+      "before": "SET LOCAL session_replication_role=replica; DELETE FROM heimdall.audit_decisions WHERE product_id='ledger' AND environment='production'",
+      "expected": "audit_unavailable"
+    },
+    {
+      "name": "bad-terminal",
+      "product": "ledger",
+      "environment": "staging",
+      "id": "decision-1",
+      "before": "SET LOCAL session_replication_role=replica; UPDATE heimdall.audit_events SET event=jsonb_set(event,'{payload}',to_jsonb('!'::text)) WHERE product_id='ledger' AND environment='staging' AND event_id='normal-terminal'",
+      "expected": "audit_unavailable"
+    },
+    {
+      "name": "changed-request-time",
+      "product": "ledger",
+      "environment": "production",
+      "id": "decision-1",
+      "before": "SET LOCAL session_replication_role=replica; UPDATE heimdall_retention.decision_identities SET requested_at=1002 WHERE product_id='ledger' AND environment='production'; UPDATE heimdall.audit_decisions SET requested_at=1002 WHERE product_id='ledger' AND environment='production'",
+      "expected": "audit_unavailable"
+    },
+    {
+      "name": "changed-resolution-time",
+      "product": "ledger",
+      "environment": "staging",
+      "id": "decision-1",
+      "before": "SET LOCAL session_replication_role=replica; UPDATE heimdall_retention.decision_identities SET resolved_at=2002 WHERE product_id='ledger' AND environment='staging'; UPDATE heimdall.audit_decisions SET resolved_at=2002 WHERE product_id='ledger' AND environment='staging'",
+      "expected": "audit_unavailable"
+    }
+  ],
+  "retired": [
+    {
+      "name": "retired-completed",
+      "product": "ledger",
+      "environment": "staging",
+      "id": "decision-1",
+      "expected": "not_found"
+    },
+    {
+      "name": "retired-recovered",
+      "product": "support",
+      "environment": "production",
+      "id": "decision-1",
+      "expected": "not_found"
+    },
+    {
+      "name": "retired-missing-member",
+      "product": "support",
+      "environment": "production",
+      "id": "decision-1",
+      "before": "SET LOCAL session_replication_role=replica; DELETE FROM heimdall_retention.event_identities WHERE product_id='support' AND environment='production' AND kind='terminal'",
+      "expected": "audit_unavailable"
+    }
+  ]
+}

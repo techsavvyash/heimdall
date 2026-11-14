@@ -1,0 +1,26 @@
+{
+  "referenceProducts": [
+    {
+      "product": "ledger",
+      "scopedRead": 200,
+      "scimBrowser": {
+        "deniedInMs": 1360,
+        "disabledSession": 401,
+        "deniedWithTuplesPresent": true,
+        "removedTuples": 2,
+        "reactivatedCookie": 401
+      }
+    },
+    {
+      "product": "support",
+      "scopedRead": 200,
+      "scimBrowser": {
+        "deniedInMs": 2904,
+        "disabledSession": 401,
+        "deniedWithTuplesPresent": true,
+        "removedTuples": 2,
+        "reactivatedCookie": 401
+      }
+    }
+  ]
+}

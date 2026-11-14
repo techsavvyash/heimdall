@@ -1,0 +1,44 @@
+{
+  "runId": "60403950-1172-4279-8b89-923b04b1bf4c",
+  "observedAt": "2026-11-14T05:55:23.712Z",
+  "artifacts": [
+    {
+      "commit": "f2b5f19f53617679b2901582656f4c519563d4dc",
+      "typescriptArchiveSHA256": "77405b07816008485d6a1a44806ec3ca2ff72c2b7453d45d06e70de1924d468b",
+      "goModuleVersion": "v0.0.0-20261114053443-f2b5f19f5361"
+    },
+    {
+      "commit": "4eeddb78ab2e394b08ef9f1b6a4027188110a6bc",
+      "typescriptArchiveSHA256": "cfecc7f64c06b851eb2c981dbbdb93194cb2270cc54b579dd84158399188cb18",
+      "goModuleVersion": "v0.0.0-20261114054503-4eeddb78ab2e"
+    }
+  ],
+  "products": [
+    {
+      "product": "ledger",
+      "previousModelId": "01M7C9YZDYGFH9SAFZ189E67TE",
+      "candidateModelId": "01M7C9YZH7EDPTWAGQ5MTVGAEA",
+      "stages": [
+        "overlap",
+        "previous pin",
+        "mismatched pin",
+        "new role",
+        "rollback",
+        "removed role grant"
+      ]
+    },
+    {
+      "product": "support",
+      "previousModelId": "01M7C9ZDGHSAZQV4TCCXXP9AJA",
+      "candidateModelId": "01M7C9ZDMEBQ2AWW8954EJ3XQZ",
+      "stages": [
+        "overlap",
+        "previous pin",
+        "mismatched pin",
+        "new role",
+        "rollback",
+        "removed role grant"
+      ]
+    }
+  ]
+}
