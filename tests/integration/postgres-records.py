@@ -243,6 +243,9 @@ try:
                                  HEIMDALL_REFERENCE_DATABASE_URL=application_dsn,
                                  HEIMDALL_REFERENCE_SUPPORT_BINARY=binary)
             restore = os.environ.get("HEIMDALL_PROBE_COORDINATED_RESTORE") == "1"
+            incomplete_restore = os.environ.get("HEIMDALL_PROBE_INCOMPLETE_RESTORE") == "1"
+            if incomplete_restore and not restore:
+                raise RuntimeError("The incomplete-history probe requires coordinated restore")
             revocation_race = os.environ.get("HEIMDALL_PROBE_REVOCATION_RACE") == "1"
             if restore:
                 reference_env["HEIMDALL_RESTORE_POSTGRES_CONTAINER"] = name
@@ -448,7 +451,8 @@ try:
                     for tenant in ("acme", "globex"):
                         assert len({e["decisionId"] for e in scoped if e["tenantId"] == tenant}) == 1
             elif restore:
-                assert {item["product"] for item in products if item["coordinatedRestore"]} == {"ledger", "support"}
+                proof_key = "incompleteRestore" if incomplete_restore else "coordinatedRestore"
+                assert {item["product"] for item in products if item[proof_key]} == {"ledger", "support"}
             elif os.environ.get("HEIMDALL_PROBE_SCIM_BROWSER") == "1":
                 from collections import Counter
                 import base64

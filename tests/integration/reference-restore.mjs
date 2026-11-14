@@ -31,6 +31,7 @@ export async function verifyRestoredReference({
   assert.match(container, /^heimdall-records-[a-f0-9]{32}$/);
   const source = new URL(db);
   assert.equal(source.pathname, "/public_runtime");
+  const incomplete = process.env.HEIMDALL_PROBE_INCOMPLETE_RESTORE === "1";
   const target = "restore_" + product;
   const login = target + "_login";
   const snapshot = "/tmp/" + target + ".dump";
@@ -71,8 +72,10 @@ export async function verifyRestoredReference({
 
   const accepted = new Set();
   let receipts = 0;
+  let sinkRequests = 0;
   const token = randomBytes(24).toString("hex");
   const sink = createServer(async (req, res) => {
+    sinkRequests++;
     try {
       assert.equal(req.headers.authorization, "Bearer " + token);
       const chunks = [];
@@ -140,7 +143,8 @@ export async function verifyRestoredReference({
     );
     assert.deepEqual(Object.keys(acknowledged).sort(), [...accepted].sort());
 
-    await restoreProvider.revoke();
+    const revocation = await restoreProvider.revoke();
+    assert.match(revocation, /^[A-Za-z0-9_-]{1,128}$/);
     assert.deepEqual(await readMemberRelations(recipient, workspace), []);
     let reactivated = false;
     try {
@@ -254,6 +258,64 @@ export async function verifyRestoredReference({
         String(receivedIds.length),
       );
 
+      const url = new URL(source);
+      url.pathname = "/" + target;
+      url.username = login;
+      url.password = password;
+      if (incomplete) {
+        // An operation known to have run is absent from the recovered journal.
+        const removedOperation = `SELECT count(*) FROM heimdall_managed.operations
+          WHERE ${where} AND operation_id='${revocation}' AND state='completed';`;
+        assert.equal(await sql("public_runtime", removedOperation), "1");
+        assert.equal(await sql(target, removedOperation), "0");
+        // Withhold one receipt from the recovery inventory. The source ledger proves the gap.
+        const availableReceipts = { ...acknowledged };
+        delete availableReceipts[receivedIds[0]];
+        const unknownReceipts = receivedIds.filter((id) => !Object.hasOwn(availableReceipts, id));
+        assert.equal(unknownReceipts.length, 1);
+        const before = sinkRequests;
+        // The operator leaves CONNECT revoked. Try the actual product and its delivery
+        // executable with the fenced runtime credential before verifying preserved state.
+        await assert.rejects(
+          restart({
+            DATABASE_URL: url.href,
+            HEIMDALL_KEY_DATABASE_URL: url.href,
+            HEIMDALL_EXPORT_DATABASE_URL: "",
+            [product === "ledger" ? "LEDGER_DATABASE_URL" : "SUPPORT_DATABASE_URL"]: url.href,
+          }),
+          /Reference backend failed readiness/,
+        );
+        await stop();
+        await assert.rejects(deliver(url.href), /Restore audit delivery command failed/);
+        assert.equal(sinkRequests, before);
+        assert.equal(receipts, receivedIds.length);
+        assert.equal(
+          await sql("postgres", `SELECT has_database_privilege('${login}','${target}','CONNECT');`),
+          "f",
+        );
+        assert.equal(
+          await sql(
+            target,
+            `SELECT count(*) FROM heimdall.audit_deliveries WHERE ${where}
+            AND sink_id='siem' AND state='pending' AND event_id IN (${ids});`,
+          ),
+          String(receivedIds.length),
+        );
+        return {
+          product,
+          scopedRead: 200,
+          incompleteRestore: {
+            revocationMissingFromRestoredJournal: true,
+            identityDenialMissingFromRestore: true,
+            withheldSinkReceipts: unknownReceipts.length,
+            backendReady: false,
+            deliveryWorkerBlocked: true,
+            confirmedReceiptsNotRedelivered: receivedIds.length,
+            runtimeFenced: true,
+          },
+        };
+      }
+
       // The fixture knows the post-backup changes. Apply only those facts to the isolated target.
       const recoveryKey = randomBytes(32);
       const fingerprint = createHash("sha256")
@@ -285,10 +347,6 @@ export async function verifyRestoredReference({
       );
 
       await sql("postgres", `GRANT CONNECT ON DATABASE ${target} TO ${login};`);
-      const url = new URL(source);
-      url.pathname = "/" + target;
-      url.username = login;
-      url.password = password;
 
       // Export to the same receipt endpoint after reconciling known receipts.
       const before = receipts;

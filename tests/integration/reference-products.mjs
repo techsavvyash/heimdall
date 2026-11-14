@@ -1142,7 +1142,9 @@ export async function verifyReferenceProduct(input, authorize) {
           async revoke() {
             const response = await memberRequest("remove", recipient, runId);
             assert.equal(response.status, 200);
-            assert.equal((await response.json()).status, "confirmed");
+            const removal = await response.json();
+            assert.equal(removal.status, "confirmed");
+            return removal.operationId;
           },
         },
       });
