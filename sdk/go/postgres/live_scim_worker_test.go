@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -14,15 +16,19 @@ import (
 	"github.com/techsavvyash/heimdall/sdk/go/provisioning"
 )
 
+type liveSCIMConfiguration struct {
+	provisioning.DirectoryReaderOptions
+	Subject, Stage, Revision, WorkspaceID, ApprovedRole string
+	ClientSecret, OpenFGAKey, OperatorToken             string
+	Config, Manifest                                    json.RawMessage
+}
+
 func TestLiveSCIMWorker(t *testing.T) {
 	raw := os.Getenv("HEIMDALL_TEST_LIVE_SCIM")
 	if raw == "" {
 		t.Skip("requires live SCIM verification")
 	}
-	var c struct {
-		provisioning.DirectoryReaderOptions
-		Subject, Stage string
-	}
+	var c liveSCIMConfiguration
 	if json.Unmarshal([]byte(raw), &c) != nil {
 		t.Fatal("invalid live SCIM test configuration")
 	}
@@ -34,6 +40,10 @@ func TestLiveSCIMWorker(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
 	const product, environment, other = "support", "scim-live-go", "scim-live-other-go"
+	if c.Stage == "cleanup" || c.Stage == "reenroll" {
+		verifyLiveSCIMReactivation(t, ctx, db, c)
+		return
+	}
 	if c.Stage == "browser" {
 		observe, err := NewDirectoryDeactivation(db, product, "verification", c.DirectoryReaderOptions)
 		if err != nil {
@@ -114,4 +124,97 @@ func TestLiveSCIMWorker(t *testing.T) {
 	if err != nil || otherRows != 1 || (ownRows == 1) != (c.Stage == "seed") {
 		t.Fatal("unexpected scoped session invalidation", ownRows, otherRows, err)
 	}
+}
+
+func verifyLiveSCIMReactivation(t *testing.T, ctx context.Context, db *sql.DB, c liveSCIMConfiguration) {
+	t.Helper()
+	const product, environment = "support", "verification"
+	fmt.Println("SCIM_STEP runtime")
+	storage, err := NewManagedStorage(db, StorageOptions{ProductID: product, Environment: environment})
+	if err != nil {
+		t.Fatal("SCIM_STEP storage-error", err)
+	}
+	client, err := heimdall.New(ctx, c.Config, c.Manifest, heimdall.Options{
+		Storage: storage, PolicyVersion: "reference-v1",
+		Credentials: heimdall.Credentials{
+			ClientSecret: func(context.Context) (string, error) { return c.ClientSecret, nil },
+			OpenFGAKey:   func(context.Context) (string, error) { return c.OpenFGAKey, nil },
+		},
+	})
+	if err != nil {
+		var failure *heimdall.Error
+		if errors.As(err, &failure) {
+			t.Log("SCIM_STEP runtime-" + failure.Code)
+		}
+		t.Fatal("runtime initialization failed")
+	}
+	fmt.Println("SCIM_STEP operator")
+	actor, err := client.Tokens().Verify(ctx, c.OperatorToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity := heimdall.Identity{Issuer: c.Issuer, Subject: c.Subject}
+	checkDenial := func(want bool) {
+		t.Helper()
+		if denied, err := storage.Identity.Check(ctx, identity); denied != want || err != nil {
+			t.Fatal("unexpected durable denial", denied, err)
+		}
+	}
+	checkDenial(true)
+	if c.Stage == "cleanup" {
+		fmt.Println("SCIM_STEP cleanup")
+		cleanup, err := NewDirectoryCleanup(db, product, environment, c.Issuer, c.OrganizationID, "production")
+		if err != nil {
+			t.Fatal(err)
+		}
+		pending, err := cleanup.Pending(ctx, "", 2)
+		if err != nil || len(pending) != 1 || pending[0].Subject != c.Subject || pending[0].Reason != "inactive" {
+			t.Fatal("expected the subject's cleanup revision", err)
+		}
+		revision := pending[0].Revision
+		result, err := cleanup.Reconcile(ctx, client, actor, c.Subject, revision, []string{c.WorkspaceID})
+		if err != nil || result != nil {
+			t.Fatal("expected confirmed cleanup", result, err)
+		}
+		if pending, err = cleanup.Pending(ctx, "", 2); len(pending) != 0 || err != nil {
+			t.Fatal("confirmed revision still pending", err)
+		}
+		fmt.Println("SCIM_REVISION " + revision)
+		return
+	}
+	fmt.Println("SCIM_STEP prepare")
+	prepare, err := NewDirectoryReactivation(db, product, environment, c.DirectoryReaderOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := prepare(ctx, c.Subject, c.Revision); err != nil {
+		t.Fatal(err)
+	}
+	release, err := NewDirectoryReactivationRelease(db, product, environment, c.DirectoryReaderOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const ruleID = "browser-scim-v1"
+	approval := []DirectoryReactivationEnrollment{{WorkspaceID: c.WorkspaceID, RuleID: ruleID}}
+	if err := release(ctx, c.Subject, c.Revision, approval); !errors.Is(err, heimdall.ErrConflict) {
+		t.Fatal("expected release to reject unconfirmed enrollment", err)
+	}
+	fmt.Println("SCIM_STEP enroll")
+	enroll, err := NewDirectoryEnrollment(db, product, environment, c.DirectoryReaderOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := enroll(ctx, client, actor, DirectoryEnrollmentInput{
+		Subject: c.Subject, WorkspaceID: c.WorkspaceID, RuleID: ruleID,
+		Roles: []string{c.ApprovedRole}, ReactivationRevision: c.Revision,
+	})
+	if err != nil || result.Status != "confirmed" {
+		t.Fatal("expected confirmed enrollment", result, err)
+	}
+	checkDenial(true)
+	fmt.Println("SCIM_STEP release")
+	if err := release(ctx, c.Subject, c.Revision, approval); err != nil {
+		t.Fatal(err)
+	}
+	checkDenial(false)
 }

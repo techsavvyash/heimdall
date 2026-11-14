@@ -2,6 +2,7 @@ import { verifyReferenceProduct } from "./reference-products.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { setTimeout as delay } from "node:timers/promises";
 import {
   randomUUID,
   randomBytes,
@@ -42,13 +43,27 @@ async function sdkRuntime(client, c) {
   ).find((f) => f.name === client.product);
   assert(fixture);
   const api = async (path, body, method = body === undefined ? "GET" : "POST") => {
-    const r = await fetch(base + path, {
-      method,
-      headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      redirect: "error",
-      signal: AbortSignal.timeout(15000),
-    });
+    const send = () =>
+      fetch(base + path, {
+        method,
+        headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        redirect: "error",
+        signal: AbortSignal.timeout(15000),
+      });
+    let r;
+    if (path.endsWith("/read") && scimBrowser) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) await delay(250);
+        r = await send().catch((error) => {
+          if (attempt === 2) throw error;
+        });
+        if (r && (attempt === 2 || ![502, 503, 504].includes(r.status))) break;
+        await r?.body?.cancel();
+      }
+    } else {
+      r = await send();
+    }
     assert(r.ok, `runtime FGA ${method}: ${r.status}`);
     return r.status === 204 ? null : r.json();
   };
@@ -113,14 +128,16 @@ async function sdkRuntime(client, c) {
             runId,
             otherWorkspace: observations.find((entry) => entry.onboarding)?.onboarding,
             scim: c.reference.scim,
-            readMember: async (subject, workspaceId) => {
+            roleAssignments: fixture.expected.roles,
+            readMemberRelations: async (subject, workspaceId) => {
               const user =
                 "user:" + Buffer.from(JSON.stringify([issuer, subject])).toString("base64url");
               const result = await api(`/stores/${store.id}/read`, {
                 tuple_key: { user, object: "workspace:" + workspaceId },
                 consistency: "HIGHER_CONSISTENCY",
               });
-              return (result.tuples ?? []).length;
+              assert(!result.continuation_token, "Expected all subject tuples on one page");
+              return (result.tuples ?? []).map(({ key }) => key.relation).sort();
             },
           },
           c.reference.authorize,
@@ -420,6 +437,7 @@ try {
           },
           token,
         );
+        if (active) otherSession = await createOtherSession(recipient.id);
       },
     };
     return recipient;
@@ -435,16 +453,17 @@ try {
           password: { password, changeRequired: false },
         },
       });
-  const otherSession = await ok(
-    "POST",
-    "/v2/sessions",
-    {
-      checks: { user: { userId: otherUser.id }, password: { password } },
-      lifetime: "3600s",
-    },
-    loginPat,
-  );
-  sessions.push(otherSession.sessionId);
+  async function createOtherSession(userId) {
+    const result = await ok(
+      "POST",
+      "/v2/sessions",
+      { checks: { user: { userId }, password: { password } }, lifetime: "3600s" },
+      loginPat,
+    );
+    sessions.push(result.sessionId);
+    return result;
+  }
+  let otherSession = await createOtherSession(otherUser.id);
   const tokens = [];
   const statusCases = [];
   async function authorize(client, apiAudience = false) {

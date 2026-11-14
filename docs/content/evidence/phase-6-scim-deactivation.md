@@ -204,4 +204,31 @@ sequenceDiagram
 
 The disable-to-denial check took 1,360 ms for Ledger and 2,904 ms for Support, including the SCIM call and test worker startup. Each worker removed one real session row. The probe checked that both direct tuples still existed at the first denial and that the product's managed removal subsequently cleared them.
 
-Run `tests/integration/postgres-records.py` with `HEIMDALL_PROBE_REFERENCE_PRODUCTS=1` and `HEIMDALL_PROBE_SCIM_BROWSER=1` plus the protected verification credentials. The probe drives HTTP cookies and callbacks programmatically. This run uses the managed membership endpoint for removal. The preceding pinned OpenFGA test covers cleanup revision acknowledgement and approved re-enrollment. A live run applying those worker operations together and qualifying a new session after approved re-enrollment remains pending.
+The initial run used the managed membership endpoint for removal. The follow-up below uses the directory cleanup and enrollment adapters.
+
+## Live cleanup and approved re-enrollment
+
+PostgreSQL run `heimdall-records-adbb78230731448797e176abeba67ab4` passed against Railway ZITADEL and OpenFGA. The disable-to-denial check took 1,230 ms for Ledger and 2,942 ms for Support, including the SCIM request and worker startup. Higher-consistency OpenFGA reads verified that the prior roles disappeared. The new sessions returned HTTP 200 in the approved workspace and HTTP 403 in Acme. The original cookies still returned HTTP 401 after release. The probe verified the durable request, dispatch, confirm and completion audit events for each product's removal and grants.
+
+The reference products start with `approver` in Ledger and `agent` in Support. Each SDK records a durable denial before OpenFGA cleanup. An authenticated workspace owner supplies the affected workspace and the approved enrollment rule. The SDK confirms the membership removal, acknowledges its revision, and requires confirmed enrollment on that revision before releasing the denial. The product supplies the workspace mapping and the approved role. The probe uses a fresh ZITADEL session to complete a new product OIDC callback.
+
+```mermaid
+sequenceDiagram
+  participant Z as Railway ZITADEL
+  participant W as Product directory worker
+  participant D as Product PostgreSQL
+  participant F as Railway OpenFGA
+  participant P as Product HTTP routes
+  Z-->>W: Verify the disabled SCIM identity
+  W->>D: Persist denial and revoke the session
+  W->>F: Remove membership and the prior role
+  W->>D: Acknowledge the cleanup revision
+  Z-->>W: Verify provider reactivation
+  W->>D: Prepare the same revision and keep the denial
+  W->>F: Grant membership and the approved role
+  W->>D: Release the denial after confirmed enrollment
+  Z-->>P: Complete a fresh product login
+  P-->>P: Return HTTP 200 for the new cookie and HTTP 401 for the old cookie
+```
+
+Run `tests/integration/postgres-records.py` with `HEIMDALL_PROBE_REFERENCE_PRODUCTS=1` and `HEIMDALL_PROBE_SCIM_BROWSER=1` plus the protected verification credentials. The probe drives cookies and callbacks through HTTP with local reference applications and disposable PostgreSQL. The remaining cross-product outage scenario requires both product sessions to be active at once while one worker fails.

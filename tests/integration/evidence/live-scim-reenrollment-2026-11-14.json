@@ -1,0 +1,39 @@
+{
+  "run": "heimdall-records-adbb78230731448797e176abeba67ab4",
+  "referenceProducts": [
+    {
+      "product": "ledger",
+      "scopedRead": 200,
+      "scimBrowser": {
+        "deniedInMs": 1230,
+        "disabledSession": 401,
+        "deniedWithTuplesPresent": true,
+        "cleanupAcknowledged": true,
+        "removedTuples": ["member", "r_1"],
+        "releasedAfterApprovedEnrollment": true,
+        "approvedRole": "viewer",
+        "originalCookieAfterRelease": 401,
+        "freshCookie": 200,
+        "freshCookieOtherWorkspace": 403,
+        "auditedRemovalAndGrants": true
+      }
+    },
+    {
+      "product": "support",
+      "scopedRead": 200,
+      "scimBrowser": {
+        "deniedInMs": 2942,
+        "disabledSession": 401,
+        "deniedWithTuplesPresent": true,
+        "cleanupAcknowledged": true,
+        "removedTuples": ["member", "r_0"],
+        "releasedAfterApprovedEnrollment": true,
+        "approvedRole": "reader",
+        "originalCookieAfterRelease": 401,
+        "freshCookie": 200,
+        "freshCookieOtherWorkspace": 403,
+        "auditedRemovalAndGrants": true
+      }
+    }
+  ]
+}

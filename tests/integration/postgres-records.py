@@ -201,13 +201,33 @@ try:
             products = [result for result in observations if "scopedRead" in result]
             if len(products) != 2:
                 raise RuntimeError("missing reference product observations")
+            audit_rows = run(
+                ["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime", "-XAt", "-v", "ON_ERROR_STOP=1"],
+                input="SELECT event->>'payload' FROM heimdall.audit_events WHERE environment='verification'",
+                capture_output=True, text=True).stdout.splitlines()
             if os.environ.get("HEIMDALL_PROBE_SCIM_BROWSER") == "1":
-                assert all("scimBrowser" in product for product in products)
+                from collections import Counter
+                import base64
+                events = [json.loads(base64.urlsafe_b64decode(payload + "===")) for payload in audit_rows]
+                for product in products:
+                    proof = product["scimBrowser"]
+                    scoped = [event for event in events if event["productId"] == product["product"]
+                              and event.get("tenantId") == proof["workspaceId"]]
+                    for action, count in (("remove_member", 1), ("add_member", 2)):
+                        operations = {event["operationId"] for event in scoped
+                                      if event["action"] == action and event["outcome"] == "requested"}
+                        assert len(operations) == count
+                        for operation in operations:
+                            chain = [event for event in scoped if event.get("operationId") == operation]
+                            assert Counter((event["action"], event["outcome"]) for event in chain) == {
+                                (action, "requested"): 1,
+                                (action + ".dispatch", "attempted"): 1,
+                                (action + ".confirm", "succeeded"): 1,
+                                (action + ".complete", "succeeded"): 1,
+                            }
+                    proof["auditedRemovalAndGrants"] = True
+                    del proof["workspaceId"]
             else:
-                audit_rows = run(
-                    ["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime", "-XAt", "-v", "ON_ERROR_STOP=1"],
-                    input="SELECT event->>'payload' FROM heimdall.audit_events WHERE environment='verification'",
-                    capture_output=True, text=True).stdout.splitlines()
                 run(["python3", "tests/integration/reference-onboarding-audit.py"],
                     input=json.dumps({"products": products, "payloads": audit_rows}), text=True)
             print(json.dumps({"referenceProducts": products}), flush=True)

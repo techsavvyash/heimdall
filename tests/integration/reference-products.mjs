@@ -20,7 +20,8 @@ export async function verifyReferenceProduct(input, authorize) {
     exportToken,
     federation,
     scim,
-    readMember,
+    roleAssignments,
+    readMemberRelations,
   } = input;
   const ledger = config.productId === "ledger";
   const port = ledger ? 18640 : 18641;
@@ -478,9 +479,14 @@ export async function verifyReferenceProduct(input, authorize) {
     });
     if (scim) {
       assert(!remote, "SCIM browser probe requires a disposable local product database");
+      await expectDenied(
+        await memberRequest("assign-roles", recipient, runId, [replacementRole]),
+        200,
+      );
       await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 200);
-      const originalTuples = await readMember(recipient, workspace.workspaceId);
-      assert.equal(originalTuples, 2);
+      const readRelations = () => readMemberRelations(recipient, workspace.workspaceId);
+      const originalTuples = await readRelations();
+      assert.deepEqual(originalTuples, ["member", roleAssignments[replacementRole].assignment]);
       const start = performance.now();
       await scim.setActive(false);
       const command = ledger
@@ -493,43 +499,80 @@ export async function verifyReferenceProduct(input, authorize) {
             "run",
             "test/live-scim-worker.test.ts",
           ]
-        : ["go", "test", "-race", "-count=1", "./postgres", "-run", "^TestLiveSCIMWorker$"];
+        : ["go", "test", "-v", "-race", "-count=1", "./postgres", "-run", "^TestLiveSCIMWorker$"];
       const { issuer, organizationId, token } = scim;
-      const worker = spawnSync(command[0], command.slice(1), {
-        cwd: new URL(ledger ? "../../" : "../../sdk/go/", import.meta.url),
-        env: {
-          ...process.env,
-          HEIMDALL_TEST_DIRECTORY_DB: runtimeDB,
-          HEIMDALL_TEST_LIVE_SCIM: JSON.stringify({
-            issuer,
-            organizationId,
-            token,
-            subject: recipient,
-            stage: "browser",
-          }),
-        },
-        encoding: "utf8",
-        timeout: 45000,
-      });
-      assert.equal(worker.status, 0, "Live SCIM browser worker failed");
+      function runWorker(stage, revision) {
+        const worker = spawnSync(command[0], command.slice(1), {
+          cwd: new URL(ledger ? "../../" : "../../sdk/go/", import.meta.url),
+          env: {
+            ...process.env,
+            HEIMDALL_TEST_DIRECTORY_DB: runtimeDB,
+            HEIMDALL_TEST_LIVE_SCIM: JSON.stringify({
+              issuer,
+              organizationId,
+              token,
+              subject: recipient,
+              stage,
+              revision,
+              workspaceId: workspace.workspaceId,
+              approvedRole: initialRole,
+              config,
+              manifest,
+              operatorToken: exportToken,
+              clientSecret,
+              openfgaKey: variables.HEIMDALL_OPENFGA_KEY,
+            }),
+          },
+          encoding: "utf8",
+          timeout: 45000,
+        });
+        const step = /SCIM_STEP ([a-z-]+)/g;
+        const last = [...(worker.stdout + worker.stderr).matchAll(step)].at(-1)?.[1];
+        assert.equal(
+          worker.status,
+          0,
+          `Live SCIM ${schema} ${stage} failed at ${last ?? "startup"}`,
+        );
+        return worker.stdout + worker.stderr;
+      }
+      runWorker("browser");
       await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 401);
       const deniedInMs = Math.round(performance.now() - start);
       assert(deniedInMs < 60000);
-      assert.equal(await readMember(recipient, workspace.workspaceId), originalTuples);
-      await expectDenied(await memberRequest("remove", recipient, runId), 200);
-      assert.equal(await readMember(recipient, workspace.workspaceId), 0);
+      assert.deepEqual(await readRelations(), originalTuples);
+      const revision = /SCIM_REVISION ([1-9][0-9]*)/.exec(runWorker("cleanup"))?.[1];
+      assert(revision, "Live SCIM cleanup did not acknowledge a revision");
+      assert.deepEqual(await readRelations(), []);
       await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 401);
       await scim.setActive(true);
+      await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 401);
+      runWorker("reenroll", revision);
+      assert.deepEqual(await readRelations(), ["member", roleAssignments[initialRole].assignment]);
+      const freshHeaders = { cookie: await signIn(true) };
+      await expectDenied(await request(resourcePath, { headers: freshHeaders }), 200);
+      assert.deepEqual(await (await request(rolesPath, { headers: freshHeaders })).json(), {
+        roles: [initialRole],
+      });
+      await expectDenied(
+        await request(`/workspaces/acme/${collection}`, { headers: freshHeaders }),
+        403,
+      );
       await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 401);
       return {
         product: schema,
         scopedRead: 200,
         scimBrowser: {
+          workspaceId: workspace.workspaceId,
           deniedInMs,
           disabledSession: 401,
           deniedWithTuplesPresent: true,
+          cleanupAcknowledged: true,
           removedTuples: originalTuples,
-          reactivatedCookie: 401,
+          releasedAfterApprovedEnrollment: true,
+          approvedRole: initialRole,
+          originalCookieAfterRelease: 401,
+          freshCookie: 200,
+          freshCookieOtherWorkspace: 403,
         },
       };
     }
