@@ -52,12 +52,37 @@ flowchart TD
   Edit[Compile current and candidate manifests] --> Verify{Existing policy and relations preserved}
   Verify -->|No| Plan[Plan an isolated migration or coordinated cutover]
   Verify -->|Yes| Publish[Publish candidate model with grants unchanged]
-  Publish --> Deploy[Deploy paired manifest and model ID]
+  Publish --> Inspect{Published pins verified and compatible}
+  Inspect -->|No| Plan
+  Inspect -->|Yes| Deploy[Deploy paired manifest and model ID]
   Deploy --> Observe[Verify existing decisions with both configurations]
   Observe --> Drain[Drain old membership and recovery workers]
   Drain --> Activate[Activate new-role tuples with the candidate model]
   Activate --> Restore[Reconcile new-role tuples before restoring old writers]
 ```
+
+After publishing the candidate but before activating any new grants, run the read-only provisioning check. It requires the current and candidate runtime config JSON and exact manifest JSON. Both configs must refer to the same product, environment, issuer, audience, ZITADEL project, and OpenFGA store. The candidate must have a higher manifest version and a different model ID. OpenFGA credentials are supplied separately.
+
+```ts
+import { inspectModelRollout } from "@heimdall/sdk/provisioning";
+
+const report = await inspectModelRollout(
+  { configJSON: currentConfig, manifestJSON: currentManifest },
+  { configJSON: candidateConfig, manifestJSON: candidateManifest },
+  openfgaToken,
+  signal,
+);
+```
+
+```go
+report, err := provisioning.InspectModelRollout(ctx,
+    provisioning.ModelRolloutDeployment{ConfigJSON: currentConfig, ManifestJSON: currentManifest},
+    provisioning.ModelRolloutDeployment{ConfigJSON: candidateConfig, ManifestJSON: candidateManifest},
+    openfgaToken,
+)
+```
+
+Require a successful verification and a compatible report before starting the overlap. The report identifies changed existing role and permission mappings, changed existing permission grants or delegation, and a changed owner role. Mismatched pins return an availability error. The inspection reads model definitions and leaves runtime configuration and tuples in place. Its report covers manifest-defined authorization semantics. Operator checks still cover deployed workers, current tuples and pending operations.
 
 Include administration, SCIM and recovery workers in the drain. Resolve pending writes under their original binding, preserving any quarantine until verified quiescence and reconciliation. After activation an old SDK membership read can return `unavailable` on the new role relation even while its checks for old permissions continue to work. To roll back, pause writers, reconcile pending work, remove candidate-only tuples with the candidate model, and verify old membership reads and permission decisions before restoring the old configuration. If the older view cannot be restored safely, keep the affected workflow blocked and recover forward.
 

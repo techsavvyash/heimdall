@@ -200,3 +200,5 @@ export { planDirectoryRevocation } from "./directory-revocation.js";
 export type { DirectoryGrantSource } from "./directory-revocation.js";
 export { createIdentityEventReader } from "./identity-events.js";
 export type { IdentityEvent, IdentityEventReaderOptions } from "./identity-events.js";
+
+export { inspectModelRollout } from "./model-rollout.js";

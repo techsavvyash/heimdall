@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 import { expect, it } from "vitest";
 import { parseDeployment } from "../src/internal/configuration.js";
 import { PinnedModel } from "../src/internal/model-binding.js";
+import { inspectModelRollout } from "../src/provisioning/index.js";
 
 const fixture = (name: string) =>
   JSON.parse(
@@ -56,6 +57,8 @@ for (const profile of profiles) {
               version: number;
               roles: Record<string, string[]>;
               permissions: string[];
+              ownerRole: string;
+              delegation: Record<string, string[]>;
             };
           }[]
         ).find((entry) => entry.name === product)!.manifest;
@@ -205,6 +208,114 @@ for (const profile of profiles) {
         const wrong = bind(original, next.config.openfga.modelId);
         await expect(wrong.client.verify()).rejects.toMatchObject({ code: "unavailable" });
         const mismatch = { config: wrong.config, manifest: wrong.manifest, reject: true };
+        const mappings = await publish({
+          ...upgraded,
+          roles: { ...original.roles, aaa_reviewer: ["aaa.review"] },
+          permissions: [...original.permissions, "aaa.review"],
+        });
+        const changedPolicy = await publish({
+          ...upgraded,
+          roles: { ...original.roles, [addedRole]: [existingPermission, addedPermission] },
+        });
+        const changedDelegation = await publish({
+          ...upgraded,
+          delegation: { ...original.delegation, [addedRole]: [existingRole] },
+        });
+        const changedOwner = await publish({ ...upgraded, ownerRole: addedRole });
+        const empty = {
+          compatible: true,
+          ownerChanged: false,
+          roleMappingChanged: [],
+          permissionMappingChanged: [],
+          permissionPolicyChanged: [],
+          delegationChanged: [],
+        };
+        const inspections = [
+          { name: "append roles and permissions", candidate: next, report: empty },
+          {
+            name: "change owner",
+            candidate: changedOwner,
+            report: { ...empty, compatible: false, ownerChanged: true },
+          },
+          {
+            name: "shift relation ordinals",
+            candidate: mappings,
+            report: {
+              ...empty,
+              compatible: false,
+              roleMappingChanged: Object.keys(original.roles).sort(),
+              permissionMappingChanged: [...original.permissions].sort(),
+            },
+          },
+          {
+            name: "extend an existing permission",
+            candidate: changedPolicy,
+            report: { ...empty, compatible: false, permissionPolicyChanged: [existingPermission] },
+          },
+          {
+            name: "extend delegation of an existing role",
+            candidate: changedDelegation,
+            report: { ...empty, compatible: false, delegationChanged: [existingRole] },
+          },
+          {
+            name: "mismatch published model and manifest",
+            candidate: bind(upgraded, changedPolicy.config.openfga.modelId),
+            error: "unavailable",
+          },
+          {
+            name: "different store",
+            candidate: {
+              ...next,
+              config: {
+                ...next.config,
+                openfga: { ...next.config.openfga, storeId: "another-store" },
+              },
+            },
+            error: "invalid_argument",
+          },
+        ];
+        const input = ({ config, manifest }: typeof old) => ({
+          configJSON: JSON.stringify(config),
+          manifestJSON: JSON.stringify(manifest),
+        });
+        for (const { candidate, report, error, name } of inspections) {
+          const inspection = inspectModelRollout(
+            input(old),
+            input(candidate),
+            key!,
+            AbortSignal.timeout(15000),
+          );
+          expect({
+            name,
+            result: await inspection.catch((reason: { code: string }) => reason.code),
+          }).toEqual({ name, result: error ?? report });
+        }
+        await promisify(execFile)(
+          "go",
+          [
+            "test",
+            "-race",
+            "./provisioning",
+            "-run",
+            "^TestLiveModelRolloutInspection$",
+            "-count=1",
+          ],
+          {
+            cwd: new URL("../../go/", import.meta.url),
+            timeout: 60000,
+            env: {
+              ...process.env,
+              HEIMDALL_TEST_MODEL_INSPECTION: JSON.stringify(
+                inspections.map(({ candidate, ...item }) => ({
+                  ...item,
+                  current: { config: old.config, manifest: old.manifest },
+                  candidate: { config: candidate.config, manifest: candidate.manifest },
+                })),
+              ),
+            },
+          },
+        );
+
         await check(next, "acme", existingPermission, true);
         await check(next, "globex", addedPermission, false);
         // Abort a tuple batch, then confirm neither the old grant nor the new grant changed.

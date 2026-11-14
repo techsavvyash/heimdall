@@ -30,7 +30,7 @@ sequenceDiagram
   SDK->>FGA: Verify original membership and permission
 ```
 
-Both implementations rejected the old manifest paired with the candidate model ID. The candidate `z_reviewer` role and `z.review` permission preserved existing relation mappings. The compiler test also showed that inserting a name before the existing names reuses the original first relation. The harness never published that configuration. The rollout procedure and recovery limits are in [[operations#model-rollout]].
+Both implementations rejected the old manifest paired with the candidate model ID. The candidate `z_reviewer` role and `z.review` permission preserved existing relation mappings. The compiler test also showed that inserting a name before the existing names reuses the original first relation. The original rehearsal did not publish that configuration. The rollout procedure and recovery limits are in [[operations#model-rollout]].
 
 Run from the repository root with an HTTPS OpenFGA origin in `HEIMDALL_PROBE_OPENFGA_URL` and the verification credential in `HEIMDALL_PROBE_OPENFGA_KEY`. The credential needs permission to create and delete disposable stores.
 
@@ -38,4 +38,11 @@ Run from the repository root with an HTTPS OpenFGA origin in `HEIMDALL_PROBE_OPE
 HEIMDALL_PROBE_MODEL_ROLLOUT=1 pnpm --filter @heimdall/sdk exec vitest run test/model-rollout.live.test.ts --disableConsoleIntercept
 ```
 
-This exercises two model and manifest versions through the current TS and Go implementations. It covers a deterministic rejected tuple batch with a corrected retry. Versioned SDK artifact combinations, provisioning drift reporting, adapter restore and recovery after uncertain writes remain separate release checks under [[phase-7-release-qualification]].
+This exercises two model and manifest versions through the current TS and Go implementations. It covers a deterministic rejected tuple batch with a corrected retry. Versioned SDK artifact combinations, coordinated adapter restore and recovery after uncertain writes remain separate release checks under [[phase-7-release-qualification]].
+
+
+## Provisioning inspection
+
+Run `2fb725b0-2cf5-4848-9701-1ca1a57c61c6` repeated both live cases on Railway in 31.86 seconds. For each product, both SDKs returned a compatible report for the append-only candidate and an incompatible report for each change to ownership, relation ordinals, an existing permission's grants or an existing role's delegation. Both rejected a manifest paired with a different published model and rejected a candidate in a different store. The probe published incompatible models only in its disposable test stores and did not change live application pins. Each probe store was removed after the test.
+
+The TypeScript check imports the provisioning entry point and invokes the Go check under the race detector with the same inputs and expected reports. See [[operations#model-rollout]] for both public APIs.
