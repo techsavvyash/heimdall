@@ -1,0 +1,16 @@
+{
+  "postgresRun": "heimdall-records-f05de3201d8742e2bfdf7e460dc378f7",
+  "run": "bdb8f201-6900-4c92-baf1-9c960d6701d3",
+  "languages": ["typescript", "go"],
+  "elasticsearch": "8.19.0",
+  "liveProvider": true,
+  "sinkOutageRetainedPending": true,
+  "lostReceiptRecovered": true,
+  "sinkRestartPreservedDocuments": true,
+  "oneDocumentPerProduct": true,
+  "tenantMismatchRejected": true,
+  "scheduledCheckpointAdvanced": false,
+  "configurationEdit": "org.idp.oidc.changed",
+  "aggregateType": "org",
+  "metadataOnly": true
+}

@@ -82,6 +82,8 @@ def run(delivery_env, elastic_start, products=None):
     }
     indexes = {lang: "heimdall-live-" + lang + "-" + run_id for lang in scopes}
     created = []
+    configuration_edit = os.environ.get("HEIMDALL_PROBE_SIEM_CONFIGURATION_EDIT") == "1"
+    aggregate_type = "user"
     policy = verification_policy() if os.environ.get("HEIMDALL_TEST_SCHEDULED_IDENTITY") == "1" else None
 
     def api(path, body=None, method=None, auth=admin):
@@ -139,6 +141,7 @@ def run(delivery_env, elastic_start, products=None):
             config = {
                 "stage": stage, "policy": policy, "expectedEvents": expected_events, "issuer": ISSUER, "organizationId": org, "providerToken": pat,
                 "subject": subject, "startMicros": start_micros, "sinkToken": token,
+                "aggregateType": aggregate_type,
                 "endpoint": f"http://127.0.0.1:{server.server_port}",
             }
             env = dict(delivery_env, HEIMDALL_TEST_IDENTITY_SIEM=json.dumps(config))
@@ -239,14 +242,43 @@ def run(delivery_env, elastic_start, products=None):
         pat = api(f"/v2/users/{reader}/pats", {
             "expirationDate": datetime.fromtimestamp(time.time() + 900, timezone.utc).isoformat()
         })["token"]
-        subject = machine("assigned")
-        unrelated = machine("unassigned")
-        for user in (unrelated, subject):
-            api(f"/v2/users/{user}/deactivate", {})
+        if configuration_edit:
+            assert not policy
+            headers = {"x-zitadel-orgid": org}
+            def provider_call(path, body, method):
+                req = Request(ISSUER + path, json.dumps(body).encode(),
+                              {"Authorization": admin, "Content-Type": "application/json", **headers},
+                              method=method)
+                with opener.open(req, timeout=10) as response:
+                    return json.load(response)
+            settings = {
+                "issuer": "https://example.invalid", "clientId": "verification",
+                "clientSecret": secrets.token_urlsafe(32), "scopes": ["openid", "profile", "email"],
+                "usePkce": True,
+            }
+            path = "/management/v1/idps/generic_oidc"
+            provider = provider_call(path, {**settings, "name": "fixture-" + run_id}, "POST")["id"]
+            edit = provider_call(path + "/" + provider, {**settings, "name": "edited-" + run_id,
+                                                          "clientSecret": secrets.token_urlsafe(32)}, "PUT")
+            read = Request(ISSUER + f"/v2/idps/{provider}", headers={"Authorization": admin, **headers})
+            with opener.open(read, timeout=10) as response:
+                assert json.load(response)["idp"]["name"] == "edited-" + run_id
+            subject = org
+        else:
+            subject = machine("assigned")
+            unrelated = machine("unassigned")
+            for user in (unrelated, subject):
+                api(f"/v2/users/{user}/deactivate", {})
         query = {"resourceOwner": org, "asc": True, "limit": 20, "aggregateId": subject}
         events = api("/admin/v1/events/_search", query, auth="Bearer " + pat)["events"]
-        deactivated, = [e for e in events if e["type"]["type"] == "user.deactivated"]
-        date = datetime.fromisoformat(deactivated["creationDate"].replace("Z", "+00:00"))
+        if configuration_edit:
+            changed, = [event for event in events if event["type"]["type"] == "org.idp.oidc.changed"
+                        and str(event["sequence"]) == str(edit["details"]["sequence"])]
+            aggregate_type = changed["aggregate"]["type"]["type"]
+            assert changed["aggregate"]["id"] == org and changed["aggregate"]["resourceOwner"] == org
+        else:
+            changed, = [event for event in events if event["type"]["type"] == "user.deactivated"]
+        date = datetime.fromisoformat(changed["creationDate"].replace("Z", "+00:00"))
         delta = date - datetime(1970, 1, 1, tzinfo=timezone.utc)
         micros = (delta.days * 86400 + delta.seconds) * 1000000 + delta.microseconds
         for lang, index in indexes.items():
@@ -277,8 +309,9 @@ def run(delivery_env, elastic_start, products=None):
             key = hashlib.sha256(json.dumps([product, environment, event_ids[lang]], separators=(",", ":")).encode()).hexdigest()
             event = es(f"/{index}/_doc/{key}")["_source"]
             assert event["eventId"] == event_ids[lang] and event["tenantId"] == tenant
-            assert event["target"]["id"] == subject and event["action"] == "user.deactivated"
-            assert event["attributes"]["sequence"] == deactivated["sequence"]
+            assert event["target"]["id"] == subject and event["action"] == changed["type"]["type"]
+            assert event["attributes"]["sequence"] == changed["sequence"]
+            assert set(event["attributes"]) == {"issuer", "organizationId", "aggregateType", "sequence", "creationDate"}
             dispatch(lang, "retry", subject, micros, pat)
             check = (
                 "SELECT state,attempts FROM heimdall.audit_deliveries "
@@ -297,7 +330,9 @@ def run(delivery_env, elastic_start, products=None):
                 dispatch(lang, "scheduled", subject, micros, pat, expected_events=1)
         return {"run": run_id, "languages": ["typescript", "go"], "elasticsearch": "8.19.0",
                 "liveProvider": True, "sinkOutageRetainedPending": True, "lostReceiptRecovered": True,
-                "sinkRestartPreservedDocuments": True, "oneDocumentPerProduct": True, "tenantMismatchRejected": True, "scheduledCheckpointAdvanced": bool(policy)}
+                "sinkRestartPreservedDocuments": True, "oneDocumentPerProduct": True, "tenantMismatchRejected": True, "scheduledCheckpointAdvanced": bool(policy),
+                **({"configurationEdit": changed["type"]["type"], "aggregateType": aggregate_type,
+                    "metadataOnly": True} if configuration_edit else {})}
     finally:
         try:
             if elastic is not None:

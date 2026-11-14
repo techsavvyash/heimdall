@@ -312,3 +312,28 @@ Use the product, environment and verified issuer/subject to find authentication 
 Elasticsearch run `ee49175a-f26f-4b68-b735-f28d3fc59697` and PostgreSQL run `heimdall-records-996f451a1b404d49bcafd46ac46bd33b` verified 91 Ledger documents and 93 Support documents. The probe matched each index against PostgreSQL's acknowledged event IDs. It traced the owner's login, policy decision, business read and exact membership operation, then verified the recipient's allowed request and business read after the grant.
 
 Reproduce with `HEIMDALL_PROBE_REFERENCE_PRODUCTS=1` and `HEIMDALL_PROBE_PRODUCT_SIEM=1` in `tests/integration/postgres-records.py`, plus protected Railway and disposable Elasticsearch configuration. The probe drives the HTTP applications locally with Railway ZITADEL and OpenFGA.
+
+## Direct provider configuration changes
+
+An organization-scoped OIDC provider edit uses the ZITADEL organization aggregate on the pinned release. The provider ID identifies the management resource. The organization ID and event sequence identify the change in the Events API. Configure the collector with the organization aggregate when an authorized destination should receive organization-wide configuration metadata. An organization shared by several workspaces does not by itself establish that every tenant is authorized to receive those events. [Pinned ZITADEL implementation](https://github.com/zitadel/zitadel/blob/v4.19.4/internal/command/org_idp.go)
+
+```mermaid
+sequenceDiagram
+  participant O as Deployment operator
+  participant Z as Railway ZITADEL
+  participant C as Product identity collector
+  participant D as PostgreSQL audit outbox
+  participant E as Elasticsearch
+  O->>Z: Update organization OIDC provider
+  Z-->>O: Return the organization event sequence
+  C->>Z: Read the verified organization time window
+  Z-->>C: Return the organization aggregate event
+  C->>D: Retain mapped metadata and commit checkpoint
+  D->>E: Deliver through the receipt handler
+```
+
+The SDK exports the event type, aggregate identity, sequence and time. It omits the provider configuration payload and editor. The resulting document can show that the organization recorded a change. Field-level differences and the editor identity require a separately authorized upstream investigation. Direct OpenFGA tuple or model edits bypass the SDK operation journal and are outside this ZITADEL collector's coverage. The verified SDK-managed mutation flow has its own durable intent and outcome records.
+
+Set `HEIMDALL_PROBE_SIEM_CONFIGURATION_EDIT=1` in the disposable ZITADEL and Elasticsearch probe environment. This mode uses the exact observed historical event window and the same lost-receipt, outage and restart scenario as the user-lifecycle export probe.
+
+Run `bdb8f201-6900-4c92-baf1-9c960d6701d3` used PostgreSQL run `heimdall-records-f05de3201d8742e2bfdf7e460dc378f7`. It changed a disposable provider's name and secret directly, verified the new name by readback, and matched the reported sequence to `org.idp.oidc.changed`. Both SDKs exported one document to their respective tenant destinations, recovered the same event ID after the receipt was lost and Elasticsearch restarted, and verified delivery on attempt three. The receiver rejected a batch addressed to the wrong tenant.

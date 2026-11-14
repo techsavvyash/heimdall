@@ -26,7 +26,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_IDENTITY_SIEM)(
           tenantId: "acme",
           auditSinks: ["siem"],
           startMicros: BigInt(config.startMicros),
-          aggregates: [{ type: "user", id: config.subject }],
+          aggregates: [{ type: config.aggregateType, id: config.subject }],
         });
         if (config.stage === "scheduled") {
           const before = await collector.checkpoint(signal);

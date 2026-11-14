@@ -23,6 +23,7 @@ func TestLiveIdentitySIEM(t *testing.T) {
 		StartMicros                                                                int64
 		Policy                                                                     IdentityCoveragePolicy
 		ExpectedEvents                                                             int
+		AggregateType                                                              string
 	}
 	if json.Unmarshal([]byte(raw), &c) != nil {
 		t.Fatal("invalid verification configuration")
@@ -46,7 +47,7 @@ func TestLiveIdentitySIEM(t *testing.T) {
 			},
 			ProductID: product, Environment: environment, TenantID: "globex",
 			AuditSinks: []string{"siem"}, StartMicros: c.StartMicros,
-			Aggregates: []IdentityAggregate{{"user", c.Subject}},
+			Aggregates: []IdentityAggregate{{c.AggregateType, c.Subject}},
 		})
 		if err != nil {
 			t.Fatal(err)
