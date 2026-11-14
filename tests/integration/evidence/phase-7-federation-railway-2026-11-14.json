@@ -1,0 +1,57 @@
+{
+  "runId": "3a7fcfec-484a-4b22-9b58-7c3054358fc5",
+  "results": [
+    {
+      "product": "ledger",
+      "deployment": "0e277db9-c2db-4992-8c01-3101b4624b41",
+      "switch": "passed",
+      "providerSetup": {
+        "protocol": "saml",
+        "version": "87dd9c05449d55c18016b0d5482782b2",
+        "eventId": "59642b2b-0287-45df-8168-2e6b51a4d149",
+        "scopeAndClaimChecked": true,
+        "lostProviderIdRecovered": true,
+        "activationRequiresTest": true,
+        "previousPolicyRejected": true,
+        "candidateCallbackRetired": true
+      },
+      "strictDirectoryCleanup": "confirmed and replayed",
+      "priorCookie": 401,
+      "staleCallback": 401,
+      "replay": 401,
+      "priorCursor": 400,
+      "discoveryBefore": "acme",
+      "discoveryAfter": "globex",
+      "resourceAfter": {
+        "acme": 403,
+        "globex": 200
+      }
+    },
+    {
+      "product": "support",
+      "deployment": "0422e020-2d58-4546-9e78-eb8e8289defc",
+      "switch": "passed",
+      "providerSetup": {
+        "protocol": "oidc",
+        "version": "d4ea84584c4eff22bd751df18b852f3b",
+        "eventId": "f4dfba99f62dd29cf0b0a83e1b8f4dab",
+        "scopeAndClaimChecked": true,
+        "lostProviderIdRecovered": true,
+        "activationRequiresTest": true,
+        "previousPolicyRejected": true,
+        "candidateCallbackRetired": true
+      },
+      "strictDirectoryCleanup": "confirmed and replayed",
+      "priorCookie": 401,
+      "staleCallback": 401,
+      "replay": 401,
+      "priorCursor": 400,
+      "discoveryBefore": "acme",
+      "discoveryAfter": "globex",
+      "resourceAfter": {
+        "acme": 403,
+        "globex": 200
+      }
+    }
+  ]
+}

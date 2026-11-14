@@ -455,7 +455,9 @@ export async function verifyReferenceProduct(input, authorize) {
     const deployment = await waitForDeployment(runId);
     if (federation) {
       const expectStatus = async (path, status, cookie = "") => {
-        const response = await request(path, { headers: { cookie } });
+        const response = await request(path, {
+          headers: { cookie, ...(remote ? { connection: "close" } : {}) },
+        });
         assert.equal(response.status, status, `${schema} ${path.split("?")[0]} status`);
         return response;
       };
