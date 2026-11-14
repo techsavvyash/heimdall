@@ -21,9 +21,11 @@ def sql(statement,database='postgres'):
  return run(['docker','exec','-i',name,'psql','-U','postgres','-d',database,'-At','-v','ON_ERROR_STOP=1'],input=statement,capture_output=True,text=True).stdout.strip()
 def fp(key):return hashlib.sha256(b'heimdall.record-key-usage.v1\0'+bytes([f['keys'][key]])*32).hexdigest()
 try:
- run(['docker','run','--detach','--name',name,'-e','POSTGRES_PASSWORD','-p','127.0.0.1::5432',IMAGE],env=env,stdout=subprocess.DEVNULL);created=True
+ run(['docker','run','--detach','--name',name,'-e','POSTGRES_PASSWORD','--tmpfs',
+      '/var/lib/postgresql/data:rw,size=256m','-p','127.0.0.1::5432',IMAGE],
+     env=env,stdout=subprocess.DEVNULL);created=True
  for _ in range(60):
-  if subprocess.run(['docker','exec',name,'pg_isready','-U','postgres'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0:break
+  if subprocess.run(['docker','exec',name,'pg_isready','-h','127.0.0.1','-U','postgres'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0:break
   time.sleep(.5)
  else:raise RuntimeError('PostgreSQL readiness timeout')
  port=run(['docker','port',name,'5432'],capture_output=True,text=True).stdout.strip().split(':')[-1]

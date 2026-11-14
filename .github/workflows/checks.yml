@@ -50,3 +50,5 @@ jobs:
           HEIMDALL_PROBE_PINNED_ADMIN: "1"
           HEIMDALL_PROBE_SDK_RECOVERY: "1"
         run: python3 tests/integration/postgres-records.py
+      - name: Verify offline session and key-ledger restore
+        run: python3 tests/integration/key-rotation.py

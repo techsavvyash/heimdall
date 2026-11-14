@@ -100,6 +100,12 @@ The test creates only disposable databases and keeps snapshot files in a tempora
 directory outside the repository. It removes the container and files on completion.
 No production data or Railway service state is restored by this test.
 
+The Phase 7 repeat `heimdall-key-rotation-215aab8600ce475dbdeeb135aa79e91d`
+passed on PostgreSQL 17.11 with both SDKs. The disposable PostgreSQL node uses
+a temporary memory-backed data directory. The harness waits for the TCP listener
+before connecting, so the temporary server used for initialization cannot
+satisfy readiness.
+
 ## Remaining operational boundaries
 
 This is a fresh-target, offline record-layer drill, not an in-place restoration
