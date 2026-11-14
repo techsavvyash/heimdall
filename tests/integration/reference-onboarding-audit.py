@@ -40,7 +40,7 @@ def verify(products, payloads):
         assert counts["workspace.create", "unavailable"] == 1
         assert sum(e.get("reasonCode") == "conflict" and e["action"] == "workspace.create"
                    for e in results.values()) == 1
-        assert counts["workspace.operation.read", "allow"] == 1
+        assert counts["workspace.operation.read", "allow"] == (2 if "mixedPersistence" in item else 1)
         assert counts["workspace.operation.resume", "allow"] == 1
         permission = {"ledger": "invoice.read", "support": "ticket.read"}[product]
         if "strictSSO" in item:

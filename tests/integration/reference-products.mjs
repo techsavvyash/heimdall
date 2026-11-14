@@ -213,6 +213,18 @@ export async function verifyReferenceProduct(input, authorize) {
         [process.env.HEIMDALL_REFERENCE_LEDGER_ENTRY ?? "examples/ledger/server.mjs"],
       ]
     : [process.env.HEIMDALL_REFERENCE_SUPPORT_BINARY, []];
+  const previousEntry =
+    process.env[
+      ledger
+        ? "HEIMDALL_REFERENCE_PREVIOUS_LEDGER_ENTRY"
+        : "HEIMDALL_REFERENCE_PREVIOUS_SUPPORT_BINARY"
+    ];
+  assert(!previousEntry || (!remote && !existing && !scim && !federation && !restoreIdentity));
+  const previousCmd = previousEntry
+    ? ledger
+      ? [process.execPath, [previousEntry]]
+      : [previousEntry, []]
+    : cmd;
   const setupDirectory = process.env.HEIMDALL_REFERENCE_SETUP_DIR;
   const recordKey = setupDirectory
     ? readFileSync(join(setupDirectory, schema + ".key"))
@@ -233,7 +245,7 @@ export async function verifyReferenceProduct(input, authorize) {
     HEIMDALL_REFERENCE_MEMBER_SUBJECT: recipient,
     ...(existing ? { HEIMDALL_REFERENCE_EXISTING_WORKSPACES: "1" } : {}),
     HEIMDALL_REFERENCE_STRICT_SSO: existing || grantNamedMembership ? "0" : "1",
-    ...(restoreIdentity || process.env.HEIMDALL_PROBE_PRODUCT_SIEM === "1"
+    ...(restoreIdentity || previousEntry || process.env.HEIMDALL_PROBE_PRODUCT_SIEM === "1"
       ? { HEIMDALL_REFERENCE_SIEM: "1" }
       : {}),
     ...(federation
@@ -276,8 +288,8 @@ export async function verifyReferenceProduct(input, authorize) {
       await stopped;
     }
   };
-  const start = (overrides = {}) => {
-    child = spawn(cmd[0], cmd[1], {
+  const start = (overrides = {}, [executable, args] = cmd) => {
+    child = spawn(executable, args, {
       stdio: "ignore",
       env: { ...(setupDirectory ? {} : process.env), ...variables, ...overrides },
     });
@@ -345,7 +357,7 @@ export async function verifyReferenceProduct(input, authorize) {
     }
     await deploy();
   } else {
-    start();
+    start({}, previousCmd);
   }
   const request = (path, options = {}) =>
     remote
@@ -1064,6 +1076,43 @@ export async function verifyReferenceProduct(input, authorize) {
     assert.equal(added.status, 200, `Reference ${schema} member add returned ${added.status}`);
     const grant = await added.json();
     assert.equal(grant.status, "confirmed");
+    let candidateCookie, originalAudit;
+    const auditDigest = (operationId) => {
+      assert.match(operationId, /^[A-Za-z0-9_-]{1,128}$/);
+      return executeSQL(`SELECT encode(sha256(convert_to(string_agg(
+        event_id || ':' || encode(payload_digest,'hex'), ',' ORDER BY event_id), 'UTF8')), 'hex')
+        FROM heimdall.audit_events WHERE product_id='${schema}' AND environment='verification'
+          AND convert_from(decode(translate(event->>'payload','-_','+/') ||
+             repeat('=',(4-length(event->>'payload')%4)%4),'base64'),'UTF8')::jsonb
+             ->>'operationId' = '${operationId}';`);
+    };
+    if (previousEntry) {
+      originalAudit = await auditDigest(workspace.operationId);
+      assert.match(originalAudit, /^[0-9a-f]{64}$/);
+      const firstPage = await request("/workspaces?limit=1", { headers });
+      assert.equal(firstPage.status, 200);
+      const { nextCursor } = await firstPage.json();
+      assert(nextCursor);
+      await stop();
+      start();
+      await waitForDeployment(runId);
+      const roles = await request(rolesPath, { headers: recipientHeaders });
+      assert.equal(roles.status, 200);
+      assert.deepEqual(await roles.json(), { roles: [initialRole] });
+      const discovered = await request("/workspaces", { headers: recipientHeaders });
+      assert.equal(discovered.status, 200);
+      assert((await discovered.json()).items.some(({ id }) => id === workspace.workspaceId));
+      const continued = await request("/workspaces?cursor=" + encodeURIComponent(nextCursor), {
+        headers,
+      });
+      assert.equal(continued.status, 200);
+      assert.deepEqual(
+        (await continued.json()).items.map(({ id }) => id),
+        [workspace.workspaceId],
+      );
+      assert.equal(await auditDigest(workspace.operationId), originalAudit);
+      candidateCookie = await signIn(true);
+    }
     if (restoreIdentity) {
       await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 200);
       return await verifyRestoredReference({
@@ -1663,7 +1712,11 @@ export async function verifyReferenceProduct(input, authorize) {
       await executeSQL(`DELETE FROM heimdall_managed.membership_candidates WHERE product_id='${schema}'
         AND environment='verification' AND workspace_id='${workspaceId}' AND principal='${recipientPrincipal}';`);
       const pool = new Pool({ connectionString: rebuildDB.href });
-      const options = { workspaceId, policyVersion: "reference-v1", auditSinks: [] };
+      const options = {
+        workspaceId,
+        policyVersion: "reference-v1",
+        auditSinks: previousEntry ? ["siem"] : [],
+      };
       const page = async (language, checkpoint) => {
         if (language === "ts")
           return rebuildDiscovery(
@@ -1828,6 +1881,52 @@ export async function verifyReferenceProduct(input, authorize) {
       );
       managedExport = { pageId, inventoryId, operations: all.items.length };
     }
+    let mixedPersistence;
+    if (previousEntry) {
+      const completedAudit = await auditDigest(workspace.operationId);
+      const transferAudit = await auditDigest(transfer.operationId);
+      assert.match(completedAudit, /^[0-9a-f]{64}$/);
+      assert.match(transferAudit, /^[0-9a-f]{64}$/);
+      await stop();
+      start({}, previousCmd);
+      await waitForDeployment(runId);
+      const afterUpgrade = { cookie: candidateCookie };
+      const roles = await request(rolesPath, { headers: afterUpgrade });
+      assert.equal(roles.status, 200);
+      assert.deepEqual(await roles.json(), { roles: [initialRole, manifest.ownerRole].sort() });
+      await expectDenied(await request(resourcePath, { headers: afterUpgrade }), 200);
+      const persistedOperation = await request(operationPath, { headers });
+      assert.equal(persistedOperation.status, 200);
+      assert.deepEqual(await persistedOperation.json(), workspace);
+      await expectDenied(
+        await request("/auth/logout", {
+          method: "POST",
+          headers: { ...afterUpgrade, origin },
+        }),
+        204,
+      );
+      await expectDenied(await request(resourcePath, { headers: afterUpgrade }), 401);
+      assert.equal(await auditDigest(transfer.operationId), transferAudit);
+      assert.equal(await auditDigest(workspace.operationId), completedAudit);
+      const outbox =
+        await executeSQL(`SELECT count(*) FILTER (WHERE d.state='pending' AND d.sink_id='siem') > 0
+        AND count(*) = count(*) FILTER (WHERE d.state='pending' AND d.sink_id='siem')
+        FROM heimdall.audit_events e LEFT JOIN heimdall.audit_deliveries d
+          USING (product_id,environment,event_id)
+        WHERE e.product_id='${schema}' AND e.environment='verification';`);
+      assert.equal(outbox, "t");
+      mixedPersistence = {
+        candidateReadPreviousSession: 200,
+        candidateResumedPreviousCursor: true,
+        previousReadCandidateSession: 200,
+        previousReadCandidateOwnership: true,
+        previousReadReconciledOperation: true,
+        priorAuditDigestPreservedOnUpgrade: true,
+        auditDigestsPreservedOnRollback: true,
+        pendingOutboxPreserved: true,
+        candidateSessionDeniedAfterRollbackLogout: 401,
+      };
+    }
     await expectDenied(
       await request("/auth/logout", { method: "POST", headers: { ...recipientHeaders, origin } }),
       204,
@@ -1844,6 +1943,7 @@ export async function verifyReferenceProduct(input, authorize) {
       discovery: "Acme",
       roles: { acme: [manifest.ownerRole], globex: [] },
       scopedRead: 200,
+      ...(mixedPersistence ? { mixedPersistence } : {}),
       ...(revocationRace ? { revocationRace } : {}),
       ...(businessWrite
         ? {

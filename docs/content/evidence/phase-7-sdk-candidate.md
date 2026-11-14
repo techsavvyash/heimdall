@@ -20,7 +20,7 @@ The tag resolves to commit `a0e1168e1954867bde092793ba0e9a9258401856`. The downl
 
 ## Live qualification
 
-Run `dfbee61a-628e-4da8-a30b-482132bc7a13` installed that exact archive and downloaded the tagged Go module. It compared both SDKs with the previous builds at `4eeddb7` against the pinned Railway providers. Both products passed previous and candidate model overlap, mismatched pin rejection, new role enforcement and rollback after removing the candidate-only role grant. This run covers model compatibility. Persistence compatibility and recovery across releases have additional gates in [[phase-7-release-qualification]].
+Run `dfbee61a-628e-4da8-a30b-482132bc7a13` installed that exact archive and downloaded the tagged Go module. It compared both SDKs with the previous builds at `4eeddb7` against the pinned Railway providers. Both products passed previous and candidate model overlap, mismatched pin rejection, new role enforcement and rollback after removing the candidate-only role grant. The same pair underwent a [[phase-7-mixed-persistence|persistence rehearsal]].
 
 Run `heimdall-records-7000c045123c458eb73b3b202edc8ed4` used the same artifacts for both reference products. It provisioned both products with the installed TypeScript CLI, verified unchanged setup replay and ran both backends on managed-v5 PostgreSQL. Both passed sign-in, workspace discovery and onboarding, role enforcement, business writes and protected-work denial during the injected audit outage. See `tests/integration/evidence/phase-7-sdk-candidate-2026-11-14.json` for both run records.
 

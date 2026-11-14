@@ -328,6 +328,45 @@ try:
                 if candidate:
                     consumer_info["archiveSHA256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
             subprocess.run(["go", "build", "-o", binary, "."], cwd=support_source, env=reference_env, check=True)
+            previous = os.environ.get("HEIMDALL_PROBE_PREVIOUS_PERSISTENCE_REVISION")
+            if previous:
+                if not (operator and revision and candidate and supplied_archive and re.fullmatch("[0-9a-f]{40}", previous)):
+                    raise RuntimeError("Persistence qualification requires the operator probe, a candidate archive and a pushed previous commit")
+                prior = consumer / "previous"
+                prior.mkdir()
+                exported = subprocess.check_output(["git", "archive", previous], cwd=ROOT, timeout=45)
+                subprocess.run(["tar", "-xf", "-"], cwd=prior, input=exported, check=True)
+                subprocess.run(["pnpm", "install", "--frozen-lockfile"], cwd=prior,
+                               env=dict(os.environ, CI="true"), check=True)
+                subprocess.run(["pnpm", "run", "build"], cwd=prior, check=True)
+                # Use the same product wiring on each side of the SDK switch.
+                prior_archive = prior / "archive"
+                prior_archive.mkdir()
+                subprocess.run(["pnpm", "--filter", "@heimdall/sdk", "pack", "--pack-destination", str(prior_archive)],
+                               cwd=prior, check=True)
+                prior_tgz, = prior_archive.glob("*.tgz")
+                prior_ledger = consumer / "previous-ledger"
+                shutil.copytree(ledger, prior_ledger, ignore=shutil.ignore_patterns("node_modules", "pnpm-lock.yaml"))
+                package_path = prior_ledger / "package.json"
+                package = json.loads(package_path.read_text())
+                package["dependencies"]["@heimdall/sdk"] = "file:" + str(prior_tgz)
+                package_path.write_text(json.dumps(package))
+                subprocess.run(["pnpm", "install", "--ignore-scripts"], cwd=prior_ledger, check=True)
+                prior_support = consumer / "previous-support"
+                shutil.copytree(support_source, prior_support)
+                subprocess.run(["go", "get", module + "@" + previous], cwd=prior_support, env=reference_env, check=True)
+                subprocess.run(["go", "mod", "tidy"], cwd=prior_support, env=reference_env, check=True)
+                prior_binary = str(consumer / "previous-support-bin")
+                subprocess.run(["go", "build", "-o", prior_binary, "."], cwd=prior_support, env=reference_env, check=True)
+                reference_env.update(HEIMDALL_REFERENCE_PREVIOUS_LEDGER_ENTRY=str(prior_ledger / "server.mjs"),
+                                     HEIMDALL_REFERENCE_PREVIOUS_SUPPORT_BINARY=prior_binary)
+                consumer_info["previousPersistence"] = {
+                    "revision": previous,
+                    "archiveSHA256": hashlib.sha256(prior_tgz.read_bytes()).hexdigest(),
+                    "goModuleVersion": subprocess.check_output(
+                        ["go", "list", "-m", "-f", "{{.Version}}", module],
+                        cwd=prior_support, env=reference_env, text=True).strip(),
+                }
             org_file = Path(temp) / "scim-organization"
             if scim_siem:
                 assert elastic_start and os.environ.get("HEIMDALL_PROBE_SCIM_BROWSER") == "1"
@@ -369,6 +408,8 @@ try:
             products = [result for result in observations if "scopedRead" in result]
             if len(products) != 2:
                 raise RuntimeError("missing reference product observations")
+            if previous:
+                assert {item["product"] for item in products if item.get("mixedPersistence")} == {"ledger", "support"}
             if revocation_race:
                 assert {item["product"] for item in products if item.get("revocationRace")} == {"ledger", "support"}
             if existing:
