@@ -29,9 +29,9 @@ Audit persistence is built before authorization results can be released; enterpr
 
 ## Current phase
 
-**Phases 1 through 5 are complete. Phase 6 covers enterprise integrations.**
+**Phases 1 through 6 are complete. Phase 7 covers release qualification.**
 
-[[evidence/phase-6-acceptance|Phase 6 acceptance review]] maps enterprise requirements to the live evidence and records the remaining checks.
+[[evidence/phase-6-acceptance|Phase 6 acceptance review]] maps enterprise requirements to the final live evidence.
 
 [[evidence/phase-5-acceptance|Phase 5 acceptance]] records the requirement-by-requirement evidence and final Railway run. [[evidence/phase-6-tenant-sso-gate|Phase 6 tenant SSO gate]] covers policy checks on existing sessions and workspace access.
 

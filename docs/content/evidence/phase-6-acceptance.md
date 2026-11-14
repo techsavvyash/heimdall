@@ -2,7 +2,7 @@
 title: Phase 6 acceptance review
 ---
 
-Phase 6 remains open. The review maps the enterprise gate in [[../implementation-phases]] to the current TypeScript and Go evidence. Release qualification starts after the open checks below have evidence.
+Phase 6 acceptance covers the enterprise gate in [[../implementation-phases]] in TypeScript and Go.
 
 | Requirement | Current evidence |
 | --- | --- |
@@ -13,6 +13,10 @@ Phase 6 remains open. The review maps the enterprise gate in [[../implementation
 | #46 Mandatory audit and custom events | [[phase-3-acceptance]], [[phase-3-recovery-process-restart]], [[phase-3-managed-audit-transactions]] and [[phase-3-audited-retirement]] cover durable admission, unresolved outcomes, managed writes and retention. [[phase-4-effective-roles]] and [[phase-4-workspace-discovery]] cover decision accounting. [[phase-6-audit-delivery]] verifies reserved event protection and a live product business workflow correlated by identity, workspace and operation. |
 | #48 Tenant-safe SIEM and service edits | [[phase-6-audit-delivery]] verifies ZITADEL and SDK event delivery to Elasticsearch, shared-organization mappings, sink restart and lost receipts, tenant filtering and direct OIDC configuration change metadata. It documents the direct OpenFGA audit gap. [[phase-6-siem-job]] verifies publication from both HTTP settings routes through the audit jobs to tenant-specific Elasticsearch indexes. |
 
-## Open checks
+## Final evidence
 
-- Re-qualify the scheduled directory jobs after adding the shared PostgreSQL policy source. The combined Railway run passed strict browser-operator cleanup and replay for both products. The separate live scheduled SCIM probe most recently timed out in Ledger. Capture the failing job stage and repeat the scheduled disable, denial, cleanup and re-enrollment checks before closing the phase.
+- Railway run `19dccb55-0b62-40ed-a2ce-3274e0bb540e` at `4ebbf3e` verified both deployed reference apps, tenant-specific SSO activation, strict-workspace directory cleanup and replay, and both publication audit receipts in tenant-specific Elasticsearch indexes. [[phase-6-siem-job#live-publication-and-receipt]]
+- PostgreSQL run `heimdall-records-55bb14da613446aaaab6f35580655745` at `47378cf` requalified the scheduled directory commands with the shared policy source and Railway identity and authorization services. [[phase-6-directory-job#scheduled-job-requalification]]
+- Both enterprise jobs are explicit commands run by a product scheduler. The verification ran them as separate processes. Strict tuple cleanup requires an operator with the workspace's federation evidence, and a local identity denial takes effect while cleanup is pending. The direct OpenFGA audit gap and the SCIM Users scope are recorded in the linked evidence.
+
+The release qualification phase owns final clean installs, migration and restore checks, fault testing, quickstarts and the release reference deployment.

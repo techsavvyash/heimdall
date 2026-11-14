@@ -1,0 +1,54 @@
+{
+  "referenceProducts": [
+    {
+      "product": "support",
+      "scopedRead": 200,
+      "scimBrowser": {
+        "deniedInMs": 61666,
+        "disabledSession": 401,
+        "sharedProviderDisable": true,
+        "deniedWithTuplesPresent": true,
+        "cleanupAcknowledged": true,
+        "cleanupReplayConfirmed": true,
+        "scheduledJob": true,
+        "scheduledCleanupInMs": 64538,
+        "missedObservationDenied": true,
+        "removedTuples": ["member", "r_0"],
+        "releasedAfterApprovedEnrollment": true,
+        "approvedRole": "reader",
+        "originalCookieAfterRelease": 401,
+        "freshCookie": 200,
+        "freshCookieOtherWorkspace": 403,
+        "staleReactivationRejected": true,
+        "secondCleanupConfirmed": true,
+        "auditedRemovalAndGrants": true
+      }
+    },
+    {
+      "product": "ledger",
+      "scopedRead": 200,
+      "scimBrowser": {
+        "deniedInMs": 3702,
+        "disabledSession": 401,
+        "sharedProviderDisable": true,
+        "deniedWithTuplesPresent": false,
+        "cleanupAcknowledged": true,
+        "cleanupReplayConfirmed": true,
+        "scheduledJob": true,
+        "scheduledCleanupInMs": 3702,
+        "missedObservationDenied": false,
+        "removedTuples": ["member", "r_1"],
+        "releasedAfterApprovedEnrollment": true,
+        "approvedRole": "viewer",
+        "originalCookieAfterRelease": 401,
+        "freshCookie": 200,
+        "freshCookieOtherWorkspace": 403,
+        "staleReactivationRejected": true,
+        "secondCleanupConfirmed": true,
+        "auditedRemovalAndGrants": true
+      }
+    }
+  ],
+  "sourceCommit": "47378cf",
+  "run": "heimdall-records-55bb14da613446aaaab6f35580655745"
+}

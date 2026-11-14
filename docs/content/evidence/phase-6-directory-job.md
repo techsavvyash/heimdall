@@ -78,3 +78,10 @@ Run `tests/integration/postgres-records.py` with `HEIMDALL_PROBE_REFERENCE_PRODU
 ## Deployment verification
 
 Source commit `5d463cd` passed the workspace gate and both GitHub workspace checks. Railway reference deployments `b9bc2bc3-9dac-4124-bb68-68c0b3c39c70` for Ledger and `5493fd9a-ba25-47df-ae9b-f5544a310995` for Support passed live SAML-to-OIDC workspace switching after the product and job began sharing the same policy configuration. The SCIM job probe ran as separate local processes against the pinned Railway identity and authorization services. Railway docs deployment `0ed0869a-01de-4ed8-af47-e1db9bb203f9` served the guide, and Chromium rendered the sequence diagram.
+
+
+## Scheduled job requalification
+
+PostgreSQL run `heimdall-records-55bb14da613446aaaab6f35580655745` at source commit `47378cf` passed with the shared product policy source and Railway ZITADEL and OpenFGA. Ledger denied the original session and confirmed cleanup in 3,702 ms. After deliberately missing the observation, Support denied the original session with both stale tuples present at 61,666 ms and confirmed cleanup at 64,538 ms. Both products passed replay, approved re-enrollment, rejection of earlier cookies, workspace isolation and a second cleanup after stale reactivation. The evidence is in `tests/integration/evidence/phase-6-scheduled-directory-2026-11-14.json`.
+
+Earlier attempts ended with bounded deadline or callback errors. The job now reports a sanitized stage alongside its error code for diagnosis. The passing run kept the original deadline and measured the same disable-to-denial boundary. The earlier failures did not establish which dependency was slow.
