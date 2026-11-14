@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"regexp"
 	"time"
 
 	heimdall "github.com/techsavvyash/heimdall/sdk/go"
@@ -21,19 +20,9 @@ func runDirectoryJob(ctx context.Context) error {
 
 	configJSON := []byte(os.Getenv("HEIMDALL_CONFIG"))
 	var config struct{ ProductID, Environment, Issuer string }
-	var workspaces []string
-	if json.Unmarshal(configJSON, &config) != nil || config.ProductID != "support" ||
-		json.Unmarshal([]byte(os.Getenv("HEIMDALL_DIRECTORY_WORKSPACES")), &workspaces) != nil ||
-		len(workspaces) == 0 || len(workspaces) > 100 {
+	workspaces, err := directoryMapping()
+	if err != nil || json.Unmarshal(configJSON, &config) != nil || config.ProductID != "support" {
 		return heimdall.ErrInvalidArgument
-	}
-	validID := regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
-	seen := make(map[string]bool)
-	for _, id := range workspaces {
-		if !validID.MatchString(id) || seen[id] {
-			return heimdall.ErrInvalidArgument
-		}
-		seen[id] = true
 	}
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -102,7 +91,8 @@ func runDirectoryJob(ctx context.Context) error {
 				return value, nil
 			}
 		}
-		runtime, err := heimdall.New(ctx, configJSON, []byte(os.Getenv("HEIMDALL_MANIFEST")), heimdall.Options{
+		manifestJSON := []byte(os.Getenv("HEIMDALL_MANIFEST"))
+		runtime, err := heimdall.New(ctx, configJSON, manifestJSON, heimdall.Options{
 			PolicyVersion: os.Getenv("HEIMDALL_POLICY_VERSION"), Storage: storage, TenantSSOPolicy: tenantSSO,
 			Credentials: heimdall.Credentials{
 				ClientSecret: credential("HEIMDALL_CLIENT_SECRET"),
@@ -114,6 +104,12 @@ func runDirectoryJob(ctx context.Context) error {
 		}
 		actor, err := runtime.Tokens().Verify(ctx, os.Getenv("HEIMDALL_DIRECTORY_OPERATOR_TOKEN"))
 		if err != nil {
+			return err
+		}
+		if operator := os.Getenv("HEIMDALL_DIRECTORY_OPERATOR_SUBJECT"); operator != "" && actor.Identity().Subject != operator {
+			return heimdall.ErrForbidden
+		}
+		if err := authorizeDirectoryCleanup(ctx, runtime, actor, workspaces, manifestJSON); err != nil {
 			return err
 		}
 		for _, item := range pending {

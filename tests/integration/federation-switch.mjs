@@ -116,6 +116,19 @@ async function verifyProduct(product) {
     const model = await f(`/stores/${store.id}/authorization-models`, fixture.expected.model);
     const modelId = model.authorization_model_id;
     const role = fixture.expected.roles[manifest.ownerRole].assignment;
+    const verifyCleanup = process.env.HEIMDALL_PROBE_STRICT_DIRECTORY_CLEANUP === "1";
+    const target = verifyCleanup
+      ? await z("/v2/users/new", {
+          organizationId: globex.policy.organizationId,
+          username: "cleanup-" + suffix,
+          human: {
+            profile: { givenName: "Cleanup", familyName: "Probe" },
+            email: { email: `cleanup-${suffix}@example.invalid`, isVerified: true },
+          },
+        })
+      : null;
+    const assignment =
+      fixture.expected.roles[product === "ledger" ? "viewer" : "reader"].assignment;
     await f(`/stores/${store.id}/write`, {
       authorization_model_id: modelId,
       writes: {
@@ -131,6 +144,13 @@ async function verifyProduct(product) {
             object: "workspace:globex",
             relation,
           })),
+          ...(target
+            ? ["member", assignment].map((relation) => ({
+                user: principal(target.id),
+                object: "workspace:globex",
+                relation,
+              }))
+            : []),
         ],
       },
     });
@@ -158,6 +178,22 @@ async function verifyProduct(product) {
           principal: principal(globex.subject),
           policies: { acme: acme.policy, globex: globex.policy },
           credential: acme.credential,
+          ...(target
+            ? {
+                cleanup: {
+                  subject: target.id,
+                  operator: globex.subject,
+                  organizationId: globex.policy.organizationId,
+                  async readRelations() {
+                    const result = await f(`/stores/${store.id}/read`, {
+                      tuple_key: { user: principal(target.id), object: "workspace:globex" },
+                      consistency: "HIGHER_CONSISTENCY",
+                    });
+                    return (result.tuples ?? []).map(({ key }) => key.relation).sort();
+                  },
+                },
+              }
+            : {}),
         },
       },
       async (location, tenant) => {

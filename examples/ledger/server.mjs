@@ -5,6 +5,7 @@ import { Pool } from "pg";
 import { createHeimdall, HeimdallError } from "@heimdall/sdk";
 import { createManagedPostgresStorage, createRecordMaintenance } from "@heimdall/sdk/postgres";
 import { tenantSSOPolicy } from "./tenant-sso.mjs";
+import { directoryCleanupRoute } from "./directory-cleanup.mjs";
 
 function required(name) {
   const value = process.env[name];
@@ -82,6 +83,14 @@ const discovery = auth.createWorkspaceDiscovery({
   activeKeyId: "v1",
   keys: { v1: Buffer.from(required("HEIMDALL_CURSOR_KEY"), "base64") },
 });
+const directoryCleanup = directoryCleanupRoute(
+  pool,
+  config,
+  JSON.parse(manifestJSON),
+  auth,
+  sessions,
+  origin,
+);
 
 const read = (value, status = 200) =>
   Response.json(value, {
@@ -89,7 +98,7 @@ const read = (value, status = 200) =>
     headers: { "cache-control": "no-store", "referrer-policy": "no-referrer" },
   });
 
-async function mutationInput(request) {
+async function jsonInput(request) {
   if (request.headers.get("content-type")?.split(";")[0]?.trim() !== "application/json")
     throw new HeimdallError("invalid_argument");
   const chunks = [];
@@ -108,6 +117,11 @@ async function mutationInput(request) {
   }
   if (!input || typeof input !== "object" || Array.isArray(input))
     throw new HeimdallError("invalid_argument");
+  return input;
+}
+
+async function mutationInput(request) {
+  const input = await jsonInput(request);
   const idempotencyKey = request.headers.get("idempotency-key") ?? "";
   if (idempotencyKey.includes(", ")) throw new HeimdallError("invalid_argument");
   return { input, idempotencyKey };
@@ -228,6 +242,19 @@ async function route(request) {
   }
   if (url.pathname === new URL(callbackUrl).pathname) return sessions.callback(request);
   if (url.pathname === "/auth/logout") return sessions.logout(request);
+  if (directoryCleanup && request.method === "POST" && url.pathname === "/directory/cleanup") {
+    const result = await directoryCleanup(request, async () => {
+      const input = await jsonInput(request);
+      if (
+        Object.keys(input).length !== 2 ||
+        typeof input.subject !== "string" ||
+        typeof input.revision !== "string"
+      )
+        throw new HeimdallError("invalid_argument");
+      return input;
+    });
+    return read(result, result.status === "confirmed" ? 200 : 202);
+  }
   if (request.method === "GET" && url.pathname === "/managed-export" && auth.exportManagedPage) {
     const bearer = /^Bearer (\S+)$/i.exec(request.headers.get("authorization") ?? "");
     if (!bearer) throw new HeimdallError("unauthenticated");
@@ -373,6 +400,7 @@ createServer(async (incoming, outgoing) => {
           method: incoming.method,
           ...(incoming.method === "POST" &&
           (target.pathname === "/workspaces" ||
+            (directoryCleanup && target.pathname === "/directory/cleanup") ||
             memberRoute.test(target.pathname) ||
             invitationRoute.test(target.pathname) ||
             target.pathname === "/invitations/accept")

@@ -5,6 +5,7 @@ import {
   createDirectoryPolling,
   createManagedPostgresStorage,
 } from "@heimdall/sdk/postgres";
+import { directoryMapping } from "./directory-cleanup.mjs";
 import { tenantSSOPolicy } from "./tenant-sso.mjs";
 
 function required(name) {
@@ -23,17 +24,8 @@ try {
   required("DATABASE_URL");
   const configJSON = required("HEIMDALL_CONFIG");
   const { productId, environment, issuer } = JSON.parse(configJSON);
-  const workspaces = JSON.parse(required("HEIMDALL_DIRECTORY_WORKSPACES"));
-  if (
-    productId !== "ledger" ||
-    !Array.isArray(workspaces) ||
-    workspaces.length === 0 ||
-    workspaces.length > 100 ||
-    workspaces.some((id) => typeof id !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(id)) ||
-    new Set(workspaces).size !== workspaces.length
-  ) {
-    throw new Error("Invalid Ledger directory mapping");
-  }
+  const workspaces = directoryMapping();
+  if (productId !== "ledger") throw new HeimdallError("invalid_argument");
   const scope = {
     productId,
     environment,
@@ -74,6 +66,16 @@ try {
     const actor = await runtime.tokens.verify(required("HEIMDALL_DIRECTORY_OPERATOR_TOKEN"), {
       signal,
     });
+    if (
+      process.env.HEIMDALL_DIRECTORY_OPERATOR_SUBJECT &&
+      actor.subject !== process.env.HEIMDALL_DIRECTORY_OPERATOR_SUBJECT
+    )
+      throw new HeimdallError("forbidden");
+    const manifest = JSON.parse(required("HEIMDALL_MANIFEST"));
+    for (const workspace of workspaces) {
+      const roles = await runtime.tenant(workspace).roles(actor, { signal });
+      if (!roles.includes(manifest.ownerRole)) throw new HeimdallError("forbidden");
+    }
     for (const { subject, revision } of pending) {
       const result = await cleanup.reconcile(
         runtime,

@@ -25,6 +25,27 @@ Supply the product's existing database, manifest, deployment, policy version, cl
 
 Install the directory migrations and grant the worker the documented PostgreSQL runtime and directory permissions. The reader and the administrator use distinct credentials. The administrator is needed when cleanup is pending. Strict workspaces require the corresponding SSO evidence, so an ordinary bearer token cannot authorize their managed membership changes. The reference commands leave those revisions pending for authorized reconciliation. The product's normal identity checks and durable denial continue to protect requests. See [[phase-6-scim-polling]] and [[phase-6-scim-deactivation]].
 
+## Reconcile a strict workspace
+
+Set `HEIMDALL_DIRECTORY_OPERATOR_SUBJECT` on the reference HTTP process to enable `POST /directory/cleanup`. Configure the same trusted directory organization and workspace mapping on the HTTP process and job. The reference route covers one strict workspace per directory mapping because a verified browser session binds its SSO evidence to a single workspace. The job can still record identity denial using its organization-scoped reader. The HTTP process needs access to read deactivation rows and update their cleanup plan and completion fields.
+
+The configured operator signs in through that workspace's federation flow. From the product origin, submit the pending `subject` and `revision` obtained from the directory cleanup queue. The route uses the product session cookie, requires the operator to be an effective owner, and takes the workspace mapping from server configuration. The SDK verifies that the identity is durably denied, binds the plan to the actor, and applies the managed membership operation. HTTP 200 confirms cleanup. HTTP 202 retains a pending operation for the existing managed recovery workflow.
+
+```mermaid
+sequenceDiagram
+  participant O as Workspace operator
+  participant P as Product backend
+  participant D as Directory cleanup queue
+  participant F as OpenFGA
+  O->>P: Sign in through the strict workspace provider
+  O->>P: Submit the pending subject and revision
+  P->>P: Verify origin, operator, SSO evidence and ownership
+  P->>D: Bind the approved workspace plan
+  P->>F: Reconcile membership through the SDK
+  P->>D: Confirm the pending revision
+  P-->>O: Return cleanup status
+```
+
 Each invocation discovers one page of up to 25 entries, checks known subjects in pages of 10, then reconciles up to 10 pending revisions. Known-subject scanning restarts from the beginning after a process restart. Measure full scan time with production directory sizes before setting a job interval. A directory too large to complete within the deadline needs a product scheduler that persists its scan position or partitions the work. The managed revision binds the approved workspace plan on its first reconciliation attempt. Keep that mapping and administrator stable while retries are pending. Uncertain writes remain subject to the managed recovery gate.
 
 The job reports counts for discovery, observation, revoked sessions and cleanup. It reports the age of the oldest revision it processed, in milliseconds, and emits a sanitized error code on failure. Reactivation still requires the separate approved enrollment flow.

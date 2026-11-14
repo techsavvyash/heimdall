@@ -233,6 +233,17 @@ func main() {
 	}
 	mount("GET "+callbackURL.Path, sessions.Callback)
 	mount("POST /auth/logout", sessions.Logout)
+	if operator := os.Getenv("HEIMDALL_DIRECTORY_OPERATOR_SUBJECT"); operator != "" {
+		workspaces, err := directoryMapping()
+		if err != nil {
+			log.Fatal("Invalid directory cleanup mapping")
+		}
+		cleanup, err := postgres.NewDirectoryCleanup(records, config.ProductID, config.Environment, config.Issuer, os.Getenv("HEIMDALL_DIRECTORY_ORGANIZATION"), "production")
+		if err != nil {
+			log.Fatal("Invalid directory cleanup scope")
+		}
+		mount("POST /directory/cleanup", directoryCleanupRoute(cleanup, auth, sessions, origin, operator, workspaces, manifestJSON))
+	}
 	mount("GET /workspaces", func(w http.ResponseWriter, r *http.Request) error {
 		actor, err := sessions.Authenticate(r)
 		if err != nil {

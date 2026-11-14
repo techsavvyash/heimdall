@@ -101,7 +101,7 @@ export async function verifyReferenceProduct(input, authorize) {
           "--identity-file",
           process.env.HEIMDALL_REFERENCE_SSH_KEY,
           "--",
-          "psql -Xq -U heimdall_probe -d heimdall_phase4_reference -v ON_ERROR_STOP=1 -v VERBOSITY=verbose",
+          "psql -XqAt -U heimdall_probe -d heimdall_phase4_reference -v ON_ERROR_STOP=1 -v VERBOSITY=verbose",
         ],
         { stdio: ["pipe", "pipe", "pipe"] },
       );
@@ -183,6 +183,13 @@ export async function verifyReferenceProduct(input, authorize) {
       ? {
           HEIMDALL_TENANT_SSO_POLICIES: JSON.stringify(federation.policies),
           HEIMDALL_FEDERATION_CREDENTIAL: federation.credential,
+        }
+      : {}),
+    ...(federation?.cleanup
+      ? {
+          HEIMDALL_DIRECTORY_OPERATOR_SUBJECT: federation.cleanup.operator,
+          HEIMDALL_DIRECTORY_ORGANIZATION: federation.cleanup.organizationId,
+          HEIMDALL_DIRECTORY_WORKSPACES: '["globex"]',
         }
       : {}),
     HEIMDALL_CLIENT_SECRET: clientSecret,
@@ -320,6 +327,32 @@ export async function verifyReferenceProduct(input, authorize) {
           .split(";")[0];
       };
       const before = await finish(await start("acme"));
+      let cleanupRequest;
+      const directory = federation.cleanup;
+      if (directory) {
+        assert([directory.subject, directory.organizationId].every((id) => /^[0-9]+$/.test(id)));
+        const identity =
+          "user:" +
+          Buffer.from(JSON.stringify([config.issuer, directory.subject])).toString("base64url");
+        const revision = await executeSQL(`
+          BEGIN;
+          INSERT INTO heimdall.identity_denials(product_id,environment,identity_hash,observed_at,reason)
+          VALUES ('${schema}','verification',sha256(convert_to('${identity}','UTF8')),1,'inactive');
+          INSERT INTO heimdall_directory.deactivations(product_id,environment,identity_hash,issuer,subject,organization_id,observed_at,reason)
+          VALUES ('${schema}','verification',sha256(convert_to('${identity}','UTF8')),'${config.issuer}','${directory.subject}','${directory.organizationId}',1,'inactive') RETURNING revision;
+          COMMIT;
+        `);
+        assert.match(revision, /^[1-9][0-9]*$/);
+        cleanupRequest = (cookie, source = origin, extra = {}) =>
+          request("/directory/cleanup", {
+            method: "POST",
+            headers: { cookie, origin: source, "content-type": "application/json" },
+            body: JSON.stringify({ subject: directory.subject, revision, ...extra }),
+          });
+        assert.equal((await cleanupRequest("")).status, 401);
+        assert.equal((await cleanupRequest(before)).status, 403);
+        assert.equal((await directory.readRelations()).length, 2);
+      }
       const page = await (await expectStatus("/workspaces?limit=1", 200, before)).json();
       assert.deepEqual(
         page.items.map(({ id }) => id),
@@ -350,6 +383,17 @@ export async function verifyReferenceProduct(input, authorize) {
       });
       await expectStatus("/workspaces/acme/" + collection, 403, after);
       await expectStatus("/workspaces/globex/" + collection, 200, after);
+      if (directory) {
+        assert.equal((await cleanupRequest(after, "https://unrelated.example")).status, 403);
+        assert.equal((await cleanupRequest(after, origin, { workspace: "acme" })).status, 400);
+        assert.equal((await directory.readRelations()).length, 2);
+        const result = await cleanupRequest(after);
+        assert.equal(result.status, 200, `${schema} strict directory cleanup`);
+        assert.deepEqual(await result.json(), { status: "confirmed" });
+        assert.deepEqual(await directory.readRelations(), []);
+        assert.equal((await cleanupRequest(after)).status, 200);
+        await expectStatus("/workspaces/globex/" + collection, 200, after);
+      }
       const logout = await request("/auth/logout", {
         method: "POST",
         headers: { cookie: after, origin },
@@ -359,6 +403,7 @@ export async function verifyReferenceProduct(input, authorize) {
         product: schema,
         deployment,
         switch: "passed",
+        ...(directory ? { strictDirectoryCleanup: "confirmed and replayed" } : {}),
         priorCookie: 401,
         staleCallback: 401,
         replay: 401,
@@ -1098,7 +1143,14 @@ export async function verifyReferenceProduct(input, authorize) {
     };
   } finally {
     if (federation && remote) {
-      for (const name of ["HEIMDALL_FEDERATION_CREDENTIAL", "HEIMDALL_TENANT_SSO_POLICIES"]) {
+      const names = ["HEIMDALL_FEDERATION_CREDENTIAL", "HEIMDALL_TENANT_SSO_POLICIES"];
+      if (federation.cleanup)
+        names.push(
+          "HEIMDALL_DIRECTORY_OPERATOR_SUBJECT",
+          "HEIMDALL_DIRECTORY_ORGANIZATION",
+          "HEIMDALL_DIRECTORY_WORKSPACES",
+        );
+      for (const name of names) {
         const cleanup = spawnSync(
           "railway",
           [
