@@ -35,7 +35,9 @@ func runAuditJob(ctx context.Context) error {
 	delivery, err := postgres.NewAuditDelivery(db, postgres.AuditDeliveryOptions{
 		ProductID: config.ProductID, Environment: config.Environment, SinkID: sink, TenantID: tenant,
 		Endpoint: os.Getenv("HEIMDALL_AUDIT_ENDPOINT"), Token: os.Getenv("HEIMDALL_AUDIT_TOKEN"),
-		TransportProfile: os.Getenv("HEIMDALL_AUDIT_TRANSPORT_PROFILE"), ValidateCustom: validateTicketRead,
+		TransportProfile: os.Getenv("HEIMDALL_AUDIT_TRANSPORT_PROFILE"), ValidateCustom: func(kind string, version int, attributes map[string]any) bool {
+			return validateTicketRead(kind, version, attributes) || validatePolicyPublication(kind, version, attributes)
+		},
 	})
 	if err != nil {
 		return err
@@ -43,6 +45,19 @@ func runAuditJob(ctx context.Context) error {
 	var collectionErr error
 	if mapping := os.Getenv("HEIMDALL_IDENTITY_MAPPING"); mapping != "" {
 		collectionErr = collectIdentityAudit(ctx, db, mapping, config.ProductID, config.Environment, config.Issuer, sink, tenant)
+	}
+	if os.Getenv("HEIMDALL_PROVIDER_SETTINGS") != "" {
+		if os.Getenv("SUPPORT_DATABASE_URL") == "" || sink != "siem" {
+			return heimdall.ErrInvalidArgument
+		}
+		business, err := sql.Open("postgres", os.Getenv("SUPPORT_DATABASE_URL"))
+		if err != nil {
+			return err
+		}
+		defer business.Close()
+		if err := exportPolicyPublications(ctx, business, db, config.ProductID, config.Environment, sink, tenant); err != nil {
+			return err
+		}
 	}
 	result, err := delivery.Deliver(ctx, 20)
 	if err != nil {

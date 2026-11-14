@@ -1,7 +1,6 @@
 import { request as httpRequest } from "node:http";
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { execFile, spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { createRequire } from "node:module";
@@ -212,6 +211,18 @@ export async function verifyReferenceProduct(input, authorize) {
           HEIMDALL_FEDERATION_CREDENTIAL: federation.credential,
         }
       : {}),
+    ...(federation?.providerSetup
+      ? {
+          HEIMDALL_PROVIDER_SETTINGS: JSON.stringify({
+            [federation.providerSetup.workspace]: {
+              organizationId:
+                federation.policies[federation.providerSetup.workspace].organizationId,
+              testSubject: federation.providerSetup.subject,
+            },
+          }),
+          HEIMDALL_PROVIDER_SETTINGS_TOKEN: federation.providerSetup.token,
+        }
+      : {}),
     ...(federation?.cleanup
       ? {
           HEIMDALL_DIRECTORY_OPERATOR_SUBJECT: federation.cleanup.operator,
@@ -255,34 +266,40 @@ export async function verifyReferenceProduct(input, authorize) {
     assert.equal(registration.status, 0, "Key registration failed");
     const service = "reference-" + schema;
     const context = ["--service", service, "--environment", "verification"];
-    const setVariable = (key, value) => {
-      const setting = spawnSync(
-        "railway",
-        ["variable", "set", ...context, "--skip-deploys", "--stdin", key],
-        { input: value, stdio: ["pipe", "ignore", "ignore"], timeout: 30000 },
-      );
-      assert.equal(setting.status, 0, `Could not set ${service} variable ${key}`);
-    };
-    const deploy = () => {
-      const deployment = spawnSync("railway", ["up", ...context, "--detach"], {
-        stdio: "ignore",
-        timeout: 60000,
+    const runRailway = async (args, timeout, input = "") => {
+      const proc = spawn("railway", args, {
+        stdio: ["pipe", "ignore", "ignore"],
+        signal: AbortSignal.timeout(timeout),
       });
-      assert.equal(deployment.status, 0, "Reference deployment submission failed");
+      proc.stdin.on("error", () => {});
+      proc.stdin.end(input);
+      return (await once(proc, "close"))[0];
     };
-    publishPolicies = (policies, revisionRun) => {
-      setVariable("HEIMDALL_TENANT_SSO_POLICIES", JSON.stringify(policies));
-      setVariable("HEIMDALL_VERIFICATION_RUN", revisionRun);
-      deploy();
+    const setVariable = async (key, value) => {
+      const status = await runRailway(
+        ["variable", "set", ...context, "--skip-deploys", "--stdin", key],
+        30000,
+        value,
+      );
+      assert.equal(status, 0, `Could not set ${service} variable ${key}`);
+    };
+    const deploy = async () => {
+      const status = await runRailway(["up", ...context, "--detach"], 60000);
+      assert.equal(status, 0, "Reference deployment submission failed");
+    };
+    publishPolicies = async (policies, revisionRun) => {
+      await setVariable("HEIMDALL_TENANT_SSO_POLICIES", JSON.stringify(policies));
+      await setVariable("HEIMDALL_VERIFICATION_RUN", revisionRun);
+      await deploy();
     };
     for (const [key, value] of Object.entries({
       ...variables,
       HEIMDALL_VERIFICATION_RUN: runId,
       RAILWAY_DOCKERFILE_PATH: `examples/${schema}/Dockerfile`,
     })) {
-      setVariable(key, value);
+      await setVariable(key, value);
     }
-    deploy();
+    await deploy();
   } else {
     child = spawn(cmd[0], cmd[1], { stdio: "ignore", env: { ...process.env, ...variables } });
   }
@@ -453,6 +470,135 @@ export async function verifyReferenceProduct(input, authorize) {
         headers: { cookie: after, origin },
       });
       assert.equal(logout.status, 204);
+      let providerSetupProof;
+      if (federation.providerSetup) {
+        const setup = federation.providerSetup;
+        const { workspace } = setup;
+        const policy = federation.policies[workspace];
+        const version = randomBytes(16).toString("hex");
+        const post = async (action, status, cookie, body, target = workspace) => {
+          const response = await request(`/workspaces/${target}/enterprise/provider/${action}`, {
+            method: "POST",
+            headers: { cookie, origin, "content-type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          assert.equal(
+            response.status,
+            status,
+            `${schema} provider ${action} expected ${status}, got ${response.status} (${response.status >= 400 ? (await response.clone().json()).code : "ok"})`,
+          );
+          return response.json();
+        };
+        const owner = await finish(await start(workspace));
+        const outsider = await finish(await start(workspace === "acme" ? "globex" : "acme"));
+        const settings = { version, ...setup.settings };
+        const providers = await setup.providers();
+        assert(
+          providers.includes(policy.providerId),
+          "Provider list must include the existing organization provider",
+        );
+        await post("prepare", 403, outsider, settings);
+        await post("prepare", 403, owner, settings, workspace === "acme" ? "globex" : "acme");
+        await post("prepare", 400, owner, { ...settings, organizationId: "wrong" });
+        assert.deepEqual(await setup.providers(), providers);
+        // Model a committed provider create whose verified ID never reaches the product store.
+        await executeSQL(`CREATE FUNCTION ${schema}.probe_lose_provider_id() RETURNS trigger
+          LANGUAGE plpgsql AS $body$ BEGIN
+            IF NEW.environment='verification' AND NEW.version='${version}' AND NEW.provider_id IS NOT NULL
+            THEN RAISE EXCEPTION 'Injected product persistence failure'; END IF;
+            RETURN NEW;
+          END $body$;
+          CREATE TRIGGER probe_lose_provider_id BEFORE UPDATE ON ${schema}.sso_candidates
+          FOR EACH ROW EXECUTE FUNCTION ${schema}.probe_lose_provider_id();`);
+        try {
+          await post("prepare", 503, owner, settings);
+          await post("prepare", 409, owner, settings);
+          assert.equal(
+            await executeSQL(`SELECT count(*) FROM ${schema}.sso_candidates
+            WHERE environment='verification' AND workspace_id='${workspace}' AND version='${version}'
+            AND dispatched AND provider_id IS NULL;`),
+            "1",
+          );
+        } finally {
+          await executeSQL(`DROP TRIGGER probe_lose_provider_id ON ${schema}.sso_candidates;
+            DROP FUNCTION ${schema}.probe_lose_provider_id();`);
+        }
+        const created = (await setup.providers()).filter((id) => !providers.includes(id));
+        assert.equal(created.length, 1, "Exactly one provider may be created");
+        const readback = { ...settings };
+        delete readback.clientSecret;
+        await post("prepare", 409, owner, { ...readback, existingProviderId: policy.providerId });
+        const candidate = await post("prepare", 200, owner, {
+          ...readback,
+          existingProviderId: created[0],
+        });
+        assert.equal(candidate.organizationId, policy.organizationId);
+        assert.equal(candidate.protocol, policy.protocol);
+        assert.equal(candidate.version, version);
+        assert.deepEqual(await setup.providers(), [...providers, candidate.providerId].sort());
+        await post("prepare", 409, owner, settings);
+        assert.deepEqual(
+          await post("prepare", 200, owner, {
+            ...readback,
+            existingProviderId: candidate.providerId,
+          }),
+          candidate,
+        );
+        assert.deepEqual(await setup.providers(), [...providers, candidate.providerId].sort());
+        const activation = { version, expectedPolicyVersion: policy.policyVersion };
+        await post("activate", 409, owner, activation);
+        await post("test", 401, owner, { version });
+        await setup.register(candidate);
+        const workspacePath = `/workspaces/${workspace}/${collection}`;
+        const verification = await finish(await start(candidate.verificationWorkspaceId));
+        await expectStatus(workspacePath, 403, verification);
+        assert.deepEqual(
+          (await (await expectStatus("/workspaces", 200, verification)).json()).items,
+          [],
+        );
+        const staged = await start(workspace);
+        await post("test", 200, verification, { version });
+        assert.equal(
+          (
+            await request("/auth/logout", {
+              method: "POST",
+              headers: { cookie: verification, origin },
+            })
+          ).status,
+          204,
+        );
+        await post("activate", 403, outsider, activation);
+        await post("activate", 409, owner, { ...activation, expectedPolicyVersion: "stale" });
+        const { eventId } = await post("activate", 200, owner, activation);
+        assert.match(eventId, /^[a-f0-9-]{32,36}$/);
+        candidate.activated = true;
+        await expectStatus(workspacePath, 403, owner);
+        await expectStatus(staged.path, 401, staged.cookie);
+        await expectStatus("/auth/federation?workspace=" + candidate.verificationWorkspaceId, 401);
+        const fresh = await finish(await start(workspace));
+        await expectStatus(workspacePath, 200, fresh);
+        await expectStatus(
+          `/workspaces/${workspace === "acme" ? "globex" : "acme"}/${collection}`,
+          403,
+          fresh,
+        );
+        assert.equal(
+          await executeSQL(`SELECT count(*) FROM ${schema}.sso_publications
+          WHERE environment='verification' AND workspace_id='${workspace}' AND version='${version}'
+          AND event_id='${eventId}' AND previous_version='${policy.policyVersion}' AND NOT exported;`),
+          "1",
+        );
+        providerSetupProof = {
+          protocol: candidate.protocol,
+          version,
+          eventId,
+          scopeAndClaimChecked: true,
+          lostProviderIdRecovered: true,
+          activationRequiresTest: true,
+          previousPolicyRejected: true,
+          candidateCallbackRetired: true,
+        };
+      }
       let sharedPolicyProof;
       if (shared) {
         const acmePath = "/workspaces/acme/" + collection;
@@ -469,7 +615,7 @@ export async function verifyReferenceProduct(input, authorize) {
         await expectStatus(acmePath, 200, acmeSession);
         const staged = await start("acme");
         const rotated = runId + "-policy";
-        publishPolicies(
+        await publishPolicies(
           {
             ...federation.policies,
             acme: { ...federation.policies.acme, policyVersion: "switch-v2" },
@@ -496,6 +642,7 @@ export async function verifyReferenceProduct(input, authorize) {
         product: schema,
         deployment,
         switch: "passed",
+        ...(providerSetupProof ? { providerSetup: providerSetupProof } : {}),
         ...(sharedPolicyProof ? { sharedPolicy: sharedPolicyProof } : {}),
         ...(directory ? { strictDirectoryCleanup: "confirmed and replayed" } : {}),
         priorCookie: 401,
@@ -1279,6 +1426,15 @@ export async function verifyReferenceProduct(input, authorize) {
   } finally {
     if (federation && remote) {
       const names = ["HEIMDALL_FEDERATION_CREDENTIAL", "HEIMDALL_TENANT_SSO_POLICIES"];
+      if (federation.providerSetup) {
+        names.push("HEIMDALL_PROVIDER_SETTINGS", "HEIMDALL_PROVIDER_SETTINGS_TOKEN");
+        const tenant = federation.providerSetup.workspace;
+        assert(["acme", "globex"].includes(tenant));
+        await executeSQL(`BEGIN;
+          DELETE FROM ${schema}.sso_publications WHERE environment='verification' AND workspace_id='${tenant}';
+          DELETE FROM ${schema}.sso_candidates WHERE environment='verification' AND workspace_id='${tenant}';
+          COMMIT;`);
+      }
       if (federation.cleanup)
         names.push(
           "HEIMDALL_DIRECTORY_OPERATOR_SUBJECT",

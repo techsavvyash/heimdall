@@ -87,11 +87,15 @@ func mutationInput(w http.ResponseWriter, r *http.Request) (map[string]json.RawM
 }
 
 func jsonInput(w http.ResponseWriter, r *http.Request) (map[string]json.RawMessage, error) {
+	return readJSONInput(w, r, 4096)
+}
+
+func readJSONInput(w http.ResponseWriter, r *http.Request, limit int64) (map[string]json.RawMessage, error) {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/json" {
 		return nil, heimdall.ErrInvalidArgument
 	}
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
 	var fields map[string]json.RawMessage
 	if err != nil || !utf8.Valid(body) || json.Unmarshal(body, &fields) != nil || fields == nil {
 		return nil, heimdall.ErrInvalidArgument
@@ -180,6 +184,11 @@ func main() {
 	if err != nil {
 		log.Fatal("Invalid federation policies")
 	}
+	settings, err := newProviderSettings(business, config.Environment, config.Issuer, tenantSSO, true)
+	if err != nil {
+		log.Fatal("Invalid provider settings configuration")
+	}
+	tenantSSO = settings.policy
 	auth, err := heimdall.New(ctx, configJSON, manifestJSON, heimdall.Options{
 		TenantSSOPolicy: tenantSSO,
 		PolicyVersion:   required("HEIMDALL_POLICY_VERSION"), Storage: storage, AuthorizeManagedExport: exportPolicy,
@@ -198,7 +207,7 @@ func main() {
 		log.Fatal("Heimdall startup: ", err)
 	}
 	sessionOptions := heimdall.SessionOptions{CallbackURL: callback, ReturnTo: "/workspaces", ZitadelAPIAudience: required("HEIMDALL_ZITADEL_API_AUDIENCE")}
-	if federationPolicies != "" {
+	if os.Getenv("HEIMDALL_FEDERATION_CREDENTIAL") != "" || federationPolicies != "" || len(settings.mapping) != 0 {
 		credential := required("HEIMDALL_FEDERATION_CREDENTIAL")
 		sessionOptions.FederationCredential = func(context.Context) (string, error) { return credential, nil }
 	}
@@ -236,7 +245,7 @@ func main() {
 		return nil
 	})
 	mount("GET /auth/start", sessions.Start)
-	if federationPolicies != "" {
+	if os.Getenv("HEIMDALL_FEDERATION_CREDENTIAL") != "" || federationPolicies != "" || len(settings.mapping) != 0 {
 		mount("GET /auth/federation", func(w http.ResponseWriter, r *http.Request) error {
 			workspace := r.URL.Query()["workspace"]
 			if len(workspace) != 1 {
@@ -247,6 +256,13 @@ func main() {
 	}
 	mount("GET "+callbackURL.Path, sessions.Callback)
 	mount("POST /auth/logout", sessions.Logout)
+	if len(settings.mapping) != 0 {
+		var manifest struct{ OwnerRole string }
+		if err := json.Unmarshal(manifestJSON, &manifest); err != nil {
+			log.Fatal("Invalid provider settings manifest")
+		}
+		mount("POST /workspaces/{workspace}/enterprise/provider/{action}", settings.route(auth, sessions, origin, manifest.OwnerRole))
+	}
 	if operator := os.Getenv("HEIMDALL_DIRECTORY_OPERATOR_SUBJECT"); operator != "" {
 		workspaces, err := directoryMapping()
 		if err != nil {

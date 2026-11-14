@@ -101,7 +101,9 @@ async function verifyProduct(product) {
       child.stderr.on("data", (chunk) => {
         const run = chunk.match(/Federation probe run: [a-f0-9-]+/);
         if (run) console.error(product, workspace, run[0]);
-        const failure = chunk.match(/(?:AssertionError.*|Error:.*HTTP [0-9]{3}.*)/)?.[0];
+        const failure = chunk.match(
+          /(?:AssertionError.*|Error:.*HTTP [0-9]{3}.*|(?:Candidate registration|Directory authorization) fixture failed[^\n]*)/,
+        )?.[0];
         if (failure) console.error(product, workspace, failure.slice(0, 220));
       });
       directories.set(workspace, { child, ...(await receive(child, "ready")) });
@@ -131,6 +133,33 @@ async function verifyProduct(product) {
       : null;
     const assignment =
       fixture.expected.roles[product === "ledger" ? "viewer" : "reader"].assignment;
+    const providerWorkspace =
+      process.env.HEIMDALL_PROBE_PROVIDER_SETTINGS === "1"
+        ? product === "ledger"
+          ? "acme"
+          : "globex"
+        : null;
+    let settingsToken;
+    if (providerWorkspace) {
+      const settingsOrg = directories.get(providerWorkspace).policy.organizationId;
+      const machine = await z("/v2/users/new", {
+        organizationId: settingsOrg,
+        username: "provider-settings-" + suffix,
+        machine: { name: "Provider settings probe" },
+      });
+      await z("/zitadel.internal_permission.v2.InternalPermissionService/CreateAdministrator", {
+        userId: machine.id,
+        resource: { organizationId: settingsOrg },
+        roles: ["ORG_SETTINGS_MANAGER"],
+      });
+      settingsToken = (
+        await z(`/v2/users/${machine.id}/pats`, {
+          expirationDate: new Date(Date.now() + 900000).toISOString(),
+        })
+      ).token;
+      assert(settingsToken);
+    }
+    let candidateLogin;
     const verifyPolicy = process.env.HEIMDALL_PROBE_SHARED_SSO_POLICY === "1";
     const password = "Aa1!" + randomBytes(24).toString("hex");
     const localUser = verifyPolicy
@@ -204,6 +233,43 @@ async function verifyProduct(product) {
             ...(verifyPolicy ? { "acme-peer": acme.policy } : {}),
           },
           credential: acme.credential,
+          ...(providerWorkspace
+            ? {
+                providerSetup: {
+                  workspace: providerWorkspace,
+                  token: settingsToken,
+                  subject: directories.get(providerWorkspace).subject,
+                  settings: directories.get(providerWorkspace).providerSettings,
+                  async register(candidate) {
+                    const { child } = directories.get(providerWorkspace);
+                    const response = receive(child, "registered-candidate");
+                    child.send({ type: "register-candidate", providerId: candidate.providerId });
+                    await response;
+                    candidateLogin = candidate;
+                  },
+                  async providers() {
+                    const res = await fetch(issuer + "/management/v1/idps/templates/_search", {
+                      method: "POST",
+                      redirect: "error",
+                      signal: AbortSignal.timeout(15000),
+                      headers: {
+                        authorization: "Bearer " + pat,
+                        "content-type": "application/json",
+                        "x-zitadel-orgid": directories.get(providerWorkspace).policy.organizationId,
+                      },
+                      body: JSON.stringify({ query: { limit: 100 } }),
+                    });
+                    assert.equal(res.status, 200);
+                    const listing = await res.json();
+                    assert.equal(
+                      Number(listing.details?.totalResult ?? 0),
+                      listing.result?.length ?? 0,
+                    );
+                    return (listing.result ?? []).map(({ id }) => id).sort();
+                  },
+                },
+              }
+            : {}),
           ...(localUser
             ? {
                 sharedPolicy: {
@@ -276,10 +342,28 @@ async function verifyProduct(product) {
         },
       },
       async (location, tenant) => {
-        const { child } = directories.get(tenant === "acme-peer" ? "acme" : tenant);
+        const isCandidate =
+          candidateLogin &&
+          (candidateLogin.verificationWorkspaceId === tenant ||
+            (candidateLogin.activated && tenant === providerWorkspace));
+        const { child } = directories.get(
+          isCandidate ? providerWorkspace : tenant === "acme-peer" ? "acme" : tenant,
+        );
         const response = receive(child, "callback");
-        child.send({ type: "authorize", location });
-        const callback = new URL((await response).location);
+        child.send({
+          type: "authorize",
+          location,
+          ...(isCandidate ? { providerId: candidateLogin.providerId } : {}),
+        });
+        let callback;
+        try {
+          callback = new URL((await response).location);
+        } catch (error) {
+          throw new Error(
+            `Fixture authorization failed for ${product} ${isCandidate ? "candidate" : tenant}`,
+            { cause: error },
+          );
+        }
         assert.equal(callback.origin + callback.pathname, redirectUri);
         return callback.pathname + callback.search;
       },

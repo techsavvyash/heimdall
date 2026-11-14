@@ -192,6 +192,9 @@ try:
         schemas = "\n".join((ROOT / "examples" / name / file).read_text()
                             for name in ("ledger", "support") for file in ("schema.sql", "invitations.sql"))
         schemas += "\nGRANT USAGE ON SCHEMA ledger,support TO heimdall_public_runtime; GRANT SELECT ON ledger.invoices,support.tickets TO heimdall_public_runtime; GRANT SELECT,INSERT,UPDATE ON ledger.invitations,support.invitations TO heimdall_public_runtime;"
+        for product in ("ledger", "support"):
+            schemas += "\n" + (ROOT / "examples" / "enterprise-provider.sql").read_text().replace(':"product_schema"', product)
+            schemas += f"\nGRANT SELECT,INSERT,UPDATE ON {product}.sso_candidates,{product}.sso_publications TO heimdall_public_runtime;"
         schemas += "\nCREATE ROLE heimdall_reference_export NOLOGIN;\n" + (ROOT / "tests/integration/reference-export-grants.sql").read_text()
         run(["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime", "-v", "ON_ERROR_STOP=1"],
             input=schemas, capture_output=True, text=True)

@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { randomUUID, randomBytes, createHash, createPublicKey, verify } from "node:crypto";
+import {
+  randomUUID,
+  randomBytes,
+  createHash,
+  createPublicKey,
+  X509Certificate,
+  verify,
+} from "node:crypto";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import { createBrowserBridge } from "./browser-bridge.mjs";
@@ -459,8 +466,8 @@ try {
     },
   });
   let samlAcs;
-  if (protocol === "saml") {
-    const metadataResponse = await fetch(`${z}/idps/${provider.id}/saml/metadata`, {
+  async function registerSAML(providerId) {
+    const metadataResponse = await fetch(`${z}/idps/${providerId}/saml/metadata`, {
       redirect: "error",
       signal: AbortSignal.timeout(15000),
     });
@@ -468,18 +475,24 @@ try {
     const metadata = await metadataResponse.text();
     const entityId = metadata.match(/entityID="([^"]+)"/)?.[1];
     const acsTag = metadata.match(/<(?:\w+:)?AssertionConsumerService\b[^>]+>/)?.[0];
-    samlAcs = acsTag?.match(/Location="([^"]+)"/)?.[1];
-    const cert = metadata
-      .match(/<(?:\w+:)?X509Certificate\b[^>]*>([^<]+)</)?.[1]
-      .replace(/\s/g, "");
-    assert(entityId && samlAcs && cert && new URL(samlAcs).origin === z, "SP metadata incomplete");
+    const acs = acsTag?.match(/Location="([^"]+)"/)?.[1];
+    let cert = metadata.match(/<(?:\w+:)?X509Certificate\b[^>]*>([^<]+)</)?.[1]?.replace(/\s/g, "");
+    if (!cert) {
+      const certificate = await fetch(`${z}/idps/${providerId}/saml/certificate`, {
+        redirect: "error",
+        signal: AbortSignal.timeout(15000),
+      });
+      assert.equal(certificate.status, 200, "SP certificate endpoint failed");
+      cert = new X509Certificate(await certificate.text()).raw.toString("base64");
+    }
+    assert(entityId && acs && new URL(acs).origin === z, "SP metadata incomplete");
     await ka("POST", `/admin/realms/${realm}/clients`, {
       clientId: entityId,
       enabled: true,
       protocol: "saml",
-      redirectUris: [samlAcs],
+      redirectUris: [acs],
       attributes: {
-        "saml.assertion.consumer.url.post": samlAcs,
+        "saml.assertion.consumer.url.post": acs,
         "saml.force.post.binding": "true",
         "saml.server.signature": "true",
         "saml.assertion.signature": "true",
@@ -495,16 +508,22 @@ try {
       ...profile,
       unmanagedAttributePolicy: "ADMIN_EDIT",
     });
+    const existingUser = await ka("GET", `/admin/realms/${realm}/users/${upstreamUser}`);
     await ka("PUT", `/admin/realms/${realm}/users/${upstreamUser}`, {
-      ...upstreamUsers[0],
-      attributes: { [`saml.persistent.name.id.for.${entityId}`]: [upstreamUser] },
+      ...existingUser,
+      attributes: {
+        ...existingUser.attributes,
+        [`saml.persistent.name.id.for.${entityId}`]: [upstreamUser],
+      },
     });
     const configuredUser = await ka("GET", `/admin/realms/${realm}/users/${upstreamUser}`);
     assert(
       configuredUser.attributes?.[`saml.persistent.name.id.for.${entityId}`]?.[0] === upstreamUser,
       "Persistent NameID fixture mapping not stored",
     );
+    return acs;
   }
+  if (protocol === "saml") samlAcs = await registerSAML(provider.id);
   if (testCrossOrgLink) {
     const crossLink = { idpId: provider.id, userId: upstreamUser, userName: "federation-user" };
     const crossUserInput = {
@@ -617,7 +636,12 @@ try {
   const complete = browserMode
     ? `${browserBridge.origin}/complete`
     : "https://heimdall-probe.example.invalid/complete";
-  async function authenticate(tamper = false, authorizationUrl, destination = complete) {
+  async function authenticate(
+    tamper = false,
+    authorizationUrl,
+    destination = complete,
+    acs = samlAcs,
+  ) {
     let capturedSamlFields;
     const intent = authorizationUrl
       ? { authUrl: authorizationUrl }
@@ -707,7 +731,7 @@ try {
       const html = await response.text();
       if (protocol === "saml" && passwordSubmitted) {
         const action = html.match(/<form\b[^>]*\baction="([^"]+)"/)?.[1];
-        assert(action && htmlAttribute(action) === samlAcs, "Unexpected SAML POST destination");
+        assert(action && htmlAttribute(action) === acs, "Unexpected SAML POST destination");
         const fields = {};
         for (const input of html.matchAll(/<input\b[^>]+>/g)) {
           const name = input[0].match(/\bname="([^"]+)"/)?.[1];
@@ -729,7 +753,7 @@ try {
           assert(changed !== samlXml, "Tamper test must change the signed NameID");
           fields.SAMLResponse = Buffer.from(changed).toString("base64");
         }
-        target = new URL(samlAcs);
+        target = new URL(acs);
         response = await page(target.href, fields);
         continue;
       }
@@ -1288,19 +1312,76 @@ try {
       .flat()
       .find((value) => value !== client.clientId && value !== project.projectId);
     assert(apiAudience);
+    const providerSettings =
+      process.env.HEIMDALL_PROBE_PROVIDER_SETTINGS === "1"
+        ? protocol === "saml"
+          ? {
+              protocol,
+              metadataXml: Buffer.from(
+                await (
+                  await fetch(`${k}/realms/${realm}/protocol/saml/descriptor`, {
+                    redirect: "error",
+                    signal: AbortSignal.timeout(15000),
+                  })
+                ).arrayBuffer(),
+              ).toString("base64"),
+            }
+          : { protocol, issuer: `${k}/realms/${realm}`, clientId: "heimdall-zitadel", clientSecret }
+        : undefined;
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error("Switch probe parent timed out")), 900000);
       process.on("disconnect", () => {
         clearTimeout(timer);
         resolve();
       });
+      const candidateCallbacks = new Map();
       process.on("message", async (message) => {
+        if (message.type === "register-candidate") {
+          try {
+            assert(/^[0-9]+$/.test(message.providerId));
+            const acs = protocol === "saml" ? await registerSAML(message.providerId) : undefined;
+            await za("POST", `/v2/users/${user.id}/links`, {
+              idpLink: {
+                idpId: message.providerId,
+                userId: upstreamUser,
+                userName: "federation-user",
+              },
+            });
+            candidateCallbacks.set(message.providerId, acs);
+            process.send({ type: "registered-candidate" });
+          } catch (error) {
+            console.error(
+              "Candidate registration fixture failed",
+              /^(SP metadata incomplete|SP certificate endpoint failed|Persistent NameID fixture mapping not stored)$/.test(
+                error.message,
+              )
+                ? error.message
+                : (error.code ?? error.name),
+              error.stack?.match(/federation\.mjs:\d+:\d+/)?.[0] ?? "",
+            );
+            process.send({ type: "failure" });
+          }
+          return;
+        }
         if (message.type !== "authorize") return;
         try {
-          const { target } = await authenticate(false, message.location, redirectUri);
+          const { target } = await authenticate(
+            false,
+            message.location,
+            redirectUri,
+            candidateCallbacks.get(message.providerId),
+          );
           assert.equal(target.origin + target.pathname, redirectUri);
           process.send({ type: "callback", location: target.href });
-        } catch {
+        } catch (error) {
+          console.error(
+            "Directory authorization fixture failed",
+            /^(Unexpected fixture login response: [0-9]+|Unexpected SAML POST destination|SAML request must be signed|Pinned Keycloak login form missing)$/.test(
+              error.message,
+            )
+              ? error.message
+              : (error.code ?? error.name),
+          );
           process.send({ type: "failure" });
         }
       });
@@ -1309,6 +1390,7 @@ try {
         apiAudience,
         subject: user.id,
         credential: flowPat,
+        providerSettings,
         policy: {
           providerId: provider.id,
           organizationId: orgId,

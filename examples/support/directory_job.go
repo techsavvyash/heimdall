@@ -76,6 +76,18 @@ func runDirectoryJob(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		if os.Getenv("SUPPORT_DATABASE_URL") == "" {
+			return heimdall.ErrInvalidArgument
+		}
+		business, err := sql.Open("postgres", os.Getenv("SUPPORT_DATABASE_URL"))
+		if err != nil {
+			return err
+		}
+		defer business.Close()
+		settings, err := newProviderSettings(business, config.Environment, config.Issuer, tenantSSO, false)
+		if err != nil {
+			return err
+		}
 		storage, err := postgres.NewManagedStorage(db, postgres.StorageOptions{
 			ProductID: config.ProductID, Environment: config.Environment,
 		})
@@ -93,7 +105,7 @@ func runDirectoryJob(ctx context.Context) error {
 		}
 		manifestJSON := []byte(os.Getenv("HEIMDALL_MANIFEST"))
 		runtime, err := heimdall.New(ctx, configJSON, manifestJSON, heimdall.Options{
-			PolicyVersion: os.Getenv("HEIMDALL_POLICY_VERSION"), Storage: storage, TenantSSOPolicy: tenantSSO,
+			PolicyVersion: os.Getenv("HEIMDALL_POLICY_VERSION"), Storage: storage, TenantSSOPolicy: settings.policy,
 			Credentials: heimdall.Credentials{
 				ClientSecret: credential("HEIMDALL_CLIENT_SECRET"),
 				OpenFGAKey:   credential("HEIMDALL_OPENFGA_KEY"),

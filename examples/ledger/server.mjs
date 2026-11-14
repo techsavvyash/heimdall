@@ -6,6 +6,7 @@ import { createHeimdall, HeimdallError } from "@heimdall/sdk";
 import { createManagedPostgresStorage, createRecordMaintenance } from "@heimdall/sdk/postgres";
 import { tenantSSOPolicy } from "./tenant-sso.mjs";
 import { directoryCleanupRoute } from "./directory-cleanup.mjs";
+import { providerSettings, providerSettingsRoute } from "./provider-settings.mjs";
 import { createInvoiceReadAudit } from "./read-audit.mjs";
 
 function required(name) {
@@ -32,6 +33,9 @@ const business = new Pool({
   connectionTimeoutMillis: 5000,
 });
 
+const settings = providerSettings(business, config, tenantSSOPolicy());
+const ownerRole = JSON.parse(manifestJSON).ownerRole;
+
 const exportDSN = process.env.HEIMDALL_EXPORT_DATABASE_URL;
 const exportPool = exportDSN && new Pool({ connectionString: exportDSN });
 const maintenance = createRecordMaintenance(pool, config.productId, config.environment);
@@ -42,7 +46,7 @@ const auth = await createHeimdall(
   manifestJSON,
   {
     policyVersion: required("HEIMDALL_POLICY_VERSION"),
-    tenantSSOPolicy: tenantSSOPolicy(),
+    tenantSSOPolicy: settings.policy,
     authorizeWorkspaceCreation: async (actor) => actor.subject === workspaceCreator,
     authorizeWorkspaceLifecycle: async (actor) => actor.subject === workspaceCreator,
     ...(exportPool
@@ -76,7 +80,7 @@ const sessions = await auth.createSessions(
     callbackUrl,
     returnTo: "/workspaces",
     zitadelAPIAudience: required("HEIMDALL_ZITADEL_API_AUDIENCE"),
-    ...(federationPolicies
+    ...(process.env.HEIMDALL_FEDERATION_CREDENTIAL || federationPolicies || settings.enabled
       ? { federation: { credential: async () => required("HEIMDALL_FEDERATION_CREDENTIAL") } }
       : {}),
   },
@@ -101,7 +105,7 @@ const read = (value, status = 200) =>
     headers: { "cache-control": "no-store", "referrer-policy": "no-referrer" },
   });
 
-async function jsonInput(request) {
+async function jsonInput(request, limit = 4096) {
   if (request.headers.get("content-type")?.split(";")[0]?.trim() !== "application/json")
     throw new HeimdallError("invalid_argument");
   const chunks = [];
@@ -109,7 +113,7 @@ async function jsonInput(request) {
   if (!request.body) throw new HeimdallError("invalid_argument");
   for await (const chunk of request.body) {
     size += chunk.byteLength;
-    if (size > 4096) throw new HeimdallError("invalid_argument");
+    if (size > limit) throw new HeimdallError("invalid_argument");
     chunks.push(chunk);
   }
   let input;
@@ -238,13 +242,25 @@ async function route(request) {
   if (request.method === "GET" && url.pathname === "/")
     return read({ login: "/auth/start", workspaces: "/workspaces" });
   if (url.pathname === "/auth/start") return sessions.start(request);
-  if (federationPolicies && url.pathname === "/auth/federation") {
+  if (
+    (process.env.HEIMDALL_FEDERATION_CREDENTIAL || federationPolicies || settings.enabled) &&
+    url.pathname === "/auth/federation"
+  ) {
     const workspace = url.searchParams.getAll("workspace");
     if (workspace.length !== 1) throw new HeimdallError("invalid_argument");
     return sessions.startFederation(request, workspace[0]);
   }
   if (url.pathname === new URL(callbackUrl).pathname) return sessions.callback(request);
   if (url.pathname === "/auth/logout") return sessions.logout(request);
+  const provider = settings.enabled && providerSettingsRoute.exec(url.pathname);
+  if (provider && request.method === "POST") {
+    if (request.headers.get("origin") !== origin) throw new HeimdallError("forbidden");
+    return read(
+      await settings.handle(request, provider[1], provider[2], auth, sessions, ownerRole, () =>
+        jsonInput(request, 352000),
+      ),
+    );
+  }
   if (directoryCleanup && request.method === "POST" && url.pathname === "/directory/cleanup") {
     const result = await directoryCleanup(request, async () => {
       const input = await jsonInput(request);
@@ -404,6 +420,7 @@ createServer(async (incoming, outgoing) => {
           method: incoming.method,
           ...(incoming.method === "POST" &&
           (target.pathname === "/workspaces" ||
+            (settings.enabled && providerSettingsRoute.test(target.pathname)) ||
             (directoryCleanup && target.pathname === "/directory/cleanup") ||
             memberRoute.test(target.pathname) ||
             invitationRoute.test(target.pathname) ||

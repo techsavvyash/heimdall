@@ -5,6 +5,7 @@ import {
   createIdentityCollector,
   deriveIdentityEventCoverage,
 } from "@heimdall/sdk/postgres";
+import { exportPolicyPublications, validatePolicyPublication } from "./provider-settings.mjs";
 import { validateInvoiceRead } from "./read-audit.mjs";
 
 const stop = new AbortController();
@@ -12,7 +13,7 @@ process.once("SIGTERM", () => stop.abort());
 process.once("SIGINT", () => stop.abort());
 const signal = AbortSignal.any([stop.signal, AbortSignal.timeout(45_000)]);
 const env = process.env;
-let pool;
+let pool, business;
 try {
   const { productId, environment, issuer } = JSON.parse(env.HEIMDALL_CONFIG ?? "null");
   if (productId !== "ledger" || !env.DATABASE_URL) throw new HeimdallError("invalid_argument");
@@ -27,7 +28,9 @@ try {
     endpoint: env.HEIMDALL_AUDIT_ENDPOINT,
     token: env.HEIMDALL_AUDIT_TOKEN,
     transportProfile: env.HEIMDALL_AUDIT_TRANSPORT_PROFILE,
-    validateCustom: validateInvoiceRead,
+    validateCustom: (kind, version, attributes) =>
+      validateInvoiceRead(kind, version, attributes) ||
+      validatePolicyPublication(kind, version, attributes),
   });
   let collectionError;
   if (env.HEIMDALL_IDENTITY_MAPPING) {
@@ -56,6 +59,15 @@ try {
         error instanceof HeimdallError ? error : new HeimdallError("invalid_argument");
     }
   }
+  if (env.HEIMDALL_PROVIDER_SETTINGS) {
+    if (!env.LEDGER_DATABASE_URL || sinkId !== "siem") throw new HeimdallError("invalid_argument");
+    business = new Pool({
+      connectionString: env.LEDGER_DATABASE_URL,
+      statement_timeout: 5000,
+      connectionTimeoutMillis: 5000,
+    });
+    await exportPolicyPublications(business, pool, scope, sinkId, tenantId, signal);
+  }
   const result = await delivery.deliver(20, signal);
   const metrics = await delivery.metrics(signal);
   console.log(JSON.stringify({ ...result, metrics }));
@@ -66,5 +78,6 @@ try {
   );
   process.exitCode = 1;
 } finally {
+  await business?.end();
   await pool?.end();
 }

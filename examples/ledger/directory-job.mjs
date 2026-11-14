@@ -6,6 +6,7 @@ import {
   createManagedPostgresStorage,
 } from "@heimdall/sdk/postgres";
 import { directoryMapping } from "./directory-cleanup.mjs";
+import { providerSettings } from "./provider-settings.mjs";
 import { tenantSSOPolicy } from "./tenant-sso.mjs";
 
 function required(name) {
@@ -19,6 +20,7 @@ process.once("SIGTERM", () => stop.abort());
 process.once("SIGINT", () => stop.abort());
 const signal = AbortSignal.any([stop.signal, AbortSignal.timeout(45000)]);
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+let business;
 
 try {
   required("DATABASE_URL");
@@ -49,12 +51,23 @@ try {
   const cleanup = createDirectoryCleanup(pool, scope);
   const pending = await cleanup.pending(null, 10, signal);
   if (pending.length > 0) {
+    business = new Pool({
+      connectionString: required("LEDGER_DATABASE_URL"),
+      statement_timeout: 5000,
+      connectionTimeoutMillis: 5000,
+    });
+    const settings = providerSettings(
+      business,
+      { productId, environment, issuer },
+      tenantSSOPolicy(),
+      false,
+    );
     const runtime = await createHeimdall(
       configJSON,
       required("HEIMDALL_MANIFEST"),
       {
         policyVersion: required("HEIMDALL_POLICY_VERSION"),
-        tenantSSOPolicy: tenantSSOPolicy(),
+        tenantSSOPolicy: settings.policy,
         credentials: {
           clientSecret: async () => required("HEIMDALL_CLIENT_SECRET"),
           openfgaKey: async () => required("HEIMDALL_OPENFGA_KEY"),
@@ -98,5 +111,6 @@ try {
   );
   process.exitCode = 1;
 } finally {
+  await business?.end();
   await pool.end();
 }

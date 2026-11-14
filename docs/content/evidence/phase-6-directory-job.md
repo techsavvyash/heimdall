@@ -14,7 +14,7 @@ flowchart LR
   R --> A[Durable managed operation audit]
 ```
 
-Supply the product's existing database, manifest, deployment, policy version, client secret and OpenFGA credential. Use the same strict SSO settings as the HTTP process. The directory job additionally reads:
+Supply the product's existing database, manifest, deployment, policy version, client secret and OpenFGA credential. Use the same strict SSO settings as the HTTP process. Supply `LEDGER_DATABASE_URL` or `SUPPORT_DATABASE_URL` with read access to the product policy tables described in [[phase-6-provider-setup]]. The directory job additionally reads:
 
 | Environment variable | Product responsibility |
 | --- | --- |
