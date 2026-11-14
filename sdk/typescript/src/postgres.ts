@@ -161,4 +161,5 @@ export function createRecordMaintenance(pool: Pool, productId: string, environme
 export {
   createIdentityCollector,
   type IdentityCollectorOptions,
+  type IdentityCollectorCheckpoint,
 } from "./internal/postgres/identity-collector.js";

@@ -107,6 +107,7 @@ try:
         (ROOT / "contracts/persistence/directory/0006.sql").read_text() +
         (ROOT / "contracts/persistence/directory/0007.sql").read_text() +
         (ROOT / "contracts/persistence/directory/0008.sql").read_text() +
+        (ROOT / "contracts/persistence/directory/0009.sql").read_text() +
         "GRANT SELECT,INSERT,UPDATE ON heimdall_directory.event_checkpoints TO heimdall_public_runtime; "
         "GRANT DELETE ON heimdall.identity_denials TO heimdall_public_runtime; "
         "GRANT SELECT,INSERT,UPDATE ON heimdall_directory.enrollments TO heimdall_public_runtime; "

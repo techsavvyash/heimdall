@@ -33,6 +33,12 @@ type IdentityCollection struct {
 	Recorded   int
 }
 
+type IdentityCollectorCheckpoint struct {
+	NextMicros      int64
+	MappingDigest   string
+	MappingRevision int64
+}
+
 type IdentityCollector struct {
 	db      *sql.DB
 	options IdentityCollectorOptions
@@ -45,6 +51,9 @@ type IdentityCollector struct {
 const maximumEventTime int64 = 253402300799999999
 const identityCheckpointScope = "product_id=$1 AND environment=$2 AND issuer=$3 AND organization_id=$4 AND tenant_id=$5"
 
+const identityCheckpointRead = "SELECT next_micros,mapping_digest,mapping_revision FROM heimdall_directory.event_checkpoints WHERE " + identityCheckpointScope
+
+var collectorDigest = regexp.MustCompile(`^[a-f0-9]{64}$`)
 var collectorID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 var collectorType = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`)
 
@@ -80,6 +89,79 @@ func NewIdentityCollector(db *sql.DB, o IdentityCollectorOptions) (*IdentityColl
 	return &IdentityCollector{mapping: hex.EncodeToString(mapping[:]), db: db, options: o, reader: reader, audit: audit, allowed: allowed}, nil
 }
 
+func (c *IdentityCollector) checkpointScope() []any {
+	o := c.options
+	return []any{o.ProductID, o.Environment, o.Issuer, o.OrganizationID, o.TenantID}
+}
+
+// Checkpoint reads the active mapping revision and next timestamp.
+func (c *IdentityCollector) Checkpoint(ctx context.Context) (*IdentityCollectorCheckpoint, error) {
+	if c == nil || c.reader == nil || ctx == nil {
+		return nil, contract.ErrInvalidArgument
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var current IdentityCollectorCheckpoint
+	err := c.db.QueryRowContext(ctx, identityCheckpointRead, c.checkpointScope()...).Scan(&current.NextMicros, &current.MappingDigest, &current.MappingRevision)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, identityCollectionDBError(ctx)
+	}
+	return &current, nil
+}
+
+// ActivateMapping applies this collector's mapping at the existing checkpoint.
+// Call from trusted operator code after approving the mapping and its boundary.
+func (c *IdentityCollector) ActivateMapping(ctx context.Context, expected IdentityCollectorCheckpoint) (IdentityCollectorCheckpoint, error) {
+	empty := IdentityCollectorCheckpoint{}
+	if c == nil || c.reader == nil || ctx == nil || expected.NextMicros < 1 || expected.NextMicros > maximumEventTime ||
+		expected.MappingRevision < 0 || expected.MappingRevision >= 9007199254740991 || !collectorDigest.MatchString(expected.MappingDigest) {
+		return empty, contract.ErrInvalidArgument
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return empty, identityCollectionDBError(ctx)
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, "SET LOCAL synchronous_commit='on'"); err != nil {
+		return empty, identityCollectionDBError(ctx)
+	}
+	scope := c.checkpointScope()
+	var current IdentityCollectorCheckpoint
+	err = tx.QueryRowContext(ctx, identityCheckpointRead+" FOR UPDATE", scope...).Scan(&current.NextMicros, &current.MappingDigest, &current.MappingRevision)
+	if err == sql.ErrNoRows {
+		return empty, contract.ErrNotFound
+	}
+	if err != nil {
+		return empty, identityCollectionDBError(ctx)
+	}
+	target := expected
+	if target.MappingDigest != c.mapping {
+		target.MappingDigest = c.mapping
+		target.MappingRevision++
+	}
+	if current == target {
+		return current, nil
+	}
+	if current != expected {
+		return empty, contract.ErrConflict
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE heimdall_directory.event_checkpoints SET mapping_digest=$6,mapping_revision=$7 WHERE "+identityCheckpointScope, append(scope, target.MappingDigest, target.MappingRevision)...); err != nil {
+		return empty, identityCollectionDBError(ctx)
+	}
+	if err := contract.CheckCancellation(ctx); err != nil {
+		return empty, err
+	}
+	if err := tx.Commit(); err != nil {
+		return empty, contract.ErrOutcomeUnknown
+	}
+	return target, nil
+}
+
 func (c *IdentityCollector) Collect(ctx context.Context, coverage IdentityEventCoverage) (IdentityCollection, error) {
 	empty := IdentityCollection{}
 	if c == nil || c.reader == nil || ctx == nil || coverage.RetainedFromMicros < 0 ||
@@ -93,19 +175,17 @@ func (c *IdentityCollector) Collect(ctx context.Context, coverage IdentityEventC
 		return empty, contract.ErrUnavailable
 	}
 	o := c.options
-	scope := []any{o.ProductID, o.Environment, o.Issuer, o.OrganizationID, o.TenantID}
-	next := o.StartMicros
-	var mapping string
-	readCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	err := c.db.QueryRowContext(readCtx, "SELECT next_micros,mapping_digest FROM heimdall_directory.event_checkpoints WHERE "+identityCheckpointScope, scope...).Scan(&next, &mapping)
-	if err != nil && err != sql.ErrNoRows {
-		failure := identityCollectionDBError(readCtx)
-		cancel()
-		return empty, failure
+	scope := c.checkpointScope()
+	next, revision := o.StartMicros, int64(0)
+	current, err := c.Checkpoint(ctx)
+	if err != nil {
+		return empty, err
 	}
-	cancel()
-	if err == nil && mapping != c.mapping {
-		return empty, contract.ErrConflict
+	if current != nil {
+		if current.MappingDigest != c.mapping {
+			return empty, contract.ErrConflict
+		}
+		next, revision = current.NextMicros, current.MappingRevision
 	}
 	if next <= coverage.RetainedFromMicros {
 		return empty, contract.ErrUnavailable
@@ -173,7 +253,7 @@ func (c *IdentityCollector) Collect(ctx context.Context, coverage IdentityEventC
 		if err != nil {
 			return identityCollectionDBError(ctx)
 		}
-		result, err := tx.ExecContext(ctx, "UPDATE heimdall_directory.event_checkpoints SET next_micros=$7 WHERE "+identityCheckpointScope+" AND next_micros=$6 AND mapping_digest=$8", append(scope, next, upper, c.mapping)...)
+		result, err := tx.ExecContext(ctx, "UPDATE heimdall_directory.event_checkpoints SET next_micros=$7 WHERE "+identityCheckpointScope+" AND next_micros=$6 AND mapping_digest=$8 AND mapping_revision=$9", append(scope, next, upper, c.mapping, revision)...)
 		if err != nil {
 			return identityCollectionDBError(ctx)
 		}

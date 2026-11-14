@@ -16,11 +16,14 @@ test.skipIf(!process.env.HEIMDALL_TEST_AUDIT_DELIVERY_DB)(
     const pool = new Pool({ connectionString: process.env.HEIMDALL_TEST_AUDIT_DELIVERY_DB });
     let outage = true;
     let reads = 0;
-    const server = createServer((_request, response) => {
+    let beforeReply: (() => Promise<void>) | undefined;
+    const server = createServer(async (_request, response) => {
       reads++;
+      const prepare = beforeReply;
+      await prepare?.();
       response
         .writeHead(outage ? 503 : 200, { "content-type": "application/json" })
-        .end(JSON.stringify({ events: fixture.events }));
+        .end(JSON.stringify({ events: prepare ? [] : fixture.events }));
     });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     try {
@@ -87,12 +90,47 @@ test.skipIf(!process.env.HEIMDALL_TEST_AUDIT_DELIVERY_DB)(
         recorded: 0,
       });
       expect(reads).toBe(3);
+      const changed = createIdentityCollector(pool, {
+        ...options,
+        aggregates: [{ type: "user", id: "unassigned" }],
+      });
+      await expect(changed.collect(coverage, signal)).rejects.toMatchObject({ code: "conflict" });
+      const before = (await collector.checkpoint(signal))!;
+      expect(before).toMatchObject({
+        nextMicros: coverage.visibleBeforeMicros,
+        mappingRevision: 0,
+      });
       await expect(
-        createIdentityCollector(pool, {
-          ...options,
-          aggregates: [{ type: "user", id: "unassigned" }],
-        }).collect(coverage, signal),
+        changed.activateMapping({ ...before, nextMicros: before.nextMicros - 1n }, signal),
       ).rejects.toMatchObject({ code: "conflict" });
+      const after = await changed.activateMapping(before, signal);
+      expect(after).toMatchObject({ nextMicros: before.nextMicros, mappingRevision: 1 });
+      expect(after.mappingDigest).not.toBe(before.mappingDigest);
+      await expect(changed.activateMapping(before, signal)).resolves.toEqual(after);
+      await expect(collector.collect(coverage, signal)).rejects.toMatchObject({ code: "conflict" });
+      await expect(changed.collect(coverage, signal)).resolves.toEqual({
+        nextMicros: before.nextMicros,
+        recorded: 0,
+      });
+      const reverted = await collector.activateMapping(after, signal);
+      expect(reverted).toEqual({ ...before, mappingRevision: 2 });
+      await expect(changed.activateMapping(before, signal)).rejects.toMatchObject({
+        code: "conflict",
+      });
+      beforeReply = async () => {
+        const temporary = await changed.activateMapping(reverted, signal);
+        await collector.activateMapping(temporary, signal);
+      };
+      await expect(
+        collector.collect(
+          {
+            ...coverage,
+            visibleBeforeMicros: before.nextMicros + 1n,
+          },
+          signal,
+        ),
+      ).rejects.toMatchObject({ code: "conflict" });
+      expect(await collector.checkpoint(signal)).toEqual({ ...before, mappingRevision: 4 });
       const stored = await pool.query(
         "SELECT event FROM heimdall.audit_events WHERE environment='collector-ts'",
       );

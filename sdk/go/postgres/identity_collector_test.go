@@ -42,10 +42,20 @@ func TestIdentityCollectorPostgres(t *testing.T) {
 	var outage atomic.Bool
 	outage.Store(true)
 	var reads atomic.Int32
+	var beforeReply atomic.Pointer[func() error]
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reads.Add(1)
 		if outage.Load() {
 			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		if prepare := beforeReply.Load(); prepare != nil {
+			if err := (*prepare)(); err != nil {
+				t.Error("mapping switch during scan failed", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			_, _ = w.Write([]byte("{}"))
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]json.RawMessage{"events": fixture.Events})
@@ -107,6 +117,53 @@ func TestIdentityCollectorPostgres(t *testing.T) {
 	}
 	if _, err := changed.Collect(ctx, coverage); !errors.Is(err, contract.ErrConflict) {
 		t.Fatal("changed routing resumed checkpoint", err)
+	}
+	before, err := collector.Checkpoint(ctx)
+	if err != nil || before == nil || before.NextMicros != fixture.UntilMicros || before.MappingRevision != 0 {
+		t.Fatal("unexpected initial checkpoint", before, err)
+	}
+	stale := *before
+	stale.NextMicros--
+	if _, err := changed.ActivateMapping(ctx, stale); !errors.Is(err, contract.ErrConflict) {
+		t.Fatal("stale boundary accepted", err)
+	}
+	after, err := changed.ActivateMapping(ctx, *before)
+	if err != nil || after.NextMicros != before.NextMicros || after.MappingRevision != 1 || after.MappingDigest == before.MappingDigest {
+		t.Fatal("activation did not preserve the boundary", after, err)
+	}
+	if retry, err := changed.ActivateMapping(ctx, *before); err != nil || retry != after {
+		t.Fatal("activation replay failed", retry, err)
+	}
+	if _, err := collector.Collect(ctx, coverage); !errors.Is(err, contract.ErrConflict) {
+		t.Fatal("old mapping still active", err)
+	}
+	if result, err := changed.Collect(ctx, coverage); err != nil || result != (IdentityCollection{fixture.UntilMicros, 0}) {
+		t.Fatal("new mapping rewound the checkpoint", result, err)
+	}
+	reverted, err := collector.ActivateMapping(ctx, after)
+	if err != nil || reverted.MappingRevision != 2 || reverted.MappingDigest != before.MappingDigest || reverted.NextMicros != before.NextMicros {
+		t.Fatal("mapping rollback did not preserve the boundary", reverted, err)
+	}
+	if _, err := changed.ActivateMapping(ctx, *before); !errors.Is(err, contract.ErrConflict) {
+		t.Fatal("stale revision accepted after reverting mapping", err)
+	}
+	switchTwice := func() error {
+		temporary, err := changed.ActivateMapping(ctx, reverted)
+		if err != nil {
+			return err
+		}
+		_, err = collector.ActivateMapping(ctx, temporary)
+		return err
+	}
+	beforeReply.Store(&switchTwice)
+	later := coverage
+	later.VisibleBeforeMicros++
+	if _, err := collector.Collect(ctx, later); !errors.Is(err, contract.ErrConflict) {
+		t.Fatal("in-flight scan committed after mapping changed twice", err)
+	}
+	if current, err := collector.Checkpoint(ctx); err != nil || current == nil ||
+		*current != (IdentityCollectorCheckpoint{before.NextMicros, before.MappingDigest, 4}) {
+		t.Fatal("stale scan advanced checkpoint", current, err)
 	}
 	var payload string
 	if err := db.QueryRowContext(ctx, "SELECT event->>'payload' FROM heimdall.audit_events WHERE environment='collector-go'").Scan(&payload); err != nil {

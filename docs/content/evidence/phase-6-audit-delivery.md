@@ -116,13 +116,13 @@ sequenceDiagram
   S-->>P: Return committed next timestamp
 ```
 
-The checkpoint stores the next inclusive microsecond, so the next scan includes records exactly at the previous upper bound. A concurrent worker must match the previous checkpoint before it can write. Restart reads the committed checkpoint after a lost commit response. Provider failures, retention gaps, a changed aggregate mapping and failed outbox writes leave the checkpoint available for recovery. The mapping digest prevents silently reusing an advanced checkpoint after editing the allowlist. Mapping changes require an explicit migration or backfill.
+The checkpoint stores the next inclusive microsecond, so the next scan includes records exactly at the previous upper bound. A concurrent worker must match the previous checkpoint before it can write. Restart reads the committed checkpoint after a lost commit response. Provider failures, retention gaps, a changed aggregate mapping and failed outbox writes leave the checkpoint available for recovery. The mapping digest prevents silently reusing an advanced checkpoint after editing the allowlist. Use the explicit activation procedure below to change the mapping for future windows.
 
 The SDK records only sanitized event metadata for assigned aggregate IDs. An organization shared by two products needs explicit mappings for both. An unmapped aggregate is omitted. Provider payloads and editor fields are discarded. The audit request ID identifies the imported event for correlation and carries no claim that an unrelated SDK request created it.
 
 PostgreSQL run `heimdall-records-1edae3aaae274a6aac06d4052f88ab92` used the same provider fixture in both SDKs. It verified that a retention gap makes no upstream call, an upstream outage leaves the checkpoint unset, an injected delivery insert failure rolls back the checkpoint and event, and restart after commit does not re-read the completed window. Only the mapped event received a delivery row and the exact uint64 sequence survived storage.
 
-Historical collection takes trusted coverage bounds as an input. Establishing automatic live coverage, qualifying mapping changes and discovering new aggregates safely remain Phase 6 work.
+Historical collection takes trusted coverage bounds as an input. Automatic live coverage and aggregate discovery remain Phase 6 work.
 
 ### Collector recovery and delivery after a lost commit response
 
@@ -195,7 +195,7 @@ Run `tests/integration/postgres-records.py` with the protected Railway verificat
 
 Run `c8581e63-b007-4920-9d3d-cda5dd272320` passed for both SDKs. Elasticsearch retained one document per product across restart, including the exact provider sequence and the mapped tenant. PostgreSQL recorded three delivery attempts and a final acknowledgement for each event.
 
-The probe supplies a known historical timestamp from the live provider event. Automatic live coverage, mapping changes and end-to-end SCIM acceptance remain open.
+The probe supplies a known historical timestamp from the live provider event. Automatic live coverage and end-to-end SCIM acceptance remain open.
 
 ## Tenant-scoped delivery and replay
 
@@ -214,3 +214,29 @@ flowchart LR
 Delivery filters by immutable retained tenant identity before applying the page limit. It also checks the decoded envelope before transmission. Backlog counters and requeue use the same tenant scope. Capacity counters still describe the whole database and belong in trusted operator monitoring. Omitting the tenant preserves the existing product-wide export. Authorization of the operator and the initial sink configuration belongs to trusted product code.
 
 PostgreSQL run `heimdall-records-2b841f5abe0f4069818f07677d35b988` verified in both SDKs that a tenant worker can requeue and deliver its own event while leaving another tenant’s quarantined event and the product-level event untouched. Live run `4323f456-2a05-442a-976e-6497535a9a5d` verified that the tenant-bound Elasticsearch receipt handler rejected a same-product, wrong-tenant batch and that the correct events survived a sink outage and restart.
+
+## Changing an aggregate mapping
+
+Apply directory migration `0009.sql` before upgrading collectors and drain older SDK workers during the upgrade. The migration gives existing checkpoints mapping revision zero. Upgraded workers include that revision when committing each page.
+
+The operator reads `checkpoint(signal)` or `Checkpoint(ctx)`, reviews the next inclusive provider timestamp, and constructs a collector with the approved aggregate list for the same issuer, organization, product, environment and tenant. Call `activateMapping(expected, signal)` or `ActivateMapping(ctx, expected)` on that collector. The operation compares the timestamp, mapping digest and revision in a transaction. The new list takes effect at that timestamp. A worker using the previous list must reload configuration. If a concurrent collector already advanced the timestamp, activation conflicts and the operator must review the new boundary.
+
+```mermaid
+sequenceDiagram
+  participant O as Authorized product operator
+  participant C as Collector with new aggregate list
+  participant D as PostgreSQL checkpoint
+  O->>C: Read checkpoint and approve the effective timestamp
+  O->>C: Activate with expected timestamp and revision
+  C->>D: Lock and compare the checkpoint
+  alt Checkpoint still matches
+    C->>D: Update mapping revision at the same timestamp
+    D-->>C: Confirm committed mapping
+  else Checkpoint moved
+    D-->>C: Return conflict
+  end
+```
+
+A repeated activation can confirm the same transition while its checkpoint remains at the approved boundary. After an uncertain response, read the current checkpoint before issuing a new activation. Returning to an earlier list increments the revision again, which fences in-flight pages from the earlier revision. Existing events and their outbox rows retain their original routing. Historical backfill and changing sink destinations require separate operator procedures.
+
+PostgreSQL run `heimdall-records-363e5c173d584c208821c9ac4d05074e` verified the migration and both SDKs. The tests rejected a stale timestamp, retried an activation at the same boundary, and rejected a stale revision after a revert. They also changed the mapping twice during an in-flight provider read. The old page could not advance the checkpoint even though the mapping digest again matched, and the original event and delivery row remained intact.

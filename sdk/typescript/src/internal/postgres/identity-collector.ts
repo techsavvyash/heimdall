@@ -8,7 +8,7 @@ import { providerId } from "../../provisioning/provider-request.js";
 import { checkCancellation, HeimdallError } from "../errors.js";
 import { PostgresAudit } from "./audit.js";
 import { auditEventValidator } from "./custom-audit.js";
-import { query } from "./query.js";
+import { query, transaction } from "./query.js";
 
 export type IdentityCollectorOptions = IdentityEventReaderOptions & {
   productId: string;
@@ -18,6 +18,12 @@ export type IdentityCollectorOptions = IdentityEventReaderOptions & {
   startMicros: bigint;
   // Exact aggregate IDs explicitly assigned to this tenant by the operator.
   aggregates: readonly { type: string; id: string }[];
+};
+
+export type IdentityCollectorCheckpoint = {
+  nextMicros: bigint;
+  mappingDigest: string;
+  mappingRevision: number;
 };
 
 const maximumTime = 253402300799999999n;
@@ -67,7 +73,68 @@ export function createIdentityCollector(pool: Pool, options: IdentityCollectorOp
     auditEventValidator(),
   );
   const scope = [productId, environment, issuer, organizationId, tenantId];
+  const checkpointSQL =
+    "SELECT next_micros::text AS next,mapping_digest,mapping_revision::text AS revision FROM heimdall_directory.event_checkpoints WHERE " +
+    predicate;
+  type Row = { next: string; mapping_digest: string; revision: string };
+  const decode = (row: Row): IdentityCollectorCheckpoint => ({
+    nextMicros: BigInt(row.next),
+    mappingDigest: row.mapping_digest,
+    mappingRevision: Number(row.revision),
+  });
+  async function checkpoint(signal: AbortSignal) {
+    if (!(signal instanceof AbortSignal)) throw new HeimdallError("invalid_argument");
+    const [row] = await query<Row>(pool, checkpointSQL, scope, false, signal);
+    return row ? decode(row) : null;
+  }
   return Object.freeze({
+    checkpoint,
+    /** Activate this mapping at the existing checkpoint. Call from trusted operator code. */
+    async activateMapping(expected: IdentityCollectorCheckpoint, signal: AbortSignal) {
+      if (
+        !(signal instanceof AbortSignal) ||
+        typeof expected?.nextMicros !== "bigint" ||
+        expected.nextMicros < 1n ||
+        expected.nextMicros > maximumTime ||
+        !Number.isSafeInteger(expected.mappingRevision) ||
+        expected.mappingRevision < 0 ||
+        expected.mappingRevision >= Number.MAX_SAFE_INTEGER ||
+        typeof expected.mappingDigest !== "string" ||
+        !/^[a-f0-9]{64}(?![\s\S])/.test(expected.mappingDigest)
+      )
+        throw new HeimdallError("invalid_argument");
+      const { nextMicros, mappingDigest, mappingRevision } = expected;
+      return transaction(
+        pool,
+        async (client) => {
+          const {
+            rows: [row],
+          } = await client.query<Row>(checkpointSQL + " FOR UPDATE", scope);
+          if (!row) throw new HeimdallError("not_found");
+          const current = decode(row);
+          const targetRevision = mappingRevision + Number(mapping !== mappingDigest);
+          if (
+            current.nextMicros === nextMicros &&
+            current.mappingDigest === mapping &&
+            current.mappingRevision === targetRevision
+          )
+            return current;
+          if (
+            current.nextMicros !== nextMicros ||
+            current.mappingDigest !== mappingDigest ||
+            current.mappingRevision !== mappingRevision
+          )
+            throw new HeimdallError("conflict");
+          await client.query(
+            "UPDATE heimdall_directory.event_checkpoints SET mapping_digest=$6,mapping_revision=$7 WHERE " +
+              predicate,
+            [...scope, mapping, targetRevision],
+          );
+          return { nextMicros, mappingDigest: mapping, mappingRevision: targetRevision };
+        },
+        signal,
+      );
+    },
     async collect(
       coverage: { retainedFromMicros: bigint; visibleBeforeMicros: bigint; validUntilMs: number },
       signal: AbortSignal,
@@ -86,16 +153,10 @@ export function createIdentityCollector(pool: Pool, options: IdentityCollectorOp
       checkCancellation(signal);
       const { retainedFromMicros, visibleBeforeMicros, validUntilMs } = coverage;
       if (validUntilMs <= Date.now()) throw new HeimdallError("unavailable");
-      const rows = await query<{ next: string; mapping_digest: string }>(
-        pool,
-        "SELECT next_micros::text AS next,mapping_digest FROM heimdall_directory.event_checkpoints WHERE " +
-          predicate,
-        scope,
-        false,
-        signal,
-      );
-      if (rows[0] && rows[0].mapping_digest !== mapping) throw new HeimdallError("conflict");
-      const next = rows[0] ? BigInt(rows[0].next) : startMicros;
+      const current = await checkpoint(signal);
+      if (current && current.mappingDigest !== mapping) throw new HeimdallError("conflict");
+      const next = current?.nextMicros ?? startMicros;
+      const revision = current?.mappingRevision ?? 0;
       if (next <= retainedFromMicros) throw new HeimdallError("unavailable");
       if (next >= visibleBeforeMicros) return { nextMicros: next, recorded: 0 };
       let upper = next + 60000000n < visibleBeforeMicros ? next + 60000000n : visibleBeforeMicros;
@@ -163,8 +224,8 @@ export function createIdentityCollector(pool: Pool, options: IdentityCollectorOp
           const changed = await client.query(
             "UPDATE heimdall_directory.event_checkpoints SET next_micros=$7 WHERE " +
               predicate +
-              " AND next_micros=$6 AND mapping_digest=$8",
-            [...scope, next.toString(), upper.toString(), mapping],
+              " AND next_micros=$6 AND mapping_digest=$8 AND mapping_revision=$9",
+            [...scope, next.toString(), upper.toString(), mapping, revision],
           );
           if (changed.rowCount !== 1) throw new HeimdallError("conflict");
         },
