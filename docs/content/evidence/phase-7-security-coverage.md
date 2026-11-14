@@ -6,7 +6,7 @@ The GitHub Actions `workspace` job runs deterministic TypeScript and Go tests, p
 
 | First-release dry run | Evidence and remaining checks |
 | --- | --- |
-| Support sign-in after Ledger | The [[phase-2-oidc]] probe asserts each token has its intended project audience and excludes the other audience. [[phase-4-reference-backends]] verifies independent product sessions and scoped read decisions. The complete cross-product login and explicit Support membership grant still needs a single acceptance trace. |
+| Support sign-in after Ledger | The [[phase-2-oidc]] probe asserts each token has its intended project audience and excludes the other audience. [[phase-4-reference-backends]] verifies independent product sessions and scoped read decisions. [[phase-7-tenant-matrix]] records the same user signing into Support after receiving Ledger access and verifies denial before an explicit Support grant. |
 | Acme route with a Globex resource ID | [[phase-4-reference-backends#phase-7-verification]] records scoped HTTP 404 in both business mutation routes. |
 | Confirmed membership removal with stale role tuples | [[phase-4-reference-backends]] verifies denial with a stale owner tuple and no membership on Railway. [[phase-5-membership-administration]] verifies removal and resulting checks on pinned services. |
 | Disabled identity and stale proof with provider outage | [[phase-3-identity-freshness]] verifies the shared freshness and provider failure behavior. [[phase-6-scim-deactivation]] verifies that a real directory disable blocks both product sessions. |

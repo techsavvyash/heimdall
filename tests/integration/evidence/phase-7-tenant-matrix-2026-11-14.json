@@ -1,0 +1,47 @@
+{
+  "isolated": {
+    "runId": "heimdall-records-3b19e97f77b741ebbd68afbfd1ec20ff",
+    "artifacts": {
+      "archive": "heimdall-sdk-0.0.0.tgz",
+      "goModuleVersion": "v0.0.0-20261114050348-ca47f14b95e1"
+    },
+    "products": [
+      {
+        "product": "ledger",
+        "namedTenants": {
+          "acme": {
+            "role": "approver",
+            "scopedRead": 200,
+            "resourceId": "acme-invoice"
+          },
+          "globex": {
+            "role": "viewer",
+            "scopedRead": 200,
+            "resourceId": "globex-invoice"
+          }
+        },
+        "beforeExplicitGrant": 403,
+        "acmeWrite": 204,
+        "globexWrite": 403
+      },
+      {
+        "product": "support",
+        "namedTenants": {
+          "acme": {
+            "role": "agent",
+            "scopedRead": 200,
+            "resourceId": "acme-ticket"
+          },
+          "globex": {
+            "role": "reader",
+            "scopedRead": 200,
+            "resourceId": "globex-ticket"
+          }
+        },
+        "beforeExplicitGrant": 403,
+        "acmeWrite": 204,
+        "globexWrite": 403
+      }
+    ]
+  }
+}
