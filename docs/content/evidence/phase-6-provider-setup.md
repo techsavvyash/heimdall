@@ -114,3 +114,17 @@ flowchart LR
   D --> J[Product audit job copies event to retained audit]
   J --> S[Tenant SIEM destination]
 ```
+
+
+### Deployed settings verification
+
+Run `e88b93d6-56c2-4cb0-940f-70b4db269be3` passed against the pinned Railway stack with SAML in Ledger deployment `034e2923-f462-49d4-b7f0-d7f8361da0de` and OIDC in Support deployment `aa4bf0fe-3b28-49e0-9928-db646b153280`. The probe used an organization-scoped `ORG_SETTINGS_MANAGER` credential and a separate federation credential. An owner from the other workspace, an unmapped route and a caller-supplied organization failed before a provider appeared. A database trigger then rejected storage of the created provider ID. Both apps retained the dispatch claim, rejected a duplicate create and recovered the sole new provider by exact ID. Readback using the prior provider ID failed.
+
+Activation before the test, a test using the existing production session, publication by the other workspace owner and an incorrect expected version were rejected. A candidate login with the configured test account had no workspace access. After the exact test and activation, the old cookie lost access, an in-flight callback under the old policy failed and the verification workspace stopped accepting sign-ins. The new production login restored only the intended workspace's access. The probe matched each activation response to a single durable, tenant-scoped policy publication and audit outbox row.
+
+| Product | Publication audit event ID |
+| --- | --- |
+| Ledger | `237a233c-f57b-47f3-8c0b-1940c459749a` |
+| Support | `125b911977d2a1fbff22849574ca07da` |
+
+Reproduce with `HEIMDALL_PROBE_PROVIDER_SETTINGS=1` and the Railway configuration used by `tests/integration/federation-switch.mjs`. The probe uses disposable organizations, provider registrations, OpenFGA stores and product policy rows. It verifies the product outbox before cleanup. Export of the publication event through the scheduled job is a separate final-gate check. [Pinned ZITADEL provider listing API](https://zitadel.com/docs/reference/api/management/zitadel.management.v1.ManagementService.ListProviders)
