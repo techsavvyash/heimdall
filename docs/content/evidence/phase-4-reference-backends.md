@@ -73,3 +73,15 @@ Readback from Railway PostgreSQL matched requests and outcomes by decision ID fo
 `pnpm run check` passed, including all 222 generated Mermaid diagrams at the source revision. Both [push](https://github.com/techsavvyash/heimdall/actions/runs/43457352974) and [pull request](https://github.com/techsavvyash/heimdall/actions/runs/43457364347) workspace checks passed.
 
 The probe covered the product HTTP boundaries using the ZITADEL Login API. Refresh/logout races and the distinction between a denial and a dependency failure are covered by the [[phase-4-session-refresh|pinned PostgreSQL session tests]] and [[phase-4-tenant-permission-checks|public permission tests]]. The synthetic provider organization and OpenFGA stores support the deployed configuration. A full repeat provisions a new synthetic user and new product configuration. The [[phase-4-custom-session-store|custom session-store checkpoint]] records the later repeat against the updated SDKs.
+
+
+## Business mutations
+
+Apply `examples/ledger/approval.sql` after the Ledger schema and `examples/support/assignment.sql` after the Support schema. Grant the business connections update access to `approved_at` and `approved_by` on `ledger.invoices`, or `assigned_at` and `assigned_to` on `support.tickets`, alongside their existing read permissions.
+
+| Route | Permission | Product write |
+| --- | --- | --- |
+| `POST /workspaces/{workspace}/invoices/{invoice}/approve` | `invoice.approve` | Record the first approval and its actor |
+| `POST /workspaces/{workspace}/tickets/{ticket}/assign-to-me` | `ticket.assign` | Assign the ticket to the authenticated subject if unassigned |
+
+Both routes require the product origin and the browser session cookie. The SDK durably records the authorization decision before the product changes the row. The product keys every write by workspace and resource, so a resource ID from another workspace returns HTTP 404 after authorization. Repeat approval or assignment by the same actor returns HTTP 204. Support returns HTTP 409 when a ticket belongs to another assignee. The persisted business fields record the result of the update.

@@ -769,6 +769,19 @@ export async function verifyReferenceProduct(input, authorize) {
       assert.equal(foreignRoles.status, 200);
       assert.deepEqual(await foreignRoles.json(), { roles: [] });
     }
+    const businessWrite =
+      !scim &&
+      process.env.HEIMDALL_PROBE_PRODUCT_SIEM !== "1" &&
+      process.env.HEIMDALL_PROBE_BUSINESS_WRITE === "1";
+    const action = ledger ? "approve" : "assign-to-me";
+    const businessId = ledger ? "invoice" : "ticket";
+    const businessTable = ledger ? "ledger.invoices" : "support.tickets";
+    const resultColumn = ledger ? "approved_by" : "assigned_to";
+    const writeResource = (workspace, id, session = cookie, source = origin) =>
+      request(`/workspaces/${workspace}/${collection}/${id}/${action}`, {
+        method: "POST",
+        headers: { cookie: session, origin: source },
+      });
     const created = await request("/workspaces", mutation);
     assert.equal(created.status, 200, `Reference ${schema} create returned ${created.status}`);
     const workspace = await created.json();
@@ -841,6 +854,29 @@ export async function verifyReferenceProduct(input, authorize) {
       await memberRequest("add", recipient, runId, [initialRole], recipientCookie),
       403,
     );
+    if (businessWrite) {
+      assert.match(recipient, /^[0-9]+$/);
+      await expectDenied(await writeResource("acme", `globex-${businessId}`), 404);
+      assert.equal(
+        await executeSQL(`SELECT count(*) FROM ${businessTable}
+        WHERE workspace_id='globex' AND ${businessId}_id='globex-${businessId}' AND ${resultColumn} IS NULL;`),
+        "1",
+      );
+      await expectDenied(
+        await writeResource(
+          workspace.workspaceId,
+          "release-resource",
+          cookie,
+          "https://unrelated.example",
+        ),
+        403,
+      );
+      await executeSQL(
+        ledger
+          ? `INSERT INTO ledger.invoices(workspace_id,invoice_id,total_cents) VALUES ('${workspace.workspaceId}','release-resource',125);`
+          : `INSERT INTO support.tickets(workspace_id,ticket_id,summary) VALUES ('${workspace.workspaceId}','release-resource','Release resource');`,
+      );
+    }
     const added = await add();
     assert.equal(added.status, 200, `Reference ${schema} member add returned ${added.status}`);
     const grant = await added.json();
@@ -865,6 +901,12 @@ export async function verifyReferenceProduct(input, authorize) {
     assert.deepEqual(await (await request(rolesPath, { headers: recipientHeaders })).json(), {
       roles: [initialRole],
     });
+    if (businessWrite) {
+      await expectDenied(
+        await writeResource(workspace.workspaceId, "release-resource", recipientCookie),
+        403,
+      );
+    }
     if (scim) {
       assert(!remote, "SCIM browser probe requires a disposable local product database");
       await expectDenied(
@@ -1104,6 +1146,57 @@ export async function verifyReferenceProduct(input, authorize) {
     const changed = await memberRequest("assign-roles", recipient, runId, [replacementRole]);
     assert.equal(changed.status, 200);
     const assignment = await changed.json();
+    if (businessWrite) {
+      const writePermission = ledger ? "invoice.approve" : "ticket.assign";
+      await executeSQL(`CREATE FUNCTION ${schema}.probe_reject_business_audit() RETURNS trigger
+        LANGUAGE plpgsql AS $body$ BEGIN
+          IF NEW.product_id='${schema}' AND NEW.environment='verification' THEN
+            IF convert_from(decode(translate(NEW.event->>'payload','-_','+/') ||
+                 repeat('=',(4-length(NEW.event->>'payload')%4)%4),'base64'),'UTF8')::jsonb
+                 @> '{"tenantId":"${workspace.workspaceId}","permission":"${writePermission}"}'::jsonb
+            THEN RAISE EXCEPTION 'Injected decision audit failure'; END IF;
+          END IF;
+          RETURN NEW;
+        END $body$;
+        CREATE TRIGGER probe_reject_business_audit_${schema} BEFORE INSERT ON heimdall.audit_events
+          FOR EACH ROW EXECUTE FUNCTION ${schema}.probe_reject_business_audit();`);
+      try {
+        const denied = await writeResource(
+          workspace.workspaceId,
+          "release-resource",
+          recipientCookie,
+        );
+        assert.equal(denied.status, 503);
+        assert.equal((await denied.json()).code, "audit_unavailable");
+        assert.equal(
+          await executeSQL(`SELECT count(*) FROM ${businessTable}
+          WHERE workspace_id='${workspace.workspaceId}' AND ${businessId}_id='release-resource'
+          AND ${resultColumn} IS NULL;`),
+          "1",
+        );
+      } finally {
+        await executeSQL(`DROP TRIGGER probe_reject_business_audit_${schema} ON heimdall.audit_events;
+          DROP FUNCTION ${schema}.probe_reject_business_audit();`);
+      }
+      await expectDenied(
+        await writeResource(workspace.workspaceId, "release-resource", recipientCookie),
+        204,
+      );
+      await expectDenied(
+        await writeResource(workspace.workspaceId, "release-resource", recipientCookie),
+        204,
+      );
+      if (!ledger)
+        await expectDenied(
+          await writeResource(workspace.workspaceId, "release-resource", cookie),
+          409,
+        );
+      assert.equal(
+        await executeSQL(`SELECT ${resultColumn} FROM ${businessTable}
+        WHERE workspace_id='${workspace.workspaceId}' AND ${businessId}_id='release-resource';`),
+        recipient,
+      );
+    }
     assert.deepEqual(await (await request(rolesPath, { headers: recipientHeaders })).json(), {
       roles: [replacementRole],
     });
@@ -1175,6 +1268,12 @@ export async function verifyReferenceProduct(input, authorize) {
     await blocked(true);
     await expectDenied(await setLifecycle("suspend", cookie), 204);
     await expectDenied(await setLifecycle("resume", cookie), 409);
+    if (businessWrite) {
+      await expectDenied(
+        await writeResource(workspace.workspaceId, "release-resource", recipientCookie),
+        403,
+      );
+    }
     await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 403);
     assert.deepEqual(await (await request(rolesPath, { headers: recipientHeaders })).json(), {
       roles: [],
@@ -1327,6 +1426,12 @@ export async function verifyReferenceProduct(input, authorize) {
       UPDATE heimdall_managed.workspaces SET lifecycle='pending',mutation_blocked=true
         WHERE product_id='${schema}' AND environment='verification' AND workspace_id='${workspace.workspaceId}';
       COMMIT;`);
+    if (businessWrite) {
+      await expectDenied(
+        await writeResource(workspace.workspaceId, "release-resource", recipientCookie),
+        403,
+      );
+    }
     const swept = await reconcile(cookie);
     assert.equal(swept.status, 200);
     const summary = await swept.json();
@@ -1418,6 +1523,20 @@ export async function verifyReferenceProduct(input, authorize) {
       discovery: "Acme",
       roles: { acme: [manifest.ownerRole], globex: [] },
       scopedRead: 200,
+      ...(businessWrite
+        ? {
+            businessWrite: {
+              action,
+              insufficientRole: 403,
+              crossTenantId: 404,
+              authorized: 204,
+              repeat: 204,
+              inactiveWorkspace: 403,
+              pendingWorkspace: 403,
+              auditUnavailable: 503,
+            },
+          }
+        : {}),
       strictSSO: {
         workspace: "globex",
         membership: "allowed by OpenFGA",

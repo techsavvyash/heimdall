@@ -371,6 +371,25 @@ async function route(request) {
     }
     return read(result, result.status === "pending" ? 202 : 200);
   }
+  const approval =
+    /^\/workspaces\/([A-Za-z0-9_-]{1,128})\/invoices\/([A-Za-z0-9_-]{1,128})\/approve$/.exec(
+      url.pathname,
+    );
+  if (request.method === "POST" && approval) {
+    if (request.headers.get("origin") !== origin) throw new HeimdallError("forbidden");
+    const [, workspace, invoice] = approval;
+    const actor = await sessions.authenticate(request);
+    await auth.tenant(workspace).require(actor, "invoice.approve", { signal: request.signal });
+    request.signal.throwIfAborted();
+    const result = await business.query(
+      `UPDATE ledger.invoices
+       SET approved_at=coalesce(approved_at,clock_timestamp()), approved_by=coalesce(approved_by,$3)
+       WHERE workspace_id=$1 AND invoice_id=$2`,
+      [workspace, invoice, actor.subject],
+    );
+    if (!result.rowCount) throw new HeimdallError("not_found");
+    return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
+  }
   if (request.method !== "GET") return read({ code: "not_found" }, 404);
   const scoped = /^\/workspaces\/([A-Za-z0-9_-]{1,128})\/(invoices|roles)$/.exec(url.pathname);
   if (!scoped && url.pathname !== "/workspaces") return read({ code: "not_found" }, 404);

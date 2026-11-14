@@ -192,6 +192,12 @@ try:
         schemas = "\n".join((ROOT / "examples" / name / file).read_text()
                             for name in ("ledger", "support") for file in ("schema.sql", "invitations.sql"))
         schemas += "\nGRANT USAGE ON SCHEMA ledger,support TO heimdall_public_runtime; GRANT SELECT ON ledger.invoices,support.tickets TO heimdall_public_runtime; GRANT SELECT,INSERT,UPDATE ON ledger.invitations,support.invitations TO heimdall_public_runtime;"
+        for product, migration, table, fields in (
+            ("ledger", "approval.sql", "invoices", "approved_at,approved_by"),
+            ("support", "assignment.sql", "tickets", "assigned_at,assigned_to"),
+        ):
+            schemas += "\n" + (ROOT / "examples" / product / migration).read_text()
+            schemas += f"\nGRANT UPDATE ({fields}) ON {product}.{table} TO heimdall_public_runtime;"
         for product in ("ledger", "support"):
             schemas += "\n" + (ROOT / "examples" / "enterprise-provider.sql").read_text().replace(':"product_schema"', product)
             schemas += f"\nGRANT SELECT,INSERT,UPDATE ON {product}.sso_candidates,{product}.sso_publications TO heimdall_public_runtime;"

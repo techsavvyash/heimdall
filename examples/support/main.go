@@ -549,6 +549,40 @@ func main() {
 		writeJSON(w, 200, map[string]any{"tickets": items})
 		return nil
 	})
+	mount("POST /workspaces/{workspace}/tickets/{ticket}/assign-to-me", func(w http.ResponseWriter, r *http.Request) error {
+		workspace, ticket := r.PathValue("workspace"), r.PathValue("ticket")
+		if !workspaceID.MatchString(workspace) || !workspaceID.MatchString(ticket) {
+			return heimdall.ErrInvalidArgument
+		}
+		if r.Header.Get("Origin") != origin {
+			return heimdall.ErrForbidden
+		}
+		ctx := r.Context()
+		actor, err := sessions.Authenticate(r)
+		if err != nil {
+			return err
+		}
+		if err := auth.Tenant(workspace).Require(ctx, actor, "ticket.assign"); err != nil {
+			return err
+		}
+		subject := actor.Identity().Subject
+		var assigned string
+		err = business.QueryRowContext(ctx, `UPDATE support.tickets
+			SET assigned_at=coalesce(assigned_at,clock_timestamp()), assigned_to=coalesce(assigned_to,$3)
+			WHERE workspace_id=$1 AND ticket_id=$2 RETURNING assigned_to`, workspace, ticket, subject).Scan(&assigned)
+		if errors.Is(err, sql.ErrNoRows) {
+			return heimdall.ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if assigned != subject {
+			return heimdall.ErrConflict
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusNoContent)
+		return nil
+	})
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"

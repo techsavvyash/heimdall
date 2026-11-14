@@ -38,4 +38,4 @@ Implementation follows the [[implementation-phases|seven sequential phases]]. Ea
 
 The selected design includes both SDKs, PostgreSQL adapters, tenant SSO, SCIM user lifecycle and mandatory durable audit/SIEM. [[design/decisions|Locked decisions]] and the linked contracts govern implementation. Historical explorations are separate and do not add supported scope.
 
-The SDK runtime remains unimplemented. API sketches show what to build; service compatibility, concrete encodings and executable safety/parity tests must be completed before release.
+The TypeScript and Go runtimes are implemented and the enterprise acceptance evidence is published. [[implementation-phases|Release qualification]] covers package installs, compatibility, failure testing and the reference integration guides.

@@ -27,7 +27,7 @@ pnpm run check
 | `pnpm run format`     | Format owned workspace files with Oxfmt                     |
 | `pnpm run docs:dev`   | Preview Quartz at localhost:8080                            |
 
-Both SDKs expose a development core runtime for scoped, audited bearer-token authentication. Construction validates configuration, durable-storage readiness, OIDC discovery and the exact OpenFGA model. Sessions, tenant authorization and convenience adapter assembly are not yet exposed. The built-in PostgreSQL factories require explicit audit-v2 activation before startup; see [the upgrade protocol](contracts/audit-recovery.md). The TypeScript package remains private and ESM-only during development; this is not a first-release claim. See [the core runtime contract](contracts/core-runtime.md) for wiring and trust boundaries.
+Both SDKs expose audited bearer-token authentication and tenant authorization, PostgreSQL browser sessions, workspace discovery and managed onboarding. Ledger and Support demonstrate those integrations in TypeScript and Go. Follow the [reference product setup](docs/content/evidence/phase-4-reference-backends.md) and [implementation phases](docs/content/implementation-phases.md) for the verified scope and release progress. The TypeScript development package is private and ESM-only.
 
 ## Layout
 
@@ -36,8 +36,8 @@ contracts/fixtures/       Shared language-independent behavior fixtures
 policies/tenant-rbac/     Authorization model and assertions
 sdk/typescript/          Rolldown, Oxlint, Oxfmt, Vitest and strict TypeScript
 sdk/go/                  Go module, gofmt, go vet and race-enabled tests
-examples/ledger/          Future TypeScript product integration
-examples/support/         Future Go product integration
+examples/ledger/          TypeScript Ledger product integration
+examples/support/         Go Support product integration
 tests/integration/       Cross-service scenarios
 deploy/local/            Future local auth deployment
 scripts/                 Workspace checks and hook installation
@@ -45,7 +45,7 @@ scripts/                 Workspace checks and hook installation
 docs/                    Quartz site in the pnpm workspace
 ```
 
-See [the documentation index](docs/content/index.md), [shared SDK contract](docs/content/design/shared-sdk-contract.md), and [task list](docs/content/design/task-list.md). Optional PostgreSQL adapters are scoped in [the adapter design](docs/content/design/built-in-adapters.md); implementation and failure validation remain pending. Read [AGENTS.md](AGENTS.md) for the agent feedback loop.
+See [the documentation index](docs/content/index.md), [shared SDK contract](docs/content/design/shared-sdk-contract.md), and [task list](docs/content/design/task-list.md). See the [adapter design](docs/content/design/built-in-adapters.md) for PostgreSQL integration boundaries. Read [AGENTS.md](AGENTS.md) for the agent feedback loop.
 
 ## Dependency policy
 
