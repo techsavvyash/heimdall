@@ -393,6 +393,9 @@ try:
                         ["go", "list", "-m", "-f", "{{.Version}}", module],
                         cwd=prior_support, env=reference_env, text=True).strip(),
                 }
+            job_env = dict(delivery_env, HEIMDALL_REFERENCE_SUPPORT_BINARY=binary,
+                           HEIMDALL_REFERENCE_LEDGER_ENTRY=reference_env.get(
+                               "HEIMDALL_REFERENCE_LEDGER_ENTRY", str(ROOT / "examples/ledger/server.mjs")))
             org_file = Path(temp) / "scim-organization"
             if scim_siem:
                 assert elastic_start and os.environ.get("HEIMDALL_PROBE_SCIM_BROWSER") == "1"
@@ -409,8 +412,7 @@ try:
                     event, = [item["scimProviderEvent"] for item in live if "scimProviderEvent" in item]
                     assert event["organizationId"] == org_file.read_text()
                     result = verify_live_identity_siem(
-                        dict(delivery_env, HEIMDALL_REFERENCE_SUPPORT_BINARY=binary),
-                        elastic_start, [item for item in live if "scimBrowser" in item], scim_event=event,
+                        job_env, elastic_start, [item for item in live if "scimBrowser" in item], scim_event=event,
                     )
                     print(json.dumps({"scimSIEM": result}), flush=True)
             finally:
@@ -515,13 +517,12 @@ try:
             if os.environ.get("HEIMDALL_PROBE_PRODUCT_SIEM") == "1":
                 from live_identity_siem import run as verify_live_identity_siem
                 assert elastic_start and all("auditActor" in product for product in products)
-                job_env = dict(delivery_env, HEIMDALL_REFERENCE_SUPPORT_BINARY=binary)
                 print(json.dumps({"productSIEM": verify_live_identity_siem(job_env, elastic_start, products)}), flush=True)
                 for product in products:
                     del product["auditActor"]
                     del product["auditRecipient"]
             print(json.dumps({"referenceProducts": products,
-                              **({"storageRun": name, "oidcRun": result["runId"]} if restore or revocation_race or operator or existing or measure else {}),
+                              **({"storageRun": name, "oidcRun": result["runId"]} if restore or revocation_race or operator or existing or measure or revision else {}),
                               **({"operatorSetup": operator_proof, "applicationSchema": "managed-v5"} if operator else {}),
                               **({"isolatedConsumers": consumer_info} if consumer_info else {})}), flush=True)
     if os.environ.get("HEIMDALL_PROBE_DURABLE_RUNTIME") == "1":

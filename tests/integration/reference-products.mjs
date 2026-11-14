@@ -1,7 +1,7 @@
 import { verifyRestoredReference } from "./reference-restore.mjs";
 import { request as httpRequest } from "node:http";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 import { execFile, spawn, spawnSync } from "node:child_process";
@@ -209,11 +209,9 @@ export async function verifyReferenceProduct(input, authorize) {
     ? process.env.HEIMDALL_REFERENCE_EXPORT_DATABASE
     : (process.env.HEIMDALL_REFERENCE_OPERATOR_EXPORT_DB ??
       db + "&options=-c%20role%3Dheimdall_reference_export");
+  const ledgerEntry = process.env.HEIMDALL_REFERENCE_LEDGER_ENTRY ?? "examples/ledger/server.mjs";
   const cmd = ledger
-    ? [
-        process.execPath,
-        [process.env.HEIMDALL_REFERENCE_LEDGER_ENTRY ?? "examples/ledger/server.mjs"],
-      ]
+    ? [process.execPath, [ledgerEntry]]
     : [process.env.HEIMDALL_REFERENCE_SUPPORT_BINARY, []];
   const previousEntry =
     process.env[
@@ -1209,7 +1207,7 @@ export async function verifyReferenceProduct(input, authorize) {
         readMemberRelations,
         commands: {
           audit: ledger
-            ? [process.execPath, "examples/ledger/audit-job.mjs"]
+            ? [process.execPath, join(dirname(ledgerEntry), "audit-job.mjs")]
             : [process.env.HEIMDALL_REFERENCE_SUPPORT_BINARY, "audit-job"],
         },
         stop,
@@ -1280,7 +1278,7 @@ export async function verifyReferenceProduct(input, authorize) {
       const { issuer, organizationId, token } = scim;
       function runDirectoryJob() {
         const args = ledger
-          ? ["node", "examples/ledger/directory-job.mjs"]
+          ? [process.execPath, join(dirname(ledgerEntry), "directory-job.mjs")]
           : [process.env.HEIMDALL_REFERENCE_SUPPORT_BINARY, "directory-job"];
         const job = spawnSync(args[0], args.slice(1), {
           env: {

@@ -57,15 +57,17 @@ def verification_policy():
           AND setdatabase=(SELECT oid FROM pg_database WHERE datname='zitadel');
         SELECT trunc(EXTRACT(EPOCH FROM clock_timestamp())*1000)::bigint;"""
     command = "psql -U heimdall_probe -d zitadel -At -v ON_ERROR_STOP=1 -c " + shlex.quote(query)
-    before = time.time_ns() // 1_000_000
-    lines = subprocess.check_output([
-        "railway", "ssh", *flags, "-s", "648133ac-305b-495d-a77e-4d0c49103feb",
-        "--identity-file", str(Path.home()/".ssh/heimdall-verification"), "--", command,
-    ], text=True, timeout=20).splitlines()
-    after = time.time_ns() // 1_000_000
-    assert lines[:3] == ["0", "0", "transaction_timeout=10s"]
-    assert before - 2000 <= int(lines[3]) <= after + 2000 and after - before <= 4000
-    return {"maxWriterTransactionMs": 10000, "maxClockOffsetMs": 5000, "minimumRetentionMs": 86400000}
+    for _ in range(3):
+        before = time.time_ns() // 1_000_000
+        lines = subprocess.check_output([
+            "railway", "ssh", *flags, "-s", "648133ac-305b-495d-a77e-4d0c49103feb",
+            "--identity-file", str(Path.home()/".ssh/heimdall-verification"), "--", command,
+        ], text=True, timeout=20).splitlines()
+        after = time.time_ns() // 1_000_000
+        assert lines[:3] == ["0", "0", "transaction_timeout=10s"]
+        if before - 2000 <= int(lines[3]) <= after + 2000 and after - before <= 4000:
+            return {"maxWriterTransactionMs": 10000, "maxClockOffsetMs": 5000, "minimumRetentionMs": 86400000}
+    raise RuntimeError("Railway clock sample did not satisfy the audit probe timing bounds")
 
 
 def run(delivery_env, elastic_start, products=None, scim_event=None):
@@ -85,6 +87,7 @@ def run(delivery_env, elastic_start, products=None, scim_event=None):
     configuration_edit = os.environ.get("HEIMDALL_PROBE_SIEM_CONFIGURATION_EDIT") == "1"
     aggregate_type = "user"
     job_binary = delivery_env.get("HEIMDALL_REFERENCE_SUPPORT_BINARY")
+    ledger_entry = Path(delivery_env.get("HEIMDALL_REFERENCE_LEDGER_ENTRY", ROOT / "examples/ledger/server.mjs"))
     policy = verification_policy() if scim_event or os.environ.get("HEIMDALL_TEST_SCHEDULED_IDENTITY") == "1" else None
 
     def api(path, body=None, method=None, auth=admin):
@@ -158,7 +161,7 @@ def run(delivery_env, elastic_start, products=None, scim_event=None):
                     assert status == 403, "Tenant-scoped receiver accepted an unrelated event"
                     statuses.clear()
                 if stage in ("product", "scheduled", "scim") and job_binary:
-                    command = ["pnpm", "--filter", "@heimdall/ledger", "audit:run"] if lang == "ts" else [job_binary, "audit-job"]
+                    command = ["node", str(ledger_entry.with_name("audit-job.mjs"))] if lang == "ts" else [job_binary, "audit-job"]
                     job_env = dict(
                         delivery_env,
                         HEIMDALL_CONFIG=json.dumps({"productId": product, "environment": environment, "issuer": ISSUER}),

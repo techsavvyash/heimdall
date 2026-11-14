@@ -1,0 +1,73 @@
+{
+  "storageRun": "heimdall-records-95136bc16cd34d6599768ec68980b221",
+  "oidcRun": "5d18d0e2-e210-4021-a234-6c250b199052",
+  "isolatedConsumers": {
+    "archive": "heimdall-sdk-0.1.0-rc.2.tgz",
+    "goModuleVersion": "v0.1.0-rc.2",
+    "archiveSHA256": "01093773609dea5e64ddb36ddd4ddf3113f4c964c93c7ebd0b3a0b33d6e7565b"
+  },
+  "referenceProducts": [
+    {
+      "product": "ledger",
+      "scopedRead": 200,
+      "scimBrowser": {
+        "deniedInMs": 1527,
+        "disabledSession": 401,
+        "sharedProviderDisable": true,
+        "deniedWithTuplesPresent": true,
+        "cleanupAcknowledged": true,
+        "cleanupReplayConfirmed": true,
+        "removedTuples": ["member", "r_1"],
+        "releasedAfterApprovedEnrollment": true,
+        "approvedRole": "viewer",
+        "originalCookieAfterRelease": 401,
+        "freshCookie": 200,
+        "freshCookieOtherWorkspace": 403,
+        "staleReactivationRejected": true,
+        "secondCleanupConfirmed": true,
+        "auditedRemovalAndGrants": true
+      }
+    },
+    {
+      "product": "support",
+      "scopedRead": 200,
+      "scimBrowser": {
+        "deniedInMs": 4207,
+        "disabledSession": 401,
+        "sharedProviderDisable": true,
+        "deniedWithTuplesPresent": true,
+        "cleanupAcknowledged": true,
+        "cleanupReplayConfirmed": true,
+        "cleanupResumedSameRevision": true,
+        "deniedDuringCleanupOutage": true,
+        "removedTuples": ["member", "r_0"],
+        "releasedAfterApprovedEnrollment": true,
+        "approvedRole": "reader",
+        "originalCookieAfterRelease": 401,
+        "freshCookie": 200,
+        "freshCookieOtherWorkspace": 403,
+        "staleReactivationRejected": true,
+        "secondCleanupConfirmed": true,
+        "auditedRemovalAndGrants": true
+      }
+    }
+  ],
+  "scimSIEM": {
+    "run": "c89683f1-303f-4606-8662-3dc449b4d0f1",
+    "elasticsearch": "8.19.0",
+    "products": {
+      "ledger": {
+        "providerEvent": true,
+        "durableDenialRevision": true,
+        "revisionBoundRemoval": true,
+        "tenantScopedDocuments": 25
+      },
+      "support": {
+        "providerEvent": true,
+        "durableDenialRevision": true,
+        "revisionBoundRemoval": true,
+        "tenantScopedDocuments": 25
+      }
+    }
+  }
+}
