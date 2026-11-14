@@ -1,5 +1,7 @@
 import { verifyRestoredReference } from "./reference-restore.mjs";
 import { request as httpRequest } from "node:http";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 import { execFile, spawn, spawnSync } from "node:child_process";
@@ -190,15 +192,25 @@ export async function verifyReferenceProduct(input, authorize) {
     ? process.env[
         ledger ? "HEIMDALL_REFERENCE_LEDGER_DATABASE" : "HEIMDALL_REFERENCE_SUPPORT_DATABASE"
       ]
-    : db + "&options=-c%20role%3Dheimdall_public_runtime";
+    : (process.env.HEIMDALL_REFERENCE_OPERATOR_RUNTIME_DB ??
+      db + "&options=-c%20role%3Dheimdall_public_runtime");
   assert(runtimeDB);
   const exportDB = remote
     ? process.env.HEIMDALL_REFERENCE_EXPORT_DATABASE
-    : db + "&options=-c%20role%3Dheimdall_reference_export";
+    : (process.env.HEIMDALL_REFERENCE_OPERATOR_EXPORT_DB ??
+      db + "&options=-c%20role%3Dheimdall_reference_export");
   const cmd = ledger
-    ? ["node", [process.env.HEIMDALL_REFERENCE_LEDGER_ENTRY ?? "examples/ledger/server.mjs"]]
+    ? [
+        process.execPath,
+        [process.env.HEIMDALL_REFERENCE_LEDGER_ENTRY ?? "examples/ledger/server.mjs"],
+      ]
     : [process.env.HEIMDALL_REFERENCE_SUPPORT_BINARY, []];
-  const recordKey = remote ? randomBytes(32) : Buffer.alloc(32, 7);
+  const setupDirectory = process.env.HEIMDALL_REFERENCE_SETUP_DIR;
+  const recordKey = setupDirectory
+    ? readFileSync(join(setupDirectory, schema + ".key"))
+    : remote
+      ? randomBytes(32)
+      : Buffer.alloc(32, 7);
   const variables = {
     PORT: String(port),
     ...(exportDB ? { HEIMDALL_EXPORT_DATABASE_URL: exportDB } : {}),
@@ -258,7 +270,7 @@ export async function verifyReferenceProduct(input, authorize) {
   const start = (overrides = {}) => {
     child = spawn(cmd[0], cmd[1], {
       stdio: "ignore",
-      env: { ...process.env, ...variables, ...overrides },
+      env: { ...(setupDirectory ? {} : process.env), ...variables, ...overrides },
     });
   };
   let publishPolicies;

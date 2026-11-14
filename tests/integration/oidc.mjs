@@ -1,8 +1,10 @@
 import { coordinateSCIMDisable, verifyReferenceProduct } from "./reference-products.mjs";
 import assert from "node:assert/strict";
 import { verifyMixedSDKBuilds } from "./mixed-sdk-rollout.mjs";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import {
   randomUUID,
@@ -28,6 +30,12 @@ console.error(`OIDC probe run: ${runId}`);
 let orgId;
 const sessions = [];
 const observations = [];
+const setupDirectory = process.env.HEIMDALL_REFERENCE_SETUP_DIR;
+const setupStores = new Set();
+const productFixture = (product) =>
+  JSON.parse(
+    readFileSync(new URL("../../contracts/fixtures/tenant-model-v1.json", import.meta.url), "utf8"),
+  ).find((fixture) => fixture.name === product);
 const scimBrowser = process.env.HEIMDALL_PROBE_SCIM_BROWSER === "1";
 if (scimBrowser)
   assert(
@@ -39,9 +47,7 @@ async function sdkRuntime(client, c) {
   const base = process.env.HEIMDALL_PROBE_OPENFGA_URL;
   const key = process.env.HEIMDALL_PROBE_OPENFGA_KEY;
   assert(base && key && new URL(base).origin === base && base.startsWith("https://"));
-  const fixture = JSON.parse(
-    readFileSync(new URL("../../contracts/fixtures/tenant-model-v1.json", import.meta.url), "utf8"),
-  ).find((f) => f.name === client.product);
+  const fixture = productFixture(client.product);
   assert(fixture);
   const api = async (path, body, method = body === undefined ? "GET" : "POST") => {
     const send = () =>
@@ -68,12 +74,16 @@ async function sdkRuntime(client, c) {
     assert(r.ok, `runtime FGA ${method}: ${r.status}`);
     return r.status === 204 ? null : r.json();
   };
-  const store = await api("/stores", { name: `heimdall-runtime-${client.product}-${runId}` });
+  const store = client.config
+    ? { id: client.config.openfga.storeId }
+    : await api("/stores", { name: `heimdall-runtime-${client.product}-${runId}` });
   try {
-    const model = await api(`/stores/${store.id}/authorization-models`, fixture.expected.model);
-    const manifest = structuredClone(fixture.manifest);
-    manifest.clients.web.redirectUris = [client.redirectUri];
-    const config = {
+    const model = client.config
+      ? { authorization_model_id: client.config.openfga.modelId }
+      : await api(`/stores/${store.id}/authorization-models`, fixture.expected.model);
+    const manifest = client.manifest ?? structuredClone(fixture.manifest);
+    if (!client.manifest) manifest.clients.web.redirectUris = [client.redirectUri];
+    const config = client.config ?? {
       schemaVersion: 1,
       productId: client.product,
       environment: "verification",
@@ -260,7 +270,7 @@ async function sdkRuntime(client, c) {
       },
     });
   } finally {
-    if (!railwayReference) await api(`/stores/${store.id}`, undefined, "DELETE");
+    if (!railwayReference && !client.config) await api(`/stores/${store.id}`, undefined, "DELETE");
   }
 }
 async function req(method, path, body, credential = pat) {
@@ -403,13 +413,78 @@ try {
   assert(user.id);
   const clients = [];
   for (const product of ["ledger", "support"]) {
+    const redirectUri = railwayReference
+      ? `https://reference-${product}-verification.up.railway.app/callback`
+      : `https://${product}.example.invalid/callback`;
+    if (setupDirectory) {
+      assert(!railwayReference && !scimBrowser && process.env.HEIMDALL_REFERENCE_DATABASE_URL);
+      const openfgaUrl = process.env.HEIMDALL_PROBE_OPENFGA_URL;
+      const manifest = productFixture(product).manifest;
+      manifest.clients.web.redirectUris = [redirectUri];
+      const plan = join(setupDirectory, product + "-plan.json");
+      const input = join(setupDirectory, product + "-manifest.json");
+      writeFileSync(
+        plan,
+        JSON.stringify({
+          productId: product,
+          environment: "verification",
+          issuer,
+          organizationId: orgId,
+          projectName: `heimdall-${product}-${runId}`,
+          openfgaUrl,
+        }),
+        { mode: 0o600, flag: "wx" },
+      );
+      writeFileSync(input, JSON.stringify(manifest), { mode: 0o600, flag: "wx" });
+      const cli =
+        process.env.HEIMDALL_REFERENCE_SETUP_CLI ??
+        fileURLToPath(new URL("../../sdk/typescript/dist/cli.js", import.meta.url));
+      const setup = (...args) => {
+        const result = spawnSync(process.execPath, [cli, ...args], {
+          env: {
+            ...process.env,
+            HEIMDALL_SETUP_SECRET_DIR: setupDirectory,
+            HEIMDALL_SETUP_ZITADEL_TOKEN: pat,
+            HEIMDALL_SETUP_OPENFGA_TOKEN: process.env.HEIMDALL_PROBE_OPENFGA_KEY,
+          },
+          encoding: "utf8",
+          timeout: 45000,
+        });
+        const code = /^[a-z_]+/.exec(result.stderr ?? "")?.[0] ?? "process";
+        assert.equal(result.status, 0, `Setup CLI ${product} failed: ${code}`);
+        return JSON.parse(result.stdout);
+      };
+      const { web: config } = setup(plan, input);
+      setupStores.add(config.openfga.storeId);
+      const status = setup("--status", product, "verification");
+      assert.equal(status.stepCount, 4);
+      assert.deepEqual(
+        status.steps.map(({ state }) => state),
+        Array(4).fill("confirmed"),
+      );
+      assert.deepEqual(setup(plan, input), { web: config });
+      assert.deepEqual(setup("--status", product, "verification"), status);
+      const suffix = status.steps[1].resourceId + "." + config.clientId + ".secret";
+      const secrets = readdirSync(setupDirectory).filter((name) => name.endsWith(suffix));
+      assert.equal(secrets.length, 1);
+      clients.push({
+        clientId: config.clientId,
+        clientSecret: readFileSync(join(setupDirectory, secrets[0]), "utf8"),
+        projectId: config.zitadelProjectId,
+        redirectUri,
+        product,
+        config,
+        manifest: JSON.parse(readFileSync(input, "utf8")),
+      });
+      observations.push({
+        operatorSetup: { product, confirmedSteps: status.stepCount, replay: "unchanged" },
+      });
+      continue;
+    }
     const project = await ok("POST", "/zitadel.project.v2.ProjectService/CreateProject", {
       organizationId: orgId,
       name: `heimdall-${product}-${runId}`,
     });
-    const redirectUri = railwayReference
-      ? `https://reference-${product}-verification.up.railway.app/callback`
-      : `https://${product}.example.invalid/callback`;
     const app = await ok("POST", "/zitadel.application.v2.ApplicationService/CreateApplication", {
       projectId: project.projectId,
       name: product,
@@ -424,6 +499,13 @@ try {
     });
     assert(!app.oidcConfiguration.nonCompliant, "OIDC app must be compliant");
     clients.push({ ...app.oidcConfiguration, projectId: project.projectId, redirectUri, product });
+  }
+  if (setupDirectory) {
+    const [ledger, support] = clients;
+    assert.notEqual(ledger.projectId, support.projectId);
+    assert.notEqual(ledger.clientId, support.clientId);
+    assert.notEqual(ledger.config.openfga.storeId, support.config.openfga.storeId);
+    assert.notEqual(ledger.config.openfga.modelId, support.config.openfga.modelId);
   }
   const discovery = await ok("GET", "/.well-known/openid-configuration", undefined, "");
   assert(new URL(discovery.jwks_uri).origin === issuer);
@@ -1099,14 +1181,25 @@ try {
   for (const c of statusCases) sdkStatus(c, "unauthenticated", "deleted");
   observations.push({ afterDeletion: "user API 404; both product tokens introspect inactive" });
 } finally {
+  const stores = await Promise.allSettled(
+    [...setupStores].map(async (id) => {
+      const response = await fetch(process.env.HEIMDALL_PROBE_OPENFGA_URL + "/stores/" + id, {
+        method: "DELETE",
+        headers: { authorization: "Bearer " + process.env.HEIMDALL_PROBE_OPENFGA_KEY },
+        redirect: "error",
+        signal: AbortSignal.timeout(15000),
+      });
+      assert(response.ok, "Disposable setup store cleanup failed");
+    }),
+  );
   const cleanup = await Promise.allSettled(
     sessions.map((sessionId) => ok("DELETE", `/v2/sessions/${sessionId}`, undefined, loginPat)),
   );
   if (orgId && !railwayReference && !process.env.HEIMDALL_SCIM_SIEM_ORGANIZATION_FILE)
     await ok("DELETE", `/v2/organizations/${orgId}`);
   assert(
-    cleanup.every((r) => r.status === "fulfilled"),
-    `Session cleanup failed for run ${runId}`,
+    [...cleanup, ...stores].every((r) => r.status === "fulfilled"),
+    `Provider cleanup failed for run ${runId}`,
   );
 }
 console.log(

@@ -116,3 +116,28 @@ python3 tests/integration/postgres-records.py
 ```
 
 The commit must already be available on GitHub. See [[evidence/phase-7-release-qualification|release qualification]] for the evidence and outstanding release gates.
+
+## Rehearse the operator handoff
+
+Enable the operator probe to run the setup CLI from the packed TypeScript install. The probe creates a separate setup journal, prepares managed-v5 application storage and registers a fresh record key for each backend. It provisions both products against the verification ZITADEL and OpenFGA, reruns the same plans, and passes the generated config and client secret into each reference backend. It then runs the reference journey, including callback, discovery, onboarding, role enforcement and business writes.
+
+```mermaid
+flowchart LR
+  Plan[Operator plans and product manifests] --> CLI[Installed Heimdall setup CLI]
+  CLI --> Journal[(Independent setup journal)]
+  CLI --> Z[ZITADEL project and web client per product]
+  CLI --> F[OpenFGA store and model per product]
+  CLI --> Handoff[Runtime config and private client secret file]
+  Handoff --> L[Ledger with installed TypeScript SDK]
+  Handoff --> S[Support with downloaded Go SDK]
+  Keys[Registered record key per product] --> L
+  Keys --> S
+  L --> DB[(Managed application PostgreSQL)]
+  S --> DB
+```
+
+```sh
+HEIMDALL_PROBE_REFERENCE_PRODUCTS=1 HEIMDALL_PROBE_OPERATOR_QUICKSTART=1 \
+HEIMDALL_PROBE_BUSINESS_WRITE=1 HEIMDALL_PROBE_CONSUMER_REVISION="$(git rev-parse HEAD)" \
+python3 tests/integration/postgres-records.py
+```

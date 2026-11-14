@@ -120,6 +120,18 @@ try:
         "BEGIN IF OLD.environment LIKE 'directory-rollback-%' THEN RAISE EXCEPTION 'injected session deletion failure'; END IF; RETURN OLD; END; $$; "
         "CREATE TRIGGER reject_directory_delete BEFORE DELETE ON heimdall.records FOR EACH ROW EXECUTE FUNCTION public.reject_directory_delete();",
         capture_output=True, text=True)
+    operator = os.environ.get("HEIMDALL_PROBE_OPERATOR_QUICKSTART") == "1"
+    if operator and (os.environ.get("HEIMDALL_PROBE_REFERENCE_PRODUCTS") != "1" or
+                     os.environ.get("HEIMDALL_PROBE_BUSINESS_WRITE") != "1" or
+                     not os.environ.get("HEIMDALL_PROBE_CONSUMER_REVISION") or
+                     os.environ.get("HEIMDALL_PROBE_COORDINATED_RESTORE") == "1"):
+        raise RuntimeError("Operator rehearsal requires reference products, business writes and a consumer revision")
+    if operator:
+        admin("CREATE DATABASE reference_application TEMPLATE public_runtime OWNER migration_owner;")
+        run(["docker", "exec", name, "psql", "-U", "postgres", "-d", "reference_application",
+             "-v", "ON_ERROR_STOP=1", "-c",
+             "DROP TRIGGER reject_directory_delete ON heimdall.records; DROP FUNCTION public.reject_directory_delete();"],
+            capture_output=True, text=True)
     run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/runtime.test.ts"], env=runtime_env)
     run(["docker", "exec", name, "psql", "-U", "postgres", "-d", "public_runtime",
          "-v", "ON_ERROR_STOP=1", "-c",
@@ -191,6 +203,10 @@ try:
         import re
         import shutil
         import tempfile
+        application_db = "reference_application" if operator else "public_runtime"
+        application_dsn = runtime_dsn.replace("/public_runtime?", f"/{application_db}?")
+        application_env = dict(runtime_env, HEIMDALL_MIGRATION_DATABASE_URL=
+                               runtime_env["HEIMDALL_MIGRATION_DATABASE_URL"].replace("/public_runtime?", f"/{application_db}?"))
         schemas = "\n".join((ROOT / "examples" / name / file).read_text()
                             for name in ("ledger", "support") for file in ("schema.sql", "invitations.sql"))
         schemas += "\nGRANT USAGE ON SCHEMA ledger,support TO heimdall_public_runtime; GRANT SELECT ON ledger.invoices,support.tickets TO heimdall_public_runtime; GRANT SELECT,INSERT,UPDATE ON ledger.invitations,support.invitations TO heimdall_public_runtime;"
@@ -204,7 +220,7 @@ try:
             schemas += "\n" + (ROOT / "examples" / "enterprise-provider.sql").read_text().replace(':"product_schema"', product)
             schemas += f"\nGRANT SELECT,INSERT,UPDATE ON {product}.sso_candidates,{product}.sso_publications TO heimdall_public_runtime;"
         schemas += "\nCREATE ROLE heimdall_reference_export NOLOGIN;\n" + (ROOT / "tests/integration/reference-export-grants.sql").read_text()
-        run(["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime", "-v", "ON_ERROR_STOP=1"],
+        run(["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", application_db, "-v", "ON_ERROR_STOP=1"],
             input=schemas, capture_output=True, text=True)
         run(["pnpm", "run", "build"])
         with tempfile.TemporaryDirectory() as temp:
@@ -212,12 +228,48 @@ try:
             binary = str(consumer / "support-bin")
             support_source = ROOT / "examples/support"
             reference_env = dict(env, HEIMDALL_PROBE_SDK_RUNTIME="1",
-                                 HEIMDALL_REFERENCE_DATABASE_URL=runtime_dsn,
+                                 HEIMDALL_REFERENCE_DATABASE_URL=application_dsn,
                                  HEIMDALL_REFERENCE_SUPPORT_BINARY=binary)
             restore = os.environ.get("HEIMDALL_PROBE_COORDINATED_RESTORE") == "1"
             revocation_race = os.environ.get("HEIMDALL_PROBE_REVOCATION_RACE") == "1"
             if restore:
                 reference_env["HEIMDALL_RESTORE_POSTGRES_CONTAINER"] = name
+            if operator:
+                admin("CREATE DATABASE reference_setup OWNER migration_owner;")
+                runtime_password = secrets.token_hex(24)
+                admin(f"CREATE ROLE reference_runtime LOGIN PASSWORD '{runtime_password}' "
+                      "IN ROLE heimdall_public_runtime; "
+                      f"CREATE ROLE reference_export LOGIN PASSWORD '{runtime_password}' "
+                      "IN ROLE heimdall_reference_export;")
+                setup_env = dict(runtime_env, HEIMDALL_MIGRATION_DATABASE_URL=
+                                 runtime_env["HEIMDALL_MIGRATION_DATABASE_URL"].replace("/public_runtime?", "/reference_setup?"))
+                for args, migration_env in (
+                    (["--initialize-setup-schema", "--sql", str(ROOT / "contracts/persistence/setup/0001.sql")], setup_env),
+                    (["--prepare-hold-release-upgrade", "--writers-drained", "--sql-directory", str(ROOT / "contracts/persistence/session")], application_env),
+                    (["--activate-hold-release-upgrade", "--writers-drained"], application_env),
+                    (["--status", "managed-v5"], application_env),
+                ):
+                    subprocess.run(["go", "run", "./cmd/heimdall-migrate", *args], cwd=ROOT / "sdk/go",
+                                   env=migration_env, check=True, timeout=45)
+                setup_dir = consumer / "operator"
+                setup_dir.mkdir(mode=0o700)
+                reference_env.update(HEIMDALL_REFERENCE_SETUP_DIR=str(setup_dir),
+                                     HEIMDALL_SETUP_DATABASE_URL=setup_env["HEIMDALL_MIGRATION_DATABASE_URL"],
+                                     HEIMDALL_REFERENCE_OPERATOR_RUNTIME_DB=application_dsn.replace(
+                                         f"postgres:{password}@", f"reference_runtime:{runtime_password}@"),
+                                     HEIMDALL_REFERENCE_OPERATOR_EXPORT_DB=application_dsn.replace(
+                                         f"postgres:{password}@", f"reference_export:{runtime_password}@"))
+                for product in ("ledger", "support"):
+                    key_path = setup_dir / (product + ".key")
+                    with os.fdopen(os.open(key_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), "wb") as key_file:
+                        key_file.write(secrets.token_bytes(32))
+                    subprocess.run(["go", "run", "./cmd/heimdall-keys", "--register", "--fresh-key",
+                                    "--key-file", str(key_path), "--limit", "10000"], cwd=ROOT / "sdk/go",
+                                   env=dict(runtime_env, HEIMDALL_KEY_DATABASE_URL=application_dsn),
+                                   check=True, timeout=45, stdout=subprocess.DEVNULL)
+                run(["docker", "exec", name, "psql", "-U", "postgres", "-d", application_db, "-v", "ON_ERROR_STOP=1",
+                     "-c", "GRANT SELECT ON ALL TABLES IN SCHEMA heimdall_retention TO heimdall_public_runtime;"],
+                    capture_output=True, text=True)
             revision = os.environ.get("HEIMDALL_PROBE_CONSUMER_REVISION")
             consumer_info = None
             if revision:
@@ -245,6 +297,8 @@ try:
                                env=reference_env, check=True)
                 subprocess.run(["go", "mod", "tidy"], cwd=support_source, env=reference_env, check=True)
                 reference_env["HEIMDALL_REFERENCE_LEDGER_ENTRY"] = str(ledger / "server.mjs")
+                if operator:
+                    reference_env["HEIMDALL_REFERENCE_SETUP_CLI"] = str(ledger / "node_modules/@heimdall/sdk/dist/cli.js")
                 go_version = subprocess.check_output(["go", "list", "-m", "-f", "{{.Version}}", module],
                                                      cwd=support_source, env=reference_env, text=True).strip()
                 consumer_info = {"archive": archive.name, "goModuleVersion": go_version}
@@ -257,7 +311,7 @@ try:
                 reference = subprocess.run(["node", "tests/integration/oidc.mjs"], cwd=ROOT, env=reference_env,
                                        capture_output=True, text=True, timeout=240)
                 if reference.returncode != 0:
-                    diagnostics = re.findall(r"(?:AssertionError \[ERR_ASSERTION\]:[^\n]+|reference-(?:products|restore)\.mjs:\d+:\d+|OIDC probe run: [a-f0-9-]+|Restore (?:database|audit delivery) command failed(?: \([a-z_/]+\))?)", reference.stderr)
+                    diagnostics = re.findall(r"(?:AssertionError \[ERR_ASSERTION\]:[^\n]+|(?:oidc|reference-(?:products|restore))\.mjs:\d+:\d+|OIDC probe run: [a-f0-9-]+|Restore (?:database|audit delivery) command failed(?: \([a-z_/]+\))?)", reference.stderr)
                     raise RuntimeError("Reference product verification failed: " + " | ".join(diagnostics)[:1000])
                 if scim_siem:
                     from live_identity_siem import run as verify_live_identity_siem
@@ -279,13 +333,21 @@ try:
                     assert 200 <= status < 300, "Disposable organization cleanup failed"
             result = json.loads(reference.stdout)
             observations = result["observations"]
+            operator_proof = [item["operatorSetup"] for item in observations if "operatorSetup" in item]
+            if operator:
+                assert {item["product"] for item in operator_proof} == {"ledger", "support"}
+                key_use = run(["docker", "exec", name, "psql", "-U", "postgres", "-d",
+                               application_db, "-XAt", "-v", "ON_ERROR_STOP=1", "-c",
+                               "SELECT count(*) FROM heimdall_keys.record_key_usage WHERE used>0;"],
+                              capture_output=True, text=True)
+                assert key_use.stdout.strip() == "2", "Both registered product keys must have encrypted records"
             products = [result for result in observations if "scopedRead" in result]
             if len(products) != 2:
                 raise RuntimeError("missing reference product observations")
             if revocation_race:
                 assert {item["product"] for item in products if item.get("revocationRace")} == {"ledger", "support"}
             audit_rows = run(
-                ["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime", "-XAt", "-v", "ON_ERROR_STOP=1"],
+                ["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", application_db, "-XAt", "-v", "ON_ERROR_STOP=1"],
                 input="SELECT event->>'payload' FROM heimdall.audit_events WHERE environment='verification'",
                 capture_output=True, text=True).stdout.splitlines()
             if restore:
@@ -332,7 +394,8 @@ try:
                     del product["auditActor"]
                     del product["auditRecipient"]
             print(json.dumps({"referenceProducts": products,
-                              **({"storageRun": name, "oidcRun": result["runId"]} if restore or revocation_race else {}),
+                              **({"storageRun": name, "oidcRun": result["runId"]} if restore or revocation_race or operator else {}),
+                              **({"operatorSetup": operator_proof, "applicationSchema": "managed-v5"} if operator else {}),
                               **({"isolatedConsumers": consumer_info} if consumer_info else {})}), flush=True)
     if os.environ.get("HEIMDALL_PROBE_DURABLE_RUNTIME") == "1":
         for args in (

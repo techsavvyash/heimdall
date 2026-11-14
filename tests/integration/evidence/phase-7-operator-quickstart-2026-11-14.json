@@ -1,0 +1,56 @@
+{
+  "referenceProducts": [
+    {
+      "product": "ledger",
+      "session": "issued and logged out",
+      "discovery": "Acme",
+      "scopedRead": 200,
+      "businessWrite": {
+        "action": "approve",
+        "insufficientRole": 403,
+        "crossTenantId": 404,
+        "authorized": 204,
+        "repeat": 204,
+        "inactiveWorkspace": 403,
+        "pendingWorkspace": 403,
+        "auditUnavailable": 503
+      }
+    },
+    {
+      "product": "support",
+      "session": "issued and logged out",
+      "discovery": "Acme",
+      "scopedRead": 200,
+      "businessWrite": {
+        "action": "assign-to-me",
+        "insufficientRole": 403,
+        "crossTenantId": 404,
+        "authorized": 204,
+        "repeat": 204,
+        "inactiveWorkspace": 403,
+        "pendingWorkspace": 403,
+        "auditUnavailable": 503
+      }
+    }
+  ],
+  "storageRun": "heimdall-records-f1003f7b4d5045848017a819a1d4d421",
+  "oidcRun": "71278ed0-90f6-4161-84ca-1f4233a3d188",
+  "operatorSetup": [
+    {
+      "product": "ledger",
+      "confirmedSteps": 4,
+      "replay": "unchanged"
+    },
+    {
+      "product": "support",
+      "confirmedSteps": 4,
+      "replay": "unchanged"
+    }
+  ],
+  "applicationSchema": "managed-v5",
+  "isolatedConsumers": {
+    "archive": "heimdall-sdk-0.0.0.tgz",
+    "goModuleVersion": "v0.0.0-20261114062316-fb296691c911"
+  },
+  "sourceRevision": "fb296691c9110d83eb27c9e02a18422259bfb7f1"
+}
