@@ -1,0 +1,91 @@
+{
+  "tag": "sdk/go/v0.1.0-rc.1",
+  "sourceCommit": "a0e1168e1954867bde092793ba0e9a9258401856",
+  "ciRun": 43569261855,
+  "archive": "heimdall-sdk-0.1.0-rc.1.tgz",
+  "goModuleVersion": "v0.1.0-rc.1",
+  "archiveSHA256": "ea1e86ef500d644feb2b55d7baa476092ea707e4f9841f86fc219c48eea267e7",
+  "operator": {
+    "storageRun": "heimdall-records-7000c045123c458eb73b3b202edc8ed4",
+    "oidcRun": "71d8cc1f-e545-44a9-b7d7-e06a7420f9f1",
+    "applicationSchema": "managed-v5",
+    "setup": [
+      {
+        "product": "ledger",
+        "confirmedSteps": 4,
+        "replay": "unchanged"
+      },
+      {
+        "product": "support",
+        "confirmedSteps": 4,
+        "replay": "unchanged"
+      }
+    ],
+    "products": [
+      {
+        "product": "ledger",
+        "scopedRead": 200,
+        "businessWrite": {
+          "action": "approve",
+          "insufficientRole": 403,
+          "crossTenantId": 404,
+          "authorized": 204,
+          "repeat": 204,
+          "inactiveWorkspace": 403,
+          "pendingWorkspace": 403,
+          "auditUnavailable": 503
+        },
+        "reconcile": {
+          "operator": 200,
+          "unauthorized": 403,
+          "confirmedCompleted": true,
+          "terminalExcluded": true
+        }
+      },
+      {
+        "product": "support",
+        "scopedRead": 200,
+        "businessWrite": {
+          "action": "assign-to-me",
+          "insufficientRole": 403,
+          "crossTenantId": 404,
+          "authorized": 204,
+          "repeat": 204,
+          "inactiveWorkspace": 403,
+          "pendingWorkspace": 403,
+          "auditUnavailable": 503
+        },
+        "reconcile": {
+          "operator": 200,
+          "unauthorized": 403,
+          "confirmedCompleted": true,
+          "terminalExcluded": true
+        }
+      }
+    ]
+  },
+  "mixedModel": {
+    "oidcRun": "dfbee61a-628e-4da8-a30b-482132bc7a13",
+    "previousCommit": "4eeddb78ab2e394b08ef9f1b6a4027188110a6bc",
+    "previousArchiveSHA256": "cfecc7f64c06b851eb2c981dbbdb93194cb2270cc54b579dd84158399188cb18",
+    "previousGoModuleVersion": "v0.0.0-20261114054503-4eeddb78ab2e",
+    "products": {
+      "ledger": [
+        "overlap",
+        "previous pin",
+        "mismatched pin",
+        "new role",
+        "rollback",
+        "removed role grant"
+      ],
+      "support": [
+        "overlap",
+        "previous pin",
+        "mismatched pin",
+        "new role",
+        "rollback",
+        "removed role grant"
+      ]
+    }
+  }
+}
