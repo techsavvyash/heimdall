@@ -48,16 +48,31 @@ migrate=/tmp/heimdall-migrate
 "$migrate" --initialize-session-schema --sql "$session_sql/0001.sql"
 "$migrate" --initialize-managed-schema --sql "$root/contracts/persistence/managed/0001.sql"
 "$migrate" --prepare-audit-upgrade --writers-drained --sql-directory "$session_sql"
-"$migrate" --backfill-audit-upgrade --writers-drained
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  result=$("$migrate" --backfill-audit-upgrade --writers-drained) || exit 1
+  printf '%s\n' "$result"
+  case "$result" in *'"status":"coverage_complete"'*) break ;; esac
+  [ "$attempt" -lt 10 ] || exit 1
+done
 "$migrate" --activate-audit-upgrade --writers-drained
 "$migrate" --prepare-capacity-upgrade --writers-drained --sql-directory "$session_sql" \
   --capacity-events "$AUDIT_EVENTS" --capacity-bytes "$AUDIT_BYTES" \
   --capacity-deliveries "$AUDIT_DELIVERIES"
-"$migrate" --backfill-capacity-upgrade --writers-drained
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  result=$("$migrate" --backfill-capacity-upgrade --writers-drained) || exit 1
+  printf '%s\n' "$result"
+  case "$result" in *'"phase":"complete"'*) break ;; esac
+  [ "$attempt" -lt 10 ] || exit 1
+done
 "$migrate" --activate-capacity-upgrade --writers-drained
 "$migrate" --prepare-retention-upgrade --writers-drained --sql-directory "$session_sql" \
   --retention-rows "$RETENTION_ROWS" --retention-bytes "$RETENTION_BYTES"
-"$migrate" --backfill-retention-upgrade --writers-drained
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  result=$("$migrate" --backfill-retention-upgrade --writers-drained) || exit 1
+  printf '%s\n' "$result"
+  case "$result" in *'"phase":"complete"'*) break ;; esac
+  [ "$attempt" -lt 10 ] || exit 1
+done
 "$migrate" --activate-retention-upgrade --writers-drained
 "$migrate" --prepare-hold-release-upgrade --writers-drained --sql-directory "$session_sql"
 "$migrate" --activate-hold-release-upgrade --writers-drained
@@ -65,7 +80,7 @@ migrate=/tmp/heimdall-migrate
 cd "$root"
 ```
 
-Check each backfill response before running its activation command. Continue until the audit status is `coverage_complete` or the capacity and retention phase is `complete`. Apply the runtime
+Each bounded loop is for a fresh database. It prints each page and requires the terminal status before activation. Existing databases with more history should use the upgrade runbook for their current version. Apply the runtime
 grants for the adapter and features you use. See the [[evidence/phase-3-public-capacity|capacity grants]],
 [[evidence/phase-3-retained-runtime|retention grants]], and [[evidence/phase-5-membership-administration|managed workspace grants]].
 Install the record key ledger separately using the key deployment credential. Apply the directory migrations under `contracts/persistence/directory` in order before starting the directory job.
