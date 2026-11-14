@@ -3,6 +3,7 @@ import { fork } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
+import { setTimeout as delay } from "node:timers/promises";
 import { verifyReferenceProduct } from "./reference-products.mjs";
 
 const issuer = process.env.HEIMDALL_PROBE_ZITADEL_ISSUER;
@@ -39,6 +40,27 @@ const api = async (origin, token, path, body, method = "POST") => {
 };
 const z = (path, body, method) => api(issuer, pat, path, body, method);
 const f = (path, body, method) => api(fga, key, path, body, method);
+async function deleteFixture(origin, token, path) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const status = await fetch(origin + path, {
+      method: "DELETE",
+      headers: { authorization: "Bearer " + token },
+      redirect: "error",
+      signal: AbortSignal.timeout(15000),
+    })
+      .then(async (response) => {
+        await response.arrayBuffer();
+        return response.status;
+      })
+      .catch(() => 0);
+    // This path identifies a resource created by this verification run.
+    if ((status >= 200 && status < 300) || status === 404) return;
+    if (attempt === 3 || (status > 0 && status < 500 && status !== 429)) {
+      throw new Error(`Fixture deletion failed with ${status || "a transport error"}`);
+    }
+    await delay(attempt * 500);
+  }
+}
 const principal = (subject) =>
   "user:" + Buffer.from(JSON.stringify([issuer, subject])).toString("base64url");
 
@@ -385,20 +407,16 @@ async function verifyProduct(product) {
         `directory ${index + 1}`,
         async () => assert.equal((await finished)[0], 0, "Directory cleanup failed"),
       ]),
-      ["product organization", () => z(`/v2/organizations/${organizationId}`, undefined, "DELETE")],
-      ...(store ? [["OpenFGA store", () => f(`/stores/${store.id}`, undefined, "DELETE")]] : []),
+      [
+        "product organization",
+        () => deleteFixture(issuer, pat, `/v2/organizations/${organizationId}`),
+      ],
+      ...(store ? [["OpenFGA store", () => deleteFixture(fga, key, `/stores/${store.id}`)]] : []),
       ...(passwordSession
         ? [
             [
               "password session",
-              () =>
-                api(
-                  issuer,
-                  loginPat,
-                  `/v2/sessions/${passwordSession.sessionId}`,
-                  undefined,
-                  "DELETE",
-                ),
+              () => deleteFixture(issuer, loginPat, `/v2/sessions/${passwordSession.sessionId}`),
             ],
           ]
         : []),

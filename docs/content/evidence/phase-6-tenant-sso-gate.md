@@ -193,3 +193,5 @@ Local watch run `28507f28-e518-495d-b3f4-8f06efcd8b91` passed tenant switching, 
 Local watch run `cc18d603-8b08-48ae-bcc9-38d40d09223a` passed static policy rotation on both backends. Both rejected the previous Acme session and its pending callback, preserved Acme Peer access and accepted fresh Acme authentication. Both also denied password fallback and denied same-provider guest access before an explicit membership grant.
 
 The rc.2 source deployments reported HTTPS readiness on Railway in run `37654c92-8929-45e7-8cb5-9f6a675b5340`. The probe reported failure during disposal of the Support fixture, so this run does not establish the deployed acceptance gate.
+
+The operator removed the disposable Support organization and OpenFGA store left by that run and verified their absence. The probe now retries transient deletion failures for its own product organizations, stores and password sessions. A missing resource counts as already deleted. Local watch run `c729c2c6-9d5d-422e-8a90-df71e51fbd97` passed both product journeys and their cleanup after this change.
