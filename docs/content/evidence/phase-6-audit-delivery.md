@@ -283,3 +283,32 @@ sequenceDiagram
 ```
 
 Run `6a5ec703-4537-4a11-abe2-25673488fcf7` passed both scheduled advances for both SDKs against Railway ZITADEL deployment `e1a7b573-5ca8-4048-82bb-ba1c235dfa86`. The initial delivery and Elasticsearch restart scenario ran in the same probe. Evidence is in `tests/integration/evidence/scheduled-identity-siem-2026-11-14.json`.
+
+## Trace a product workflow in Elasticsearch
+
+Ledger and Support write a product-defined audit event after an authorized read completes its tenant-scoped database query. The product supplies the verified actor, workspace and bounded row count. The event schema has a single integer attribute. If audit persistence fails, the route withholds the result and returns the SDK failure. The same storage configuration routes the product outcome and SDK events to the product-wide `siem` sink when `HEIMDALL_REFERENCE_SIEM=1`.
+
+```mermaid
+sequenceDiagram
+  participant U as Product user
+  participant P as Product backend
+  participant D as Audit outbox
+  participant S as Scheduled SDK exporter
+  participant E as Elasticsearch
+  U->>P: Complete product login
+  P->>D: Record authentication
+  U->>P: Read the new workspace
+  P->>D: Record the permission decision
+  P->>D: Record the completed business read
+  U->>P: Grant a workspace role
+  P->>D: Record the completed membership operation
+  S->>D: Read due product events
+  S->>E: Deliver through the receipt handler
+  E-->>S: Confirm durable acceptance
+```
+
+Use the product, environment and verified issuer/subject to find authentication events. Include workspace ID when matching the permission and business outcomes, and the operation ID when locating the membership mutation. Authentication events are product scoped, so this trace uses a product-wide index that is accessible to trusted product operators. The separate tenant-bound delivery probe checks that a tenant sink excludes product-scoped and unrelated tenant events.
+
+Elasticsearch run `ee49175a-f26f-4b68-b735-f28d3fc59697` and PostgreSQL run `heimdall-records-996f451a1b404d49bcafd46ac46bd33b` verified 91 Ledger documents and 93 Support documents. The probe matched each index against PostgreSQL's acknowledged event IDs. It traced the owner's login, policy decision, business read and exact membership operation, then verified the recipient's allowed request and business read after the grant.
+
+Reproduce with `HEIMDALL_PROBE_REFERENCE_PRODUCTS=1` and `HEIMDALL_PROBE_PRODUCT_SIEM=1` in `tests/integration/postgres-records.py`, plus protected Railway and disposable Elasticsearch configuration. The probe drives the HTTP applications locally with Railway ZITADEL and OpenFGA.

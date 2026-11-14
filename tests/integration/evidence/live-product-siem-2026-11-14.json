@@ -1,0 +1,17 @@
+{
+  "postgresRun": "heimdall-records-996f451a1b404d49bcafd46ac46bd33b",
+  "run": "ee49175a-f26f-4b68-b735-f28d3fc59697",
+  "elasticsearch": "8.19.0",
+  "products": {
+    "ledger": {
+      "documents": 91,
+      "loginDecisionBusinessAndRoleChange": true,
+      "recipientReadAfterGrant": true
+    },
+    "support": {
+      "documents": 93,
+      "loginDecisionBusinessAndRoleChange": true,
+      "recipientReadAfterGrant": true
+    }
+  }
+}

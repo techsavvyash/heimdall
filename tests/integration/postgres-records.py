@@ -151,7 +151,8 @@ try:
             if not proxy.dropped.is_set() or proxy.errors:
                 raise RuntimeError(language + " identity collector COMMIT fault was not verified")
     print(json.dumps({"run": name, "identityCollectorCommitLossAndDelivery": ["typescript", "go"], "result": "passed"}), flush=True)
-    if elastic_start := os.environ.get("HEIMDALL_TEST_ELASTICSEARCH_START"):
+    elastic_start = os.environ.get("HEIMDALL_TEST_ELASTICSEARCH_START")
+    if elastic_start and os.environ.get("HEIMDALL_PROBE_PRODUCT_SIEM") != "1":
         from live_identity_siem import run as verify_live_identity_siem
         print(json.dumps(verify_live_identity_siem(delivery_env, elastic_start)), flush=True)
     directory_env = dict(runtime_env, HEIMDALL_TEST_DIRECTORY_DB=runtime_dsn + "&options=-c%20role%3Dheimdall_public_runtime")
@@ -233,9 +234,16 @@ try:
                             }
                     proof["auditedRemovalAndGrants"] = True
                     del proof["workspaceId"]
-            else:
+            elif os.environ.get("HEIMDALL_PROBE_PRODUCT_SIEM") != "1":
                 run(["python3", "tests/integration/reference-onboarding-audit.py"],
                     input=json.dumps({"products": products, "payloads": audit_rows}), text=True)
+            if os.environ.get("HEIMDALL_PROBE_PRODUCT_SIEM") == "1":
+                from live_identity_siem import run as verify_live_identity_siem
+                assert elastic_start and all("auditActor" in product for product in products)
+                print(json.dumps({"productSIEM": verify_live_identity_siem(delivery_env, elastic_start, products)}), flush=True)
+                for product in products:
+                    del product["auditActor"]
+                    del product["auditRecipient"]
             print(json.dumps({"referenceProducts": products}), flush=True)
     if os.environ.get("HEIMDALL_PROBE_DURABLE_RUNTIME") == "1":
         for args in (

@@ -179,6 +179,7 @@ export async function verifyReferenceProduct(input, authorize) {
     HEIMDALL_WORKSPACE_CREATOR_SUBJECT: user,
     HEIMDALL_REFERENCE_MEMBER_SUBJECT: recipient,
     HEIMDALL_REFERENCE_STRICT_SSO: "1",
+    ...(process.env.HEIMDALL_PROBE_PRODUCT_SIEM === "1" ? { HEIMDALL_REFERENCE_SIEM: "1" } : {}),
     ...(federation
       ? {
           HEIMDALL_TENANT_SSO_POLICIES: JSON.stringify(federation.policies),
@@ -446,7 +447,8 @@ export async function verifyReferenceProduct(input, authorize) {
     }
     const collection = ledger ? "invoices" : "tickets";
     const allowed = await request(`/workspaces/acme/${collection}`, { headers });
-    assert.equal(allowed.status, 200);
+    const readFailure = allowed.ok ? "" : (await allowed.json().catch(() => ({}))).code;
+    assert.equal(allowed.status, 200, `Reference ${schema} scoped read failed: ${readFailure}`);
     assert.deepEqual(
       await allowed.json(),
       ledger
@@ -568,6 +570,19 @@ export async function verifyReferenceProduct(input, authorize) {
     assert.equal(added.status, 200, `Reference ${schema} member add returned ${added.status}`);
     const grant = await added.json();
     assert.equal(grant.status, "confirmed");
+    if (process.env.HEIMDALL_PROBE_PRODUCT_SIEM === "1") {
+      const response = await request(resourcePath, { headers: recipientHeaders });
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), { [collection]: [] });
+      return {
+        product: schema,
+        scopedRead: 200,
+        onboarding: { workspaceId: workspace.workspaceId },
+        administration: { grant },
+        auditActor: user,
+        auditRecipient: recipient,
+      };
+    }
     const repeated = await add();
     assert.equal(repeated.status, 200);
     assert.deepEqual(await repeated.json(), grant);

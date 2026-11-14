@@ -11,7 +11,10 @@ test.skipIf(!process.env.HEIMDALL_TEST_IDENTITY_SIEM)(
   async () => {
     const config = JSON.parse(process.env.HEIMDALL_TEST_IDENTITY_SIEM!);
     const pool = new Pool({ connectionString: process.env.HEIMDALL_TEST_AUDIT_DELIVERY_DB });
-    const scope = { productId: "ledger", environment: "live-siem-ts" };
+    const scope = {
+      productId: "ledger",
+      environment: config.stage === "product" ? "verification" : "live-siem-ts",
+    };
     try {
       const signal = AbortSignal.timeout(25000);
       if (config.stage === "collect" || config.stage === "scheduled") {
@@ -51,11 +54,24 @@ test.skipIf(!process.env.HEIMDALL_TEST_IDENTITY_SIEM)(
       const delivery = createAuditDelivery(pool, {
         ...scope,
         sinkId: "siem",
-        tenantId: "acme",
+        ...(config.stage === "product" ? {} : { tenantId: "acme" }),
         endpoint: config.endpoint,
         token: config.sinkToken,
         transportProfile: "loopback",
+        validateCustom: (type, version, attributes) =>
+          type === "product.invoice.listed" &&
+          version === 1 &&
+          Object.keys(attributes).length === 1 &&
+          Number.isInteger(attributes.count) &&
+          Number(attributes.count) >= 0 &&
+          Number(attributes.count) <= 100,
       });
+      if (config.stage === "product") {
+        for (let page = 0; page < 50; page++) {
+          if ((await delivery.deliver(20, signal)).attempted === 0) return;
+        }
+        throw new Error("Product export did not drain within the page budget");
+      }
       const result = await delivery.deliver(10, signal).then(
         (value) => ({ delivered: value.delivered }),
         (error) => ({ error: error.code }),

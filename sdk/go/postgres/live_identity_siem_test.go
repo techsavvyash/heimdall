@@ -34,7 +34,11 @@ func TestLiveIdentitySIEM(t *testing.T) {
 	defer db.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
-	const product, environment = "support", "live-siem-go"
+	const product = "support"
+	environment, tenant := "live-siem-go", "globex"
+	if c.Stage == "product" {
+		environment, tenant = "verification", ""
+	}
 	if c.Stage == "collect" || c.Stage == "scheduled" {
 		collector, err := NewIdentityCollector(db, IdentityCollectorOptions{
 			IdentityEventReaderOptions: provisioning.IdentityEventReaderOptions{
@@ -70,11 +74,28 @@ func TestLiveIdentitySIEM(t *testing.T) {
 		}
 	}
 	delivery, err := NewAuditDelivery(db, AuditDeliveryOptions{
-		ProductID: product, Environment: environment, SinkID: "siem", TenantID: "globex", Endpoint: c.Endpoint,
+		ProductID: product, Environment: environment, SinkID: "siem", TenantID: tenant, Endpoint: c.Endpoint,
 		Token: c.SinkToken, TransportProfile: "loopback",
+		ValidateCustom: func(kind string, version int, attributes map[string]any) bool {
+			count, ok := attributes["count"].(float64)
+			return kind == "product.ticket.listed" && version == 1 && len(attributes) == 1 &&
+				ok && count >= 0 && count <= 100 && count == float64(int(count))
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if c.Stage == "product" {
+		for range 50 {
+			result, err := delivery.Deliver(ctx, 20)
+			if err != nil {
+				t.Fatal("product audit delivery failed", err)
+			}
+			if result.Attempted == 0 {
+				return
+			}
+		}
+		t.Fatal("product export did not drain within the page budget")
 	}
 	result, err := delivery.Deliver(ctx, 10)
 	if c.Stage == "retry" {

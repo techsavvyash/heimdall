@@ -134,6 +134,14 @@ func main() {
 	defer records.Close()
 	defer keyUsage.Close()
 	defer business.Close()
+	var auditSinks []string
+	if os.Getenv("HEIMDALL_REFERENCE_SIEM") == "1" {
+		auditSinks = []string{"siem"}
+	}
+	auditTicketRead, err := ticketReadAudit(records, config.ProductID, config.Environment, auditSinks)
+	if err != nil {
+		log.Fatal("Invalid Support audit configuration")
+	}
 	var keys map[string][]byte
 	if json.Unmarshal([]byte(required("HEIMDALL_RECORD_KEYS")), &keys) != nil {
 		log.Fatal("Invalid record keys")
@@ -153,7 +161,7 @@ func main() {
 		}
 	}
 	storage, err := postgres.NewManagedStorage(records, postgres.StorageOptions{
-		ProductID: config.ProductID, Environment: config.Environment, ExportDB: exportDB,
+		ProductID: config.ProductID, Environment: config.Environment, ExportDB: exportDB, AuditSinks: auditSinks,
 		Sessions: &postgres.SessionStorageOptions{KeyUsageDB: keyUsage, ActiveKeyID: required("HEIMDALL_RECORD_KEY_ID"), Keys: keys},
 	})
 	if err != nil {
@@ -511,6 +519,9 @@ func main() {
 			items = append(items, map[string]string{"ticket_id": id, "summary": summary})
 		}
 		if err := rows.Err(); err != nil {
+			return err
+		}
+		if err := auditTicketRead(r.Context(), actor, workspace, len(items)); err != nil {
 			return err
 		}
 		writeJSON(w, 200, map[string]any{"tickets": items})

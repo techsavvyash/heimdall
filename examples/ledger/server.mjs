@@ -6,6 +6,7 @@ import { createHeimdall, HeimdallError } from "@heimdall/sdk";
 import { createManagedPostgresStorage, createRecordMaintenance } from "@heimdall/sdk/postgres";
 import { tenantSSOPolicy } from "./tenant-sso.mjs";
 import { directoryCleanupRoute } from "./directory-cleanup.mjs";
+import { createInvoiceReadAudit } from "./read-audit.mjs";
 
 function required(name) {
   const value = process.env[name];
@@ -22,6 +23,8 @@ const origin = new URL(callbackUrl).origin;
 const federationPolicies = process.env.HEIMDALL_TENANT_SSO_POLICIES;
 const workspaceCreator = process.env.HEIMDALL_WORKSPACE_CREATOR_SUBJECT;
 const pool = new Pool({ connectionString: required("DATABASE_URL") });
+const auditSinks = process.env.HEIMDALL_REFERENCE_SIEM === "1" ? ["siem"] : [];
+const auditInvoiceRead = createInvoiceReadAudit(pool, config, auditSinks);
 const keyUsagePool = new Pool({ connectionString: required("HEIMDALL_KEY_DATABASE_URL") });
 const business = new Pool({
   connectionString: required("LEDGER_DATABASE_URL"),
@@ -52,7 +55,7 @@ const auth = await createHeimdall(
     storage: createManagedPostgresStorage(pool, {
       productId: config.productId,
       environment: config.environment,
-      auditSinks: [],
+      auditSinks,
       ...(exportPool ? { exportPool } : {}),
       sessions: {
         keyUsagePool,
@@ -373,6 +376,7 @@ async function route(request) {
     "SELECT invoice_id, total_cents FROM ledger.invoices WHERE workspace_id=$1 ORDER BY invoice_id LIMIT 100",
     [workspace],
   );
+  await auditInvoiceRead(actor, workspace, result.rows.length, request.signal);
   return read({ invoices: result.rows });
 }
 

@@ -68,7 +68,7 @@ def verification_policy():
     return {"maxWriterTransactionMs": 10000, "maxClockOffsetMs": 5000, "minimumRetentionMs": 86400000}
 
 
-def run(delivery_env, elastic_start):
+def run(delivery_env, elastic_start, products=None):
     run_id = str(uuid4())
     admin = "Bearer " + os.environ["HEIMDALL_PROBE_ZITADEL_PAT"]
     elastic_auth = "Basic " + base64.b64encode(os.environ["HEIMDALL_TEST_ELASTICSEARCH_CREDENTIALS"].encode()).decode()
@@ -162,8 +162,11 @@ def run(delivery_env, elastic_start):
             finally:
                 server.shutdown()
                 serving.result(timeout=10)
-        expected_status = {"outage": [503], "collect": [200], "retry": [200], "scheduled": []}
-        assert statuses == expected_status[stage], "Unexpected receiver status"
+        if stage == "product":
+            assert statuses and set(statuses) == {200}
+        else:
+            expected_status = {"outage": [503], "collect": [200], "retry": [200], "scheduled": []}
+            assert statuses == expected_status[stage], "Unexpected receiver status"
 
     try:
         # Start and stop only the disposable process launched by this probe.
@@ -174,6 +177,55 @@ def run(delivery_env, elastic_start):
         else:
             raise RuntimeError("Elasticsearch verification port is already occupied")
         cluster = start()
+        if products is not None:
+            checks = {}
+            for lang, (product, _, _) in list(scopes.items()):
+                scopes[lang] = (product, "verification", None)
+                index = indexes[lang]
+                es("/" + index, {"settings": {"index.translog.durability": "request", "number_of_replicas": 0}}, "PUT")
+                created.append(index)
+                dispatch(lang, "product", None, 0, None)
+                es(f"/{index}/_refresh", method="POST")
+                hits = es(f"/{index}/_search", {"size": 1000, "track_total_hits": True})["hits"]
+                events = [hit["_source"] for hit in hits["hits"]]
+                assert len(events) == hits["total"]["value"] and events
+                assert all(event["productId"] == product and event["environment"] == "verification" for event in events)
+                assert len({event["eventId"] for event in events}) == len(events)
+                deliveries = subprocess.check_output([
+                    "psql", delivery_env["HEIMDALL_TEST_DATABASE_URL"], "-XAt", "-v", "ON_ERROR_STOP=1", "-c",
+                    f"SELECT event_id,state FROM heimdall.audit_deliveries WHERE product_id='{product}' "
+                    "AND environment='verification' AND sink_id='siem'",
+                ], text=True).splitlines()
+                assert set(deliveries) == {event["eventId"] + "|delivered" for event in events}
+                fixture = next(item for item in products if item["product"] == product)
+                actor = {"kind": "user", "issuer": ISSUER, "subject": fixture["auditActor"]}
+                recipient = {**actor, "subject": fixture["auditRecipient"]}
+                workspace = fixture["onboarding"]["workspaceId"]
+                action = "invoice" if product == "ledger" else "ticket"
+                owned = [event for event in events if event["actor"] == actor]
+                login = [event for event in owned if event["eventType"] == "heimdall.authentication.completed"
+                         and event["outcome"] == "succeeded"]
+                allow = [event for event in owned if event.get("tenantId") == workspace
+                         and event["action"] == action + ".read" and event["outcome"] == "allow"]
+                business = [event for event in owned if event.get("tenantId") == workspace
+                            and event["eventType"] == "product." + action + ".listed"
+                            and event["attributes"] == {"count": 0} and event["outcome"] == "succeeded"]
+                grant = [event for event in owned if event.get("tenantId") == workspace
+                         and event.get("operationId") == fixture["administration"]["grant"]["operationId"]
+                         and event["action"] == "add_member.complete" and event["outcome"] == "succeeded"]
+                assert login and allow and business and grant, f"Missing product audit chain for {product}"
+                assert any(a["recordedAt"] <= b["recordedAt"] <= c["recordedAt"] <= d["recordedAt"]
+                           for a in login for b in allow for c in business for d in grant)
+                recipient_allow = [event for event in events if event["actor"] == recipient
+                                   and event["tenantId"] == workspace and event["action"] == action + ".read"
+                                   and event["outcome"] == "allow"]
+                recipient_read = [event for event in events if event["actor"] == recipient
+                                  and event["tenantId"] == workspace and event["eventType"] == "product." + action + ".listed"
+                                  and event["attributes"] == {"count": 0} and event["outcome"] == "succeeded"]
+                assert any(a["recordedAt"] <= b["recordedAt"] <= c["recordedAt"]
+                           for a in grant for b in recipient_allow for c in recipient_read)
+                checks[product] = {"documents": len(events), "loginDecisionBusinessAndRoleChange": True, "recipientReadAfterGrant": True}
+            return {"run": run_id, "elasticsearch": "8.19.0", "products": checks}
         org = api("/v2/organizations", {"name": "heimdall-siem-" + run_id})["organizationId"]
 
         def machine(name):
