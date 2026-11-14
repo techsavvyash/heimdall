@@ -4,6 +4,7 @@ import { addAbortSignal } from "node:stream";
 import { Pool } from "pg";
 import { createHeimdall, HeimdallError } from "@heimdall/sdk";
 import { createManagedPostgresStorage, createRecordMaintenance } from "@heimdall/sdk/postgres";
+import { tenantSSOPolicy } from "./tenant-sso.mjs";
 
 function required(name) {
   const value = process.env[name];
@@ -17,9 +18,7 @@ const config = JSON.parse(configJSON);
 if (config.productId !== "ledger") throw new Error("Expected the Ledger product");
 const callbackUrl = required("HEIMDALL_CALLBACK_URL");
 const origin = new URL(callbackUrl).origin;
-const federationPolicies = process.env.HEIMDALL_TENANT_SSO_POLICIES
-  ? new Map(Object.entries(JSON.parse(process.env.HEIMDALL_TENANT_SSO_POLICIES)))
-  : null;
+const federationPolicies = process.env.HEIMDALL_TENANT_SSO_POLICIES;
 const workspaceCreator = process.env.HEIMDALL_WORKSPACE_CREATOR_SUBJECT;
 const pool = new Pool({ connectionString: required("DATABASE_URL") });
 const keyUsagePool = new Pool({ connectionString: required("HEIMDALL_KEY_DATABASE_URL") });
@@ -39,22 +38,7 @@ const auth = await createHeimdall(
   manifestJSON,
   {
     policyVersion: required("HEIMDALL_POLICY_VERSION"),
-    ...(federationPolicies
-      ? { tenantSSOPolicy: async (workspaceId) => federationPolicies.get(workspaceId) ?? null }
-      : process.env.HEIMDALL_REFERENCE_STRICT_SSO === "1"
-        ? {
-            tenantSSOPolicy: async (workspaceId) =>
-              workspaceId === "globex"
-                ? {
-                    organizationId: "reference-globex",
-                    providerId: "reference-globex-oidc",
-                    policyVersion: "reference-sso-v1",
-                    protocol: "oidc",
-                    maxAgeMs: 900_000,
-                  }
-                : null,
-          }
-        : {}),
+    tenantSSOPolicy: tenantSSOPolicy(),
     authorizeWorkspaceCreation: async (actor) => actor.subject === workspaceCreator,
     authorizeWorkspaceLifecycle: async (actor) => actor.subject === workspaceCreator,
     ...(exportPool

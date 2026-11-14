@@ -213,7 +213,10 @@ try:
                     proof = product["scimBrowser"]
                     assert proof["sharedProviderDisable"] and proof["cleanupReplayConfirmed"]
                     if product["product"] == "support":
-                        assert proof["cleanupResumedSameRevision"] and proof["deniedDuringCleanupOutage"]
+                        if os.environ.get("HEIMDALL_PROBE_DIRECTORY_JOB") == "1":
+                            assert proof["scheduledJob"] and proof["missedObservationDenied"]
+                        else:
+                            assert proof["cleanupResumedSameRevision"] and proof["deniedDuringCleanupOutage"]
                     scoped = [event for event in events if event["productId"] == product["product"]
                               and event.get("tenantId") == proof["workspaceId"]]
                     for action, count in (("remove_member", 1), ("add_member", 2)):

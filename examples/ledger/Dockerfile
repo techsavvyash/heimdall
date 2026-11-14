@@ -9,7 +9,7 @@ COPY examples/ledger/package.json ./examples/ledger/package.json
 RUN pnpm --filter @heimdall/ledger... --filter heimdall-workspace install --frozen-lockfile
 COPY sdk/typescript/ ./sdk/typescript/
 RUN pnpm --filter @heimdall/sdk build
-COPY examples/ledger/server.mjs ./examples/ledger/server.mjs
+COPY examples/ledger/server.mjs examples/ledger/directory-job.mjs examples/ledger/tenant-sso.mjs ./examples/ledger/
 RUN pnpm --filter @heimdall/ledger --prod deploy --legacy /app
 
 FROM node:24-slim

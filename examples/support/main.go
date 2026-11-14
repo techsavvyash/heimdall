@@ -12,10 +12,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -110,6 +112,12 @@ func workspaceInput(w http.ResponseWriter, r *http.Request) (heimdall.WorkspaceC
 }
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "directory-job" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		code := directoryJobExitCode(ctx)
+		stop()
+		os.Exit(code)
+	}
 	configJSON, manifestJSON := []byte(required("HEIMDALL_CONFIG")), []byte(required("HEIMDALL_MANIFEST"))
 	var config struct{ ProductID, Environment, Issuer string }
 	if json.Unmarshal(configJSON, &config) != nil || config.ProductID != "support" {
@@ -153,30 +161,10 @@ func main() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	var tenantSSO heimdall.TenantSSOPolicySource
 	federationPolicies := os.Getenv("HEIMDALL_TENANT_SSO_POLICIES")
-	if federationPolicies != "" {
-		var policies map[string]heimdall.TenantSSOPolicy
-		if json.Unmarshal([]byte(federationPolicies), &policies) != nil || policies == nil {
-			log.Fatal("Invalid federation policies")
-		}
-		tenantSSO = func(_ context.Context, workspace string) (*heimdall.TenantSSOPolicy, error) {
-			policy, found := policies[workspace]
-			if !found {
-				return nil, nil
-			}
-			return &policy, nil
-		}
-	} else if os.Getenv("HEIMDALL_REFERENCE_STRICT_SSO") == "1" {
-		tenantSSO = func(_ context.Context, workspaceID string) (*heimdall.TenantSSOPolicy, error) {
-			if workspaceID != "globex" {
-				return nil, nil
-			}
-			return &heimdall.TenantSSOPolicy{
-				OrganizationID: "reference-globex", ProviderID: "reference-globex-oidc",
-				PolicyVersion: "reference-sso-v1", Protocol: "oidc", MaxAgeMS: 900_000,
-			}, nil
-		}
+	tenantSSO, err := tenantSSOPolicy()
+	if err != nil {
+		log.Fatal("Invalid federation policies")
 	}
 	auth, err := heimdall.New(ctx, configJSON, manifestJSON, heimdall.Options{
 		TenantSSOPolicy: tenantSSO,

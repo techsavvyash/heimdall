@@ -840,7 +840,10 @@ try {
     });
   }
   if (scimBrowser) {
-    const lifecycle = coordinateSCIMDisable(directory);
+    const lifecycle = coordinateSCIMDisable(
+      directory,
+      process.env.HEIMDALL_PROBE_DIRECTORY_JOB === "1",
+    );
     const results = await Promise.allSettled(
       clients.map(async (client, index) => {
         const entry = statusCases[index];

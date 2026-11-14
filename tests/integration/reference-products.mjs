@@ -6,8 +6,9 @@ import { execFile, spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { createRequire } from "node:module";
 import { promisify } from "node:util";
+import { setTimeout as delay } from "node:timers/promises";
 
-export function coordinateSCIMDisable(directory) {
+export function coordinateSCIMDisable(directory, scheduled) {
   const ready = new Map();
   const completed = Promise.withResolvers();
   // One product can fail during setup before either product reaches the rendezvous.
@@ -20,15 +21,28 @@ export function coordinateSCIMDisable(directory) {
         try {
           const ledger = ready.get("ledger");
           const support = ready.get("support");
+          if (scheduled) {
+            await ledger.seedDirectoryJob();
+            await support.seedDirectoryJob();
+          }
           const started = performance.now();
           await directory.setActive(false);
-          await ledger.observeDisable(started);
-          await support.observeDisable(started);
-          await support.withCleanupOutage(async () => {
-            await ledger.confirmCleanup();
-            await support.assertStillDeniedWithGrants();
-          });
-          await support.confirmCleanup();
+          if (scheduled) {
+            await ledger.finishDirectoryJob(started);
+            await support.assertObservationMissing();
+            await delay(Math.max(0, 61000 - (performance.now() - started)));
+            await support.assertMissedObservationDenial(started);
+            await support.assertObservationMissing();
+            await support.finishDirectoryJob(started);
+          } else {
+            await ledger.observeDisable(started);
+            await support.observeDisable(started);
+            await support.withCleanupOutage(async () => {
+              await ledger.confirmCleanup();
+              await support.assertStillDeniedWithGrants();
+            });
+            await support.confirmCleanup();
+          }
           await directory.setActive(true);
           completed.resolve();
         } catch (error) {
@@ -89,11 +103,11 @@ export async function verifyReferenceProduct(input, authorize) {
           "--",
           "psql -Xq -U heimdall_probe -d heimdall_phase4_reference -v ON_ERROR_STOP=1 -v VERBOSITY=verbose",
         ],
-        { stdio: ["pipe", "ignore", "pipe"] },
+        { stdio: ["pipe", "pipe", "pipe"] },
       );
     } else {
       const database = new URL(db);
-      sql = spawn("psql", ["-Xq", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose"], {
+      sql = spawn("psql", ["-XqAt", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose"], {
         env: {
           ...process.env,
           PGHOST: database.hostname,
@@ -104,19 +118,25 @@ export async function verifyReferenceProduct(input, authorize) {
           PGSSLMODE: database.searchParams.get("sslmode") ?? "require",
           PGOPTIONS: "",
         },
-        stdio: ["pipe", "ignore", "pipe"],
+        stdio: ["pipe", "pipe", "pipe"],
       });
     }
     let sqlDiagnostic = "";
+    let output = "";
+    sql.stdout.setEncoding("utf8");
+    sql.stdout.on("data", (chunk) => {
+      output += chunk;
+    });
     sql.stderr.setEncoding("utf8");
     sql.stderr.on("data", (chunk) => {
       sqlDiagnostic = (sqlDiagnostic + chunk).slice(-8192);
     });
     sql.stdin.end(statement);
-    const [sqlCode] = await once(sql, "exit");
+    const [sqlCode] = await once(sql, "close");
     const sqlState =
       /ERROR:\s+([A-Z0-9]{5}):/.exec(sqlDiagnostic)?.[1] ?? "connection or client error";
     assert.equal(sqlCode, 0, "Reference fixture SQL failed " + sqlState);
+    return output.trim();
   }
   assert(/^[A-Za-z0-9:_-]+$/.test(principal));
   if (federation) assert(/^[A-Za-z0-9:_-]+$/.test(federation.principal));
@@ -532,6 +552,40 @@ export async function verifyReferenceProduct(input, authorize) {
           ]
         : ["go", "test", "-v", "-race", "-count=1", "./postgres", "-run", "^TestLiveSCIMWorker$"];
       const { issuer, organizationId, token } = scim;
+      function runDirectoryJob() {
+        const args = ledger
+          ? ["node", "examples/ledger/directory-job.mjs"]
+          : [process.env.HEIMDALL_REFERENCE_SUPPORT_BINARY, "directory-job"];
+        const job = spawnSync(args[0], args.slice(1), {
+          env: {
+            ...process.env,
+            ...variables,
+            HEIMDALL_DIRECTORY_ORGANIZATION: organizationId,
+            HEIMDALL_DIRECTORY_READER_TOKEN: token,
+            HEIMDALL_DIRECTORY_OPERATOR_TOKEN: exportToken,
+            HEIMDALL_DIRECTORY_WORKSPACES: JSON.stringify([workspace.workspaceId]),
+          },
+          encoding: "utf8",
+          timeout: 50000,
+        });
+        const code = /"directoryJob":"([a-z_]+)"/.exec(job.stderr ?? "")?.[1];
+        assert.equal(
+          job.status,
+          0,
+          `Live SCIM ${schema} directory job failed: ${code ?? "process"}`,
+        );
+        return Object.assign(
+          {},
+          ...job.stdout
+            .trim()
+            .split("\n")
+            .map((line) => JSON.parse(line)),
+        );
+      }
+      assert(/^[0-9]+$/.test(recipient));
+      const readDirectoryRevision = () =>
+        executeSQL(`SELECT revision::text || ':' || completed::text FROM heimdall_directory.deactivations
+          WHERE product_id='${schema}' AND environment='verification' AND subject='${recipient}'`);
       function runWorker(stage, revision) {
         const worker = spawnSync(command[0], command.slice(1), {
           cwd: new URL(ledger ? "../../" : "../../sdk/go/", import.meta.url),
@@ -571,12 +625,45 @@ export async function verifyReferenceProduct(input, authorize) {
         assert(revision, "Live SCIM worker did not report a revision");
         return revision;
       };
-      let deniedInMs, revision, failedRevision;
+      let deniedInMs, scheduledCleanupInMs, revision, failedRevision, scheduledJob;
       const assertStillDeniedWithGrants = async () => {
         await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 401);
         assert.deepEqual(await readRelations(), originalTuples);
       };
       await scim.join(schema, {
+        async seedDirectoryJob() {
+          const result = runDirectoryJob();
+          assert.equal(result.discovered, 1);
+          assert.equal(result.observed, 1);
+          assert.equal(result.sessionsInvalidated, 0);
+          assert.equal(result.cleaned, 0);
+          await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 200);
+        },
+        async assertObservationMissing() {
+          assert.equal(await readDirectoryRevision(), "");
+        },
+        async assertMissedObservationDenial(started) {
+          await assertStillDeniedWithGrants();
+          deniedInMs = Math.round(performance.now() - started);
+        },
+        async finishDirectoryJob(started) {
+          const result = runDirectoryJob();
+          assert.equal(result.observed, 1);
+          assert.equal(result.cleaned, 1);
+          if (ledger) assert.equal(result.sessionsInvalidated, 1);
+          const match = /^([1-9][0-9]*):true$/.exec(await readDirectoryRevision());
+          assert(match, "Directory job did not complete cleanup");
+          revision = match[1];
+          await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 401);
+          scheduledCleanupInMs = Math.round(performance.now() - started);
+          if (ledger) {
+            assert(scheduledCleanupInMs < 60000);
+            deniedInMs = scheduledCleanupInMs;
+          }
+          assert.deepEqual(await readRelations(), []);
+          assert.equal(runDirectoryJob().cleaned, 0);
+          scheduledJob = true;
+        },
         async observeDisable(started) {
           runWorker("browser");
           await assertStillDeniedWithGrants();
@@ -633,9 +720,12 @@ export async function verifyReferenceProduct(input, authorize) {
           deniedInMs,
           disabledSession: 401,
           sharedProviderDisable: true,
-          deniedWithTuplesPresent: true,
+          deniedWithTuplesPresent: !scheduledJob || !ledger,
           cleanupAcknowledged: true,
           cleanupReplayConfirmed: true,
+          ...(scheduledJob
+            ? { scheduledJob: true, scheduledCleanupInMs, missedObservationDenied: !ledger }
+            : {}),
           ...(failedRevision
             ? { cleanupResumedSameRevision: true, deniedDuringCleanupOutage: true }
             : {}),
