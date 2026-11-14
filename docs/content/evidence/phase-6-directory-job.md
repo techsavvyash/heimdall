@@ -46,6 +46,8 @@ sequenceDiagram
   P-->>O: Return cleanup status
 ```
 
+Railway run `df814a6e-19bf-48fe-9e15-35fb9669f606` passed on Ledger deployment `d8666e8d-852e-47c9-9fce-e584a0b4678b` and Support deployment `975b1c97-97f8-4a3c-b43a-1cf96730c908` using source commit `8d61605`. The probe seeded the pending revision and denial in PostgreSQL and checked the target's live OpenFGA grants. An anonymous request returned HTTP 401. The Acme session and cross-origin request returned HTTP 403. A request with an injected workspace returned HTTP 400. Both products confirmed and replayed cleanup with the Globex owner's live OIDC session, with no target grants remaining. Reproduce with `HEIMDALL_PROBE_STRICT_DIRECTORY_CLEANUP=1` in the deployed federation-switch probe.
+
 Each invocation discovers one page of up to 25 entries, checks known subjects in pages of 10, then reconciles up to 10 pending revisions. Known-subject scanning restarts from the beginning after a process restart. Measure full scan time with production directory sizes before setting a job interval. A directory too large to complete within the deadline needs a product scheduler that persists its scan position or partitions the work. The managed revision binds the approved workspace plan on its first reconciliation attempt. Keep that mapping and administrator stable while retries are pending. Uncertain writes remain subject to the managed recovery gate.
 
 The job reports counts for discovery, observation, revoked sessions and cleanup. It reports the age of the oldest revision it processed, in milliseconds, and emits a sanitized error code on failure. Reactivation still requires the separate approved enrollment flow.
