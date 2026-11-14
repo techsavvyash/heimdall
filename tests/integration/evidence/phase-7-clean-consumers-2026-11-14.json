@@ -58,5 +58,66 @@
         "terminalExcluded": true
       }
     }
-  ]
+  ],
+  "railway": {
+    "runId": "62412952-458a-4dc9-9900-17e4f41407ed",
+    "supportGoToolchain": "go1.26.11",
+    "supportImageDigest": "sha256:673c1d7ce822c37d2cc2793059918ec55bc02676bbac4bfae66428d53f108fc3",
+    "products": [
+      {
+        "product": "ledger",
+        "deployment": "45753248-288e-4ac2-a6d0-9f2eab4fb485",
+        "session": "issued and logged out",
+        "discovery": "Acme",
+        "roles": {
+          "acme": ["owner"],
+          "globex": []
+        },
+        "scopedRead": 200,
+        "businessWrite": {
+          "action": "approve",
+          "insufficientRole": 403,
+          "crossTenantId": 404,
+          "authorized": 204,
+          "repeat": 204,
+          "inactiveWorkspace": 403,
+          "pendingWorkspace": 403,
+          "auditUnavailable": 503
+        },
+        "reconcile": {
+          "operator": 200,
+          "unauthorized": 403,
+          "confirmedCompleted": true,
+          "terminalExcluded": true
+        }
+      },
+      {
+        "product": "support",
+        "deployment": "f7ac0870-ab0a-494a-97f9-9b268548b2bf",
+        "session": "issued and logged out",
+        "discovery": "Acme",
+        "roles": {
+          "acme": ["owner"],
+          "globex": []
+        },
+        "scopedRead": 200,
+        "businessWrite": {
+          "action": "assign-to-me",
+          "insufficientRole": 403,
+          "crossTenantId": 404,
+          "authorized": 204,
+          "repeat": 204,
+          "inactiveWorkspace": 403,
+          "pendingWorkspace": 403,
+          "auditUnavailable": 503
+        },
+        "reconcile": {
+          "operator": 200,
+          "unauthorized": 403,
+          "confirmedCompleted": true,
+          "terminalExcluded": true
+        }
+      }
+    ]
+  }
 }
