@@ -19,6 +19,8 @@ export async function verifyReferenceProduct(input, authorize) {
     otherWorkspace,
     exportToken,
     federation,
+    scim,
+    readMember,
   } = input;
   const ledger = config.productId === "ledger";
   const port = ledger ? 18640 : 18641;
@@ -474,6 +476,63 @@ export async function verifyReferenceProduct(input, authorize) {
     assert.deepEqual(await (await request(rolesPath, { headers: recipientHeaders })).json(), {
       roles: [initialRole],
     });
+    if (scim) {
+      assert(!remote, "SCIM browser probe requires a disposable local product database");
+      await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 200);
+      const originalTuples = await readMember(recipient, workspace.workspaceId);
+      assert.equal(originalTuples, 2);
+      const start = performance.now();
+      await scim.setActive(false);
+      const command = ledger
+        ? [
+            "pnpm",
+            "--filter",
+            "@heimdall/sdk",
+            "exec",
+            "vitest",
+            "run",
+            "test/live-scim-worker.test.ts",
+          ]
+        : ["go", "test", "-race", "-count=1", "./postgres", "-run", "^TestLiveSCIMWorker$"];
+      const { issuer, organizationId, token } = scim;
+      const worker = spawnSync(command[0], command.slice(1), {
+        cwd: new URL(ledger ? "../../" : "../../sdk/go/", import.meta.url),
+        env: {
+          ...process.env,
+          HEIMDALL_TEST_DIRECTORY_DB: runtimeDB,
+          HEIMDALL_TEST_LIVE_SCIM: JSON.stringify({
+            issuer,
+            organizationId,
+            token,
+            subject: recipient,
+            stage: "browser",
+          }),
+        },
+        encoding: "utf8",
+        timeout: 45000,
+      });
+      assert.equal(worker.status, 0, "Live SCIM browser worker failed");
+      await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 401);
+      const deniedInMs = Math.round(performance.now() - start);
+      assert(deniedInMs < 60000);
+      assert.equal(await readMember(recipient, workspace.workspaceId), originalTuples);
+      await expectDenied(await memberRequest("remove", recipient, runId), 200);
+      assert.equal(await readMember(recipient, workspace.workspaceId), 0);
+      await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 401);
+      await scim.setActive(true);
+      await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 401);
+      return {
+        product: schema,
+        scopedRead: 200,
+        scimBrowser: {
+          deniedInMs,
+          disabledSession: 401,
+          deniedWithTuplesPresent: true,
+          removedTuples: originalTuples,
+          reactivatedCookie: 401,
+        },
+      };
+    }
     const changed = await memberRequest("assign-roles", recipient, runId, [replacementRole]);
     assert.equal(changed.status, 200);
     const assignment = await changed.json();

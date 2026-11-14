@@ -34,6 +34,24 @@ func TestLiveSCIMWorker(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
 	const product, environment, other = "support", "scim-live-go", "scim-live-other-go"
+	if c.Stage == "browser" {
+		observe, err := NewDirectoryDeactivation(db, product, "verification", c.DirectoryReaderOptions)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := observe(ctx, c.Subject)
+		if err != nil || result.State != "inactive" || result.SessionsInvalidated != 1 {
+			t.Fatal("SCIM disable did not revoke the browser session", result, err)
+		}
+		storage, err := NewStorage(db, StorageOptions{ProductID: product, Environment: "verification"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if denied, err := storage.Identity.Check(ctx, heimdall.Identity{Issuer: c.Issuer, Subject: c.Subject}); err != nil || !denied {
+			t.Fatal("durable identity denial absent", err)
+		}
+		return
+	}
 	worker, err := NewDirectoryPolling(db, product, environment, c.DirectoryReaderOptions)
 	if err != nil {
 		t.Fatal(err)

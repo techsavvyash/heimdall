@@ -4,6 +4,7 @@ import { expect, test } from "vitest";
 import { encodeIdentity } from "../src/internal/identity-encoding.js";
 import {
   createDirectoryCleanup,
+  createDirectoryDeactivation,
   createDirectoryPolling,
   createPostgresStorage,
 } from "../src/postgres.js";
@@ -21,6 +22,22 @@ test.skipIf(!process.env.HEIMDALL_TEST_LIVE_SCIM)(
       const worker = createDirectoryPolling(pool, options);
       const storage = createPostgresStorage(pool, { ...options, auditSinks: [] });
       const cleanup = createDirectoryCleanup(pool, options);
+      if (stage === "browser") {
+        const scope = {
+          ...reader,
+          productId: "ledger",
+          environment: "verification",
+          auditSinks: [],
+        };
+        const observed = await createDirectoryDeactivation(pool, scope)(subject, signal);
+        if (
+          observed.state !== "inactive" ||
+          observed.sessionsInvalidated !== 1 ||
+          !(await createPostgresStorage(pool, scope).identity.check(identity, signal))
+        )
+          throw new Error("Live SCIM disable did not revoke the browser session");
+        return;
+      }
       const scopes = [options.environment, "scim-live-other-ts"];
       if (stage === "seed") {
         for (const environment of scopes) {

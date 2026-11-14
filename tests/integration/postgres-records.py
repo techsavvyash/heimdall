@@ -201,12 +201,15 @@ try:
             products = [result for result in observations if "scopedRead" in result]
             if len(products) != 2:
                 raise RuntimeError("missing reference product observations")
-            audit_rows = run(
-                ["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime", "-XAt", "-v", "ON_ERROR_STOP=1"],
-                input="SELECT event->>'payload' FROM heimdall.audit_events WHERE environment='verification'",
-                capture_output=True, text=True).stdout.splitlines()
-            run(["python3", "tests/integration/reference-onboarding-audit.py"],
-                input=json.dumps({"products": products, "payloads": audit_rows}), text=True)
+            if os.environ.get("HEIMDALL_PROBE_SCIM_BROWSER") == "1":
+                assert all("scimBrowser" in product for product in products)
+            else:
+                audit_rows = run(
+                    ["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime", "-XAt", "-v", "ON_ERROR_STOP=1"],
+                    input="SELECT event->>'payload' FROM heimdall.audit_events WHERE environment='verification'",
+                    capture_output=True, text=True).stdout.splitlines()
+                run(["python3", "tests/integration/reference-onboarding-audit.py"],
+                    input=json.dumps({"products": products, "payloads": audit_rows}), text=True)
             print(json.dumps({"referenceProducts": products}), flush=True)
     if os.environ.get("HEIMDALL_PROBE_DURABLE_RUNTIME") == "1":
         for args in (

@@ -179,3 +179,29 @@ sequenceDiagram
 ```
 
 Reproduce with `HEIMDALL_PROBE_PINNED_ADMIN=1` and `tests/integration/postgres-records.py`. This test uses synthetic provider status and loss of the OpenFGA write response. The live SCIM verification above separately exercises the provider status and durable deny transaction. A single live run connecting browser login, SCIM mutation and OpenFGA enforcement remains open.
+
+## Live SCIM disable with product browser sessions
+
+PostgreSQL run `heimdall-records-8372d6b9ed3345a0ada97ce07f19887a` connected the local Ledger and Support reference applications to Railway ZITADEL and OpenFGA. It created the recipient through SCIM and used the ZITADEL Login API to complete the applications' authorization-code callbacks. Both applications issued real cookies backed by PostgreSQL. The recipient read the protected resource after an authorized membership grant.
+
+```mermaid
+sequenceDiagram
+  participant U as Product session
+  participant W as Directory worker
+  participant Z as Railway ZITADEL
+  participant D as Product PostgreSQL
+  participant F as Railway OpenFGA
+  U->>F: Read protected resource through the product
+  F-->>U: Allow through granted membership
+  W->>Z: Disable the subject through SCIM
+  W->>D: Commit identity denial and revoke the session
+  U->>D: Replay original session cookie
+  D-->>U: Product returns HTTP 401 while tuples still exist
+  W->>F: Administrator removes the membership through the product
+  Z-->>W: SCIM reactivation succeeds
+  D-->>U: Original cookie still returns HTTP 401
+```
+
+The disable-to-denial check took 1,360 ms for Ledger and 2,904 ms for Support, including the SCIM call and test worker startup. Each worker removed one real session row. The probe checked that both direct tuples still existed at the first denial and that the product's managed removal subsequently cleared them.
+
+Run `tests/integration/postgres-records.py` with `HEIMDALL_PROBE_REFERENCE_PRODUCTS=1` and `HEIMDALL_PROBE_SCIM_BROWSER=1` plus the protected verification credentials. The probe drives HTTP cookies and callbacks programmatically. This run uses the managed membership endpoint for removal. The preceding pinned OpenFGA test covers cleanup revision acknowledgement and approved re-enrollment. A live run applying those worker operations together and qualifying a new session after approved re-enrollment remains pending.

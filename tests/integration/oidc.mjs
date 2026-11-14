@@ -26,6 +26,12 @@ console.error(`OIDC probe run: ${runId}`);
 let orgId;
 const sessions = [];
 const observations = [];
+const scimBrowser = process.env.HEIMDALL_PROBE_SCIM_BROWSER === "1";
+if (scimBrowser)
+  assert(
+    !railwayReference && process.env.HEIMDALL_REFERENCE_DATABASE_URL,
+    "The SCIM browser probe requires disposable local product storage",
+  );
 async function sdkRuntime(client, c) {
   if (process.env.HEIMDALL_PROBE_SDK_RUNTIME !== "1") return;
   const base = process.env.HEIMDALL_PROBE_OPENFGA_URL;
@@ -106,6 +112,16 @@ async function sdkRuntime(client, c) {
             recipient: c.reference.recipient,
             runId,
             otherWorkspace: observations.find((entry) => entry.onboarding)?.onboarding,
+            scim: c.reference.scim,
+            readMember: async (subject, workspaceId) => {
+              const user =
+                "user:" + Buffer.from(JSON.stringify([issuer, subject])).toString("base64url");
+              const result = await api(`/stores/${store.id}/read`, {
+                tuple_key: { user, object: "workspace:" + workspaceId },
+                consistency: "HIGHER_CONSISTENCY",
+              });
+              return (result.tuples ?? []).length;
+            },
           },
           c.reference.authorize,
         ),
@@ -181,7 +197,7 @@ async function req(method, path, body, credential = pat) {
   const response = await fetch(issuer + path, {
     method,
     headers: {
-      "content-type": "application/json",
+      "content-type": path.startsWith("/scim/") ? "application/scim+json" : "application/json",
       ...(credential ? { authorization: `Bearer ${credential}` } : {}),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -348,15 +364,77 @@ try {
     loginPat,
   );
   sessions.push(session.sessionId);
-  const otherUser = await ok("POST", "/v2/users/new", {
-    organizationId: orgId,
-    username: `other-${runId}`,
-    human: {
-      profile: { givenName: "Other", familyName: "Probe" },
-      email: { email: `other-${runId}@example.invalid`, isVerified: true },
-      password: { password, changeRequired: false },
-    },
-  });
+  let directory;
+  async function createSCIMRecipient() {
+    const machine = await ok("POST", "/v2/users/new", {
+      organizationId: orgId,
+      username: "directory-" + runId,
+      machine: { name: "Browser SCIM probe" },
+      metadata: [
+        {
+          key: "urn:zitadel:scim:provisioningDomain",
+          value: Buffer.from("browser-" + runId).toString("base64"),
+        },
+      ],
+    });
+    await ok(
+      "POST",
+      "/zitadel.internal_permission.v2.InternalPermissionService/CreateAdministrator",
+      {
+        userId: machine.id,
+        resource: { organizationId: orgId },
+        roles: ["ORG_HEIMDALL_SCIM"],
+      },
+    );
+    const token = (
+      await ok("POST", `/v2/users/${machine.id}/pats`, {
+        expirationDate: new Date(Date.now() + 900000).toISOString(),
+      })
+    ).token;
+    const path = `/scim/v2/${orgId}/Users`;
+    const recipient = await ok(
+      "POST",
+      path,
+      {
+        schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+        externalId: "browser-" + runId,
+        userName: `scim-browser-${runId}@example.invalid`,
+        name: { givenName: "SCIM", familyName: "Browser" },
+        emails: [{ value: `scim-browser-${runId}@example.invalid`, primary: true }],
+        password,
+        active: true,
+      },
+      token,
+    );
+    directory = {
+      issuer,
+      organizationId: orgId,
+      token,
+      async setActive(active) {
+        await ok(
+          "PATCH",
+          path + "/" + recipient.id,
+          {
+            schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+            Operations: [{ op: "replace", path: "active", value: active }],
+          },
+          token,
+        );
+      },
+    };
+    return recipient;
+  }
+  const otherUser = scimBrowser
+    ? await createSCIMRecipient()
+    : await ok("POST", "/v2/users/new", {
+        organizationId: orgId,
+        username: `other-${runId}`,
+        human: {
+          profile: { givenName: "Other", familyName: "Probe" },
+          email: { email: `other-${runId}@example.invalid`, isVerified: true },
+          password: { password, changeRequired: false },
+        },
+      });
   const otherSession = await ok(
     "POST",
     "/v2/sessions",
@@ -561,6 +639,7 @@ try {
       statusCase.reference = {
         apiAudience: audiences[0],
         recipient: otherUser.id,
+        scim: directory,
         authorize: async (location, recipient = false) => {
           const selected = recipient ? otherSession : session;
           const login = await redirect(location);
