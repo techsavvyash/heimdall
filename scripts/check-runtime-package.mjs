@@ -1,20 +1,31 @@
 import { execFileSync } from "node:child_process";
+import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const work = mkdtempSync(join(tmpdir(), "heimdall-consumer-"));
 const run = (command, args, cwd = work) => execFileSync(command, args, { cwd, stdio: "pipe" });
 try {
-  const archive = join(work, "archive");
-  mkdirSync(archive);
-  run("pnpm", ["--filter", "@heimdall/sdk", "pack", "--pack-destination", archive], root);
-  const tarball = readdirSync(archive).find((name) => name.endsWith(".tgz"));
-  if (!tarball) throw new Error("Package tarball missing");
+  const archivePath = process.argv[2];
+  let tarPath;
+  if (archivePath) {
+    tarPath = resolve(archivePath);
+  } else {
+    const archive = join(work, "archive");
+    mkdirSync(archive);
+    run("pnpm", ["--filter", "@heimdall/sdk", "pack", "--pack-destination", archive], root);
+    const tarball = readdirSync(archive).find((name) => name.endsWith(".tgz"));
+    if (!tarball) throw new Error("Package tarball missing");
+    tarPath = join(archive, tarball);
+  }
   const metadata = JSON.parse(readFileSync(join(root, "sdk/typescript/package.json"), "utf8"));
-  if (tarball !== `heimdall-sdk-${metadata.version}.tgz`)
+  if (basename(tarPath) !== `heimdall-sdk-${metadata.version}.tgz`)
     throw new Error("Package version mismatch");
-  const tarPath = join(archive, tarball);
+  const packedMetadata = JSON.parse(run("tar", ["-xOzf", tarPath, "package/package.json"]));
+  for (const field of ["name", "version", "private", "engines", "exports", "bin", "dependencies"]) {
+    assert.deepEqual(packedMetadata[field], metadata[field], `Unexpected packed package ${field}`);
+  }
   for (const entry of run("tar", ["-tzf", tarPath]).toString().trim().split("\n")) {
     if (entry === "package/package.json") continue;
     if (!/^package\/dist\/(?:[\w.-]+\/)*[\w.-]+\.(?:js|ts|js\.map|ts\.map)$/.test(entry))

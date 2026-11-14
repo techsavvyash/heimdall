@@ -19,6 +19,28 @@ Release qualification is in progress. The enterprise gate is recorded in [[phase
 
 The production TypeScript package audit reported zero known vulnerabilities. The Go SDK and Support reference example passed `govulncheck` with Go 1.26.11, and the SDK race suite passed on that toolchain. The scan on Go 1.26.4 reported reachable standard-library advisories. The Go 1.24 module directive describes language compatibility. Railway built and verified the Support reference binary with Go 1.26.11. [Go release history](https://go.dev/doc/devel/release)
 
+## Publish the paired SDKs
+
+The npm maintainer needs publish access to `@heimdall/sdk`. Confirm the scope in npm and authenticate in the maintainer's environment. The current verification session returns HTTP 401 from `npm whoami --registry=https://registry.npmjs.org`. A public package lookup cannot verify scope ownership. [npm organization package publishing](https://docs.npmjs.com/creating-and-publishing-an-organization-scoped-package/)
+
+Use the approved stable version in the TypeScript manifest and both runtime version constants. Remove the TypeScript manifest's `private` flag in the stable release commit. Run the workspace and pinned-service checks on that commit, and use the same commit for the nested Go tag `sdk/go/v<version>`. Run the reference journeys against the stable build and record the artifact checksums and Railway deployment IDs.
+
+From a clean checkout of the approved release commit, build the TypeScript archive once and check the exact file that will go to npm.
+
+```sh
+pnpm install --frozen-lockfile
+pnpm run check
+release_dir="$(mktemp -d)"
+version="$(node -p 'require("./sdk/typescript/package.json").version')"
+archive="$release_dir/heimdall-sdk-$version.tgz"
+pnpm --filter @heimdall/sdk pack --pack-destination "$release_dir"
+pnpm run check:package "$archive"
+shasum -a 256 "$archive"
+npm publish "$archive" --registry=https://registry.npmjs.org --access public --dry-run
+```
+
+During the authorized release, publish that archive and push the matching Go tag. If either operation fails, verify which artifact is already available and resume the other operation with the same archive and release commit. Verify npm's `dist.integrity` against the SHA-512 of the local archive. Verify both installs from fresh consumers and check that the Go tag resolves to the same release commit before announcing the pair. [npm publish](https://docs.npmjs.com/commands/npm-publish/)
+
 
 ## Isolated consumer journeys
 
