@@ -1,0 +1,69 @@
+{
+  "runId": "19dccb55-0b62-40ed-a2ce-3274e0bb540e",
+  "results": [
+    {
+      "product": "ledger",
+      "deployment": "bec587ec-1f6e-493b-9189-f236e0e54e75",
+      "switch": "passed",
+      "providerSetup": {
+        "auditDelivery": {
+          "indexed": true,
+          "foreignTenantRejected": true,
+          "eventId": "b6385423-f8cb-4256-be66-496d3731a449",
+          "index": "heimdall-policy-ledger-00dd5437-fa00-4836-b117-9b23ea31e166"
+        },
+        "protocol": "saml",
+        "version": "4df1c0624002a7eccf91b3d9f2a135dc",
+        "eventId": "b6385423-f8cb-4256-be66-496d3731a449",
+        "scopeAndClaimChecked": true,
+        "lostProviderIdRecovered": true,
+        "activationRequiresTest": true,
+        "previousPolicyRejected": true,
+        "candidateCallbackRetired": true
+      },
+      "strictDirectoryCleanup": "confirmed and replayed",
+      "priorCookie": 401,
+      "staleCallback": 401,
+      "replay": 401,
+      "priorCursor": 400,
+      "discoveryBefore": "acme",
+      "discoveryAfter": "globex",
+      "resourceAfter": {
+        "acme": 403,
+        "globex": 200
+      }
+    },
+    {
+      "product": "support",
+      "deployment": "753d553f-47e0-4b90-9d73-1fa38e84a4c3",
+      "switch": "passed",
+      "providerSetup": {
+        "auditDelivery": {
+          "indexed": true,
+          "foreignTenantRejected": true,
+          "eventId": "e4c6ab39faaa0d17b588f057df851266",
+          "index": "heimdall-policy-support-4a371ea7-662b-44d7-ab3e-eae6957f9e72"
+        },
+        "protocol": "oidc",
+        "version": "f8087a3097bc879a2c2239579b28d304",
+        "eventId": "e4c6ab39faaa0d17b588f057df851266",
+        "scopeAndClaimChecked": true,
+        "lostProviderIdRecovered": true,
+        "activationRequiresTest": true,
+        "previousPolicyRejected": true,
+        "candidateCallbackRetired": true
+      },
+      "strictDirectoryCleanup": "confirmed and replayed",
+      "priorCookie": 401,
+      "staleCallback": 401,
+      "replay": 401,
+      "priorCursor": 400,
+      "discoveryBefore": "acme",
+      "discoveryAfter": "globex",
+      "resourceAfter": {
+        "acme": 403,
+        "globex": 200
+      }
+    }
+  ]
+}
