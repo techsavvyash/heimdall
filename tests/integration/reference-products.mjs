@@ -908,7 +908,9 @@ export async function verifyReferenceProduct(input, authorize) {
       );
       const row = `WHERE workspace_id='acme' AND ${businessId}_id='${writableId}'`;
       try {
-        await expectDenied(await writeResource("acme", writableId, recipientCookie), 204);
+        const response = await writeResource("acme", writableId, recipientCookie);
+        const failure = response.ok ? "" : (await response.json().catch(() => ({}))).code;
+        assert.equal(response.status, 204, `${schema} Acme mutation failed: ${failure}`);
         assert.equal(
           await executeSQL(`SELECT ${resultColumn} FROM ${businessTable} ${row};`),
           recipient,
