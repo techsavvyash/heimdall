@@ -22,6 +22,14 @@ To collect ZITADEL events in the same invocation, provide a tenant, `HEIMDALL_ID
 
 The job prints counts and backlog metrics. Monitor failures, due and quarantined counts, oldest pending age and database capacity. Capacity is database-wide and belongs in operator monitoring. Use the SDK's tenant-bound requeue operation with the current attempt count after investigating and fixing a quarantined event. Keep Elasticsearch indexes and receiver credentials bound to the configured destinations.
 
+## Export SSO policy publications
+
+The HTTP process writes the product's publication row. The tenant audit job reads that row using the product database connection, stages the retained event using its stable ID, and marks the product row exported. Then it delivers the retained event and records the receiver's acknowledgement. The product row's exported flag means the retained event is available for delivery. The SDK delivery row records the receipt.
+
+For this path, give the tenant job access to its product database through `LEDGER_DATABASE_URL` or `SUPPORT_DATABASE_URL`. Supply `HEIMDALL_PROVIDER_SETTINGS` to enable staging, together with `HEIMDALL_AUDIT_TENANT` and the `siem` destination. Keep the staging setting active until pending publications have drained, including after disabling the settings routes on the HTTP process. The job uses neither the provider settings token nor the federation credential.
+
+Use a distinct job login for `DATABASE_URL`. It needs retained audit writer access for staging and update access to the delivery state, attempt count, next attempt and delivered timestamp for claiming and acknowledging batches. The Railway verification grants in `deploy/verification/policy-audit-job-grants.sql` inherit the product's verification runtime role and add only those delivery-column updates. The HTTP login keeps its existing privileges. The grant file takes the existing verification role as `runtime_role` and the new scheduled job role as `audit_role`. Keep the receipt endpoint, token and index tied to the job's product, environment and tenant.
+
 ## Verification
 
 - Run `cae27495-ed0e-4264-99fa-fd29ba94379b` invoked the product commands in separate processes to deliver 91 Ledger and 93 Support events. The probe matched all indexed IDs to acknowledged PostgreSQL rows and traced the owner and recipient workflows.

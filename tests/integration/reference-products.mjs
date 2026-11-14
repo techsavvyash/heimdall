@@ -108,7 +108,7 @@ export async function verifyReferenceProduct(input, authorize) {
     : "INSERT INTO support.tickets VALUES ('acme','acme-ticket','Acme ticket'),('globex','globex-ticket','Globex ticket')";
   async function executeSQL(statement) {
     let sql;
-    if (remote) {
+    if (remote && !process.env.HEIMDALL_REFERENCE_SQL_DATABASE_URL) {
       sql = spawn(
         "railway",
         [
@@ -125,7 +125,11 @@ export async function verifyReferenceProduct(input, authorize) {
         { stdio: ["pipe", "pipe", "pipe"] },
       );
     } else {
-      const database = new URL(db);
+      const database = new URL(remote ? process.env.HEIMDALL_REFERENCE_SQL_DATABASE_URL : db);
+      if (remote) {
+        assert.equal(database.hostname, "127.0.0.1");
+        assert.equal(database.pathname, "/heimdall_phase4_reference");
+      }
       sql = spawn("psql", ["-XqAt", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose"], {
         env: {
           ...process.env,
@@ -154,7 +158,7 @@ export async function verifyReferenceProduct(input, authorize) {
     const [sqlCode] = await once(sql, "close");
     const sqlState =
       /ERROR:\s+([A-Z0-9]{5}):/.exec(sqlDiagnostic)?.[1] ?? "connection or client error";
-    assert.equal(sqlCode, 0, "Reference fixture SQL failed " + sqlState);
+    assert.equal(sqlCode, 0, "Reference fixture SQL failed for " + schema + ": " + sqlState);
     return output.trim();
   }
   assert(/^[A-Za-z0-9:_-]+$/.test(principal));
@@ -593,7 +597,33 @@ export async function verifyReferenceProduct(input, authorize) {
           AND event_id='${eventId}' AND previous_version='${policy.policyVersion}' AND NOT exported;`),
           "1",
         );
+        let auditDelivery;
+        if (process.env.HEIMDALL_PROBE_POLICY_PUBLICATION_SIEM === "1") {
+          const { stdout } = await promisify(execFile)(
+            "python3",
+            [
+              "tests/integration/policy-publication-siem.py",
+              schema,
+              workspace,
+              eventId,
+              version,
+              policy.policyVersion,
+            ],
+            { env: { ...process.env, ...variables }, timeout: 180000 },
+          );
+          auditDelivery = JSON.parse(stdout);
+          assert.equal(auditDelivery.eventId, eventId);
+          assert.equal(auditDelivery.indexed, true);
+          assert.equal(
+            await executeSQL(`SELECT count(*) FROM ${schema}.sso_publications p
+            JOIN heimdall.audit_deliveries d ON d.environment=p.environment AND d.event_id=p.event_id
+            WHERE p.environment='verification' AND p.workspace_id='${workspace}' AND p.event_id='${eventId}'
+            AND p.exported AND d.product_id='${schema}' AND d.sink_id='siem' AND d.state='delivered';`),
+            "1",
+          );
+        }
         providerSetupProof = {
+          ...(auditDelivery ? { auditDelivery } : {}),
           protocol: candidate.protocol,
           version,
           eventId,
