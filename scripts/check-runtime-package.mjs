@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
@@ -11,14 +11,26 @@ try {
   run("pnpm", ["--filter", "@heimdall/sdk", "pack", "--pack-destination", archive], root);
   const tarball = readdirSync(archive).find((name) => name.endsWith(".tgz"));
   if (!tarball) throw new Error("Package tarball missing");
+  const metadata = JSON.parse(readFileSync(join(root, "sdk/typescript/package.json"), "utf8"));
+  if (tarball !== `heimdall-sdk-${metadata.version}.tgz`)
+    throw new Error("Package version mismatch");
+  const tarPath = join(archive, tarball);
+  for (const entry of run("tar", ["-tzf", tarPath]).toString().trim().split("\n")) {
+    if (entry === "package/package.json") continue;
+    if (!/^package\/dist\/(?:[\w.-]+\/)*[\w.-]+\.(?:js|ts|js\.map|ts\.map)$/.test(entry))
+      throw new Error("Unexpected package path");
+  }
   writeFileSync(
     join(work, "package.json"),
     JSON.stringify({
       type: "module",
-      dependencies: { "@heimdall/sdk": "file:" + join(archive, tarball) },
+      dependencies: { "@heimdall/sdk": "file:" + tarPath },
     }),
   );
-  writeFileSync(join(work, "pnpm-workspace.yaml"), "minimumReleaseAge: 43200\n");
+  writeFileSync(
+    join(work, "pnpm-workspace.yaml"),
+    "minimumReleaseAge: 43200\nminimumReleaseAgeStrict: true\n",
+  );
   run("pnpm", ["install", "--prefer-offline", "--ignore-scripts"]);
   writeFileSync(
     join(work, "tsconfig.json"),

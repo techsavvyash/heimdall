@@ -1,0 +1,52 @@
+name: Paired SDK candidate
+
+on:
+  push:
+    tags:
+      - "sdk/go/v*-rc.*"
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.11"
+          cache: false
+      - name: Verify paired versions
+        shell: bash
+        run: |
+          version=${GITHUB_REF_NAME#sdk/go/v}
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]
+          test "$version" = "$(node -p 'require("./sdk/typescript/package.json").version')"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run check
+      - name: Verify pinned-service fault scenarios
+        env:
+          HEIMDALL_PROBE_PINNED_ADMIN: "1"
+          HEIMDALL_PROBE_SDK_RECOVERY: "1"
+        run: python3 tests/integration/postgres-records.py
+      - name: Verify Go module tag in a clean consumer
+        run: sh scripts/check-go-consumer.sh "${GITHUB_REF_NAME#sdk/go/}"
+      - name: Pack and hash the TypeScript candidate
+        run: |
+          mkdir release-candidate
+          pnpm --filter @heimdall/sdk pack --pack-destination "$PWD/release-candidate"
+          cd release-candidate
+          sha256sum -- *.tgz > SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        with:
+          name: heimdall-paired-sdk-candidate
+          path: release-candidate/
+          if-no-files-found: error

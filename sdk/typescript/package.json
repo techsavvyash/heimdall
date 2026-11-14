@@ -1,8 +1,8 @@
 {
   "name": "@heimdall/sdk",
-  "version": "0.0.0",
+  "version": "0.1.0-rc.1",
   "private": true,
-  "description": "Heimdall TypeScript SDK development runtime",
+  "description": "Heimdall TypeScript SDK for product authentication and authorization",
   "bin": {
     "heimdall-setup": "./dist/cli.js"
   },

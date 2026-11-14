@@ -285,16 +285,25 @@ try:
             revision = os.environ.get("HEIMDALL_PROBE_CONSUMER_REVISION")
             consumer_info = None
             if revision:
-                if not re.fullmatch(r"[0-9a-f]{40}", revision):
-                    raise RuntimeError("The consumer revision must be a pushed Git commit")
+                candidate = re.fullmatch(r"v(\d+\.\d+\.\d+-rc\.[1-9]\d*)", revision)
+                if not candidate and not re.fullmatch(r"[0-9a-f]{40}", revision):
+                    raise RuntimeError("The consumer revision must be a pushed commit or release candidate")
                 ledger = consumer / "ledger"
                 support_source = consumer / "support"
                 shutil.copytree(ROOT / "examples/ledger", ledger, ignore=shutil.ignore_patterns("node_modules"))
                 shutil.copytree(ROOT / "examples/support", support_source)
                 archive_dir = consumer / "archive"
                 archive_dir.mkdir()
-                run(["pnpm", "--filter", "@heimdall/sdk", "pack", "--pack-destination", str(archive_dir)])
-                archive, = archive_dir.glob("*.tgz")
+                supplied_archive = os.environ.get("HEIMDALL_PROBE_CONSUMER_ARCHIVE")
+                if supplied_archive:
+                    archive = Path(supplied_archive).resolve(strict=True)
+                    if not candidate:
+                        raise RuntimeError("An external archive requires a paired candidate version")
+                else:
+                    run(["pnpm", "--filter", "@heimdall/sdk", "pack", "--pack-destination", str(archive_dir)])
+                    archive, = archive_dir.glob("*.tgz")
+                if candidate and archive.name != f"heimdall-sdk-{candidate[1]}.tgz":
+                    raise RuntimeError("TypeScript archive must match the Go candidate version")
                 package_path = ledger / "package.json"
                 package = json.loads(package_path.read_text())
                 package["dependencies"]["@heimdall/sdk"] = "file:" + str(archive)
@@ -313,7 +322,11 @@ try:
                     reference_env["HEIMDALL_REFERENCE_SETUP_CLI"] = str(ledger / "node_modules/@heimdall/sdk/dist/cli.js")
                 go_version = subprocess.check_output(["go", "list", "-m", "-f", "{{.Version}}", module],
                                                      cwd=support_source, env=reference_env, text=True).strip()
+                if candidate and go_version != revision:
+                    raise RuntimeError("Go module did not resolve to the requested candidate")
                 consumer_info = {"archive": archive.name, "goModuleVersion": go_version}
+                if candidate:
+                    consumer_info["archiveSHA256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
             subprocess.run(["go", "build", "-o", binary, "."], cwd=support_source, env=reference_env, check=True)
             org_file = Path(temp) / "scim-organization"
             if scim_siem:
