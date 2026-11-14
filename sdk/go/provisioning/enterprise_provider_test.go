@@ -71,7 +71,9 @@ func TestLiveEnterpriseProviderPreparation(t *testing.T) {
 	if json.Unmarshal([]byte(raw), &o) != nil {
 		t.Fatal("invalid test input")
 	}
-	o.ClaimDispatch = func(context.Context) error { return nil }
+	if o.ExistingProviderID == "" {
+		o.ClaimDispatch = func(context.Context) error { return nil }
+	}
 	result, err := PrepareEnterpriseProvider(context.Background(), o)
 	if err != nil {
 		var typed *contract.Error
@@ -90,4 +92,40 @@ func TestLiveEnterpriseProviderPreparation(t *testing.T) {
 		t.Fatal("wrong organization accepted", err)
 	}
 	fmt.Println("ENTERPRISE_PROVIDER_ID", result.ProviderID)
+}
+
+func TestLiveEnterpriseProviderResponseLoss(t *testing.T) {
+	raw := os.Getenv("HEIMDALL_TEST_ENTERPRISE_PROVIDER_LOSS")
+	if raw == "" {
+		t.Skip("requires the pinned provider and a response-loss relay")
+	}
+	var options EnterpriseProviderOptions
+	if json.Unmarshal([]byte(raw), &options) != nil {
+		t.Fatal("invalid test input")
+	}
+	claimed := false
+	options.ClaimDispatch = func(context.Context) error {
+		if claimed {
+			return contract.ErrConflict
+		}
+		claimed = true
+		return nil
+	}
+	invalid := options
+	if options.OIDC == nil {
+		invalid.SAMLMetadataXML = []byte{}
+	} else {
+		oidc := *options.OIDC
+		oidc.ClientSecret = ""
+		invalid.OIDC = &oidc
+	}
+	if _, err := PrepareEnterpriseProvider(context.Background(), invalid); !errors.Is(err, contract.ErrInvalidArgument) || claimed {
+		t.Fatal("invalid settings must fail before dispatch")
+	}
+	if _, err := PrepareEnterpriseProvider(context.Background(), options); !errors.Is(err, contract.ErrOutcomeUnknown) {
+		t.Fatal("lost response must keep the outcome unknown", err)
+	}
+	if _, err := PrepareEnterpriseProvider(context.Background(), options); !errors.Is(err, contract.ErrConflict) {
+		t.Fatal("claimed attempt must reject another dispatch", err)
+	}
 }

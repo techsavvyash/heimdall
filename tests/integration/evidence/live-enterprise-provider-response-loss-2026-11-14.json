@@ -1,0 +1,54 @@
+[
+  {
+    "runId": "2834fed5-8cb1-4245-94af-310dd865c0e6",
+    "protocol": "oidc",
+    "ownerMatchesTargetOrganization": true,
+    "active": true,
+    "protocolMatches": true,
+    "sdk": "typescript",
+    "verifiedExistingProvider": true,
+    "rejectedWrongOrganization": true,
+    "lostCreateResponseRecovered": true,
+    "duplicateDispatches": 0,
+    "invalidSettingsRejected": true
+  },
+  {
+    "runId": "ae825d9f-3dc4-4587-992f-ad5eac7bd7f2",
+    "protocol": "oidc",
+    "ownerMatchesTargetOrganization": true,
+    "active": true,
+    "protocolMatches": true,
+    "sdk": "go",
+    "verifiedExistingProvider": true,
+    "rejectedWrongOrganization": true,
+    "lostCreateResponseRecovered": true,
+    "duplicateDispatches": 0,
+    "invalidSettingsRejected": true
+  },
+  {
+    "runId": "acd94172-bcd0-4112-8249-9932ebef4aa3",
+    "protocol": "saml",
+    "ownerMatchesTargetOrganization": true,
+    "active": true,
+    "protocolMatches": true,
+    "sdk": "typescript",
+    "verifiedExistingProvider": true,
+    "rejectedWrongOrganization": true,
+    "lostCreateResponseRecovered": true,
+    "duplicateDispatches": 0,
+    "invalidSettingsRejected": true
+  },
+  {
+    "runId": "abbe8697-4459-44d5-bf6d-683b3ff9b8b5",
+    "protocol": "saml",
+    "ownerMatchesTargetOrganization": true,
+    "active": true,
+    "protocolMatches": true,
+    "sdk": "go",
+    "verifiedExistingProvider": true,
+    "rejectedWrongOrganization": true,
+    "lostCreateResponseRecovered": true,
+    "duplicateDispatches": 0,
+    "invalidSettingsRejected": true
+  }
+]

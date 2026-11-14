@@ -54,3 +54,31 @@ OIDC run `65b7753d-7039-4a93-b74e-a83d261e0f4a` and SAML run `6f5ea804-3267-4eef
 Run `tests/integration/federation.mjs` with the protected variables described in [[phase-2-browser-federation]], plus `HEIMDALL_PROBE_ENTERPRISE_SETUP=typescript` or `go` and `HEIMDALL_PROBE_SDK_FEDERATION_HTTP=1`. The probe creates and removes its own organizations, directory realm and sessions. The production policy compare and swap is product-owned and the harness exercises the SDK check preceding it.
 
 Source commit `da666fa9e4d11f1e17f41190f43d372335865518` passed the workspace gate with 1,778 Vitest tests, Go race tests, package checks and 248 Mermaid diagrams checked in both Markdown and generated HTML. GitHub Actions runs `43514856120` and `43514865017` passed. Railway docs deployment `19ab3be2-f23d-4449-b8b0-b2c1109b18d7` served this evidence for that commit, and Chromium rendered the sequence diagram.
+
+## Recover a lost provider creation response
+
+The verification relay forwards one creation call to Railway ZITADEL. After ZITADEL confirms creation, the relay captures the provider ID for the test operator and drops the SDK connection. The SDK reports `outcome_unknown`. Reusing the claimed attempt returns `conflict` without forwarding a second creation. The test operator then supplies the captured ID and the SDK verifies it directly against Railway. The probe also submits an empty OIDC client secret or empty SAML metadata before claiming the attempt. Both fail locally.
+
+```mermaid
+sequenceDiagram
+  participant S as Heimdall SDK
+  participant R as Verification relay
+  participant Z as Railway ZITADEL
+  S->>S: Claim the creation attempt
+  S->>R: Send provider creation
+  R->>Z: Forward one request
+  Z-->>R: Confirm creation with provider ID
+  R--xS: Drop the response
+  S->>S: Reject another dispatch on the same claim
+  S->>Z: Read back the operator supplied provider ID
+  Z-->>S: Return provider scope and public settings
+```
+
+Set `HEIMDALL_PROBE_SETUP_RESPONSE_LOSS=1` with the existing enterprise setup probe. The fixture claim is held in memory for one test run. Production setup must persist the claim independently so it survives restart. The relay gives the test the exact resource ID and does not exercise an operator finding that ID after an incident.
+
+All four runs recovered the committed provider, rejected readback under another organization and completed federation with the recovered provider.
+
+| SDK | OIDC run | SAML run |
+| --- | --- | --- |
+| TypeScript | `2834fed5-8cb1-4245-94af-310dd865c0e6` | `acd94172-bcd0-4112-8249-9932ebef4aa3` |
+| Go | `ae825d9f-3dc4-4587-992f-ad5eac7bd7f2` | `abbe8697-4459-44d5-bf6d-683b3ff9b8b5` |

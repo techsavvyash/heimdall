@@ -67,6 +67,151 @@ async function api(origin, method, path, body, token, extra = {}) {
 }
 const za = (method, path, body, token = pat, extra) => api(z, method, path, body, token, extra);
 const ka = (method, path, body) => api(k, method, path, body, adminToken);
+
+async function verifyProviderResponseLoss(
+  language,
+  { organizationId, name, token, oidc, metadataXml, otherOrganization },
+) {
+  const provider = metadataXml ? { protocol: "saml", metadataXml } : { protocol: "oidc", ...oidc };
+  const path = "/management/v1/idps/" + (metadataXml ? "saml" : "generic_oidc");
+  let dispatched = 0;
+  let committedId;
+  const server = createServer(async (request, response) => {
+    if (
+      request.method !== "POST" ||
+      request.url !== path ||
+      request.headers["x-zitadel-orgid"] !== organizationId ||
+      request.headers.authorization !== "Bearer " + token
+    ) {
+      response.writeHead(403).end();
+      return;
+    }
+    dispatched++;
+    try {
+      const chunks = [];
+      for await (const chunk of request) chunks.push(chunk);
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      const result = await za("POST", path, body, token, { "x-zitadel-orgid": organizationId });
+      assert.match(result.id, /^[A-Za-z0-9_-]+$/);
+      committedId = result.id;
+      response.destroy();
+    } catch {
+      response.writeHead(502).end();
+    }
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const boundary = `http://127.0.0.1:${server.address().port}`;
+  const options = { issuer: z, organizationId, name, token, provider };
+  try {
+    if (language === "typescript") {
+      const { prepareEnterpriseProvider } =
+        await import("../../sdk/typescript/dist/provisioning/index.js");
+      const { HeimdallError } = await import("../../sdk/typescript/dist/index.js");
+      let claimed = false;
+      const claimDispatch = async () => {
+        if (claimed) throw new HeimdallError("conflict");
+        claimed = true;
+      };
+      const create = { ...options, issuer: boundary, transportProfile: "loopback", claimDispatch };
+      const invalid = metadataXml
+        ? { ...provider, metadataXml: new Uint8Array() }
+        : { ...provider, clientSecret: "" };
+      await assert.rejects(
+        prepareEnterpriseProvider({ ...create, provider: invalid }, AbortSignal.timeout(20000)),
+        { code: "invalid_argument" },
+      );
+      assert.equal(claimed, false);
+      await assert.rejects(prepareEnterpriseProvider(create, AbortSignal.timeout(20000)), {
+        code: "outcome_unknown",
+      });
+      await assert.rejects(prepareEnterpriseProvider(create, AbortSignal.timeout(20000)), {
+        code: "conflict",
+      });
+    } else {
+      assert.equal(language, "go");
+      const child = spawn(
+        "go",
+        [
+          "test",
+          "-race",
+          "-count=1",
+          "./provisioning",
+          "-run",
+          "^TestLiveEnterpriseProviderResponseLoss$",
+          "-v",
+        ],
+        {
+          cwd: new URL("../../sdk/go/", import.meta.url),
+          env: {
+            ...process.env,
+            HEIMDALL_TEST_ENTERPRISE_PROVIDER_LOSS: JSON.stringify({
+              issuer: boundary,
+              transportProfile: "loopback",
+              organizationId,
+              name,
+              token,
+              ...(metadataXml ? { samlMetadataXML: metadataXml.toString("base64") } : { oidc }),
+            }),
+          },
+          stdio: "ignore",
+        },
+      );
+      const [code] = await once(child, "exit");
+      assert.equal(code, 0, "Go lost response and duplicate dispatch checks failed");
+    }
+    assert.equal(dispatched, 1);
+    assert(committedId, "Expected ZITADEL to commit before response loss");
+    if (language === "typescript") {
+      const { prepareEnterpriseProvider } =
+        await import("../../sdk/typescript/dist/provisioning/index.js");
+      const recover = { ...options, existingProviderId: committedId };
+      const candidate = await prepareEnterpriseProvider(recover, AbortSignal.timeout(20000));
+      assert.equal(candidate.providerId, committedId);
+      await assert.rejects(
+        prepareEnterpriseProvider(
+          { ...recover, organizationId: otherOrganization },
+          AbortSignal.timeout(20000),
+        ),
+        { code: "conflict" },
+      );
+    } else {
+      const child = spawnSync(
+        "go",
+        [
+          "test",
+          "-race",
+          "-count=1",
+          "./provisioning",
+          "-run",
+          "^TestLiveEnterpriseProviderPreparation$",
+        ],
+        {
+          cwd: new URL("../../sdk/go/", import.meta.url),
+          timeout: 45000,
+          stdio: "ignore",
+          env: {
+            ...process.env,
+            HEIMDALL_TEST_OTHER_ORGANIZATION: otherOrganization,
+            HEIMDALL_TEST_ENTERPRISE_PROVIDER: JSON.stringify({
+              issuer: z,
+              organizationId,
+              name,
+              token,
+              existingProviderId: committedId,
+              ...(metadataXml ? { samlMetadataXML: metadataXml.toString("base64") } : { oidc }),
+            }),
+          },
+        },
+      );
+      assert.equal(child.status, 0, "Go recovered provider readback failed");
+    }
+    return { id: committedId };
+  } finally {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
 async function authenticateFixtureAdmin() {
   const login = await fetch(`${k}/realms/master/protocol/openid-connect/token`, {
     method: "POST",
@@ -173,6 +318,16 @@ try {
               )
             : undefined;
         const oidc = { issuer: `${k}/realms/${realm}`, clientId: "heimdall-zitadel", clientSecret };
+        if (process.env.HEIMDALL_PROBE_SETUP_RESPONSE_LOSS === "1") {
+          return await verifyProviderResponseLoss(language, {
+            organizationId: orgId,
+            name,
+            token: pat,
+            oidc,
+            metadataXml,
+            otherOrganization,
+          });
+        }
         if (language === "typescript") {
           const { prepareEnterpriseProvider } =
             await import("../../sdk/typescript/dist/provisioning/index.js");
@@ -292,6 +447,13 @@ try {
             sdk: process.env.HEIMDALL_PROBE_ENTERPRISE_SETUP,
             verifiedExistingProvider: true,
             rejectedWrongOrganization: true,
+            ...(process.env.HEIMDALL_PROBE_SETUP_RESPONSE_LOSS === "1"
+              ? {
+                  lostCreateResponseRecovered: true,
+                  duplicateDispatches: 0,
+                  invalidSettingsRejected: true,
+                }
+              : {}),
           }
         : {}),
     },
