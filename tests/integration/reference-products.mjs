@@ -88,6 +88,7 @@ export async function verifyReferenceProduct(input, authorize) {
     scim,
     roleAssignments,
     readMemberRelations,
+    grantNamedMembership,
   } = input;
   const ledger = config.productId === "ledger";
   const port = ledger ? 18640 : 18641;
@@ -207,7 +208,7 @@ export async function verifyReferenceProduct(input, authorize) {
     HEIMDALL_POLICY_VERSION: "reference-v1",
     HEIMDALL_WORKSPACE_CREATOR_SUBJECT: user,
     HEIMDALL_REFERENCE_MEMBER_SUBJECT: recipient,
-    HEIMDALL_REFERENCE_STRICT_SSO: "1",
+    HEIMDALL_REFERENCE_STRICT_SSO: grantNamedMembership ? "0" : "1",
     ...(process.env.HEIMDALL_PROBE_PRODUCT_SIEM === "1" ? { HEIMDALL_REFERENCE_SIEM: "1" } : {}),
     ...(federation
       ? {
@@ -839,6 +840,83 @@ export async function verifyReferenceProduct(input, authorize) {
       await response.body?.cancel();
     };
     await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 403);
+    let namedTenants;
+    if (grantNamedMembership) {
+      const discover = async () => {
+        const response = await request("/workspaces", { headers: recipientHeaders });
+        assert.equal(response.status, 200);
+        return (await response.json()).items.map(({ id }) => id);
+      };
+      assert.deepEqual(await discover(), []);
+      for (const workspaceId of ["acme", "globex"]) {
+        assert.deepEqual(await readMemberRelations(recipient, workspaceId), []);
+        await expectDenied(
+          await request(`/workspaces/${workspaceId}/${collection}`, { headers: recipientHeaders }),
+          403,
+        );
+      }
+      namedTenants = {};
+      for (const [workspaceId, role] of [
+        ["acme", replacementRole],
+        ["globex", initialRole],
+      ]) {
+        if (workspaceId === "globex") {
+          assert.deepEqual(await discover(), ["acme"]);
+          await expectDenied(
+            await request(`/workspaces/globex/${collection}`, { headers: recipientHeaders }),
+            403,
+          );
+        }
+        await grantNamedMembership(workspaceId, role);
+        const identity =
+          "user:" + Buffer.from(JSON.stringify([config.issuer, recipient])).toString("base64url");
+        await executeSQL(`INSERT INTO heimdall_managed.membership_candidates
+          (product_id,environment,workspace_id,identity_hash,principal,observed_at)
+          VALUES ('${schema}','verification','${workspaceId}',
+            sha256(convert_to('${identity}','UTF8')),'${identity}',1);`);
+        const response = await request(`/workspaces/${workspaceId}/roles`, {
+          headers: recipientHeaders,
+        });
+        assert.equal(response.status, 200);
+        assert.deepEqual(await response.json(), { roles: [role] });
+        const resource = await request(`/workspaces/${workspaceId}/${collection}`, {
+          headers: recipientHeaders,
+        });
+        assert.equal(resource.status, 200);
+        const rows = (await resource.json())[collection];
+        const id = `${workspaceId}-${businessId}`;
+        assert.deepEqual(
+          rows.map((row) => row[businessId + "_id"]),
+          [id],
+        );
+        namedTenants[workspaceId] = { role, scopedRead: resource.status, resourceId: id };
+      }
+      assert.deepEqual((await discover()).sort(), ["acme", "globex"]);
+      await expectDenied(
+        await writeResource("globex", `globex-${businessId}`, recipientCookie),
+        403,
+      );
+      assert.match(runId, /^[a-f0-9-]+$/);
+      assert.match(recipient, /^[0-9]+$/);
+      const writableId = "role-matrix-" + runId;
+      await executeSQL(
+        ledger
+          ? `INSERT INTO ledger.invoices(workspace_id,invoice_id,total_cents)
+             VALUES ('acme','${writableId}',125);`
+          : `INSERT INTO support.tickets(workspace_id,ticket_id,summary)
+             VALUES ('acme','${writableId}','Role matrix');`,
+      );
+      const row = `WHERE workspace_id='acme' AND ${businessId}_id='${writableId}'`;
+      try {
+        await expectDenied(await writeResource("acme", writableId, recipientCookie), 204);
+        assert.equal(
+          await executeSQL(`SELECT ${resultColumn} FROM ${businessTable} ${row};`),
+          recipient,
+        );
+      } finally {
+        await executeSQL(`DELETE FROM ${businessTable} ${row};`);
+      }
+    }
     await expectDenied(
       await memberRequest(
         "add",
@@ -1537,13 +1615,17 @@ export async function verifyReferenceProduct(input, authorize) {
             },
           }
         : {}),
-      strictSSO: {
-        workspace: "globex",
-        membership: "allowed by OpenFGA",
-        discovery: "omitted",
-        roles: [],
-        scopedRead: denied.status,
-      },
+      ...(namedTenants
+        ? { namedTenants, beforeExplicitGrant: 403, acmeWrite: 204, globexWrite: 403 }
+        : {
+            strictSSO: {
+              workspace: "globex",
+              membership: "allowed by OpenFGA",
+              discovery: "omitted",
+              roles: [],
+              scopedRead: denied.status,
+            },
+          }),
       onboarding: {
         ...workspace,
         replay: 200,

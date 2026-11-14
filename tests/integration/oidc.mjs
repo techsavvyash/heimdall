@@ -85,6 +85,9 @@ async function sdkRuntime(client, c) {
       openfga: { url: base, storeId: store.id, modelId: model.authorization_model_id },
     };
     let permission, effectiveRole;
+    const tenantMatrix = c.reference && process.env.HEIMDALL_PROBE_TENANT_MATRIX === "1";
+    if (tenantMatrix)
+      assert(!c.reference.scim, "The tenant matrix requires ordinary OIDC sessions");
     if (process.env.HEIMDALL_PROBE_TENANT_CHECK === "1" || c.reference) {
       const role = fixture.manifest.ownerRole;
       effectiveRole = role;
@@ -102,19 +105,28 @@ async function sdkRuntime(client, c) {
             { user, object: "workspace:acme", relation: "member" },
             { user, object: "workspace:acme", relation: assignment },
             { user, object: "workspace:globex", relation: assignment },
-            ...(c.reference ? [{ user, object: "workspace:globex", relation: "member" }] : []),
+            ...(c.reference && !tenantMatrix
+              ? [{ user, object: "workspace:globex", relation: "member" }]
+              : []),
           ],
         },
       });
     }
     if (c.reference) {
+      if (tenantMatrix && client.product === "support")
+        assert.equal(
+          observations.find((entry) => entry.product === "ledger" && entry.namedTenants)
+            ?.namedTenants.acme.scopedRead,
+          200,
+          "Ledger must grant access to the same test recipient before Support login",
+        );
       const user = "user:" + Buffer.from(JSON.stringify([issuer, c.subject])).toString("base64url");
       const { allowed } = await api(`/stores/${store.id}/check`, {
         authorization_model_id: model.authorization_model_id,
         consistency: "HIGHER_CONSISTENCY",
         tuple_key: { user, object: "workspace:globex", relation: "member" },
       });
-      assert.equal(allowed, true, "Strict SSO fixture must have real OpenFGA membership");
+      assert.equal(allowed, !tenantMatrix, "Verify the Globex membership fixture");
       observations.push(
         await verifyReferenceProduct(
           {
@@ -129,6 +141,27 @@ async function sdkRuntime(client, c) {
             otherWorkspace: observations.find((entry) => entry.onboarding)?.onboarding,
             scim: c.reference.scim,
             roleAssignments: fixture.expected.roles,
+            ...(tenantMatrix
+              ? {
+                  grantNamedMembership: async (workspaceId, role) => {
+                    const user =
+                      "user:" +
+                      Buffer.from(JSON.stringify([issuer, c.reference.recipient])).toString(
+                        "base64url",
+                      );
+                    const object = "workspace:" + workspaceId;
+                    await api(`/stores/${store.id}/write`, {
+                      authorization_model_id: model.authorization_model_id,
+                      writes: {
+                        tuple_keys: [
+                          { user, object, relation: "member" },
+                          { user, object, relation: fixture.expected.roles[role].assignment },
+                        ],
+                      },
+                    });
+                  },
+                }
+              : {}),
             readMemberRelations: async (subject, workspaceId) => {
               const user =
                 "user:" + Buffer.from(JSON.stringify([issuer, subject])).toString("base64url");
