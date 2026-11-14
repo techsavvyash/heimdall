@@ -22,6 +22,9 @@ func TestLiveRuntime(t *testing.T) {
 	var c struct {
 		Config, Manifest                                        json.RawMessage
 		ClientSecret, Token, Subject, Permission, EffectiveRole string
+		ExpectedRoles                                           []string
+		DenyAcme                                                bool
+		RejectModel                                             bool
 	}
 	if json.Unmarshal([]byte(raw), &c) != nil {
 		t.Fatal("runtime input")
@@ -40,6 +43,12 @@ func TestLiveRuntime(t *testing.T) {
 		digest, e := heimdall.AuditEventDigest(event)
 		return heimdall.AuditReceipt{ProductID: event["productId"].(string), Environment: event["environment"].(string), EventID: event["eventId"].(string), RecordedAt: int64(event["recordedAt"].(float64)), PayloadDigest: digest}, e
 	}}})
+	if c.RejectModel {
+		if !errors.Is(e, heimdall.ErrUnavailable) {
+			t.Fatal("mismatched model did not fail startup", e)
+		}
+		return
+	}
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -53,7 +62,7 @@ func TestLiveRuntime(t *testing.T) {
 	if c.Permission != "" {
 		for _, id := range []string{"acme", "globex"} {
 			allowed, err := client.Tenant(id).Can(context.Background(), p, c.Permission)
-			if err != nil || allowed != (id == "acme") {
+			if err != nil || allowed != (id == "acme" && !c.DenyAcme) {
 				t.Fatal("unexpected permission result", err)
 			}
 		}
@@ -64,6 +73,9 @@ func TestLiveRuntime(t *testing.T) {
 			want := ""
 			if id == "acme" {
 				want = c.EffectiveRole
+				if c.ExpectedRoles != nil {
+					want = strings.Join(c.ExpectedRoles, ",")
+				}
 			}
 			if err != nil || strings.Join(roles, ",") != want {
 				t.Fatal("unexpected effective roles", err)
@@ -91,7 +103,7 @@ func TestLiveRuntime(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	expected := "succeeded,deny"
-	if c.Permission != "" {
+	if c.Permission != "" && !c.DenyAcme {
 		expected += ",requested,allow,requested,deny"
 	}
 	if !strings.HasPrefix(strings.Join(outcomes, ","), expected) {

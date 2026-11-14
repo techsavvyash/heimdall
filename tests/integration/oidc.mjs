@@ -1,5 +1,6 @@
 import { coordinateSCIMDisable, verifyReferenceProduct } from "./reference-products.mjs";
 import assert from "node:assert/strict";
+import { verifyMixedSDKBuilds } from "./mixed-sdk-rollout.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
@@ -84,6 +85,22 @@ async function sdkRuntime(client, c) {
       manifestVersion: manifest.version,
       openfga: { url: base, storeId: store.id, modelId: model.authorization_model_id },
     };
+    const mixedSDK = process.env.HEIMDALL_PROBE_MIXED_SDK;
+    if (mixedSDK) {
+      assert(!c.reference && !railwayReference, "Mixed builds require disposable stores");
+      observations.push(
+        await verifyMixedSDKBuilds({
+          root: mixedSDK,
+          config,
+          manifest,
+          artifact: fixture.expected,
+          client,
+          identity: c,
+          api,
+        }),
+      );
+      return;
+    }
     let permission, effectiveRole;
     const tenantMatrix = c.reference && process.env.HEIMDALL_PROBE_TENANT_MATRIX === "1";
     if (tenantMatrix)
