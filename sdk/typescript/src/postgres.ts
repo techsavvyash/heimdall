@@ -163,3 +163,9 @@ export {
   type IdentityCollectorOptions,
   type IdentityCollectorCheckpoint,
 } from "./internal/postgres/identity-collector.js";
+
+export {
+  deriveIdentityEventCoverage,
+  type IdentityEventCoverage,
+  type IdentityCoveragePolicy,
+} from "./internal/postgres/identity-coverage.js";

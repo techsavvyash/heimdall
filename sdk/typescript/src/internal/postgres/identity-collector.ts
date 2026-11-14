@@ -8,6 +8,7 @@ import { providerId } from "../../provisioning/provider-request.js";
 import { checkCancellation, HeimdallError } from "../errors.js";
 import { PostgresAudit } from "./audit.js";
 import { auditEventValidator } from "./custom-audit.js";
+import type { IdentityEventCoverage } from "./identity-coverage.js";
 import { query, transaction } from "./query.js";
 
 export type IdentityCollectorOptions = IdentityEventReaderOptions & {
@@ -135,10 +136,7 @@ export function createIdentityCollector(pool: Pool, options: IdentityCollectorOp
         signal,
       );
     },
-    async collect(
-      coverage: { retainedFromMicros: bigint; visibleBeforeMicros: bigint; validUntilMs: number },
-      signal: AbortSignal,
-    ) {
+    async collect(coverage: IdentityEventCoverage, signal: AbortSignal) {
       if (
         !(signal instanceof AbortSignal) ||
         typeof coverage?.retainedFromMicros !== "bigint" ||

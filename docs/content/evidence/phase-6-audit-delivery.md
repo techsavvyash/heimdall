@@ -240,3 +240,21 @@ sequenceDiagram
 A repeated activation can confirm the same transition while its checkpoint remains at the approved boundary. After an uncertain response, read the current checkpoint before issuing a new activation. Returning to an earlier list increments the revision again, which fences in-flight pages from the earlier revision. Existing events and their outbox rows retain their original routing. Historical backfill and changing sink destinations require separate operator procedures.
 
 PostgreSQL run `heimdall-records-363e5c173d584c208821c9ac4d05074e` verified the migration and both SDKs. The tests rejected a stale timestamp, retried an activation at the same boundary, and rejected a stale revision after a revert. They also changed the mapping twice during an in-flight provider read. The old page could not advance the checkpoint even though the mapping digest again matched, and the original event and delivery row remained intact.
+
+## Deriving coverage for scheduled collection
+
+TypeScript exports `deriveIdentityEventCoverage(policy)` and Go exports `DeriveIdentityEventCoverage(policy, time.Now())`. A product scheduler calls the helper immediately before `collect` or `Collect`. Configure the policy from verified deployment limits for maximum writer transaction duration, maximum absolute clock offset from the worker, and minimum effective Events API retention. The clock bound must apply to the database primary and all ZITADEL API replicas throughout the scan, including failovers. The retention bound must account for the effective instance override and remain valid for the full read.
+
+```mermaid
+flowchart LR
+  P[Verified writer, clock and retention limits] --> B[Derive historical window bounds]
+  B --> C{Bounds overlap safely}
+  C -->|Yes| R[Read and commit the next covered page]
+  C -->|No| F[Return unavailable and preserve checkpoint]
+```
+
+The helper subtracts the writer duration and three clock offsets from local time to get the exclusive visibility ceiling. The offsets cover slow time at write creation, fast time at position assignment, and slow time at the reader. The exclusive retention floor uses local time plus the 30-second coverage lifetime and one clock offset, minus minimum retention. This accounts for the latest provider read before expiry. The collector refuses to advance if its checkpoint falls outside retained history. Shared fixtures verify clock margin, an exhausted window, disabled bounds and exact microsecond conversion.
+
+PostgreSQL run `heimdall-coverage-44e931ce79dc4a9992d9c5493c7e0863` confirmed that the pinned PostgreSQL 17.11 image applies a per-role transaction timeout, terminates an overlong writer, and rolls back its uncommitted event insert. Prepared transactions were disabled. [PostgreSQL transaction timeout](https://www.postgresql.org/docs/17/runtime-config-client.html#GUC-TRANSACTION-TIMEOUT) · [ZITADEL retention settings](https://zitadel.com/docs/self-hosting/manage/usage_control#limit-audit-trails)
+
+Use a positive PostgreSQL transaction timeout for every event writer, reconnect older sessions after configuring the role, and keep prepared transactions disabled. The helper trusts the supplied limits. The PostgreSQL probe qualifies the timeout premise on a disposable node. The current Railway ZITADEL deployment has yet to be qualified for a continuously advancing checkpoint under these limits.

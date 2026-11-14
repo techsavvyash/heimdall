@@ -1,0 +1,9 @@
+{
+  "run": "heimdall-coverage-44e931ce79dc4a9992d9c5493c7e0863",
+  "postgres": "postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac",
+  "writerTimeoutMs": 1000,
+  "statementCompleted": true,
+  "overlongTransactionTerminated": true,
+  "overlongInsertRolledBack": true,
+  "preparedTransactionsDisabled": true
+}
