@@ -380,19 +380,38 @@ async function verifyProduct(product) {
     );
   } finally {
     for (const { child } of children) if (child.connected) child.disconnect();
-    const cleanup = await Promise.allSettled([
-      ...children.map(async ({ finished }) =>
-        assert.equal((await finished)[0], 0, "Directory cleanup failed"),
-      ),
-      z(`/v2/organizations/${organizationId}`, undefined, "DELETE"),
-      ...(store ? [f(`/stores/${store.id}`, undefined, "DELETE")] : []),
+    const cleanupSteps = [
+      ...children.map(({ finished }, index) => [
+        `directory ${index + 1}`,
+        async () => assert.equal((await finished)[0], 0, "Directory cleanup failed"),
+      ]),
+      ["product organization", () => z(`/v2/organizations/${organizationId}`, undefined, "DELETE")],
+      ...(store ? [["OpenFGA store", () => f(`/stores/${store.id}`, undefined, "DELETE")]] : []),
       ...(passwordSession
-        ? [api(issuer, loginPat, `/v2/sessions/${passwordSession.sessionId}`, undefined, "DELETE")]
+        ? [
+            [
+              "password session",
+              () =>
+                api(
+                  issuer,
+                  loginPat,
+                  `/v2/sessions/${passwordSession.sessionId}`,
+                  undefined,
+                  "DELETE",
+                ),
+            ],
+          ]
         : []),
-    ]);
+    ];
+    const cleanup = await Promise.allSettled(cleanupSteps.map(([, clean]) => clean()));
     assert(
       cleanup.every((result) => result.status === "fulfilled"),
-      "Disposable product cleanup failed",
+      "Disposable product cleanup failed: " +
+        cleanup
+          .flatMap((result, index) =>
+            result.status === "rejected" ? [cleanupSteps[index][0]] : [],
+          )
+          .join(", "),
     );
   }
 }

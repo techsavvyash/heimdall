@@ -191,3 +191,5 @@ Run provider activation separately by setting `HEIMDALL_PROBE_PROVIDER_SETTINGS=
 Local watch run `28507f28-e518-495d-b3f4-8f06efcd8b91` passed tenant switching, provider activation and strict-workspace cleanup on both backends. Ledger activated an Acme SAML candidate, and Support activated a Globex OIDC candidate. Both recovered a provider create whose ID was lost, required a test login before activation and rejected the previous policy afterward. The raw outcomes are in `tests/integration/evidence/phase-7-federation-local-2026-11-14.json`.
 
 Local watch run `cc18d603-8b08-48ae-bcc9-38d40d09223a` passed static policy rotation on both backends. Both rejected the previous Acme session and its pending callback, preserved Acme Peer access and accepted fresh Acme authentication. Both also denied password fallback and denied same-provider guest access before an explicit membership grant.
+
+The rc.2 source deployments reported HTTPS readiness on Railway in run `37654c92-8929-45e7-8cb5-9f6a675b5340`. The probe reported failure during disposal of the Support fixture, so this run does not establish the deployed acceptance gate.

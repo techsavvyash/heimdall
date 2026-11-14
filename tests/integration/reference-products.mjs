@@ -390,14 +390,20 @@ export async function verifyReferenceProduct(input, authorize) {
           ...options,
           redirect: "manual",
           signal: AbortSignal.timeout(25000),
-        }).catch((error) => {
-          throw new Error(
-            `${schema} ${options.method ?? "GET"} ${path.split("?")[0]}: ${error.message}`,
-            {
-              cause: error,
-            },
-          );
         })
+          .then(async (response) => {
+            // Drain ignored response bodies so the probe can reuse its HTTPS connections.
+            const body = response.body ? await response.arrayBuffer() : null;
+            return new Response(body, response);
+          })
+          .catch((error) => {
+            throw new Error(
+              `${schema} ${options.method ?? "GET"} ${path.split("?")[0]}: ${error.message}`,
+              {
+                cause: error,
+              },
+            );
+          })
       : new Promise((resolve, reject) => {
           const request = httpRequest(
             endpoint + path,
