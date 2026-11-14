@@ -319,9 +319,9 @@ try:
             revision = os.environ.get("HEIMDALL_PROBE_CONSUMER_REVISION")
             consumer_info = None
             if revision:
-                candidate = re.fullmatch(r"v(\d+\.\d+\.\d+-rc\.[1-9]\d*)", revision)
-                if not candidate and not re.fullmatch(r"[0-9a-f]{40}", revision):
-                    raise RuntimeError("The consumer revision must be a pushed commit or release candidate")
+                tagged_version = re.fullmatch(r"v((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-rc\.[1-9][0-9]*)?)", revision)
+                if not tagged_version and not re.fullmatch(r"[0-9a-f]{40}", revision):
+                    raise RuntimeError("The consumer revision must be a pushed commit or paired version tag")
                 ledger = consumer / "ledger"
                 support_source = consumer / "support"
                 shutil.copytree(ROOT / "examples/ledger", ledger, ignore=shutil.ignore_patterns("node_modules"))
@@ -331,13 +331,13 @@ try:
                 supplied_archive = os.environ.get("HEIMDALL_PROBE_CONSUMER_ARCHIVE")
                 if supplied_archive:
                     archive = Path(supplied_archive).resolve(strict=True)
-                    if not candidate:
-                        raise RuntimeError("An external archive requires a paired candidate version")
+                    if not tagged_version:
+                        raise RuntimeError("An external archive requires a paired version tag")
                 else:
                     run(["pnpm", "--filter", "@heimdall/sdk", "pack", "--pack-destination", str(archive_dir)])
                     archive, = archive_dir.glob("*.tgz")
-                if candidate and archive.name != f"heimdall-sdk-{candidate[1]}.tgz":
-                    raise RuntimeError("TypeScript archive must match the Go candidate version")
+                if tagged_version and archive.name != f"heimdall-sdk-{tagged_version[1]}.tgz":
+                    raise RuntimeError("TypeScript archive must match the Go tag version")
                 package_path = ledger / "package.json"
                 package = json.loads(package_path.read_text())
                 package["dependencies"]["@heimdall/sdk"] = "file:" + str(archive)
@@ -356,16 +356,16 @@ try:
                     reference_env["HEIMDALL_REFERENCE_SETUP_CLI"] = str(ledger / "node_modules/@heimdall/sdk/dist/cli.js")
                 go_version = subprocess.check_output(["go", "list", "-m", "-f", "{{.Version}}", module],
                                                      cwd=support_source, env=reference_env, text=True).strip()
-                if candidate and go_version != revision:
-                    raise RuntimeError("Go module did not resolve to the requested candidate")
+                if tagged_version and go_version != revision:
+                    raise RuntimeError("Go module did not resolve to the requested version")
                 consumer_info = {"archive": archive.name, "goModuleVersion": go_version}
-                if candidate:
+                if tagged_version:
                     consumer_info["archiveSHA256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
             subprocess.run(["go", "build", "-o", binary, "."], cwd=support_source, env=reference_env, check=True)
             previous = os.environ.get("HEIMDALL_PROBE_PREVIOUS_PERSISTENCE_REVISION")
             if previous:
-                if not (operator and revision and candidate and supplied_archive and re.fullmatch("[0-9a-f]{40}", previous)):
-                    raise RuntimeError("Persistence qualification requires the operator probe, a candidate archive and a pushed previous commit")
+                if not (operator and revision and tagged_version and supplied_archive and re.fullmatch("[0-9a-f]{40}", previous)):
+                    raise RuntimeError("Persistence qualification requires the operator probe, a paired SDK archive and a pushed previous commit")
                 prior = consumer / "previous"
                 prior.mkdir()
                 exported = subprocess.check_output(["git", "archive", previous], cwd=ROOT, timeout=45)

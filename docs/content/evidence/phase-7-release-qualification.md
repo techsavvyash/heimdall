@@ -25,7 +25,9 @@ The npm maintainer needs publish access to `@heimdall/sdk`. Confirm the scope in
 
 Use the approved stable version in the TypeScript manifest and both runtime version constants. Remove the TypeScript manifest's `private` flag in the stable release commit. Run the workspace and pinned-service checks on that commit, and use the same commit for the nested Go tag `sdk/go/v<version>`. Run the reference journeys against the stable build and record the artifact checksums and Railway deployment IDs.
 
-From a clean checkout of the approved release commit, build the TypeScript archive once and check the exact file that will go to npm.
+The paired SDK workflow runs on both stable and release candidate tags. It verifies the package and runtime versions, runs the workspace and pinned-service checks, installs the tagged Go module in a clean consumer, and uploads a checksummed TypeScript archive after checking that exact file. The stable tag also requires a publishable TypeScript manifest. The workflow produces artifacts for the maintainer.
+
+To rehearse locally from a clean checkout of the approved release commit, build and check a TypeScript archive.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -39,7 +41,7 @@ shasum -a 256 "$archive"
 npm publish "$archive" --registry=https://registry.npmjs.org --access public --dry-run
 ```
 
-During the authorized release, publish that archive and push the matching Go tag. If either operation fails, verify which artifact is already available and resume the other operation with the same archive and release commit. Verify npm's `dist.integrity` against the SHA-512 of the local archive. Verify both installs from fresh consumers and check that the Go tag resolves to the same release commit before announcing the pair. [npm publish](https://docs.npmjs.com/commands/npm-publish/)
+During the authorized release, push the matching Go tag, wait for the paired workflow, and download its TypeScript archive and checksum. Verify the checksum and use that archive with `HEIMDALL_PROBE_CONSUMER_ARCHIVE` and `HEIMDALL_PROBE_CONSUMER_REVISION=v<version>` in the release integration probes. Publish the verified archive with `npm publish "$archive" --registry=https://registry.npmjs.org --access public`. If npm publication fails, verify whether that version exists with the expected integrity before retrying with the same file. Verify npm's `dist.integrity` against the SHA-512 of the archive. Verify both installs from fresh consumers and check that the Go tag resolves to the same release commit before announcing the pair. [npm publish](https://docs.npmjs.com/commands/npm-publish/)
 
 
 ## Isolated consumer journeys
