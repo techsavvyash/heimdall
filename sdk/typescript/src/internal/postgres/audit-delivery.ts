@@ -13,14 +13,17 @@ export function createAuditDelivery(
     productId: string;
     environment: string;
     sinkId: string;
+    tenantId?: string;
     endpoint: string;
     token: string;
     transportProfile?: "production" | "loopback";
     validateCustom?: CustomAuditValidator;
   },
 ) {
-  const { productId, environment, sinkId, endpoint, token, validateCustom } = options;
+  const { productId, environment, sinkId, tenantId, endpoint, token, validateCustom } = options;
   if (
+    (tenantId !== undefined &&
+      (typeof tenantId !== "string" || !/^[A-Za-z0-9_-]{1,128}(?![\s\S])/.test(tenantId))) ||
     typeof endpoint !== "string" ||
     typeof token !== "string" ||
     !/^[\x21-\x7e]{1,4096}(?![\s\S])/.test(token)
@@ -63,8 +66,11 @@ export function createAuditDelivery(
             min(e.recorded_at) FILTER (WHERE d.state='pending')::text AS oldest
           FROM heimdall.audit_deliveries d JOIN heimdall.audit_events e USING(product_id,environment,event_id)
           WHERE d.product_id=$1 AND d.environment=$2 AND d.sink_id=$3
+            ${tenantId === undefined ? "" : "AND EXISTS (SELECT 1 FROM heimdall_retention.event_identities i WHERE i.product_id=d.product_id AND i.environment=d.environment AND i.event_id=d.event_id AND i.tenant_id=$5)"}
             AND d.state IN ('pending','quarantined')`,
-            [productId, environment, sinkId, now],
+            tenantId === undefined
+              ? [productId, environment, sinkId, now]
+              : [productId, environment, sinkId, now, tenantId],
           );
           const {
             rows: [capacity],
@@ -109,7 +115,7 @@ export function createAuditDelivery(
     async deliver(limit: number, signal: AbortSignal) {
       if (!(signal instanceof AbortSignal)) throw new HeimdallError("invalid_argument");
       const operation = AbortSignal.any([signal, AbortSignal.timeout(30000)]);
-      const pending = await audit.pending(sinkId, Date.now(), limit, operation);
+      const pending = await audit.pending(sinkId, Date.now(), limit, operation, tenantId);
       const result = { attempted: 0, delivered: 0, quarantined: 0 };
       const claimed: { eventId: string; event: Record<string, unknown>; attempt: number }[] = [];
       for (const item of pending) {
@@ -192,7 +198,7 @@ export function createAuditDelivery(
     },
     requeue(eventId: string, attempts: number, signal: AbortSignal) {
       if (!(signal instanceof AbortSignal)) throw new HeimdallError("invalid_argument");
-      return audit.requeueQuarantined(sinkId, eventId, attempts, Date.now(), signal);
+      return audit.requeueQuarantined(sinkId, eventId, attempts, Date.now(), signal, tenantId);
     },
   });
 }

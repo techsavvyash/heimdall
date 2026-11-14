@@ -18,7 +18,7 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
-def create_handler(*, endpoint, authorization, index, product, environment, sink, token, loopback=False):
+def create_handler(*, endpoint, authorization, index, product, environment, sink, token, tenant=None, loopback=False):
     """Mount at a product-owned HTTPS route. Use one precreated index per authorized scope."""
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,127}", index):
         raise ValueError("invalid concrete index name")
@@ -72,7 +72,8 @@ def create_handler(*, endpoint, authorization, index, product, environment, sink
                 return reply("400 Bad Request")
             for event_id, event in zip(ids, events):
                 if (not isinstance(event, dict) or event.get("eventId") != event_id
-                        or event.get("productId") != product or event.get("environment") != environment):
+                        or event.get("productId") != product or event.get("environment") != environment
+                        or (tenant is not None and event.get("tenantId") != tenant)):
                     return reply("403 Forbidden")
         except (KeyError, ValueError, TypeError):
             return reply("400 Bad Request")

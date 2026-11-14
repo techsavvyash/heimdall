@@ -53,7 +53,7 @@ func TestLiveIdentitySIEM(t *testing.T) {
 		}
 	}
 	delivery, err := NewAuditDelivery(db, AuditDeliveryOptions{
-		ProductID: product, Environment: environment, SinkID: "siem", Endpoint: c.Endpoint,
+		ProductID: product, Environment: environment, SinkID: "siem", TenantID: "globex", Endpoint: c.Endpoint,
 		Token: c.SinkToken, TransportProfile: "loopback",
 	})
 	if err != nil {

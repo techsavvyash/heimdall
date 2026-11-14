@@ -907,14 +907,15 @@ WITH selected AS MATERIALIZED (
     };
   }
   // A read is not a claim/lease. Concurrent workers may select the same records.
-  async pending(sink: string, now: number, limit: number, signal?: AbortSignal) {
+  async pending(sink: string, now: number, limit: number, signal?: AbortSignal, tenantId?: string) {
     if (
       !token(sink, 128) ||
       !Number.isSafeInteger(now) ||
       now < 0 ||
       !Number.isInteger(limit) ||
       limit < 1 ||
-      limit > 100
+      limit > 100 ||
+      (tenantId !== undefined && (!this.retainedRuntime || !token(tenantId, 128)))
     )
       throw new HeimdallError("invalid_argument");
     type PendingRow = {
@@ -928,11 +929,13 @@ WITH selected AS MATERIALIZED (
       SELECT d.event_id,d.attempts,d.next_attempt_at,e.recorded_at,e.payload_digest,e.event
       FROM heimdall.audit_deliveries d JOIN heimdall.audit_events e USING(product_id,environment,event_id)
       WHERE d.product_id=$1 AND d.environment=$2 AND d.sink_id=$3 AND d.state='pending' AND d.next_attempt_at<=$4
+      ${tenantId === undefined ? "" : "AND EXISTS (SELECT 1 FROM heimdall_retention.event_identities i WHERE i.product_id=d.product_id AND i.environment=d.environment AND i.event_id=d.event_id AND i.tenant_id=$6)"}
       ORDER BY d.next_attempt_at,d.event_id COLLATE "C" LIMIT $5
     ), sized AS (
       SELECT *,sum(octet_length(event::text)) OVER(ORDER BY next_attempt_at,event_id COLLATE "C") AS size FROM candidates
     ) SELECT event_id,attempts,recorded_at::text,payload_digest,event FROM sized WHERE size<=4194304 ORDER BY next_attempt_at,event_id COLLATE "C"`;
     const args = [this.productId, this.environment, sink, now, limit];
+    if (tenantId !== undefined) args.push(tenantId);
     const rows = this.retainedRuntime
       ? await readSnapshot(
           this.pool,
@@ -953,6 +956,7 @@ WITH selected AS MATERIALIZED (
           Number(row.recorded_at),
           row.payload_digest.toString("hex"),
         );
+        if (tenantId !== undefined && event.tenantId !== tenantId) event = null;
       } catch {
         /* Return explicit invalid record identity for quarantine; never export its payload. */
       }
@@ -1960,17 +1964,27 @@ WITH selected AS MATERIALIZED (
     expectedAttempts: number,
     retryAt: number,
     signal?: AbortSignal,
+    tenantId?: string,
   ): Promise<boolean> {
     const args = this.deliveryArgs(sink, eventId, expectedAttempts);
-    if (expectedAttempts >= 2147483646 || !Number.isSafeInteger(retryAt) || retryAt < 0)
+    if (
+      (tenantId !== undefined && (!this.retainedRuntime || !token(tenantId, 128))) ||
+      expectedAttempts >= 2147483646 ||
+      !Number.isSafeInteger(retryAt) ||
+      retryAt < 0
+    )
       throw new HeimdallError("invalid_argument");
     return transaction(
       this.pool,
       async (client) => {
         if (this.retainedRuntime) await lockRetentionAdmission(client);
         const rows = await client.query(
-          "UPDATE heimdall.audit_deliveries SET state='pending',attempts=attempts+1,next_attempt_at=$6 WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=$4 AND attempts=$5 AND state='quarantined' RETURNING attempts",
-          [...args, retryAt],
+          "UPDATE heimdall.audit_deliveries d SET state='pending',attempts=attempts+1,next_attempt_at=$6 WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=$4 AND attempts=$5 AND state='quarantined'" +
+            (tenantId === undefined
+              ? ""
+              : " AND EXISTS (SELECT 1 FROM heimdall_retention.event_identities i WHERE i.product_id=d.product_id AND i.environment=d.environment AND i.event_id=d.event_id AND i.tenant_id=$7)") +
+            " RETURNING attempts",
+          tenantId === undefined ? [...args, retryAt] : [...args, retryAt, tenantId],
         );
         return rows.rowCount === 1;
       },

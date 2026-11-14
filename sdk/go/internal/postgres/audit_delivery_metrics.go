@@ -20,9 +20,9 @@ type AuditDeliveryMetrics struct {
 	Capacity                  AuditDeliveryCapacity
 }
 
-func (a *RetainedRuntimeAudit) DeliveryMetrics(ctx context.Context, sink string, now int64) (AuditDeliveryMetrics, error) {
+func (a *RetainedRuntimeAudit) DeliveryMetrics(ctx context.Context, sink string, now int64, tenant string) (AuditDeliveryMetrics, error) {
 	empty := AuditDeliveryMetrics{}
-	if ctx == nil || !valid(sink, 128) || now < 0 || now > maxSafe {
+	if ctx == nil || !valid(sink, 128) || now < 0 || now > maxSafe || (tenant != "" && !valid(tenant, 128)) {
 		return empty, contract.ErrInvalidArgument
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -41,13 +41,18 @@ func (a *RetainedRuntimeAudit) DeliveryMetrics(ctx context.Context, sink string,
 	}
 	var result AuditDeliveryMetrics
 	var oldest sql.NullInt64
+	tenantFilter := ""
+	args := []any{a.audit.product, a.audit.environment, sink, now}
+	if tenant != "" {
+		tenantFilter = " AND EXISTS (SELECT 1 FROM heimdall_retention.event_identities i WHERE i.product_id=d.product_id AND i.environment=d.environment AND i.event_id=d.event_id AND i.tenant_id=$5)"
+		args = append(args, tenant)
+	}
 	err = tx.QueryRowContext(ctx, `SELECT count(*) FILTER (WHERE d.state='pending'),
  count(*) FILTER (WHERE d.state='pending' AND d.next_attempt_at<=$4),
  count(*) FILTER (WHERE d.state='quarantined'),
  min(e.recorded_at) FILTER (WHERE d.state='pending')
 FROM heimdall.audit_deliveries d JOIN heimdall.audit_events e USING(product_id,environment,event_id)
-WHERE d.product_id=$1 AND d.environment=$2 AND d.sink_id=$3 AND d.state IN ('pending','quarantined')`,
-		a.audit.product, a.audit.environment, sink, now).Scan(&result.Pending, &result.Due, &result.Quarantined, &oldest)
+WHERE d.product_id=$1 AND d.environment=$2 AND d.sink_id=$3 AND d.state IN ('pending','quarantined')`+tenantFilter, args...).Scan(&result.Pending, &result.Due, &result.Quarantined, &oldest)
 	if err != nil {
 		return empty, databaseError(ctx)
 	}

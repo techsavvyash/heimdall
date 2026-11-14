@@ -156,6 +156,36 @@ test.skipIf(!process.env.HEIMDALL_TEST_AUDIT_DELIVERY_DB)(
         quarantined: 0,
       });
       expect(accepted.at(-1)).toBe(event.eventId);
+      await writer.record({ ...event, eventId: "other-tenant", tenantId: "tenant-2" }, signal);
+      await writer.record({ ...event, eventId: "product-level", tenantId: null }, signal);
+      await writer.record({ ...event, eventId: "own-tenant" }, signal);
+      await pool.query(
+        "UPDATE heimdall.audit_deliveries SET state='quarantined',attempts=1 WHERE environment=$1 AND event_id IN ('own-tenant','other-tenant')",
+        [scope.environment],
+      );
+      const tenantDelivery = createAuditDelivery(pool, {
+        ...scope,
+        tenantId: "tenant-1",
+        endpoint: "http://127.0.0.1:" + address.port,
+        token: "test-token",
+        transportProfile: "loopback",
+        validateCustom,
+      });
+      expect(await tenantDelivery.metrics(signal)).toMatchObject({ pending: 0, quarantined: 1 });
+      expect(await tenantDelivery.requeue("other-tenant", 1, signal)).toBe(false);
+      expect(await tenantDelivery.requeue("own-tenant", 1, signal)).toBe(true);
+      expect(await tenantDelivery.deliver(10, signal)).toEqual({
+        attempted: 1,
+        delivered: 1,
+        quarantined: 0,
+      });
+      expect(accepted.at(-1)).toBe("own-tenant");
+      expect(await tenantDelivery.deliver(10, signal)).toEqual({
+        attempted: 0,
+        delivered: 0,
+        quarantined: 0,
+      });
+      expect(await delivery.metrics(signal)).toMatchObject({ pending: 1, quarantined: 1 });
       const other = createAuditDelivery(pool, {
         ...scope,
         sinkId: "other",

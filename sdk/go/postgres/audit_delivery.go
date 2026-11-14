@@ -16,9 +16,9 @@ import (
 )
 
 type AuditDeliveryOptions struct {
-	ProductID, Environment, SinkID    string
-	Endpoint, Token, TransportProfile string
-	ValidateCustom                    CustomAuditValidator
+	ProductID, Environment, SinkID, TenantID string
+	Endpoint, Token, TransportProfile        string
+	ValidateCustom                           CustomAuditValidator
 }
 
 type AuditDeliveryResult struct {
@@ -39,6 +39,7 @@ type auditBatch struct {
 	Events      []map[string]any `json:"events,omitempty"`
 }
 
+var auditTenant = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 var auditBearer = regexp.MustCompile(`^[!-~]+$`)
 
 func NewAuditDelivery(pool *sql.DB, options AuditDeliveryOptions) (*AuditDelivery, error) {
@@ -46,7 +47,7 @@ func NewAuditDelivery(pool *sql.DB, options AuditDeliveryOptions) (*AuditDeliver
 	if profile == "" {
 		profile = "production"
 	}
-	if len(options.Token) > 4096 || !auditBearer.MatchString(options.Token) || contract.ValidateEndpoint(options.Endpoint, profile) != nil {
+	if (options.TenantID != "" && !auditTenant.MatchString(options.TenantID)) || len(options.Token) > 4096 || !auditBearer.MatchString(options.Token) || contract.ValidateEndpoint(options.Endpoint, profile) != nil {
 		return nil, contract.ErrInvalidArgument
 	}
 	audit, err := internal.NewRetainedRuntimeAudit(pool, options.ProductID, options.Environment, []string{options.SinkID}, auditEventValidator(options.ValidateCustom, false))
@@ -69,7 +70,7 @@ func (d *AuditDelivery) Deliver(ctx context.Context, limit int) (AuditDeliveryRe
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	sink := d.options.SinkID
-	items, err := d.audit.Pending(ctx, sink, time.Now().UnixMilli(), limit)
+	items, err := d.audit.Pending(ctx, sink, time.Now().UnixMilli(), limit, d.options.TenantID)
 	if err != nil {
 		return result, err
 	}
@@ -181,7 +182,7 @@ func (d *AuditDelivery) Requeue(ctx context.Context, eventID string, attempts in
 	if d == nil || d.audit == nil || ctx == nil {
 		return false, contract.ErrInvalidArgument
 	}
-	return d.audit.RequeueQuarantined(ctx, d.options.SinkID, eventID, attempts, time.Now().UnixMilli())
+	return d.audit.RequeueQuarantined(ctx, d.options.SinkID, eventID, attempts, time.Now().UnixMilli(), d.options.TenantID)
 }
 
 type AuditDeliveryMetrics = internal.AuditDeliveryMetrics
@@ -192,5 +193,5 @@ func (d *AuditDelivery) Metrics(ctx context.Context) (AuditDeliveryMetrics, erro
 	if d == nil || d.audit == nil {
 		return AuditDeliveryMetrics{}, contract.ErrInvalidArgument
 	}
-	return d.audit.DeliveryMetrics(ctx, d.options.SinkID, time.Now().UnixMilli())
+	return d.audit.DeliveryMetrics(ctx, d.options.SinkID, time.Now().UnixMilli(), d.options.TenantID)
 }

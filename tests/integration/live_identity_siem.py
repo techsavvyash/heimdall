@@ -88,10 +88,10 @@ def run(delivery_env, elastic_start):
             elastic = None
 
     def dispatch(lang, stage, subject, start_micros, pat, drop_receipt=False):
-        product, environment, _ = scopes[lang]
+        product, environment, tenant = scopes[lang]
         token = secrets.token_urlsafe(32)
         handler = create_handler(endpoint=ELASTIC, authorization=elastic_auth, index=indexes[lang],
-                                 product=product, environment=environment, sink="siem", token=token, loopback=True)
+                                 product=product, environment=environment, sink="siem", token=token, tenant=tenant, loopback=True)
         statuses = []
 
         def observed(environ, respond):
@@ -111,6 +111,16 @@ def run(delivery_env, elastic_start):
             }
             env = dict(delivery_env, HEIMDALL_TEST_IDENTITY_SIEM=json.dumps(config))
             try:
+                if stage == "collect":
+                    status, _ = request(config["endpoint"], "/", "Bearer " + token, {
+                        "productId": product, "environment": environment, "sinkId": "siem",
+                        "eventIds": ["wrong-tenant"], "events": [{
+                            "eventId": "wrong-tenant", "productId": product,
+                            "environment": environment, "tenantId": "unmapped",
+                        }],
+                    })
+                    assert status == 403, "Tenant-scoped receiver accepted an unrelated event"
+                    statuses.clear()
                 if lang == "ts":
                     subprocess.run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run",
                                     "test/live-identity-siem.test.ts"], cwd=ROOT, env=env, check=True)
@@ -195,7 +205,7 @@ def run(delivery_env, elastic_start):
             assert es(f"/{index}/_count")["count"] == 1
         return {"run": run_id, "languages": ["typescript", "go"], "elasticsearch": "8.19.0",
                 "liveProvider": True, "sinkOutageRetainedPending": True, "lostReceiptRecovered": True,
-                "sinkRestartPreservedDocuments": True, "oneDocumentPerProduct": True}
+                "sinkRestartPreservedDocuments": True, "oneDocumentPerProduct": True, "tenantMismatchRejected": True}
     finally:
         try:
             if elastic is not None:

@@ -52,8 +52,8 @@ func (a *RetainedRuntimeAudit) Eligibility(ctx context.Context, tenant *string, 
 	return a.audit.InspectRetentionEligibility(ctx, tenant, id, now, duration)
 }
 
-func (a *RetainedRuntimeAudit) Pending(ctx context.Context, sink string, now int64, limit int) ([]PendingAudit, error) {
-	return a.audit.Pending(ctx, sink, now, limit)
+func (a *RetainedRuntimeAudit) Pending(ctx context.Context, sink string, now int64, limit int, tenant string) ([]PendingAudit, error) {
+	return a.audit.pending(ctx, sink, now, limit, tenant)
 }
 func (a *RetainedRuntimeAudit) BeginAttempt(ctx context.Context, sink, id string, attempts int, now, retryAt int64) (*int, error) {
 	return a.audit.BeginAttempt(ctx, sink, id, attempts, now, retryAt)
@@ -64,8 +64,8 @@ func (a *RetainedRuntimeAudit) DeferAttempt(ctx context.Context, sink, id string
 func (a *RetainedRuntimeAudit) Quarantine(ctx context.Context, sink, id string, attempts int) (bool, error) {
 	return a.audit.Quarantine(ctx, sink, id, attempts)
 }
-func (a *RetainedRuntimeAudit) RequeueQuarantined(ctx context.Context, sink, id string, attempts int, retryAt int64) (bool, error) {
-	return a.audit.RequeueQuarantined(ctx, sink, id, attempts, retryAt)
+func (a *RetainedRuntimeAudit) RequeueQuarantined(ctx context.Context, sink, id string, attempts int, retryAt int64, tenant string) (bool, error) {
+	return a.audit.requeueQuarantined(ctx, sink, id, attempts, retryAt, tenant)
 }
 func (a *RetainedRuntimeAudit) Acknowledge(ctx context.Context, batch, receipt contract.AuditDelivery, at int64) error {
 	return a.audit.Acknowledge(ctx, batch, receipt, at)

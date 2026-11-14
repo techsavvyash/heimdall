@@ -195,4 +195,22 @@ Run `tests/integration/postgres-records.py` with the protected Railway verificat
 
 Run `c8581e63-b007-4920-9d3d-cda5dd272320` passed for both SDKs. Elasticsearch retained one document per product across restart, including the exact provider sequence and the mapped tenant. PostgreSQL recorded three delivery attempts and a final acknowledgement for each event.
 
-The probe supplies a known historical timestamp from the live provider event. Automatic live coverage, mapping changes, tenant export authorization and end-to-end SCIM acceptance remain open.
+The probe supplies a known historical timestamp from the live provider event. Automatic live coverage, mapping changes and end-to-end SCIM acceptance remain open.
+
+## Tenant-scoped delivery and replay
+
+Set `tenantId` in TypeScript or `TenantID` in Go when constructing the audit exporter for a tenant-specific destination. The product backend resolves the authorized tenant and configures the exporter with a matching destination and credential. Use separate sink IDs for separate destinations. The Elasticsearch handler accepts a matching `tenant` binding and verifies every event before sending any document to the index.
+
+```mermaid
+flowchart LR
+  O[Trusted product operator] --> W[Exporter bound to product and tenant]
+  W --> Q[Select only matching retained tenant identities]
+  Q --> V[Verify tenant in the decoded event]
+  V --> H[Receipt handler verifies tenant again]
+  H --> E[Elasticsearch tenant destination]
+  W --> R[Requeue only within the same tenant]
+```
+
+Delivery filters by immutable retained tenant identity before applying the page limit. It also checks the decoded envelope before transmission. Backlog counters and requeue use the same tenant scope. Capacity counters still describe the whole database and belong in trusted operator monitoring. Omitting the tenant preserves the existing product-wide export. Authorization of the operator and the initial sink configuration belongs to trusted product code.
+
+PostgreSQL run `heimdall-records-2b841f5abe0f4069818f07677d35b988` verified in both SDKs that a tenant worker can requeue and deliver its own event while leaving another tenant’s quarantined event and the product-level event untouched. Live run `4323f456-2a05-442a-976e-6497535a9a5d` verified that the tenant-bound Elasticsearch receipt handler rejected a same-product, wrong-tenant batch and that the correct events survived a sink outage and restart.

@@ -35,6 +35,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_IDENTITY_SIEM)(
       const delivery = createAuditDelivery(pool, {
         ...scope,
         sinkId: "siem",
+        tenantId: "acme",
         endpoint: config.endpoint,
         token: config.sinkToken,
         transportProfile: "loopback",

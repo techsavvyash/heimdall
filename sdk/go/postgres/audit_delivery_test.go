@@ -181,4 +181,45 @@ func TestAuditDeliveryPostgres(t *testing.T) {
 	if result, err := delivery.Deliver(ctx, 10); err != nil || result != (AuditDeliveryResult{1, 1, 0}) {
 		t.Fatal(result, err)
 	}
+	otherTenant := "tenant-2"
+	for _, item := range []struct {
+		id     string
+		tenant *string
+	}{
+		{"other-tenant", &otherTenant}, {"product-level", nil}, {"own-tenant", &tenant},
+	} {
+		event.EventID, event.TenantID = item.id, item.tenant
+		if _, err := writer.Record(ctx, event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := pool.ExecContext(ctx, "UPDATE heimdall.audit_deliveries SET state='quarantined',attempts=1 WHERE environment='delivery-go' AND event_id IN ('own-tenant','other-tenant')"); err != nil {
+		t.Fatal(err)
+	}
+	scoped, err := NewAuditDelivery(pool, AuditDeliveryOptions{
+		ProductID: "ledger", Environment: "delivery-go", TenantID: tenant, SinkID: "siem",
+		Endpoint: server.URL, Token: "test-token", TransportProfile: "loopback", ValidateCustom: validateCustom,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if metrics, err := scoped.Metrics(ctx); err != nil || metrics.Pending != 0 || metrics.Quarantined != 1 {
+		t.Fatal(metrics, err)
+	}
+	if changed, err := scoped.Requeue(ctx, "other-tenant", 1); err != nil || changed {
+		t.Fatal(changed, err)
+	}
+	if changed, err := scoped.Requeue(ctx, "own-tenant", 1); err != nil || !changed {
+		t.Fatal(changed, err)
+	}
+	if result, err := scoped.Deliver(ctx, 10); err != nil || result != (AuditDeliveryResult{1, 1, 0}) {
+		t.Fatal(result, err)
+	}
+	if result, err := scoped.Deliver(ctx, 10); err != nil || result != (AuditDeliveryResult{}) {
+		t.Fatal(result, err)
+	}
+	if metrics, err := delivery.Metrics(ctx); err != nil || metrics.Pending != 1 || metrics.Quarantined != 1 {
+		t.Fatal(metrics, err)
+	}
+
 }

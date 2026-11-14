@@ -233,7 +233,11 @@ type PendingAudit struct {
 
 // Pending is a read, not a lease. Duplicates from concurrent workers are expected.
 func (a *Audit) Pending(ctx context.Context, sink string, now int64, limit int) ([]PendingAudit, error) {
-	if ctx == nil || !valid(sink, 128) || now < 0 || now > maxSafe || limit < 1 || limit > 100 {
+	return a.pending(ctx, sink, now, limit, "")
+}
+
+func (a *Audit) pending(ctx context.Context, sink string, now int64, limit int, tenant string) ([]PendingAudit, error) {
+	if ctx == nil || !valid(sink, 128) || now < 0 || now > maxSafe || limit < 1 || limit > 100 || (tenant != "" && (!a.retainedRuntime || !valid(tenant, 128))) {
 		return nil, contract.ErrInvalidArgument
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -254,14 +258,20 @@ func (a *Audit) Pending(ctx context.Context, sink string, now int64, limit int) 
 		}
 		query = tx.QueryContext
 	}
+	tenantFilter := ""
+	args := []any{a.product, a.environment, sink, now, limit}
+	if tenant != "" {
+		tenantFilter = " AND EXISTS (SELECT 1 FROM heimdall_retention.event_identities i WHERE i.product_id=d.product_id AND i.environment=d.environment AND i.event_id=d.event_id AND i.tenant_id=$6)"
+		args = append(args, tenant)
+	}
 	rows, err := query(ctx, `WITH candidates AS MATERIALIZED (
  SELECT d.event_id,d.attempts,d.next_attempt_at,e.recorded_at,e.payload_digest,e.event
  FROM heimdall.audit_deliveries d JOIN heimdall.audit_events e USING(product_id,environment,event_id)
- WHERE d.product_id=$1 AND d.environment=$2 AND d.sink_id=$3 AND d.state='pending' AND d.next_attempt_at<=$4
+ WHERE d.product_id=$1 AND d.environment=$2 AND d.sink_id=$3 AND d.state='pending' AND d.next_attempt_at<=$4`+tenantFilter+`
  ORDER BY d.next_attempt_at,d.event_id COLLATE "C" LIMIT $5
  ), sized AS (
  SELECT *,sum(octet_length(event::text)) OVER(ORDER BY next_attempt_at,event_id COLLATE "C") AS size FROM candidates
- ) SELECT event_id,attempts,recorded_at,payload_digest,event FROM sized WHERE size<=4194304 ORDER BY next_attempt_at,event_id COLLATE "C"`, a.product, a.environment, sink, now, limit)
+ ) SELECT event_id,attempts,recorded_at,payload_digest,event FROM sized WHERE size<=4194304 ORDER BY next_attempt_at,event_id COLLATE "C"`, args...)
 	if err != nil {
 		return nil, databaseError(ctx)
 	}
@@ -275,6 +285,9 @@ func (a *Audit) Pending(ctx context.Context, sink string, now int64, limit int) 
 			return nil, databaseError(ctx)
 		}
 		item.Event, _ = a.decodeStored(raw, item.EventID, recordedAt, hex.EncodeToString(digest))
+		if tenant != "" && item.Event["tenantId"] != tenant {
+			item.Event = nil
+		}
 		result = append(result, item)
 	}
 	if rows.Err() != nil {
@@ -362,14 +375,24 @@ func (a *Audit) Quarantine(ctx context.Context, sink, eventID string, expectedAt
 // RequeueQuarantined is an explicit operator storage action. Advancing the
 // counter invalidates callbacks from before quarantine and leaves room to claim.
 func (a *Audit) RequeueQuarantined(ctx context.Context, sink, eventID string, expectedAttempts int, retryAt int64) (bool, error) {
+	return a.requeueQuarantined(ctx, sink, eventID, expectedAttempts, retryAt, "")
+}
+
+func (a *Audit) requeueQuarantined(ctx context.Context, sink, eventID string, expectedAttempts int, retryAt int64, tenant string) (bool, error) {
 	args, err := a.deliveryArgs(sink, eventID, expectedAttempts)
 	if err != nil {
 		return false, err
 	}
-	if ctx == nil || expectedAttempts >= 2147483646 || retryAt < 0 || retryAt > maxSafe {
+	if ctx == nil || expectedAttempts >= 2147483646 || retryAt < 0 || retryAt > maxSafe || (tenant != "" && (!a.retainedRuntime || !valid(tenant, 128))) {
 		return false, contract.ErrInvalidArgument
 	}
-	result, err := a.deliveryTransition(ctx, "UPDATE heimdall.audit_deliveries SET state='pending',attempts=attempts+1,next_attempt_at=$6 WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=$4 AND attempts=$5 AND state='quarantined' RETURNING attempts", append(args, retryAt))
+	statement := "UPDATE heimdall.audit_deliveries d SET state='pending',attempts=attempts+1,next_attempt_at=$6 WHERE product_id=$1 AND environment=$2 AND sink_id=$3 AND event_id=$4 AND attempts=$5 AND state='quarantined'"
+	args = append(args, retryAt)
+	if tenant != "" {
+		statement += " AND EXISTS (SELECT 1 FROM heimdall_retention.event_identities i WHERE i.product_id=d.product_id AND i.environment=d.environment AND i.event_id=d.event_id AND i.tenant_id=$7)"
+		args = append(args, tenant)
+	}
+	result, err := a.deliveryTransition(ctx, statement+" RETURNING attempts", args)
 	return result != nil, err
 }
 
