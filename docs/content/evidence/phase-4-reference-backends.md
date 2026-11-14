@@ -85,3 +85,9 @@ Apply `examples/ledger/approval.sql` after the Ledger schema and `examples/suppo
 | `POST /workspaces/{workspace}/tickets/{ticket}/assign-to-me` | `ticket.assign` | Assign the ticket to the authenticated subject if unassigned |
 
 Both routes require the product origin and the browser session cookie. The SDK durably records the authorization decision before the product changes the row. The product keys every write by workspace and resource, so a resource ID from another workspace returns HTTP 404 after authorization. Repeat approval or assignment by the same actor returns HTTP 204. Support returns HTTP 409 when a ticket belongs to another assignee. The persisted business fields record the result of the update.
+
+### Phase 7 verification
+
+Railway run `1a5a1358-419d-4f7e-bb9f-3b742f025fd2` passed on Ledger deployment `0fabb5d5-00a4-40c5-901f-9a8699e23af8` and Support deployment `20ead9a5-253b-4b12-9afe-0911a1474198`. Both deployments rejected a read-only role and an inactive workspace, returned scoped HTTP 404 for a foreign resource ID, and accepted and replayed authorized writes. The probe checked the actor persisted in PostgreSQL. The run started before the pending-workspace and audit-failure assertions were added.
+
+At source commit `2e9622a`, disposable PostgreSQL run `heimdall-records-ba0e2c120e884291ae9ca1c37a1ea573` repeated the business checks against Railway ZITADEL and OpenFGA. It also verified both pending workspaces returned HTTP 403 and that a rejected decision-audit write returned HTTP 503 with no business mutation. Reproduce with `HEIMDALL_PROBE_BUSINESS_WRITE=1` and `HEIMDALL_PROBE_REFERENCE_PRODUCTS=1` in `tests/integration/postgres-records.py`, plus protected pinned-service verification variables. The sanitized report is in `tests/integration/evidence/phase-7-business-writes-2026-11-14.json`.

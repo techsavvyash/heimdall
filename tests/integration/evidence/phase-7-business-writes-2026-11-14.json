@@ -1,0 +1,64 @@
+{
+  "sourceCommit": "2e9622a",
+  "railway": {
+    "runId": "1a5a1358-419d-4f7e-bb9f-3b742f025fd2",
+    "products": [
+      {
+        "product": "ledger",
+        "deployment": "0fabb5d5-00a4-40c5-901f-9a8699e23af8",
+        "businessWrite": {
+          "action": "approve",
+          "insufficientRole": 403,
+          "crossTenantId": 404,
+          "authorized": 204,
+          "repeat": 204,
+          "inactiveWorkspace": 403
+        }
+      },
+      {
+        "product": "support",
+        "deployment": "20ead9a5-253b-4b12-9afe-0911a1474198",
+        "businessWrite": {
+          "action": "assign-to-me",
+          "insufficientRole": 403,
+          "crossTenantId": 404,
+          "authorized": 204,
+          "repeat": 204,
+          "inactiveWorkspace": 403
+        }
+      }
+    ]
+  },
+  "disposablePostgres": {
+    "runId": "heimdall-records-ba0e2c120e884291ae9ca1c37a1ea573",
+    "products": [
+      {
+        "product": "ledger",
+        "businessWrite": {
+          "action": "approve",
+          "insufficientRole": 403,
+          "crossTenantId": 404,
+          "authorized": 204,
+          "repeat": 204,
+          "inactiveWorkspace": 403,
+          "pendingWorkspace": 403,
+          "auditUnavailable": 503
+        }
+      },
+      {
+        "product": "support",
+        "businessWrite": {
+          "action": "assign-to-me",
+          "insufficientRole": 403,
+          "crossTenantId": 404,
+          "authorized": 204,
+          "repeat": 204,
+          "inactiveWorkspace": 403,
+          "pendingWorkspace": 403,
+          "auditUnavailable": 503
+        }
+      }
+    ]
+  },
+  "goConsumerVersion": "v0.0.0-20261114040723-3becec4ec0ef"
+}
