@@ -141,3 +141,28 @@ Railway run `78bae401-deff-41d3-bb12-5cfd51d6df03` exercised Ledger and Support 
 | Durable audit readback | Two distinct authenticated subjects and four paired resource decisions per product. Each request and result agreed on subject, tenant and permission. |
 
 Ledger deployment `decb30af-0e04-4447-981f-e7c9fe85f3b0` and Support deployment `4fc305e2-5924-4c2a-a859-78948a4a8a7a` ran implementation commit `a96936c`. Both GitHub workspace runs passed. The fixture removed the disposable provider organizations, OpenFGA stores and product organizations, revoked the temporary federation grants, and cleared the stored federation credentials. The test uses the provider redirect flow for SAML and explicitly linked fixture accounts. Enterprise provider setup, SCIM lifecycle and SIEM delivery remain Phase 6 work.
+
+## Strict fallback, guest access and shared organization policy
+
+Acme and Acme Peer use the same SAML provider and ZITADEL organization. The reference products enforce workspace policy and membership independently. A local password account with an explicit Acme grant can complete product login. Its session lacks the strict Acme evidence and receives HTTP 403 on the protected route. A SAML account with matching Acme Peer evidence also receives HTTP 403 until the product grants membership.
+
+```mermaid
+sequenceDiagram
+  participant U as Acme user
+  participant Z as Shared ZITADEL organization
+  participant P as Product policy resolver
+  participant F as Product OpenFGA store
+  U->>Z: Authenticate through the shared SAML provider
+  U->>P: Present Acme Peer session
+  P->>F: Check Acme Peer membership
+  F-->>U: Deny until explicit membership exists
+  P->>P: Publish a new Acme policy version
+  U->>P: Present earlier Acme session or pending callback
+  P-->>U: Require fresh Acme authentication
+  U->>P: Present existing Acme Peer session
+  P->>F: Continue to enforce Acme Peer membership
+```
+
+Reproduce with `HEIMDALL_PROBE_SHARED_SSO_POLICY=1` when running `tests/integration/federation-switch.mjs` with the protected Railway verification configuration. The probe authenticates the local password account through the ZITADEL Login API. It publishes the policy change by updating the product policy configuration and redeploying each reference app with the same session keys and database.
+
+Railway run `03bcb3f4-55a0-4ff3-84d1-086eb67f5e03` passed for Ledger and Support. The earlier Acme session received HTTP 403 and its pending callback received HTTP 401 after the version change. Acme Peer retained access with its existing session, and fresh Acme authentication restored access. Ledger deployments were `079e1c54-7d54-4098-87f1-672391103d7e` and `43361cd9-ba0c-4d8d-a1a1-ca43a05d51c7`. Support deployments were `2b970e52-2149-4ebb-9afc-b9186fe6485d` and `8ccb3cf0-e255-4b57-8c8c-e8414e951233`.

@@ -166,6 +166,12 @@ export async function verifyReferenceProduct(input, authorize) {
     SELECT '${schema}','verification',workspace,sha256(convert_to('${principal}','UTF8')),'${principal}',1 FROM (VALUES ('acme'),('globex')) c(workspace);
     ${seed} ON CONFLICT DO NOTHING;
     ${
+      federation?.sharedPolicy
+        ? `INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at)
+       VALUES ('${schema}','verification','acme-peer','Acme peer','active',false,1,1) ON CONFLICT DO NOTHING;`
+        : ""
+    }
+    ${
       federation
         ? `INSERT INTO heimdall_managed.membership_candidates(product_id,environment,workspace_id,identity_hash,principal,observed_at)
       VALUES ('${schema}','verification','globex',sha256(convert_to('${federation.principal}','UTF8')),'${federation.principal}',1);`
@@ -220,6 +226,7 @@ export async function verifyReferenceProduct(input, authorize) {
     HEIMDALL_ZITADEL_API_AUDIENCE: apiAudience,
   };
   let child;
+  let publishPolicies;
   if (remote) {
     const fingerprint = createHash("sha256")
       .update("heimdall.record-key-usage.v1\0")
@@ -247,27 +254,34 @@ export async function verifyReferenceProduct(input, authorize) {
     assert.equal(registration.status, 0, "Key registration failed");
     const service = "reference-" + schema;
     const context = ["--service", service, "--environment", "verification"];
+    const setVariable = (key, value) => {
+      const setting = spawnSync(
+        "railway",
+        ["variable", "set", ...context, "--skip-deploys", "--stdin", key],
+        { input: value, stdio: ["pipe", "ignore", "ignore"], timeout: 30000 },
+      );
+      assert.equal(setting.status, 0, `Could not set ${service} variable ${key}`);
+    };
+    const deploy = () => {
+      const deployment = spawnSync("railway", ["up", ...context, "--detach"], {
+        stdio: "ignore",
+        timeout: 60000,
+      });
+      assert.equal(deployment.status, 0, "Reference deployment submission failed");
+    };
+    publishPolicies = (policies, revisionRun) => {
+      setVariable("HEIMDALL_TENANT_SSO_POLICIES", JSON.stringify(policies));
+      setVariable("HEIMDALL_VERIFICATION_RUN", revisionRun);
+      deploy();
+    };
     for (const [key, value] of Object.entries({
       ...variables,
       HEIMDALL_VERIFICATION_RUN: runId,
       RAILWAY_DOCKERFILE_PATH: `examples/${schema}/Dockerfile`,
     })) {
-      const setting = spawnSync(
-        "railway",
-        ["variable", "set", ...context, "--skip-deploys", "--stdin", key],
-        {
-          input: value,
-          stdio: ["pipe", "ignore", "ignore"],
-          timeout: 30000,
-        },
-      );
-      assert.equal(setting.status, 0, `Could not set ${service} variable ${key}`);
+      setVariable(key, value);
     }
-    const deployment = spawnSync("railway", ["up", ...context, "--detach"], {
-      stdio: "ignore",
-      timeout: 60000,
-    });
-    assert.equal(deployment.status, 0, "Reference deployment submission failed");
+    deploy();
   } else {
     child = spawn(cmd[0], cmd[1], { stdio: "ignore", env: { ...process.env, ...variables } });
   }
@@ -306,25 +320,27 @@ export async function verifyReferenceProduct(input, authorize) {
           request.on("error", reject);
           request.end(options.body);
         });
-  try {
-    let ready = false;
-    let deployment;
+  async function waitForDeployment(expectedRun) {
     for (let attempt = 0; attempt < (remote ? 180 : 50); attempt++) {
       if (child && child.exitCode !== null) break;
       const response = await request("/healthz").catch(() => null);
       if (response?.ok) {
         const health = await response.json().catch(() => null);
-        if (health?.ready && (!remote || (health.verificationRun === runId && health.deployment))) {
-          deployment = health.deployment;
-          ready = true;
-          break;
+        if (
+          health?.ready &&
+          (!remote || (health.verificationRun === expectedRun && health.deployment))
+        ) {
+          return health.deployment;
         }
       } else {
         await response?.body?.cancel();
       }
       await new Promise((resolve) => setTimeout(resolve, remote ? 2000 : 200));
     }
-    assert(ready, "Reference backend failed readiness");
+    assert.fail("Reference backend failed readiness");
+  }
+  try {
+    const deployment = await waitForDeployment(runId);
     if (federation) {
       const expectStatus = async (path, status, cookie = "") => {
         const response = await request(path, { headers: { cookie } });
@@ -346,6 +362,23 @@ export async function verifyReferenceProduct(input, authorize) {
           .find((value) => value.includes("-session="))
           .split(";")[0];
       };
+      const shared = federation.sharedPolicy;
+      if (shared) {
+        const passwordStart = await expectStatus("/auth/start", 303);
+        const passwordCookie = await finish({
+          path: await shared.authorizePassword(passwordStart.headers.get("location")),
+          cookie: passwordStart.headers.getSetCookie()[0].split(";")[0],
+        });
+        assert.deepEqual(
+          await (await expectStatus("/workspaces/acme/roles", 200, passwordCookie)).json(),
+          { roles: [] },
+        );
+        await expectStatus(
+          `/workspaces/acme/${ledger ? "invoices" : "tickets"}`,
+          403,
+          passwordCookie,
+        );
+      }
       const before = await finish(await start("acme"));
       let cleanupRequest;
       const directory = federation.cleanup;
@@ -419,10 +452,50 @@ export async function verifyReferenceProduct(input, authorize) {
         headers: { cookie: after, origin },
       });
       assert.equal(logout.status, 204);
+      let sharedPolicyProof;
+      if (shared) {
+        const acmePath = "/workspaces/acme/" + collection;
+        const peerPath = "/workspaces/acme-peer/" + collection;
+        const guest = await finish(await start("acme-peer"));
+        await expectStatus(peerPath, 403, guest);
+        assert.deepEqual(
+          await (await expectStatus("/workspaces/acme-peer/roles", 200, guest)).json(),
+          { roles: [] },
+        );
+        await shared.grantPeer();
+        await expectStatus(peerPath, 200, guest);
+        const acmeSession = await finish(await start("acme"));
+        await expectStatus(acmePath, 200, acmeSession);
+        const staged = await start("acme");
+        const rotated = runId + "-policy";
+        publishPolicies(
+          {
+            ...federation.policies,
+            acme: { ...federation.policies.acme, policyVersion: "switch-v2" },
+          },
+          rotated,
+        );
+        const rotatedDeployment = await waitForDeployment(rotated);
+        await expectStatus(acmePath, 403, acmeSession);
+        await expectStatus(peerPath, 200, guest);
+        await expectStatus(staged.path, 401, staged.cookie);
+        await expectStatus(acmePath, 200, await finish(await start("acme")));
+        sharedPolicyProof = {
+          passwordFallback: 403,
+          guestWithoutGrant: 403,
+          guestAfterGrant: 200,
+          earlierPolicy: 403,
+          pendingCallback: 401,
+          unchangedPeer: 200,
+          freshPolicy: 200,
+          rotatedDeployment,
+        };
+      }
       return {
         product: schema,
         deployment,
         switch: "passed",
+        ...(sharedPolicyProof ? { sharedPolicy: sharedPolicyProof } : {}),
         ...(directory ? { strictDirectoryCleanup: "confirmed and replayed" } : {}),
         priorCookie: 401,
         staleCallback: 401,

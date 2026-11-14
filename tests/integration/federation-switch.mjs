@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { fork } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { verifyReferenceProduct } from "./reference-products.mjs";
 
 const issuer = process.env.HEIMDALL_PROBE_ZITADEL_ISSUER;
 const pat = process.env.HEIMDALL_PROBE_ZITADEL_PAT;
+const loginPat = process.env.HEIMDALL_PROBE_ZITADEL_LOGIN_PAT;
 const fga = process.env.HEIMDALL_PROBE_OPENFGA_URL;
 const key = process.env.HEIMDALL_PROBE_OPENFGA_KEY;
 assert.equal(process.env.HEIMDALL_REFERENCE_RAILWAY, "1");
@@ -57,6 +58,7 @@ async function verifyProduct(product) {
   const suffix = runId + "-" + product;
   const { organizationId } = await z("/v2/organizations", { name: "heimdall-switch-" + suffix });
   const children = [];
+  let passwordSession;
   let store;
   try {
     const { projectId } = await z("/zitadel.project.v2.ProjectService/CreateProject", {
@@ -129,6 +131,19 @@ async function verifyProduct(product) {
       : null;
     const assignment =
       fixture.expected.roles[product === "ledger" ? "viewer" : "reader"].assignment;
+    const verifyPolicy = process.env.HEIMDALL_PROBE_SHARED_SSO_POLICY === "1";
+    const password = "Aa1!" + randomBytes(24).toString("hex");
+    const localUser = verifyPolicy
+      ? await z("/v2/users/new", {
+          organizationId: acme.policy.organizationId,
+          username: "password-" + suffix,
+          human: {
+            profile: { givenName: "Local", familyName: "Probe" },
+            email: { email: `password-${suffix}@example.invalid`, isVerified: true },
+            password: { password, changeRequired: false },
+          },
+        })
+      : null;
     await f(`/stores/${store.id}/write`, {
       authorization_model_id: modelId,
       writes: {
@@ -148,6 +163,13 @@ async function verifyProduct(product) {
             ? ["member", assignment].map((relation) => ({
                 user: principal(target.id),
                 object: "workspace:globex",
+                relation,
+              }))
+            : []),
+          ...(localUser
+            ? ["member", assignment].map((relation) => ({
+                user: principal(localUser.id),
+                object: "workspace:acme",
                 relation,
               }))
             : []),
@@ -176,8 +198,65 @@ async function verifyProduct(product) {
         runId,
         federation: {
           principal: principal(globex.subject),
-          policies: { acme: acme.policy, globex: globex.policy },
+          policies: {
+            acme: acme.policy,
+            globex: globex.policy,
+            ...(verifyPolicy ? { "acme-peer": acme.policy } : {}),
+          },
           credential: acme.credential,
+          ...(localUser
+            ? {
+                sharedPolicy: {
+                  async authorizePassword(location) {
+                    assert(loginPat);
+                    passwordSession = await api(issuer, loginPat, "/v2/sessions", {
+                      checks: { user: { userId: localUser.id }, password: { password } },
+                      lifetime: "600s",
+                    });
+                    async function follow(url) {
+                      assert.equal(new URL(url).origin, issuer);
+                      const response = await fetch(url, {
+                        redirect: "manual",
+                        signal: AbortSignal.timeout(15000),
+                      });
+                      assert(
+                        [302, 303, 307].includes(response.status),
+                        "Expected a password login redirect",
+                      );
+                      const next = response.headers.get("location");
+                      await response.body?.cancel();
+                      return new URL(next, url);
+                    }
+                    const login = await follow(location);
+                    const id = login.searchParams.get("authRequest");
+                    assert(id);
+                    const result = await api(issuer, loginPat, `/v2/oidc/auth_requests/${id}`, {
+                      session: {
+                        sessionId: passwordSession.sessionId,
+                        sessionToken: passwordSession.sessionToken,
+                      },
+                    });
+                    let callback = new URL(result.callbackUrl);
+                    for (let attempt = 0; attempt < 4 && callback.origin === issuer; attempt++)
+                      callback = await follow(callback.href);
+                    assert.equal(callback.origin + callback.pathname, redirectUri);
+                    assert(callback.searchParams.has("code"));
+                    return callback.pathname + callback.search;
+                  },
+                  grantPeer: () =>
+                    f(`/stores/${store.id}/write`, {
+                      authorization_model_id: modelId,
+                      writes: {
+                        tuple_keys: ["member", assignment].map((relation) => ({
+                          user: principal(acme.subject),
+                          object: "workspace:acme-peer",
+                          relation,
+                        })),
+                      },
+                    }),
+                },
+              }
+            : {}),
           ...(target
             ? {
                 cleanup: {
@@ -197,7 +276,7 @@ async function verifyProduct(product) {
         },
       },
       async (location, tenant) => {
-        const { child } = directories.get(tenant);
+        const { child } = directories.get(tenant === "acme-peer" ? "acme" : tenant);
         const response = receive(child, "callback");
         child.send({ type: "authorize", location });
         const callback = new URL((await response).location);
@@ -213,6 +292,9 @@ async function verifyProduct(product) {
       ),
       z(`/v2/organizations/${organizationId}`, undefined, "DELETE"),
       ...(store ? [f(`/stores/${store.id}`, undefined, "DELETE")] : []),
+      ...(passwordSession
+        ? [api(issuer, loginPat, `/v2/sessions/${passwordSession.sessionId}`, undefined, "DELETE")]
+        : []),
     ]);
     assert(
       cleanup.every((result) => result.status === "fulfilled"),
