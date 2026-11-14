@@ -31,6 +31,8 @@ Audit persistence is built before authorization results can be released; enterpr
 
 **Phases 1 through 5 are complete. Phase 6 covers enterprise integrations.**
 
+[[evidence/phase-6-acceptance|Phase 6 acceptance review]] maps enterprise requirements to the live evidence and records the remaining checks.
+
 [[evidence/phase-5-acceptance|Phase 5 acceptance]] records the requirement-by-requirement evidence and final Railway run. [[evidence/phase-6-tenant-sso-gate|Phase 6 tenant SSO gate]] covers policy checks on existing sessions and workspace access.
 
 [[evidence/phase-6-provider-setup|Phase 6 provider setup]] covers organization-scoped SAML and OIDC provisioning, read-only recovery and the test login required before policy publication.

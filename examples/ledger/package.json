@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
+    "audit:run": "node audit-job.mjs",
     "directory:run": "node directory-job.mjs"
   },
   "dependencies": {

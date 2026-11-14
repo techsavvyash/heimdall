@@ -154,7 +154,16 @@ try:
     elastic_start = os.environ.get("HEIMDALL_TEST_ELASTICSEARCH_START")
     if elastic_start and os.environ.get("HEIMDALL_PROBE_PRODUCT_SIEM") != "1":
         from live_identity_siem import run as verify_live_identity_siem
-        print(json.dumps(verify_live_identity_siem(delivery_env, elastic_start)), flush=True)
+        if os.environ.get("HEIMDALL_TEST_SCHEDULED_IDENTITY") == "1":
+            import tempfile
+            with tempfile.TemporaryDirectory() as temp:
+                binary = str(Path(temp) / "support")
+                subprocess.run(["go", "build", "-o", binary, "."], cwd=ROOT / "examples/support", check=True)
+                run(["pnpm", "run", "build"])
+                print(json.dumps(verify_live_identity_siem(
+                    dict(delivery_env, HEIMDALL_REFERENCE_SUPPORT_BINARY=binary), elastic_start)), flush=True)
+        else:
+            print(json.dumps(verify_live_identity_siem(delivery_env, elastic_start)), flush=True)
     directory_env = dict(runtime_env, HEIMDALL_TEST_DIRECTORY_DB=runtime_dsn + "&options=-c%20role%3Dheimdall_public_runtime")
     if os.environ.get("HEIMDALL_PROBE_SCIM_WORKER") == "true":
         run(["node", "tests/integration/scim.mjs"], env=directory_env)
@@ -241,7 +250,8 @@ try:
             if os.environ.get("HEIMDALL_PROBE_PRODUCT_SIEM") == "1":
                 from live_identity_siem import run as verify_live_identity_siem
                 assert elastic_start and all("auditActor" in product for product in products)
-                print(json.dumps({"productSIEM": verify_live_identity_siem(delivery_env, elastic_start, products)}), flush=True)
+                job_env = dict(delivery_env, HEIMDALL_REFERENCE_SUPPORT_BINARY=binary)
+                print(json.dumps({"productSIEM": verify_live_identity_siem(job_env, elastic_start, products)}), flush=True)
                 for product in products:
                     del product["auditActor"]
                     del product["auditRecipient"]

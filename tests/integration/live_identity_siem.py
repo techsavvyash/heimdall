@@ -84,6 +84,7 @@ def run(delivery_env, elastic_start, products=None):
     created = []
     configuration_edit = os.environ.get("HEIMDALL_PROBE_SIEM_CONFIGURATION_EDIT") == "1"
     aggregate_type = "user"
+    job_binary = delivery_env.get("HEIMDALL_REFERENCE_SUPPORT_BINARY")
     policy = verification_policy() if os.environ.get("HEIMDALL_TEST_SCHEDULED_IDENTITY") == "1" else None
 
     def api(path, body=None, method=None, auth=admin):
@@ -156,7 +157,41 @@ def run(delivery_env, elastic_start, products=None):
                     })
                     assert status == 403, "Tenant-scoped receiver accepted an unrelated event"
                     statuses.clear()
-                if lang == "ts":
+                if stage in ("product", "scheduled") and job_binary:
+                    command = ["pnpm", "--filter", "@heimdall/ledger", "audit:run"] if lang == "ts" else [job_binary, "audit-job"]
+                    job_env = dict(
+                        delivery_env,
+                        HEIMDALL_CONFIG=json.dumps({"productId": product, "environment": environment, "issuer": ISSUER}),
+                        DATABASE_URL=delivery_env["HEIMDALL_TEST_AUDIT_DELIVERY_DB"],
+                        HEIMDALL_AUDIT_ENDPOINT=config["endpoint"],
+                        HEIMDALL_AUDIT_TOKEN=token,
+                        HEIMDALL_AUDIT_TRANSPORT_PROFILE="loopback",
+                    )
+                    if stage == "scheduled":
+                        job_env.update(
+                            HEIMDALL_AUDIT_TENANT=tenant,
+                            HEIMDALL_IDENTITY_READER_TOKEN=pat,
+                            HEIMDALL_IDENTITY_MAPPING=json.dumps({
+                                "organizationId": org, "startMicros": str(start_micros),
+                                "aggregates": [{"type": aggregate_type, "id": subject}], "coverage": policy,
+                            }),
+                        )
+                    for _ in range(50):
+                        result = subprocess.run(command, cwd=ROOT, env=job_env, capture_output=True, text=True, timeout=50)
+                        assert result.returncode == 0, "Reference audit job failed"
+                        summary = json.loads(result.stdout.splitlines()[-1])
+                        assert summary["quarantined"] == 0
+                        if stage == "scheduled":
+                            collected = json.loads(result.stdout.splitlines()[-2])
+                            assert collected["collected"] == expected_events
+                            assert int(collected["nextMicros"]) > start_micros
+                            assert summary["delivered"] == expected_events
+                            break
+                        if summary["attempted"] == 0:
+                            break
+                    else:
+                        raise RuntimeError("Reference audit job exceeded page budget")
+                elif lang == "ts":
                     subprocess.run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run",
                                     "test/live-identity-siem.test.ts"], cwd=ROOT, env=env, check=True)
                 else:
@@ -168,7 +203,8 @@ def run(delivery_env, elastic_start, products=None):
         if stage == "product":
             assert statuses and set(statuses) == {200}
         else:
-            expected_status = {"outage": [503], "collect": [200], "retry": [200], "scheduled": []}
+            expected_status = {"outage": [503], "collect": [200], "retry": [200],
+                               "scheduled": [200] if job_binary and expected_events else []}
             assert statuses == expected_status[stage], "Unexpected receiver status"
 
     try:
@@ -228,7 +264,7 @@ def run(delivery_env, elastic_start, products=None):
                 assert any(a["recordedAt"] <= b["recordedAt"] <= c["recordedAt"]
                            for a in grant for b in recipient_allow for c in recipient_read)
                 checks[product] = {"documents": len(events), "loginDecisionBusinessAndRoleChange": True, "recipientReadAfterGrant": True}
-            return {"run": run_id, "elasticsearch": "8.19.0", "products": checks}
+            return {"run": run_id, "elasticsearch": "8.19.0", "products": checks, "referenceJobs": bool(job_binary)}
         org = api("/v2/organizations", {"name": "heimdall-siem-" + run_id})["organizationId"]
 
         def machine(name):
@@ -322,15 +358,36 @@ def run(delivery_env, elastic_start, products=None):
             es(f"/{index}/_refresh", method="POST")
             assert es(f"/{index}/_count")["count"] == 1
         if policy:
+            checkpoints = {}
             for lang in scopes:
                 dispatch(lang, "scheduled", subject, micros, pat)
+                product, environment, tenant = scopes[lang]
+                checkpoints[lang] = int(subprocess.check_output([
+                    "psql", delivery_env["HEIMDALL_TEST_DATABASE_URL"], "-XAt", "-v", "ON_ERROR_STOP=1", "-c",
+                    f"SELECT next_micros FROM heimdall_directory.event_checkpoints WHERE product_id='{product}' "
+                    f"AND environment='{environment}' AND tenant_id='{tenant}'",
+                ], text=True))
             api(f"/v2/users/{subject}/reactivate", {})
             time.sleep((policy["maxWriterTransactionMs"] + 3 * policy["maxClockOffsetMs"]) / 1000 + 1)
             for lang in scopes:
                 dispatch(lang, "scheduled", subject, micros, pat, expected_events=1)
+                product, environment, tenant = scopes[lang]
+                assert int(subprocess.check_output([
+                    "psql", delivery_env["HEIMDALL_TEST_DATABASE_URL"], "-XAt", "-v", "ON_ERROR_STOP=1", "-c",
+                    f"SELECT next_micros FROM heimdall_directory.event_checkpoints WHERE product_id='{product}' "
+                    f"AND environment='{environment}' AND tenant_id='{tenant}'",
+                ], text=True)) > checkpoints[lang]
+                if job_binary:
+                    index = indexes[lang]
+                    es(f"/{index}/_refresh", method="POST")
+                    docs = es(f"/{index}/_search")["hits"]["hits"]
+                    assert len(docs) == 2 and {doc["_source"]["action"] for doc in docs} == {
+                        "user.deactivated", "user.reactivated",
+                    }
         return {"run": run_id, "languages": ["typescript", "go"], "elasticsearch": "8.19.0",
                 "liveProvider": True, "sinkOutageRetainedPending": True, "lostReceiptRecovered": True,
                 "sinkRestartPreservedDocuments": True, "oneDocumentPerProduct": True, "tenantMismatchRejected": True, "scheduledCheckpointAdvanced": bool(policy),
+                **({"referenceCollectorJobs": True} if policy and job_binary else {}),
                 **({"configurationEdit": changed["type"]["type"], "aggregateType": aggregate_type,
                     "metadataOnly": True} if configuration_edit else {})}
     finally:

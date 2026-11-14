@@ -118,6 +118,12 @@ func main() {
 		stop()
 		os.Exit(code)
 	}
+	if len(os.Args) == 2 && os.Args[1] == "audit-job" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		code := auditJobExitCode(ctx)
+		stop()
+		os.Exit(code)
+	}
 	configJSON, manifestJSON := []byte(required("HEIMDALL_CONFIG")), []byte(required("HEIMDALL_MANIFEST"))
 	var config struct{ ProductID, Environment, Issuer string }
 	if json.Unmarshal(configJSON, &config) != nil || config.ProductID != "support" {
