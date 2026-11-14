@@ -14,7 +14,7 @@ import (
 	"github.com/techsavvyash/heimdall/sdk/go/provisioning"
 )
 
-func runDirectoryJob(ctx context.Context) error {
+func runDirectoryJob(ctx context.Context, stage *string) error {
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 
@@ -41,10 +41,12 @@ func runDirectoryJob(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	*stage = "discovery"
 	discovery, err := polling.Discover(ctx, 25)
 	if err != nil {
 		return err
 	}
+	*stage = "observation"
 	var observed int
 	var invalidated int64
 	for after := ""; ; {
@@ -62,6 +64,7 @@ func runDirectoryJob(ctx context.Context) error {
 	fmt.Printf("{\"discovered\":%d,\"cycleComplete\":%t,\"observed\":%d,\"sessionsInvalidated\":%d}\n",
 		discovery.Discovered, discovery.CycleComplete, observed, invalidated)
 
+	*stage = "pending_cleanup"
 	cleanup, err := postgres.NewDirectoryCleanup(db, config.ProductID, config.Environment, options.Issuer, options.OrganizationID, "production")
 	if err != nil {
 		return err
@@ -104,6 +107,7 @@ func runDirectoryJob(ctx context.Context) error {
 			}
 		}
 		manifestJSON := []byte(os.Getenv("HEIMDALL_MANIFEST"))
+		*stage = "runtime"
 		runtime, err := heimdall.New(ctx, configJSON, manifestJSON, heimdall.Options{
 			PolicyVersion: os.Getenv("HEIMDALL_POLICY_VERSION"), Storage: storage, TenantSSOPolicy: settings.policy,
 			Credentials: heimdall.Credentials{
@@ -114,6 +118,7 @@ func runDirectoryJob(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		*stage = "authorization"
 		actor, err := runtime.Tokens().Verify(ctx, os.Getenv("HEIMDALL_DIRECTORY_OPERATOR_TOKEN"))
 		if err != nil {
 			return err
@@ -124,6 +129,7 @@ func runDirectoryJob(ctx context.Context) error {
 		if err := authorizeDirectoryCleanup(ctx, runtime, actor, workspaces, manifestJSON); err != nil {
 			return err
 		}
+		*stage = "reconciliation"
 		for _, item := range pending {
 			result, err := cleanup.Reconcile(ctx, runtime, actor, item.Subject, item.Revision, workspaces)
 			if err != nil {
@@ -140,13 +146,14 @@ func runDirectoryJob(ctx context.Context) error {
 }
 
 func directoryJobExitCode(ctx context.Context) int {
-	if err := runDirectoryJob(ctx); err != nil {
+	stage := "configuration"
+	if err := runDirectoryJob(ctx, &stage); err != nil {
 		code := "failed"
 		var failure *heimdall.Error
 		if errors.As(err, &failure) {
 			code = string(failure.Code)
 		}
-		fmt.Fprintf(os.Stderr, "{\"directoryJob\":%q}\n", code)
+		fmt.Fprintf(os.Stderr, "{\"directoryJob\":%q,\"stage\":%q}\n", code, stage)
 		return 1
 	}
 	return 0

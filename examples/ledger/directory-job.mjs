@@ -21,6 +21,7 @@ process.once("SIGINT", () => stop.abort());
 const signal = AbortSignal.any([stop.signal, AbortSignal.timeout(45000)]);
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 let business;
+let stage = "configuration";
 
 try {
   required("DATABASE_URL");
@@ -36,7 +37,9 @@ try {
     token: required("HEIMDALL_DIRECTORY_READER_TOKEN"),
   };
   const polling = createDirectoryPolling(pool, scope);
+  stage = "discovery";
   const discovery = await polling.discover(25, signal);
+  stage = "observation";
   let after = null;
   let observed = 0;
   let sessionsInvalidated = 0;
@@ -48,6 +51,7 @@ try {
   } while (after !== null);
   console.log(JSON.stringify({ ...discovery, observed, sessionsInvalidated }));
 
+  stage = "pending_cleanup";
   const cleanup = createDirectoryCleanup(pool, scope);
   const pending = await cleanup.pending(null, 10, signal);
   if (pending.length > 0) {
@@ -62,6 +66,7 @@ try {
       tenantSSOPolicy(),
       false,
     );
+    stage = "runtime";
     const runtime = await createHeimdall(
       configJSON,
       required("HEIMDALL_MANIFEST"),
@@ -76,6 +81,7 @@ try {
       },
       { signal },
     );
+    stage = "authorization";
     const actor = await runtime.tokens.verify(required("HEIMDALL_DIRECTORY_OPERATOR_TOKEN"), {
       signal,
     });
@@ -89,6 +95,7 @@ try {
       const roles = await runtime.tenant(workspace).roles(actor, { signal });
       if (!roles.includes(manifest.ownerRole)) throw new HeimdallError("forbidden");
     }
+    stage = "reconciliation";
     for (const { subject, revision } of pending) {
       const result = await cleanup.reconcile(
         runtime,
@@ -107,7 +114,7 @@ try {
   );
 } catch (error) {
   console.error(
-    JSON.stringify({ directoryJob: error instanceof HeimdallError ? error.code : "failed" }),
+    JSON.stringify({ directoryJob: error instanceof HeimdallError ? error.code : "failed", stage }),
   );
   process.exitCode = 1;
 } finally {

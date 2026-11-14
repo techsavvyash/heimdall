@@ -903,11 +903,12 @@ export async function verifyReferenceProduct(input, authorize) {
           encoding: "utf8",
           timeout: 50000,
         });
-        const code = /"directoryJob":"([a-z_]+)"/.exec(job.stderr ?? "")?.[1];
+        const [, code, stage] =
+          /"directoryJob":"([a-z_]+)","stage":"([a-z_]+)"/.exec(job.stderr ?? "") ?? [];
         assert.equal(
           job.status,
           0,
-          `Live SCIM ${schema} directory job failed: ${code ?? "process"}`,
+          `Live SCIM ${schema} directory job failed: ${code ?? "process"} (${stage ?? "unknown stage"})`,
         );
         return Object.assign(
           {},
