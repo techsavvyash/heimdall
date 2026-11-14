@@ -1,0 +1,10 @@
+{
+  "run": "c8581e63-b007-4920-9d3d-cda5dd272320",
+  "languages": ["typescript", "go"],
+  "elasticsearch": "8.19.0",
+  "liveProvider": true,
+  "sinkOutageRetainedPending": true,
+  "lostReceiptRecovered": true,
+  "sinkRestartPreservedDocuments": true,
+  "oneDocumentPerProduct": true
+}

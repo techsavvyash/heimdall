@@ -150,6 +150,9 @@ try:
             if not proxy.dropped.is_set() or proxy.errors:
                 raise RuntimeError(language + " identity collector COMMIT fault was not verified")
     print(json.dumps({"run": name, "identityCollectorCommitLossAndDelivery": ["typescript", "go"], "result": "passed"}), flush=True)
+    if elastic_start := os.environ.get("HEIMDALL_TEST_ELASTICSEARCH_START"):
+        from live_identity_siem import run as verify_live_identity_siem
+        print(json.dumps(verify_live_identity_siem(delivery_env, elastic_start)), flush=True)
     directory_env = dict(runtime_env, HEIMDALL_TEST_DIRECTORY_DB=runtime_dsn + "&options=-c%20role%3Dheimdall_public_runtime")
     run(["pnpm", "--filter", "@heimdall/sdk", "exec", "vitest", "run", "test/postgres-directory-deactivation.test.ts"], env=directory_env)
     subprocess.run(["go", "test", "-race", "-count=1", "./postgres", "-run", "^TestDirectoryDeactivationPostgres$"],

@@ -168,4 +168,31 @@ Precreate the index with request-level translog durability and deploy the handle
 
 Run `python3 tests/integration/elasticsearch-receipts.py` against a disposable Elasticsearch 8.19.0 node with `HEIMDALL_TEST_ELASTICSEARCH_URL` and protected `HEIMDALL_TEST_ELASTICSEARCH_CREDENTIALS`. The test creates and deletes one run-scoped index. Run `601e612b-9dc3-4ccf-a588-5515998a32f5` used the checksum-verified native Elastic distribution with authentication enabled. It rejected invalid credentials and cross-product batches, acknowledged an identical replay without adding a document, left a changed tenant payload pending and accepted the healthy product event in that same batch. Direct Elasticsearch reads confirmed that the index held exactly the two expected documents.
 
-This run verifies the receipt handler against real Elasticsearch. The prior commit-loss run exercises SDK exporters against the receipt protocol. A combined live provider-to-SIEM run and Elasticsearch restart qualification remain open.
+This run verifies the receipt handler against real Elasticsearch. The prior commit-loss run exercises SDK exporters against the receipt protocol. The combined live run below verifies both SDK exporters through the same receipt handler.
+
+## Live ZITADEL to Elasticsearch recovery
+
+The optional PostgreSQL integration run starts a disposable Elasticsearch 8.19.0 process and creates one index per product scope. It writes a deactivation event through Railway ZITADEL and imports the exact historical window through both SDKs. Ledger and Support map the same provider aggregate to different tenants. The test receiver withholds a successful receipt after indexing. Each SDK then attempts delivery while Elasticsearch is offline and retries after the same node restarts.
+
+```mermaid
+sequenceDiagram
+  participant Z as Railway ZITADEL
+  participant S as Product SDKs
+  participant D as PostgreSQL outbox
+  participant E as Elasticsearch
+  Z-->>S: Return the live deactivation event
+  S->>D: Commit mapped event and checkpoint
+  S->>E: Deliver through the scoped receipt handler
+  Note over S,E: Elasticsearch commits and the receipt is withheld
+  S->>E: Retry during the sink outage
+  S->>D: Keep the event pending
+  S->>E: Replay after Elasticsearch restarts
+  E-->>S: Confirm the original scoped document
+  S->>D: Mark delivery acknowledged
+```
+
+Run `tests/integration/postgres-records.py` with the protected Railway verification PAT, `HEIMDALL_TEST_ELASTICSEARCH_CREDENTIALS`, and `HEIMDALL_TEST_ELASTICSEARCH_START`. The last setting points to an executable that runs a disposable local node in the foreground on loopback port 19243. Configure its data path to persist across the two process starts. The probe starts and stops its own process and deletes its disposable organization and indexes. It makes pending rows due directly in the test database to avoid waiting for the production retry timer.
+
+Run `c8581e63-b007-4920-9d3d-cda5dd272320` passed for both SDKs. Elasticsearch retained one document per product across restart, including the exact provider sequence and the mapped tenant. PostgreSQL recorded three delivery attempts and a final acknowledgement for each event.
+
+The probe supplies a known historical timestamp from the live provider event. Automatic live coverage, mapping changes, tenant export authorization and end-to-end SCIM acceptance remain open.
