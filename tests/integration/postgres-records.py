@@ -214,6 +214,9 @@ try:
             reference_env = dict(env, HEIMDALL_PROBE_SDK_RUNTIME="1",
                                  HEIMDALL_REFERENCE_DATABASE_URL=runtime_dsn,
                                  HEIMDALL_REFERENCE_SUPPORT_BINARY=binary)
+            restore = os.environ.get("HEIMDALL_PROBE_COORDINATED_RESTORE") == "1"
+            if restore:
+                reference_env["HEIMDALL_RESTORE_POSTGRES_CONTAINER"] = name
             revision = os.environ.get("HEIMDALL_PROBE_CONSUMER_REVISION")
             consumer_info = None
             if revision:
@@ -253,7 +256,7 @@ try:
                 reference = subprocess.run(["node", "tests/integration/oidc.mjs"], cwd=ROOT, env=reference_env,
                                        capture_output=True, text=True, timeout=240)
                 if reference.returncode != 0:
-                    diagnostics = re.findall(r"(?:AssertionError \[ERR_ASSERTION\]:[^\n]+|reference-products\.mjs:\d+:\d+|OIDC probe run: [a-f0-9-]+)", reference.stderr)
+                    diagnostics = re.findall(r"(?:AssertionError \[ERR_ASSERTION\]:[^\n]+|reference-(?:products|restore)\.mjs:\d+:\d+|OIDC probe run: [a-f0-9-]+|Restore (?:database|audit delivery) command failed(?: \([a-z_/]+\))?)", reference.stderr)
                     raise RuntimeError("Reference product verification failed: " + " | ".join(diagnostics)[:1000])
                 if scim_siem:
                     from live_identity_siem import run as verify_live_identity_siem
@@ -273,7 +276,8 @@ try:
                     status, _ = request(ISSUER, "/v2/organizations/" + org,
                                         "Bearer " + os.environ["HEIMDALL_PROBE_ZITADEL_PAT"], method="DELETE")
                     assert 200 <= status < 300, "Disposable organization cleanup failed"
-            observations = json.loads(reference.stdout)["observations"]
+            result = json.loads(reference.stdout)
+            observations = result["observations"]
             products = [result for result in observations if "scopedRead" in result]
             if len(products) != 2:
                 raise RuntimeError("missing reference product observations")
@@ -281,7 +285,9 @@ try:
                 ["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime", "-XAt", "-v", "ON_ERROR_STOP=1"],
                 input="SELECT event->>'payload' FROM heimdall.audit_events WHERE environment='verification'",
                 capture_output=True, text=True).stdout.splitlines()
-            if os.environ.get("HEIMDALL_PROBE_SCIM_BROWSER") == "1":
+            if restore:
+                assert {item["product"] for item in products if item["coordinatedRestore"]} == {"ledger", "support"}
+            elif os.environ.get("HEIMDALL_PROBE_SCIM_BROWSER") == "1":
                 from collections import Counter
                 import base64
                 events = [json.loads(base64.urlsafe_b64decode(payload + "===")) for payload in audit_rows]
@@ -323,6 +329,7 @@ try:
                     del product["auditActor"]
                     del product["auditRecipient"]
             print(json.dumps({"referenceProducts": products,
+                              **({"storageRun": name, "oidcRun": result["runId"]} if restore else {}),
                               **({"isolatedConsumers": consumer_info} if consumer_info else {})}), flush=True)
     if os.environ.get("HEIMDALL_PROBE_DURABLE_RUNTIME") == "1":
         for args in (

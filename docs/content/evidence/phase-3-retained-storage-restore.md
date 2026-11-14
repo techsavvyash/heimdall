@@ -59,5 +59,5 @@ database and left application access closed throughout the drill.
 The Phase 7 repeat `heimdall-capacity-backfill-351dd65705554542b26b5419a168a33b`
 passed the isolated restore cases with both SDKs. It used the harness's
 `HEIMDALL_TEST_POSTGRES_BIND_ROOT` setting to place the disposable data directory
-outside Docker's local volume filesystem. Coordinated reconciliation after
-identity, relationship and SIEM changes remains a release gate.
+outside Docker's local volume filesystem. See [[phase-7-coordinated-restore]]
+for the separate live-provider drill and the scope of its reconciliation.

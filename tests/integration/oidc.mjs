@@ -158,6 +158,9 @@ async function sdkRuntime(client, c) {
             otherWorkspace: observations.find((entry) => entry.onboarding)?.onboarding,
             scim: c.reference.scim,
             roleAssignments: fixture.expected.roles,
+            ...(c.reference.restoreIdentity
+              ? { restoreIdentity: c.reference.restoreIdentity }
+              : {}),
             ...(tenantMatrix
               ? {
                   grantNamedMembership: async (workspaceId, role) => {
@@ -735,6 +738,21 @@ try {
       statusCase.reference = {
         apiAudience: audiences[0],
         recipient: otherUser.id,
+        ...(process.env.HEIMDALL_PROBE_COORDINATED_RESTORE === "1"
+          ? {
+              restoreIdentity: {
+                disable: async () => {
+                  await ok("POST", `/v2/users/${otherUser.id}/deactivate`, {});
+                  const status = await ok("GET", `/v2/users/${otherUser.id}`);
+                  assert.equal(status.user.state, "USER_STATE_INACTIVE");
+                },
+                activate: async () => {
+                  await ok("POST", `/v2/users/${otherUser.id}/reactivate`, {});
+                  otherSession = await createOtherSession(otherUser.id);
+                },
+              },
+            }
+          : {}),
         authorize: async (location, recipient = false) => {
           const selected = recipient ? otherSession : session;
           const login = await redirect(location);

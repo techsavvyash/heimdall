@@ -1,3 +1,4 @@
+import { verifyRestoredReference } from "./reference-restore.mjs";
 import { request as httpRequest } from "node:http";
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
@@ -89,6 +90,7 @@ export async function verifyReferenceProduct(input, authorize) {
     roleAssignments,
     readMemberRelations,
     grantNamedMembership,
+    restoreIdentity,
   } = input;
   const ledger = config.productId === "ledger";
   const port = ledger ? 18640 : 18641;
@@ -101,6 +103,7 @@ export async function verifyReferenceProduct(input, authorize) {
   const origin = new URL(callback).origin;
   const db = process.env.HEIMDALL_REFERENCE_DATABASE_URL;
   assert(db || remote);
+  assert(!restoreIdentity || (!remote && !scim && !federation && !grantNamedMembership));
   const principal =
     "user:" + Buffer.from(JSON.stringify([config.issuer, user])).toString("base64url");
   const schema = ledger ? "ledger" : "support";
@@ -209,7 +212,9 @@ export async function verifyReferenceProduct(input, authorize) {
     HEIMDALL_WORKSPACE_CREATOR_SUBJECT: user,
     HEIMDALL_REFERENCE_MEMBER_SUBJECT: recipient,
     HEIMDALL_REFERENCE_STRICT_SSO: grantNamedMembership ? "0" : "1",
-    ...(process.env.HEIMDALL_PROBE_PRODUCT_SIEM === "1" ? { HEIMDALL_REFERENCE_SIEM: "1" } : {}),
+    ...(restoreIdentity || process.env.HEIMDALL_PROBE_PRODUCT_SIEM === "1"
+      ? { HEIMDALL_REFERENCE_SIEM: "1" }
+      : {}),
     ...(federation
       ? {
           HEIMDALL_TENANT_SSO_POLICIES: JSON.stringify(federation.policies),
@@ -243,6 +248,19 @@ export async function verifyReferenceProduct(input, authorize) {
     HEIMDALL_ZITADEL_API_AUDIENCE: apiAudience,
   };
   let child;
+  const stop = async () => {
+    if (child && child.exitCode === null && child.signalCode === null) {
+      const stopped = once(child, "exit");
+      child.kill();
+      await stopped;
+    }
+  };
+  const start = (overrides = {}) => {
+    child = spawn(cmd[0], cmd[1], {
+      stdio: "ignore",
+      env: { ...process.env, ...variables, ...overrides },
+    });
+  };
   let publishPolicies;
   if (remote) {
     const fingerprint = createHash("sha256")
@@ -306,7 +324,7 @@ export async function verifyReferenceProduct(input, authorize) {
     }
     await deploy();
   } else {
-    child = spawn(cmd[0], cmd[1], { stdio: "ignore", env: { ...process.env, ...variables } });
+    start();
   }
   const request = (path, options = {}) =>
     remote
@@ -690,7 +708,7 @@ export async function verifyReferenceProduct(input, authorize) {
         resourceAfter: { acme: 403, globex: 200 },
       };
     }
-    async function signIn(recipient = false) {
+    async function signIn(recipient = false, expectedStatus = 303) {
       const start = await request("/auth/start");
       assert.equal(start.status, 303, `Reference ${schema} login start returned ${start.status}`);
       const binding = start.headers.getSetCookie()[0].split(";")[0];
@@ -700,9 +718,13 @@ export async function verifyReferenceProduct(input, authorize) {
       });
       assert.equal(
         complete.status,
-        303,
+        expectedStatus,
         `Reference ${schema} callback returned ${complete.status}`,
       );
+      if (expectedStatus !== 303) {
+        await complete.body?.cancel();
+        return;
+      }
       return complete.headers
         .getSetCookie()
         .find((value) => value.includes("-session="))
@@ -961,6 +983,40 @@ export async function verifyReferenceProduct(input, authorize) {
     assert.equal(added.status, 200, `Reference ${schema} member add returned ${added.status}`);
     const grant = await added.json();
     assert.equal(grant.status, "confirmed");
+    if (restoreIdentity) {
+      await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 200);
+      return await verifyRestoredReference({
+        config,
+        db,
+        variables,
+        request,
+        signIn,
+        recipientCookie,
+        recipient,
+        workspace: workspace.workspaceId,
+        resource: resourcePath,
+        readMemberRelations,
+        commands: {
+          audit: ledger
+            ? [process.execPath, "examples/ledger/audit-job.mjs"]
+            : [process.env.HEIMDALL_REFERENCE_SUPPORT_BINARY, "audit-job"],
+        },
+        stop,
+        async restart(overrides) {
+          await stop();
+          start(overrides);
+          await waitForDeployment(runId);
+        },
+        restoreProvider: {
+          ...restoreIdentity,
+          async revoke() {
+            const response = await memberRequest("remove", recipient, runId);
+            assert.equal(response.status, 200);
+            assert.equal((await response.json()).status, "confirmed");
+          },
+        },
+      });
+    }
     if (process.env.HEIMDALL_PROBE_PRODUCT_SIEM === "1") {
       const response = await request(resourcePath, { headers: recipientHeaders });
       assert.equal(response.status, 200);
@@ -1698,9 +1754,6 @@ export async function verifyReferenceProduct(input, authorize) {
         assert.equal(cleanup.status, 0, "Could not clear disposable federation variables");
       }
     }
-    if (child && child.exitCode === null) {
-      child.kill();
-      await once(child, "exit");
-    }
+    await stop();
   }
 }
