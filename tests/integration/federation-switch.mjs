@@ -10,7 +10,14 @@ const pat = process.env.HEIMDALL_PROBE_ZITADEL_PAT;
 const loginPat = process.env.HEIMDALL_PROBE_ZITADEL_LOGIN_PAT;
 const fga = process.env.HEIMDALL_PROBE_OPENFGA_URL;
 const key = process.env.HEIMDALL_PROBE_OPENFGA_KEY;
-assert.equal(process.env.HEIMDALL_REFERENCE_RAILWAY, "1");
+const remote = process.env.HEIMDALL_REFERENCE_RAILWAY === "1";
+assert(remote || process.env.HEIMDALL_REFERENCE_DATABASE_URL);
+assert(remote || process.env.HEIMDALL_PROBE_POLICY_PUBLICATION_SIEM !== "1");
+assert(
+  process.env.HEIMDALL_PROBE_PROVIDER_SETTINGS !== "1" ||
+    process.env.HEIMDALL_PROBE_SHARED_SSO_POLICY !== "1",
+  "Run provider activation and static policy rotation in separate fixtures",
+);
 for (const origin of [issuer, fga])
   assert(origin?.startsWith("https://") && new URL(origin).origin === origin);
 assert(pat && key);
@@ -65,7 +72,10 @@ async function verifyProduct(product) {
       organizationId,
       name: "switch-" + suffix,
     });
-    const redirectUri = `https://reference-${product}-verification.up.railway.app/auth/callback`;
+    const host = remote
+      ? `reference-${product}-verification.up.railway.app`
+      : `${product}.example.invalid`;
+    const redirectUri = `https://${host}/auth/callback`;
     const app = await z("/zitadel.application.v2.ApplicationService/CreateApplication", {
       projectId,
       name: "switch-web",
@@ -387,9 +397,17 @@ async function verifyProduct(product) {
   }
 }
 
-const results = await Promise.allSettled(["ledger", "support"].map(verifyProduct));
-for (const result of results)
-  if (result.status === "rejected") console.error(result.reason.message);
+const products = ["ledger", "support"];
+const results = await Promise.allSettled(products.map(verifyProduct));
+for (const [index, result] of results.entries())
+  if (result.status === "rejected") {
+    const { message, stack } = result.reason;
+    const location = stack
+      ?.split("\n")
+      .filter((line) => /\.mjs:\d+:\d+/.test(line))
+      .slice(0, 2);
+    console.error(products[index], message, location?.map((line) => line.trim()).join(" ") ?? "");
+  }
 assert(
   results.every((result) => result.status === "fulfilled"),
   "Two-directory reference verification failed",

@@ -166,3 +166,28 @@ sequenceDiagram
 Reproduce with `HEIMDALL_PROBE_SHARED_SSO_POLICY=1` when running `tests/integration/federation-switch.mjs` with the protected Railway verification configuration. The probe authenticates the local password account through the ZITADEL Login API. It publishes the policy change by updating the product policy configuration and redeploying each reference app with the same session keys and database.
 
 Railway run `03bcb3f4-55a0-4ff3-84d1-086eb67f5e03` passed for Ledger and Support. The earlier Acme session received HTTP 403 and its pending callback received HTTP 401 after the version change. Acme Peer retained access with its existing session, and fresh Acme authentication restored access. Ledger deployments were `079e1c54-7d54-4098-87f1-672391103d7e` and `43361cd9-ba0c-4d8d-a1a1-ca43a05d51c7`. Support deployments were `2b970e52-2149-4ebb-9afc-b9186fe6485d` and `8ccb3cf0-e255-4b57-8c8c-e8414e951233`.
+
+## Local feedback loop
+
+Use the same tenant switch and policy assertions against local Ledger and Support processes with disposable PostgreSQL before deploying. The probe still uses the verification ZITADEL, OpenFGA and Keycloak instances. Supply the protected verification credentials, including `HEIMDALL_PROBE_IDP_URL` and `HEIMDALL_PROBE_IDP_ADMIN_PASSWORD`. Keep ports 18640 and 18641 free and run one reference probe at a time.
+
+With Air on `PATH`, start the TypeScript SDK build watcher in one terminal.
+
+```sh
+pnpm --filter @heimdall/sdk exec rolldown -c --watch
+```
+
+In another terminal, run the local verification with Node's watch mode and Air. Changes to the TypeScript SDK or Ledger restart Ledger. Changes to the Go SDK or Support rebuild and restart Support. Rerun the assertions if a save restarts a server during a request.
+
+```sh
+HEIMDALL_PROBE_REFERENCE_PRODUCTS=1 HEIMDALL_PROBE_FEDERATION_SWITCH=1 \
+HEIMDALL_PROBE_REFERENCE_WATCH=1 HEIMDALL_PROBE_SHARED_SSO_POLICY=1 \
+HEIMDALL_PROBE_STRICT_DIRECTORY_CLEANUP=1 \
+python3 tests/integration/postgres-records.py
+```
+
+Run provider activation separately by setting `HEIMDALL_PROBE_PROVIDER_SETTINGS=1` in place of `HEIMDALL_PROBE_SHARED_SSO_POLICY=1`. An activated database policy takes precedence over the static policy used in the rotation case. Omit `HEIMDALL_PROBE_REFERENCE_WATCH` for a one-shot local run. After it passes, use the Railway federation probe for deployment readiness and HTTPS verification.
+
+Local watch run `28507f28-e518-495d-b3f4-8f06efcd8b91` passed tenant switching, provider activation and strict-workspace cleanup on both backends. Ledger activated an Acme SAML candidate, and Support activated a Globex OIDC candidate. Both recovered a provider create whose ID was lost, required a test login before activation and rejected the previous policy afterward. The raw outcomes are in `tests/integration/evidence/phase-7-federation-local-2026-11-14.json`.
+
+Local watch run `cc18d603-8b08-48ae-bcc9-38d40d09223a` passed static policy rotation on both backends. Both rejected the previous Acme session and its pending callback, preserved Acme Peer access and accepted fresh Acme authentication. Both also denied password fallback and denied same-provider guest access before an explicit membership grant.

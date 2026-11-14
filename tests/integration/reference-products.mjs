@@ -210,9 +210,29 @@ export async function verifyReferenceProduct(input, authorize) {
     : (process.env.HEIMDALL_REFERENCE_OPERATOR_EXPORT_DB ??
       db + "&options=-c%20role%3Dheimdall_reference_export");
   const ledgerEntry = process.env.HEIMDALL_REFERENCE_LEDGER_ENTRY ?? "examples/ledger/server.mjs";
+  const watch = process.env.HEIMDALL_PROBE_REFERENCE_WATCH === "1";
+  assert(!watch || (!remote && !process.env.HEIMDALL_REFERENCE_LEDGER_ENTRY));
   const cmd = ledger
-    ? [process.execPath, [ledgerEntry]]
-    : [process.env.HEIMDALL_REFERENCE_SUPPORT_BINARY, []];
+    ? [process.execPath, watch ? ["--watch", ledgerEntry] : [ledgerEntry]]
+    : watch
+      ? [
+          "air",
+          [
+            "-build.cmd",
+            'go -C examples/support build -o "$HEIMDALL_REFERENCE_SUPPORT_BINARY" .',
+            "-build.bin",
+            process.env.HEIMDALL_REFERENCE_SUPPORT_BINARY,
+            "-build.include_dir",
+            "examples/support,sdk/go",
+            "-build.include_ext",
+            "go,mod,sum",
+            "-build.stop_on_error",
+            "true",
+            "-tmp_dir",
+            dirname(process.env.HEIMDALL_REFERENCE_SUPPORT_BINARY),
+          ],
+        ]
+      : [process.env.HEIMDALL_REFERENCE_SUPPORT_BINARY, []];
   const previousEntry =
     process.env[
       ledger
@@ -358,6 +378,11 @@ export async function verifyReferenceProduct(input, authorize) {
     await deploy();
   } else {
     start({}, previousCmd);
+    publishPolicies = async (policies) => {
+      await stop();
+      variables.HEIMDALL_TENANT_SSO_POLICIES = JSON.stringify(policies);
+      start();
+    };
   }
   const request = (path, options = {}) =>
     remote
@@ -365,6 +390,13 @@ export async function verifyReferenceProduct(input, authorize) {
           ...options,
           redirect: "manual",
           signal: AbortSignal.timeout(25000),
+        }).catch((error) => {
+          throw new Error(
+            `${schema} ${options.method ?? "GET"} ${path.split("?")[0]}: ${error.message}`,
+            {
+              cause: error,
+            },
+          );
         })
       : new Promise((resolve, reject) => {
           const request = httpRequest(
@@ -395,7 +427,7 @@ export async function verifyReferenceProduct(input, authorize) {
           request.end(options.body);
         });
   async function waitForDeployment(expectedRun) {
-    for (let attempt = 0; attempt < (remote ? 180 : 50); attempt++) {
+    for (let attempt = 0; attempt < (remote ? 180 : watch ? 150 : 50); attempt++) {
       if (child && child.exitCode !== null) break;
       const response = await request("/healthz").catch(() => null);
       if (response?.ok) {

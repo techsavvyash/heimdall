@@ -124,6 +124,14 @@ try:
         capture_output=True, text=True)
     operator = os.environ.get("HEIMDALL_PROBE_OPERATOR_QUICKSTART") == "1"
     existing = os.environ.get("HEIMDALL_PROBE_EXISTING_WORKSPACES") == "1"
+    federation = os.environ.get("HEIMDALL_PROBE_FEDERATION_SWITCH") == "1"
+    if federation and (os.environ.get("HEIMDALL_PROBE_REFERENCE_PRODUCTS") != "1" or operator or existing or measure or any(
+        os.environ.get(flag) == "1" for flag in (
+            "HEIMDALL_PROBE_COORDINATED_RESTORE", "HEIMDALL_PROBE_REVOCATION_RACE",
+            "HEIMDALL_PROBE_SCIM_BROWSER", "HEIMDALL_PROBE_PRODUCT_SIEM",
+        )
+    )):
+        raise RuntimeError("Federation verification requires the standalone reference product probe")
     if operator and (os.environ.get("HEIMDALL_PROBE_REFERENCE_PRODUCTS") != "1" or
                      os.environ.get("HEIMDALL_PROBE_BUSINESS_WRITE") != "1" or
                      not os.environ.get("HEIMDALL_PROBE_CONSUMER_REVISION") or
@@ -401,9 +409,12 @@ try:
                 assert elastic_start and os.environ.get("HEIMDALL_PROBE_SCIM_BROWSER") == "1"
                 reference_env["HEIMDALL_SCIM_SIEM_ORGANIZATION_FILE"] = str(org_file)
             try:
-                reference = subprocess.run(["node", "tests/integration/oidc.mjs"], cwd=ROOT, env=reference_env,
-                                       capture_output=True, text=True, timeout=240)
+                probe = "federation-switch.mjs" if federation else "oidc.mjs"
+                reference = subprocess.run(["node", f"tests/integration/{probe}"], cwd=ROOT, env=reference_env,
+                                           capture_output=True, text=True, timeout=360 if federation else 240)
                 if reference.returncode != 0:
+                    if federation:
+                        raise RuntimeError("Local federation verification failed: " + reference.stderr[-2400:])
                     diagnostics = re.findall(r"(?:AssertionError \[ERR_ASSERTION\]:[^\n]+|(?:oidc|reference-(?:products|restore))\.mjs:\d+:\d+|OIDC probe run: [a-f0-9-]+|Restore (?:database|audit delivery) command failed(?: \([a-z_/]+\))?)", reference.stderr)
                     raise RuntimeError("Reference product verification failed: " + " | ".join(diagnostics)[:1000])
                 if scim_siem:
@@ -424,7 +435,7 @@ try:
                                         "Bearer " + os.environ["HEIMDALL_PROBE_ZITADEL_PAT"], method="DELETE")
                     assert 200 <= status < 300, "Disposable organization cleanup failed"
             result = json.loads(reference.stdout)
-            observations = result["observations"]
+            observations = result["results"] if federation else result["observations"]
             operator_proof = [item["operatorSetup"] for item in observations if "operatorSetup" in item]
             if operator:
                 assert {item["product"] for item in operator_proof} == {"ledger", "support"}
@@ -433,7 +444,7 @@ try:
                                "SELECT count(*) FROM heimdall_keys.record_key_usage WHERE used>0;"],
                               capture_output=True, text=True)
                 assert key_use.stdout.strip() == "2", "Both registered product keys must have encrypted records"
-            products = [result for result in observations if "scopedRead" in result]
+            products = observations if federation else [result for result in observations if "scopedRead" in result]
             if len(products) != 2:
                 raise RuntimeError("missing reference product observations")
             if measure:
@@ -510,7 +521,7 @@ try:
                     proof["auditedRemovalAndGrants"] = True
                     del proof["workspaceId"]
                     proof.pop("trace", None)
-            elif os.environ.get("HEIMDALL_PROBE_PRODUCT_SIEM") != "1":
+            elif not federation and os.environ.get("HEIMDALL_PROBE_PRODUCT_SIEM") != "1":
                 run(["python3", "tests/integration/reference-onboarding-audit.py"],
                     input=json.dumps({"products": products, "payloads": audit_rows,
                                       "sdkVersion": os.environ.get("HEIMDALL_PROBE_EXPECT_AUDIT_SDK_VERSION")}), text=True)
@@ -521,8 +532,8 @@ try:
                 for product in products:
                     del product["auditActor"]
                     del product["auditRecipient"]
-            print(json.dumps({"referenceProducts": products,
-                              **({"storageRun": name, "oidcRun": result["runId"]} if restore or revocation_race or operator or existing or measure or revision else {}),
+            print(json.dumps({"referenceFederation" if federation else "referenceProducts": products,
+                              **({"storageRun": name, "oidcRun": result["runId"]} if federation or restore or revocation_race or operator or existing or measure or revision else {}),
                               **({"operatorSetup": operator_proof, "applicationSchema": "managed-v5"} if operator else {}),
                               **({"isolatedConsumers": consumer_info} if consumer_info else {})}), flush=True)
     if os.environ.get("HEIMDALL_PROBE_DURABLE_RUNTIME") == "1":
