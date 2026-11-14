@@ -39,7 +39,7 @@ sequenceDiagram
   Request->>DB: Commit previously authorized operation
 ```
 
-This race is possible in the baseline. The agreed guarantee covers new decisions after a confirmed revocation, subject to the selected datastore and consistency behavior. A requirement to cancel all already-authorized in-flight operations needs product-level coordination and a stronger protocol. Model that requirement before claiming immediate revocation.
+The agreed guarantee covers new decisions after a confirmed revocation, subject to the selected datastore and consistency behavior. [[evidence/phase-7-security-coverage#In-flight write during membership removal]] records the bound in both reference backends. A requirement to cancel all already-authorized in-flight operations needs separate product-level coordination.
 
 ## Model rollout
 

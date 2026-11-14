@@ -1336,7 +1336,111 @@ export async function verifyReferenceProduct(input, authorize) {
     assert.deepEqual(await (await request(rolesPath, { headers: recipientHeaders })).json(), {
       roles: [replacementRole],
     });
-    const removed = await memberRequest("remove", recipient, runId);
+    const remove = () => memberRequest("remove", recipient, runId);
+    let removed, revocationRace;
+    if (businessWrite && process.env.HEIMDALL_PROBE_REVOCATION_RACE === "1") {
+      assert(!remote, "The revocation barrier requires disposable PostgreSQL");
+      assert.match(recipient, /^[0-9]+$/);
+      const { Pool } = createRequire(
+        new URL("../../examples/ledger/package.json", import.meta.url),
+      )("pg");
+      const pool = new Pool({ connectionString: db, statement_timeout: 5000 });
+      const lock = await pool.connect();
+      const row = `WHERE workspace_id='${workspace.workspaceId}' AND ${businessId}_id='revocation-race'`;
+      const decisionOutcomes = async () =>
+        (
+          await pool.query(
+            `SELECT d.decision_id, terminal.event->>'payload' AS payload,
+                    requested.event->>'payload' AS request
+             FROM heimdall.audit_decisions d
+             JOIN heimdall.audit_events terminal
+               ON (terminal.product_id,terminal.environment,terminal.event_id)=
+                  (d.product_id,d.environment,d.terminal_event_id)
+             JOIN heimdall.audit_events requested
+               ON (requested.product_id,requested.environment,requested.event_id)=
+                  (d.product_id,d.environment,d.request_event_id)
+             WHERE d.product_id=$1 AND d.environment='verification' AND d.resolution='completed'`,
+            [schema],
+          )
+        ).rows.flatMap(({ decision_id, payload, request }) => {
+          const event = JSON.parse(Buffer.from(payload, "base64url"));
+          const permission = ledger ? "invoice.approve" : "ticket.assign";
+          if (
+            event.tenantId !== workspace.workspaceId ||
+            event.permission !== permission ||
+            event.actor?.subject !== recipient
+          )
+            return [];
+          const start = JSON.parse(Buffer.from(request, "base64url"));
+          assert.equal(start.outcome, "requested");
+          assert.equal(start.decisionId, decision_id);
+          assert.equal(event.decisionId, decision_id);
+          for (const key of ["actor", "tenantId", "permission"])
+            assert.deepEqual(event[key], start[key]);
+          return [{ id: decision_id, outcome: event.outcome }];
+        });
+      let writing;
+      try {
+        await executeSQL(
+          ledger
+            ? `INSERT INTO ledger.invoices(workspace_id,invoice_id,total_cents)
+               VALUES ('${workspace.workspaceId}','revocation-race',125);`
+            : `INSERT INTO support.tickets(workspace_id,ticket_id,summary)
+               VALUES ('${workspace.workspaceId}','revocation-race','Revocation race');`,
+        );
+        const baseline = new Set((await decisionOutcomes()).map(({ id }) => id));
+        const observed = async () =>
+          (await decisionOutcomes()).filter(({ id }) => !baseline.has(id));
+        await lock.query("BEGIN");
+        const {
+          rows: [{ pid }],
+        } = await lock.query("SELECT pg_backend_pid() AS pid");
+        await lock.query(`SELECT 1 FROM ${businessTable} ${row} FOR UPDATE`);
+        writing = writeResource(workspace.workspaceId, "revocation-race", recipientCookie);
+        void writing.catch(() => {});
+        const deadline = Date.now() + 3500;
+        while (true) {
+          const { rowCount } = await pool.query(
+            "SELECT 1 FROM pg_stat_activity WHERE query LIKE $1 AND $2 = ANY(pg_blocking_pids(pid))",
+            [`UPDATE ${businessTable}%`, pid],
+          );
+          if (rowCount === 1) break;
+          assert(Date.now() < deadline, "Authorized business write did not reach the row lock");
+          await delay(15);
+        }
+        const [allowed, ...extra] = await observed();
+        assert.equal(extra.length, 0);
+        assert.equal(allowed?.outcome, "allow");
+        removed = await remove();
+        assert.equal(removed.status, 200);
+        assert.equal((await removed.clone().json()).status, "confirmed");
+        assert.deepEqual(await readMemberRelations(recipient, workspace.workspaceId), []);
+        await lock.query("COMMIT");
+        await expectDenied(await writing, 204);
+        await expectDenied(
+          await writeResource(workspace.workspaceId, "revocation-race", recipientCookie),
+          403,
+        );
+        const after = await observed();
+        assert.deepEqual(after.map(({ outcome }) => outcome).sort(), ["allow", "deny"]);
+        assert(after.some(({ id, outcome }) => id === allowed.id && outcome === "allow"));
+        const {
+          rows: [businessRow],
+        } = await pool.query(`SELECT ${resultColumn} AS subject FROM ${businessTable} ${row}`);
+        assert.equal(businessRow?.subject, recipient);
+        revocationRace = { previouslyAuthorized: 204, newDecision: 403, audit: ["allow", "deny"] };
+      } finally {
+        try {
+          await lock.query("ROLLBACK");
+        } finally {
+          lock.release();
+          await writing?.catch(() => {});
+          await pool.end();
+        }
+      }
+    } else {
+      removed = await remove();
+    }
     assert.equal(removed.status, 200);
     const removal = await removed.json();
     await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 403);
@@ -1659,6 +1763,7 @@ export async function verifyReferenceProduct(input, authorize) {
       discovery: "Acme",
       roles: { acme: [manifest.ownerRole], globex: [] },
       scopedRead: 200,
+      ...(revocationRace ? { revocationRace } : {}),
       ...(businessWrite
         ? {
             businessWrite: {

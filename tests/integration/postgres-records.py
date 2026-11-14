@@ -215,6 +215,7 @@ try:
                                  HEIMDALL_REFERENCE_DATABASE_URL=runtime_dsn,
                                  HEIMDALL_REFERENCE_SUPPORT_BINARY=binary)
             restore = os.environ.get("HEIMDALL_PROBE_COORDINATED_RESTORE") == "1"
+            revocation_race = os.environ.get("HEIMDALL_PROBE_REVOCATION_RACE") == "1"
             if restore:
                 reference_env["HEIMDALL_RESTORE_POSTGRES_CONTAINER"] = name
             revision = os.environ.get("HEIMDALL_PROBE_CONSUMER_REVISION")
@@ -281,6 +282,8 @@ try:
             products = [result for result in observations if "scopedRead" in result]
             if len(products) != 2:
                 raise RuntimeError("missing reference product observations")
+            if revocation_race:
+                assert {item["product"] for item in products if item.get("revocationRace")} == {"ledger", "support"}
             audit_rows = run(
                 ["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", "public_runtime", "-XAt", "-v", "ON_ERROR_STOP=1"],
                 input="SELECT event->>'payload' FROM heimdall.audit_events WHERE environment='verification'",
@@ -329,7 +332,7 @@ try:
                     del product["auditActor"]
                     del product["auditRecipient"]
             print(json.dumps({"referenceProducts": products,
-                              **({"storageRun": name, "oidcRun": result["runId"]} if restore else {}),
+                              **({"storageRun": name, "oidcRun": result["runId"]} if restore or revocation_race else {}),
                               **({"isolatedConsumers": consumer_info} if consumer_info else {})}), flush=True)
     if os.environ.get("HEIMDALL_PROBE_DURABLE_RUNTIME") == "1":
         for args in (
