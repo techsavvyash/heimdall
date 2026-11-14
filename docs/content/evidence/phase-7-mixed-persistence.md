@@ -27,9 +27,11 @@ This is a same-schema rollback with one running backend per product and the Rail
 
 Run `heimdall-records-693dc21aed8344a8b8e3dcf8c6478582` passed for Ledger and Support. Both candidate builds resumed the earlier cursor and accepted the earlier session. Both previous builds returned HTTP 200 for the candidate session after rollback and HTTP 401 after logout. The audit verifier matched the authorization requests and outcomes, checked that the added rollback operation read was audited, and verified the original and candidate operation histories. The exact archive hashes, module versions and results are in `tests/integration/evidence/phase-7-mixed-persistence-2026-11-14.json`.
 
+Run `heimdall-records-03821cc79dd94b60853352bdb27ff868` repeated the same rehearsal with the checksummed [[phase-7-sdk-candidate#audit-attribution-in-rc2|rc.2 archive and Go module]] and the same previous builds. Both backends preserved operation audit digests through upgrade and rollback and retained the pending SIEM deliveries. The run record is `tests/integration/evidence/phase-7-mixed-persistence-rc2-2026-11-14.json`.
+
 ## Reproduce
 
-Download and verify the candidate archive as described in [[phase-7-sdk-candidate]]. Configure the verification provider credentials from the [[../reference-quickstart#verify-package-integration|reference quickstart]]. Run from the repository root.
+Download the rc.1 archive and checksum from the [rc.1 GitHub Actions run](https://github.com/techsavvyash/heimdall/actions/runs/43569261855#artifacts), then verify the archive with `shasum -a 256 -c SHA256SUMS`. Configure the verification provider credentials from the [[../reference-quickstart#verify-package-integration|reference quickstart]]. Run from the repository root.
 
 ```sh
 HEIMDALL_PROBE_REFERENCE_PRODUCTS=1 HEIMDALL_PROBE_OPERATOR_QUICKSTART=1 \

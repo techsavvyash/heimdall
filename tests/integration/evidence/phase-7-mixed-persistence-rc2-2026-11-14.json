@@ -1,0 +1,45 @@
+{
+  "storageRun": "heimdall-records-03821cc79dd94b60853352bdb27ff868",
+  "oidcRun": "6e6292b5-dbec-4ce6-9371-df8b86d5c15a",
+  "applicationSchema": "managed-v5",
+  "isolatedConsumers": {
+    "archive": "heimdall-sdk-0.1.0-rc.2.tgz",
+    "goModuleVersion": "v0.1.0-rc.2",
+    "archiveSHA256": "01093773609dea5e64ddb36ddd4ddf3113f4c964c93c7ebd0b3a0b33d6e7565b",
+    "previousPersistence": {
+      "revision": "4eeddb78ab2e394b08ef9f1b6a4027188110a6bc",
+      "archiveSHA256": "cfecc7f64c06b851eb2c981dbbdb93194cb2270cc54b579dd84158399188cb18",
+      "goModuleVersion": "v0.0.0-20261114054503-4eeddb78ab2e"
+    }
+  },
+  "products": [
+    {
+      "product": "ledger",
+      "mixedPersistence": {
+        "candidateReadPreviousSession": 200,
+        "candidateResumedPreviousCursor": true,
+        "previousReadCandidateSession": 200,
+        "previousReadCandidateOwnership": true,
+        "previousReadReconciledOperation": true,
+        "priorAuditDigestPreservedOnUpgrade": true,
+        "auditDigestsPreservedOnRollback": true,
+        "pendingOutboxPreserved": true,
+        "candidateSessionDeniedAfterRollbackLogout": 401
+      }
+    },
+    {
+      "product": "support",
+      "mixedPersistence": {
+        "candidateReadPreviousSession": 200,
+        "candidateResumedPreviousCursor": true,
+        "previousReadCandidateSession": 200,
+        "previousReadCandidateOwnership": true,
+        "previousReadReconciledOperation": true,
+        "priorAuditDigestPreservedOnUpgrade": true,
+        "auditDigestsPreservedOnRollback": true,
+        "pendingOutboxPreserved": true,
+        "candidateSessionDeniedAfterRollbackLogout": 401
+      }
+    }
+  ]
+}
