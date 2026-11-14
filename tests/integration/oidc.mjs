@@ -112,6 +112,7 @@ async function sdkRuntime(client, c) {
       return;
     }
     let permission, effectiveRole;
+    const existing = process.env.HEIMDALL_PROBE_EXISTING_WORKSPACES === "1";
     const tenantMatrix = c.reference && process.env.HEIMDALL_PROBE_TENANT_MATRIX === "1";
     if (tenantMatrix)
       assert(!c.reference.scim, "The tenant matrix requires ordinary OIDC sessions");
@@ -132,8 +133,14 @@ async function sdkRuntime(client, c) {
             { user, object: "workspace:acme", relation: "member" },
             { user, object: "workspace:acme", relation: assignment },
             { user, object: "workspace:globex", relation: assignment },
-            ...(c.reference && !tenantMatrix
+            ...(c.reference && !tenantMatrix && !existing
               ? [{ user, object: "workspace:globex", relation: "member" }]
+              : []),
+            ...(existing
+              ? [
+                  { user, object: "workspace:closed", relation: "member" },
+                  { user, object: "workspace:closed", relation: assignment },
+                ]
               : []),
           ],
         },
@@ -153,7 +160,7 @@ async function sdkRuntime(client, c) {
         consistency: "HIGHER_CONSISTENCY",
         tuple_key: { user, object: "workspace:globex", relation: "member" },
       });
-      assert.equal(allowed, !tenantMatrix, "Verify the Globex membership fixture");
+      assert.equal(allowed, !tenantMatrix && !existing, "Verify the Globex membership fixture");
       observations.push(
         await verifyReferenceProduct(
           {

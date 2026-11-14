@@ -141,3 +141,36 @@ HEIMDALL_PROBE_REFERENCE_PRODUCTS=1 HEIMDALL_PROBE_OPERATOR_QUICKSTART=1 \
 HEIMDALL_PROBE_BUSINESS_WRITE=1 HEIMDALL_PROBE_CONSUMER_REVISION="$(git rev-parse HEAD)" \
 python3 tests/integration/postgres-records.py
 ```
+
+## Use an existing workspace catalog
+
+Ledger and Support can use Heimdall sessions, discovery, and authorization over workspaces the application already owns. Apply the example catalog in `examples/existing-workspaces.sql` with `psql -v product_schema=ledger` or `psql -v product_schema=support`, or adapt the query to your catalog. Grant the product's business login read access to active workspace IDs and names. Set `HEIMDALL_REFERENCE_EXISTING_WORKSPACES=1` in the example backend. Apply the same session, identity, audit and key migrations. This composition has no managed workspace schema requirement. The product continues to own lifecycle, role mutations and their operating procedures.
+
+| Product supplies | SDK handles |
+| --- | --- |
+| Stable keyset scan of active workspaces | Bounded discovery, signed cursor and fresh OpenFGA membership filters |
+| Product catalog checks on direct resource and role routes | Verified session identity, permission checks and durable authorization receipts |
+| Database grants, record keys and auth route mount | Encrypted durable session records, callback, and logout |
+
+```mermaid
+flowchart LR
+  Browser --> App[Product routes]
+  App --> Sessions[SDK session authentication]
+  Sessions --> Records[(Session identity and audit storage)]
+  App --> Catalog[(Product workspace catalog)]
+  Catalog --> Discovery[SDK workspace discovery]
+  Discovery --> FGA[OpenFGA membership]
+  App --> Permissions[SDK role and permission checks]
+  Permissions --> FGA
+  Permissions --> Records
+```
+
+Pass `createPostgresStorage` or `postgres.NewStorage` into the runtime with its session configuration. Mount the same session routes as the managed example. Give discovery the product source through `source` in TypeScript or `Source` in Go. Each scan returns the workspace ID as its continuation position. Before a direct read or write, the examples verify the workspace is active and check the product-defined permission. Coordinate catalog deactivation with in-flight business writes if the product requires a stronger guarantee than blocking subsequent requests.
+
+Run the probe with the verification credentials listed above.
+
+```sh
+HEIMDALL_PROBE_REFERENCE_PRODUCTS=1 HEIMDALL_PROBE_EXISTING_WORKSPACES=1 \
+HEIMDALL_PROBE_CONSUMER_REVISION="$(git rev-parse HEAD)" \
+python3 tests/integration/postgres-records.py
+```

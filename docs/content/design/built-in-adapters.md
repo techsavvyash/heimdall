@@ -63,35 +63,7 @@ flowchart TB
 
 ### Sessions with existing product workspaces
 
-The core WorkspaceSource and SessionStore contracts remain unchanged. PostgreSQL implements SessionStore; existing products supply their stable, active-workspace scan. This mode does not take ownership of tenant lifecycle or cancellation.
-
-```ts
-const core = createHeimdall({ config })
-const sessions = core.createSessions({
-  store: postgres.sessions(pool),
-  encryptionKeys: sessionKeys,
-  publicUrl: "https://ledger.example.com",
-  allowedReturnTo: ["/workspaces"],
-})
-const discovery = core.createWorkspaceDiscovery({
-  source: productWorkspaceSource,
-  cursorKeys,
-})
-// Mount sessions.handle(Request, { signal }) at the configured auth prefix.
-```
-
-```go
-core, err := heimdall.New(heimdall.Options{Config: config})
-if err != nil { return err }
-sessions, err := core.NewSessions(heimdall.SessionOptions{
-    Store: postgres.NewSessionStore(db),
-    EncryptionKeys: sessionKeys,
-    PublicURL: "https://support.example.com",
-    AllowedReturnTo: []string{"/workspaces"},
-})
-if err != nil { return err }
-mux.Handle("/auth/", sessions.Handler())
-```
+Use the PostgreSQL runtime storage with browser sessions, durable identity denial and required audit. The product supplies an active-workspace catalog and enforces its lifecycle on direct resource routes. OpenFGA checks membership and permissions against the configured product model. See [[../reference-quickstart#use-an-existing-workspace-catalog]] for the two running examples and the wiring they require.
 
 ### Managed composition
 

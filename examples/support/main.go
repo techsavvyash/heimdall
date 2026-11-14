@@ -140,6 +140,7 @@ func main() {
 	}
 	origin := callbackURL.Scheme + "://" + callbackURL.Host
 	workspaceCreator := os.Getenv("HEIMDALL_WORKSPACE_CREATOR_SUBJECT")
+	existing := os.Getenv("HEIMDALL_REFERENCE_EXISTING_WORKSPACES") == "1"
 	records, keyUsage, business := database("DATABASE_URL"), database("HEIMDALL_KEY_DATABASE_URL"), database("SUPPORT_DATABASE_URL")
 	defer records.Close()
 	defer keyUsage.Close()
@@ -163,14 +164,18 @@ func main() {
 	var lastSuccessAt atomic.Int64
 	var exportDB *sql.DB
 	var exportPolicy heimdall.ManagedExportPolicy
-	if os.Getenv("HEIMDALL_EXPORT_DATABASE_URL") != "" {
+	if !existing && os.Getenv("HEIMDALL_EXPORT_DATABASE_URL") != "" {
 		exportDB = database("HEIMDALL_EXPORT_DATABASE_URL")
 		defer exportDB.Close()
 		exportPolicy = func(_ context.Context, scope heimdall.ManagedExportScope) (bool, error) {
 			return scope.Actor.Subject == workspaceCreator, nil
 		}
 	}
-	storage, err := postgres.NewManagedStorage(records, postgres.StorageOptions{
+	newStorage := postgres.NewManagedStorage
+	if existing {
+		newStorage = postgres.NewStorage
+	}
+	storage, err := newStorage(records, postgres.StorageOptions{
 		ProductID: config.ProductID, Environment: config.Environment, ExportDB: exportDB, AuditSinks: auditSinks,
 		Sessions: &postgres.SessionStorageOptions{KeyUsageDB: keyUsage, ActiveKeyID: required("HEIMDALL_RECORD_KEY_ID"), Keys: keys},
 	})
@@ -189,7 +194,7 @@ func main() {
 		log.Fatal("Invalid provider settings configuration")
 	}
 	tenantSSO = settings.policy
-	auth, err := heimdall.New(ctx, configJSON, manifestJSON, heimdall.Options{
+	options := heimdall.Options{
 		TenantSSOPolicy: tenantSSO,
 		PolicyVersion:   required("HEIMDALL_POLICY_VERSION"), Storage: storage, AuthorizeManagedExport: exportPolicy,
 		AuthorizeWorkspaceCreation: func(_ context.Context, actor *heimdall.Principal, _ string) (bool, error) {
@@ -202,7 +207,12 @@ func main() {
 			ClientSecret: func(context.Context) (string, error) { return required("HEIMDALL_CLIENT_SECRET"), nil },
 			OpenFGAKey:   func(context.Context) (string, error) { return required("HEIMDALL_OPENFGA_KEY"), nil },
 		},
-	})
+	}
+	if existing {
+		options.AuthorizeWorkspaceCreation = nil
+		options.AuthorizeWorkspaceLifecycle = nil
+	}
+	auth, err := heimdall.New(ctx, configJSON, manifestJSON, options)
 	if err != nil {
 		log.Fatal("Heimdall startup: ", err)
 	}
@@ -219,7 +229,11 @@ func main() {
 	if err != nil {
 		log.Fatal("Invalid cursor key")
 	}
-	discovery, err := auth.NewWorkspaceDiscovery(heimdall.DiscoveryOptions{ActiveKeyID: "v1", Keys: map[string][]byte{"v1": cursor}})
+	discoveryOptions := heimdall.DiscoveryOptions{ActiveKeyID: "v1", Keys: map[string][]byte{"v1": cursor}}
+	if existing {
+		discoveryOptions.Source = existingWorkspaceSource{business}
+	}
+	discovery, err := auth.NewWorkspaceDiscovery(discoveryOptions)
 	if err != nil {
 		log.Fatal("Discovery startup: ", err)
 	}
@@ -256,14 +270,14 @@ func main() {
 	}
 	mount("GET "+callbackURL.Path, sessions.Callback)
 	mount("POST /auth/logout", sessions.Logout)
-	if len(settings.mapping) != 0 {
+	if !existing && len(settings.mapping) != 0 {
 		var manifest struct{ OwnerRole string }
 		if err := json.Unmarshal(manifestJSON, &manifest); err != nil {
 			log.Fatal("Invalid provider settings manifest")
 		}
 		mount("POST /workspaces/{workspace}/enterprise/provider/{action}", settings.route(auth, sessions, origin, manifest.OwnerRole))
 	}
-	if operator := os.Getenv("HEIMDALL_DIRECTORY_OPERATOR_SUBJECT"); operator != "" {
+	if operator := os.Getenv("HEIMDALL_DIRECTORY_OPERATOR_SUBJECT"); operator != "" && !existing {
 		workspaces, err := directoryMapping()
 		if err != nil {
 			log.Fatal("Invalid directory cleanup mapping")
@@ -303,6 +317,25 @@ func main() {
 		return nil
 	})
 	workspaceID := regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+	mountManaged := func(pattern string, handler func(http.ResponseWriter, *http.Request) error) {
+		if !existing {
+			mount(pattern, handler)
+		}
+	}
+	requireActiveWorkspace := func(ctx context.Context, workspace string) error {
+		if !existing {
+			return nil
+		}
+		var active bool
+		err := business.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM support.workspaces WHERE id=$1 AND active)", workspace).Scan(&active)
+		if err != nil {
+			return err
+		}
+		if !active {
+			return heimdall.ErrForbidden
+		}
+		return nil
+	}
 	onboarding := auth.Onboarding()
 	workspaceOperation := func(w http.ResponseWriter, r *http.Request) error {
 		mutation := r.Method == http.MethodPost
@@ -339,10 +372,10 @@ func main() {
 		writeJSON(w, status, result)
 		return nil
 	}
-	mount("POST /workspaces", workspaceOperation)
-	mount("GET /workspace-operations/{operation}", workspaceOperation)
+	mountManaged("POST /workspaces", workspaceOperation)
+	mountManaged("GET /workspace-operations/{operation}", workspaceOperation)
 	if exportDB != nil {
-		mount("GET /managed-export", func(w http.ResponseWriter, r *http.Request) error {
+		mountManaged("GET /managed-export", func(w http.ResponseWriter, r *http.Request) error {
 			bearer := strings.Fields(r.Header.Get("Authorization"))
 			if len(bearer) != 2 || !strings.EqualFold(bearer[0], "Bearer") {
 				return heimdall.ErrUnauthenticated
@@ -369,7 +402,7 @@ func main() {
 			return nil
 		})
 	}
-	mount("POST /workspace-operations/reconcile", func(w http.ResponseWriter, r *http.Request) error {
+	mountManaged("POST /workspace-operations/reconcile", func(w http.ResponseWriter, r *http.Request) error {
 		if len(r.Header.Values("Origin")) != 1 || r.Header.Get("Origin") != origin {
 			return heimdall.ErrForbidden
 		}
@@ -388,7 +421,7 @@ func main() {
 		writeJSON(w, http.StatusOK, result)
 		return nil
 	})
-	mount("GET /workspace-operations/metrics", func(w http.ResponseWriter, r *http.Request) error {
+	mountManaged("GET /workspace-operations/metrics", func(w http.ResponseWriter, r *http.Request) error {
 		actor, err := sessions.Authenticate(r)
 		if err != nil {
 			return err
@@ -415,13 +448,13 @@ func main() {
 		}{metrics, lag, last})
 		return nil
 	})
-	mount("POST /workspace-operations/{operation}", workspaceOperation)
+	mountManaged("POST /workspace-operations/{operation}", workspaceOperation)
 	eligibleMember := os.Getenv("HEIMDALL_REFERENCE_MEMBER_SUBJECT")
 	invites := invitationHandler(auth, sessions, business, config.Environment, origin, workspaceCreator, eligibleMember, workspaceID)
-	mount("POST /workspaces/{workspace}/invitations", invites)
-	mount("POST /invitations/accept", invites)
+	mountManaged("POST /workspaces/{workspace}/invitations", invites)
+	mountManaged("POST /invitations/accept", invites)
 	for _, action := range []string{"suspend", "resume"} {
-		mount("POST /workspaces/{workspace}/"+action, func(w http.ResponseWriter, r *http.Request) error {
+		mountManaged("POST /workspaces/{workspace}/"+action, func(w http.ResponseWriter, r *http.Request) error {
 			if len(r.Header.Values("Origin")) != 1 || r.Header.Get("Origin") != origin {
 				return heimdall.ErrForbidden
 			}
@@ -441,7 +474,7 @@ func main() {
 			return nil
 		})
 	}
-	mount("POST /workspaces/{workspace}/members/{action}", func(w http.ResponseWriter, r *http.Request) error {
+	mountManaged("POST /workspaces/{workspace}/members/{action}", func(w http.ResponseWriter, r *http.Request) error {
 		workspace, action := r.PathValue("workspace"), r.PathValue("action")
 		takesRoles := action == "add" || action == "assign-roles"
 		if !workspaceID.MatchString(workspace) || (!takesRoles && action != "remove" && action != "transfer-ownership") {
@@ -508,6 +541,9 @@ func main() {
 		if err != nil {
 			return err
 		}
+		if err := requireActiveWorkspace(r.Context(), workspace); err != nil {
+			return err
+		}
 		roles, err := auth.Tenant(workspace).Roles(r.Context(), actor)
 		if err != nil {
 			return err
@@ -522,6 +558,9 @@ func main() {
 		}
 		actor, err := sessions.Authenticate(r)
 		if err != nil {
+			return err
+		}
+		if err := requireActiveWorkspace(r.Context(), workspace); err != nil {
 			return err
 		}
 		if err = auth.Tenant(workspace).Require(r.Context(), actor, "ticket.read"); err != nil {
@@ -560,6 +599,9 @@ func main() {
 		ctx := r.Context()
 		actor, err := sessions.Authenticate(r)
 		if err != nil {
+			return err
+		}
+		if err := requireActiveWorkspace(ctx, workspace); err != nil {
 			return err
 		}
 		if err := auth.Tenant(workspace).Require(ctx, actor, "ticket.assign"); err != nil {

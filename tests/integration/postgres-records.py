@@ -121,12 +121,15 @@ try:
         "CREATE TRIGGER reject_directory_delete BEFORE DELETE ON heimdall.records FOR EACH ROW EXECUTE FUNCTION public.reject_directory_delete();",
         capture_output=True, text=True)
     operator = os.environ.get("HEIMDALL_PROBE_OPERATOR_QUICKSTART") == "1"
+    existing = os.environ.get("HEIMDALL_PROBE_EXISTING_WORKSPACES") == "1"
     if operator and (os.environ.get("HEIMDALL_PROBE_REFERENCE_PRODUCTS") != "1" or
                      os.environ.get("HEIMDALL_PROBE_BUSINESS_WRITE") != "1" or
                      not os.environ.get("HEIMDALL_PROBE_CONSUMER_REVISION") or
                      os.environ.get("HEIMDALL_PROBE_COORDINATED_RESTORE") == "1"):
         raise RuntimeError("Operator rehearsal requires reference products, business writes and a consumer revision")
-    if operator:
+    if existing and (operator or os.environ.get("HEIMDALL_PROBE_REFERENCE_PRODUCTS") != "1"):
+        raise RuntimeError("Existing-workspace verification needs the standalone reference probe")
+    if operator or existing:
         admin("CREATE DATABASE reference_application TEMPLATE public_runtime OWNER migration_owner;")
         run(["docker", "exec", name, "psql", "-U", "postgres", "-d", "reference_application",
              "-v", "ON_ERROR_STOP=1", "-c",
@@ -203,7 +206,7 @@ try:
         import re
         import shutil
         import tempfile
-        application_db = "reference_application" if operator else "public_runtime"
+        application_db = "reference_application" if operator or existing else "public_runtime"
         application_dsn = runtime_dsn.replace("/public_runtime?", f"/{application_db}?")
         application_env = dict(runtime_env, HEIMDALL_MIGRATION_DATABASE_URL=
                                runtime_env["HEIMDALL_MIGRATION_DATABASE_URL"].replace("/public_runtime?", f"/{application_db}?"))
@@ -220,6 +223,15 @@ try:
             schemas += "\n" + (ROOT / "examples" / "enterprise-provider.sql").read_text().replace(':"product_schema"', product)
             schemas += f"\nGRANT SELECT,INSERT,UPDATE ON {product}.sso_candidates,{product}.sso_publications TO heimdall_public_runtime;"
         schemas += "\nCREATE ROLE heimdall_reference_export NOLOGIN;\n" + (ROOT / "tests/integration/reference-export-grants.sql").read_text()
+        if existing:
+            for product in ("ledger", "support"):
+                schemas += "\n" + (ROOT / "examples/existing-workspaces.sql").read_text().replace(':"product_schema"', product)
+                schemas += f"""
+                INSERT INTO {product}.workspaces VALUES
+                    ('acme','Acme',true), ('globex','Globex',true), ('closed','Closed',false);
+                GRANT SELECT ON {product}.workspaces TO heimdall_public_runtime;
+                """
+            schemas += "\nDROP SCHEMA heimdall_managed CASCADE;"
         run(["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", application_db, "-v", "ON_ERROR_STOP=1"],
             input=schemas, capture_output=True, text=True)
         run(["pnpm", "run", "build"])
@@ -346,11 +358,42 @@ try:
                 raise RuntimeError("missing reference product observations")
             if revocation_race:
                 assert {item["product"] for item in products if item.get("revocationRace")} == {"ledger", "support"}
+            if existing:
+                assert {item["product"] for item in products if item.get("existingWorkspaces")} == {"ledger", "support"}
+                state = run(["docker", "exec", name, "psql", "-U", "postgres", "-d", application_db,
+                             "-XAt", "-v", "ON_ERROR_STOP=1", "-c",
+                             "SELECT to_regnamespace('heimdall_managed') IS NULL; "
+                             "SELECT count(DISTINCT product_id) FROM heimdall.audit_decisions "
+                             "WHERE environment='verification' AND resolution='completed';"],
+                            capture_output=True, text=True)
+                assert state.stdout.splitlines() == ["t", "2"]
+                writes = run(["docker", "exec", name, "psql", "-U", "postgres", "-d", application_db,
+                              "-XAt", "-v", "ON_ERROR_STOP=1", "-c", """
+                    SELECT count(*) FROM ledger.invoices
+                    WHERE (workspace_id='acme' AND approved_by IS NOT NULL) OR
+                          (workspace_id='globex' AND approved_by IS NULL);
+                    SELECT count(*) FROM support.tickets
+                    WHERE (workspace_id='acme' AND assigned_to IS NOT NULL) OR
+                          (workspace_id='globex' AND assigned_to IS NULL);
+                    """], capture_output=True, text=True)
+                assert writes.stdout.splitlines() == ["2", "2"]
             audit_rows = run(
                 ["docker", "exec", "-i", name, "psql", "-U", "postgres", "-d", application_db, "-XAt", "-v", "ON_ERROR_STOP=1"],
                 input="SELECT event->>'payload' FROM heimdall.audit_events WHERE environment='verification'",
                 capture_output=True, text=True).stdout.splitlines()
-            if restore:
+            if existing:
+                import base64
+                events = [json.loads(base64.urlsafe_b64decode(payload + "===")) for payload in audit_rows]
+                for product, permission in (("ledger", "invoice.approve"), ("support", "ticket.assign")):
+                    scoped = [event for event in events if event["productId"] == product and
+                              event.get("permission") == permission]
+                    receipts = {(e["tenantId"], e["outcome"]) for e in scoped}
+                    assert len(scoped) == 4
+                    assert receipts == {("acme", "requested"), ("acme", "allow"),
+                                        ("globex", "requested"), ("globex", "deny")}
+                    for tenant in ("acme", "globex"):
+                        assert len({e["decisionId"] for e in scoped if e["tenantId"] == tenant}) == 1
+            elif restore:
                 assert {item["product"] for item in products if item["coordinatedRestore"]} == {"ledger", "support"}
             elif os.environ.get("HEIMDALL_PROBE_SCIM_BROWSER") == "1":
                 from collections import Counter
@@ -394,7 +437,7 @@ try:
                     del product["auditActor"]
                     del product["auditRecipient"]
             print(json.dumps({"referenceProducts": products,
-                              **({"storageRun": name, "oidcRun": result["runId"]} if restore or revocation_race or operator else {}),
+                              **({"storageRun": name, "oidcRun": result["runId"]} if restore or revocation_race or operator or existing else {}),
                               **({"operatorSetup": operator_proof, "applicationSchema": "managed-v5"} if operator else {}),
                               **({"isolatedConsumers": consumer_info} if consumer_info else {})}), flush=True)
     if os.environ.get("HEIMDALL_PROBE_DURABLE_RUNTIME") == "1":

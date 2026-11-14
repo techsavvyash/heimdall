@@ -3,7 +3,11 @@ import { createServer } from "node:http";
 import { addAbortSignal } from "node:stream";
 import { Pool } from "pg";
 import { createHeimdall, HeimdallError } from "@heimdall/sdk";
-import { createManagedPostgresStorage, createRecordMaintenance } from "@heimdall/sdk/postgres";
+import {
+  createManagedPostgresStorage,
+  createPostgresStorage,
+  createRecordMaintenance,
+} from "@heimdall/sdk/postgres";
 import { tenantSSOPolicy } from "./tenant-sso.mjs";
 import { directoryCleanupRoute } from "./directory-cleanup.mjs";
 import { providerSettings, providerSettingsRoute } from "./provider-settings.mjs";
@@ -23,6 +27,7 @@ const callbackUrl = required("HEIMDALL_CALLBACK_URL");
 const origin = new URL(callbackUrl).origin;
 const federationPolicies = process.env.HEIMDALL_TENANT_SSO_POLICIES;
 const workspaceCreator = process.env.HEIMDALL_WORKSPACE_CREATOR_SUBJECT;
+const existing = process.env.HEIMDALL_REFERENCE_EXISTING_WORKSPACES === "1";
 const pool = new Pool({ connectionString: required("DATABASE_URL") });
 const auditSinks = process.env.HEIMDALL_REFERENCE_SIEM === "1" ? ["siem"] : [];
 const auditInvoiceRead = createInvoiceReadAudit(pool, config, auditSinks);
@@ -36,7 +41,7 @@ const business = new Pool({
 const settings = providerSettings(business, config, tenantSSOPolicy());
 const ownerRole = JSON.parse(manifestJSON).ownerRole;
 
-const exportDSN = process.env.HEIMDALL_EXPORT_DATABASE_URL;
+const exportDSN = !existing && process.env.HEIMDALL_EXPORT_DATABASE_URL;
 const exportPool = exportDSN && new Pool({ connectionString: exportDSN });
 const maintenance = createRecordMaintenance(pool, config.productId, config.environment);
 let lastSuccessAt = null;
@@ -47,8 +52,12 @@ const auth = await createHeimdall(
   {
     policyVersion: required("HEIMDALL_POLICY_VERSION"),
     tenantSSOPolicy: settings.policy,
-    authorizeWorkspaceCreation: async (actor) => actor.subject === workspaceCreator,
-    authorizeWorkspaceLifecycle: async (actor) => actor.subject === workspaceCreator,
+    ...(!existing
+      ? {
+          authorizeWorkspaceCreation: async (actor) => actor.subject === workspaceCreator,
+          authorizeWorkspaceLifecycle: async (actor) => actor.subject === workspaceCreator,
+        }
+      : {}),
     ...(exportPool
       ? { authorizeManagedExport: async (scope) => scope.actor.subject === workspaceCreator }
       : {}),
@@ -56,7 +65,7 @@ const auth = await createHeimdall(
       clientSecret: async () => required("HEIMDALL_CLIENT_SECRET"),
       openfgaKey: async () => required("HEIMDALL_OPENFGA_KEY"),
     },
-    storage: createManagedPostgresStorage(pool, {
+    storage: (existing ? createPostgresStorage : createManagedPostgresStorage)(pool, {
       productId: config.productId,
       environment: config.environment,
       auditSinks,
@@ -89,7 +98,37 @@ const sessions = await auth.createSessions(
 const discovery = auth.createWorkspaceDiscovery({
   activeKeyId: "v1",
   keys: { v1: Buffer.from(required("HEIMDALL_CURSOR_KEY"), "base64") },
+  ...(existing
+    ? {
+        source: {
+          async scan({ after, limit }, { signal }) {
+            signal.throwIfAborted();
+            const { rows } = await business.query(
+              `SELECT id, name FROM ledger.workspaces
+         WHERE active AND id COLLATE "C" > $1 ORDER BY id COLLATE "C" LIMIT $2`,
+              [after ?? "", limit + 1],
+            );
+            signal.throwIfAborted();
+            return {
+              items: rows
+                .slice(0, limit)
+                .map((workspace) => ({ workspace, position: workspace.id })),
+              exhausted: rows.length <= limit,
+            };
+          },
+        },
+      }
+    : {}),
 });
+async function requireActiveWorkspace(id, signal) {
+  if (!existing) return;
+  signal.throwIfAborted();
+  const result = await business.query("SELECT 1 FROM ledger.workspaces WHERE id=$1 AND active", [
+    id,
+  ]);
+  signal.throwIfAborted();
+  if (!result.rowCount) throw new HeimdallError("forbidden");
+}
 const directoryCleanup = directoryCleanupRoute(
   pool,
   config,
@@ -231,27 +270,7 @@ async function invitation(request, workspace) {
   return read(result, result.status === "pending" ? 202 : 200);
 }
 
-async function route(request) {
-  const url = new URL(request.url);
-  if (request.method === "GET" && url.pathname === "/healthz")
-    return read({
-      ready: true,
-      deployment: process.env.RAILWAY_DEPLOYMENT_ID ?? null,
-      verificationRun: process.env.HEIMDALL_VERIFICATION_RUN ?? null,
-    });
-  if (request.method === "GET" && url.pathname === "/")
-    return read({ login: "/auth/start", workspaces: "/workspaces" });
-  if (url.pathname === "/auth/start") return sessions.start(request);
-  if (
-    (process.env.HEIMDALL_FEDERATION_CREDENTIAL || federationPolicies || settings.enabled) &&
-    url.pathname === "/auth/federation"
-  ) {
-    const workspace = url.searchParams.getAll("workspace");
-    if (workspace.length !== 1) throw new HeimdallError("invalid_argument");
-    return sessions.startFederation(request, workspace[0]);
-  }
-  if (url.pathname === new URL(callbackUrl).pathname) return sessions.callback(request);
-  if (url.pathname === "/auth/logout") return sessions.logout(request);
+async function managedRoute(request, url) {
   const provider = settings.enabled && providerSettingsRoute.exec(url.pathname);
   if (provider && request.method === "POST") {
     if (request.headers.get("origin") !== origin) throw new HeimdallError("forbidden");
@@ -371,6 +390,33 @@ async function route(request) {
     }
     return read(result, result.status === "pending" ? 202 : 200);
   }
+}
+
+async function route(request) {
+  const url = new URL(request.url);
+  if (request.method === "GET" && url.pathname === "/healthz")
+    return read({
+      ready: true,
+      deployment: process.env.RAILWAY_DEPLOYMENT_ID ?? null,
+      verificationRun: process.env.HEIMDALL_VERIFICATION_RUN ?? null,
+    });
+  if (request.method === "GET" && url.pathname === "/")
+    return read({ login: "/auth/start", workspaces: "/workspaces" });
+  if (url.pathname === "/auth/start") return sessions.start(request);
+  if (
+    (process.env.HEIMDALL_FEDERATION_CREDENTIAL || federationPolicies || settings.enabled) &&
+    url.pathname === "/auth/federation"
+  ) {
+    const workspace = url.searchParams.getAll("workspace");
+    if (workspace.length !== 1) throw new HeimdallError("invalid_argument");
+    return sessions.startFederation(request, workspace[0]);
+  }
+  if (url.pathname === new URL(callbackUrl).pathname) return sessions.callback(request);
+  if (url.pathname === "/auth/logout") return sessions.logout(request);
+  if (!existing) {
+    const managed = await managedRoute(request, url);
+    if (managed) return managed;
+  }
   const approval =
     /^\/workspaces\/([A-Za-z0-9_-]{1,128})\/invoices\/([A-Za-z0-9_-]{1,128})\/approve$/.exec(
       url.pathname,
@@ -379,6 +425,7 @@ async function route(request) {
     if (request.headers.get("origin") !== origin) throw new HeimdallError("forbidden");
     const [, workspace, invoice] = approval;
     const actor = await sessions.authenticate(request);
+    await requireActiveWorkspace(workspace, request.signal);
     await auth.tenant(workspace).require(actor, "invoice.approve", { signal: request.signal });
     request.signal.throwIfAborted();
     const result = await business.query(
@@ -403,6 +450,7 @@ async function route(request) {
       }),
     );
   const [, workspace, collection] = scoped;
+  await requireActiveWorkspace(workspace, request.signal);
   const tenant = auth.tenant(workspace);
   if (collection === "roles")
     return read({ roles: await tenant.roles(actor, { signal: request.signal }) });

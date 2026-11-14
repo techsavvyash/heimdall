@@ -97,6 +97,7 @@ export async function verifyReferenceProduct(input, authorize) {
   const ledger = config.productId === "ledger";
   const port = ledger ? 18640 : 18641;
   const remote = process.env.HEIMDALL_REFERENCE_RAILWAY === "1";
+  const existing = process.env.HEIMDALL_PROBE_EXISTING_WORKSPACES === "1";
   const endpoint = remote
     ? new URL(manifest.clients.web.redirectUris[0]).origin
     : `http://127.0.0.1:${port}`;
@@ -105,6 +106,9 @@ export async function verifyReferenceProduct(input, authorize) {
   const origin = new URL(callback).origin;
   const db = process.env.HEIMDALL_REFERENCE_DATABASE_URL;
   assert(db || remote);
+  assert(
+    !existing || (!remote && !scim && !federation && !grantNamedMembership && !restoreIdentity),
+  );
   assert(!restoreIdentity || (!remote && !scim && !federation && !grantNamedMembership));
   const principal =
     "user:" + Buffer.from(JSON.stringify([config.issuer, user])).toString("base64url");
@@ -169,7 +173,10 @@ export async function verifyReferenceProduct(input, authorize) {
   }
   assert(/^[A-Za-z0-9:_-]+$/.test(principal));
   if (federation) assert(/^[A-Za-z0-9:_-]+$/.test(federation.principal));
-  await executeSQL(`
+  await executeSQL(
+    existing
+      ? seed + " ON CONFLICT DO NOTHING;"
+      : `
     INSERT INTO heimdall_managed.workspaces(product_id,environment,workspace_id,name,lifecycle,mutation_blocked,created_at,updated_at)
     VALUES ('${schema}','verification','acme','Acme','active',false,1,1), ('${schema}','verification','globex','Globex','active',false,1,1) ON CONFLICT DO NOTHING;
     INSERT INTO heimdall_managed.membership_candidates(product_id,environment,workspace_id,identity_hash,principal,observed_at)
@@ -187,7 +194,8 @@ export async function verifyReferenceProduct(input, authorize) {
       VALUES ('${schema}','verification','globex',sha256(convert_to('${federation.principal}','UTF8')),'${federation.principal}',1);`
         : ""
     }
-  `);
+  `,
+  );
   const runtimeDB = remote
     ? process.env[
         ledger ? "HEIMDALL_REFERENCE_LEDGER_DATABASE" : "HEIMDALL_REFERENCE_SUPPORT_DATABASE"
@@ -223,7 +231,8 @@ export async function verifyReferenceProduct(input, authorize) {
     HEIMDALL_POLICY_VERSION: "reference-v1",
     HEIMDALL_WORKSPACE_CREATOR_SUBJECT: user,
     HEIMDALL_REFERENCE_MEMBER_SUBJECT: recipient,
-    HEIMDALL_REFERENCE_STRICT_SSO: grantNamedMembership ? "0" : "1",
+    ...(existing ? { HEIMDALL_REFERENCE_EXISTING_WORKSPACES: "1" } : {}),
+    HEIMDALL_REFERENCE_STRICT_SSO: existing || grantNamedMembership ? "0" : "1",
     ...(restoreIdentity || process.env.HEIMDALL_PROBE_PRODUCT_SIEM === "1"
       ? { HEIMDALL_REFERENCE_SIEM: "1" }
       : {}),
@@ -768,6 +777,66 @@ export async function verifyReferenceProduct(input, authorize) {
     const denied = await request(`/workspaces/globex/${collection}`, { headers });
     assert.equal(denied.status, 403);
     await denied.body?.cancel();
+    if (existing) {
+      assert((await readMemberRelations(user, "closed")).includes("member"));
+      const inactive = await request(`/workspaces/closed/${collection}`, { headers });
+      assert.equal(inactive.status, 403);
+      await inactive.body?.cancel();
+      await executeSQL(`UPDATE ${schema}.workspaces SET active=false WHERE id='acme';`);
+      try {
+        const disabled = await request("/workspaces", { headers });
+        assert.equal(disabled.status, 200);
+        assert.deepEqual((await disabled.json()).items, []);
+        const direct = await request(`/workspaces/acme/${collection}`, { headers });
+        assert.equal(direct.status, 403);
+        await direct.body?.cancel();
+        assert((await readMemberRelations(user, "acme")).includes("member"));
+      } finally {
+        await executeSQL(`UPDATE ${schema}.workspaces SET active=true WHERE id='acme';`);
+      }
+      await stop();
+      start();
+      await waitForDeployment(runId);
+      const resumed = await request("/workspaces", { headers });
+      assert.equal(resumed.status, 200);
+      assert.deepEqual((await resumed.json()).items, [{ id: "acme", name: "Acme" }]);
+      const write = (workspace, id) =>
+        request(
+          `/workspaces/${workspace}/${collection}/${id}/${ledger ? "approve" : "assign-to-me"}`,
+          {
+            method: "POST",
+            headers: { cookie, origin },
+          },
+        );
+      assert.equal((await write("acme", ledger ? "acme-invoice" : "acme-ticket")).status, 204);
+      const deniedWrite = await write("globex", ledger ? "globex-invoice" : "globex-ticket");
+      assert.equal(deniedWrite.status, 403);
+      await deniedWrite.body?.cancel();
+      const create = await request("/workspaces", { method: "POST", headers: { cookie, origin } });
+      assert.equal(create.status, ledger ? 404 : 405);
+      await create.body?.cancel();
+      assert.equal(
+        (await request("/auth/logout", { method: "POST", headers: { cookie, origin } })).status,
+        204,
+      );
+      const replay = await request("/workspaces", { headers });
+      assert.equal(replay.status, 401);
+      await replay.body?.cancel();
+      return {
+        product: schema,
+        scopedRead: 200,
+        existingWorkspaces: {
+          discovered: ["acme"],
+          nonMember: 403,
+          inactive: 403,
+          persistedAcrossRestart: true,
+          scopedWrite: 204,
+          nonMemberWrite: 403,
+          managedCreate: create.status,
+          afterLogout: 401,
+        },
+      };
+    }
     const input = { name: "Onboarded " + schema };
     const mutation = {
       method: "POST",
