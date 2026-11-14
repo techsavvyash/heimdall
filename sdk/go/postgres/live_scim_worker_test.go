@@ -41,6 +41,10 @@ func TestLiveSCIMWorker(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
 	const product, environment, other = "support", "scim-live-go", "scim-live-other-go"
+	if c.Stage == "stale-reactivation" {
+		rejectStaleSCIMReactivation(t, ctx, db, c)
+		return
+	}
 	if strings.HasPrefix(c.Stage, "cleanup") || c.Stage == "reenroll" {
 		verifyLiveSCIMReactivation(t, ctx, db, c)
 		return
@@ -124,6 +128,44 @@ func TestLiveSCIMWorker(t *testing.T) {
 	err = db.QueryRowContext(ctx, "SELECT count(*) FILTER (WHERE environment=$3),count(*) FILTER (WHERE environment=$4) FROM heimdall.records WHERE product_id=$1 AND identity_hash=$2", product, hash[:], environment, other).Scan(&ownRows, &otherRows)
 	if err != nil || otherRows != 1 || (ownRows == 1) != (c.Stage == "seed") {
 		t.Fatal("unexpected scoped session invalidation", ownRows, otherRows, err)
+	}
+}
+
+func rejectStaleSCIMReactivation(t *testing.T, ctx context.Context, db *sql.DB, c liveSCIMConfiguration) {
+	t.Helper()
+	const product, environment = "support", "verification"
+	prepare, err := NewDirectoryReactivation(db, product, environment, c.DirectoryReaderOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release, err := NewDirectoryReactivationRelease(db, product, environment, c.DirectoryReaderOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval := []DirectoryReactivationEnrollment{{WorkspaceID: c.WorkspaceID, RuleID: "browser-scim-v1"}}
+	fmt.Println("SCIM_STEP stale-provider-state")
+	if _, err := prepare(ctx, c.Subject, c.Revision); !errors.Is(err, heimdall.ErrForbidden) {
+		t.Fatal("expected stale preparation to be denied", err)
+	}
+	if err := release(ctx, c.Subject, c.Revision, approval); !errors.Is(err, heimdall.ErrForbidden) {
+		t.Fatal("expected stale release to be denied", err)
+	}
+	observe, err := NewDirectoryDeactivation(db, product, environment, c.DirectoryReaderOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result, err := observe(ctx, c.Subject); err != nil || result.State != "inactive" || result.SessionsInvalidated != 1 {
+		t.Fatal("expected the later disable to revoke the new session", result, err)
+	}
+	if err := release(ctx, c.Subject, c.Revision, approval); !errors.Is(err, heimdall.ErrForbidden) {
+		t.Fatal("expected stale release to be denied after observation", err)
+	}
+	storage, err := NewStorage(db, StorageOptions{ProductID: product, Environment: environment})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if denied, err := storage.Identity.Check(ctx, heimdall.Identity{Issuer: c.Issuer, Subject: c.Subject}); err != nil || !denied {
+		t.Fatal("expected later durable denial", err)
 	}
 }
 

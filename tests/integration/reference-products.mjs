@@ -11,10 +11,29 @@ import { setTimeout as delay } from "node:timers/promises";
 export function coordinateSCIMDisable(directory, scheduled) {
   const ready = new Map();
   const completed = Promise.withResolvers();
+  const replayed = Promise.withResolvers();
+  const fresh = new Map();
   // One product can fail during setup before either product reaches the rendezvous.
   void completed.promise.catch(() => {});
+  void replayed.promise.catch(() => {});
   return {
-    fail: completed.reject,
+    fail(error) {
+      completed.reject(error);
+      replayed.reject(error);
+    },
+    async replay(product, verify) {
+      fresh.set(product, verify);
+      if (fresh.size === 2) {
+        try {
+          await directory.setActive(false);
+          for (const verify of fresh.values()) await verify();
+          replayed.resolve();
+        } catch (error) {
+          replayed.reject(error);
+        }
+      }
+      await replayed.promise;
+    },
     async join(product, session) {
       ready.set(product, session);
       if (ready.size === 2) {
@@ -772,6 +791,19 @@ export async function verifyReferenceProduct(input, authorize) {
         403,
       );
       await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 401);
+      await scim.replay(schema, async () => {
+        runWorker("stale-reactivation", revision);
+        await expectDenied(await request(resourcePath, { headers: freshHeaders }), 401);
+        assert.deepEqual(await readRelations(), [
+          "member",
+          roleAssignments[initialRole].assignment,
+        ]);
+        const next = readRevision(runWorker("cleanup"));
+        assert(BigInt(next) > BigInt(revision));
+        assert.deepEqual(await readRelations(), []);
+        runWorker("cleanup-replay", next);
+        await expectDenied(await request(resourcePath, { headers: freshHeaders }), 401);
+      });
       return {
         product: schema,
         scopedRead: 200,
@@ -795,6 +827,8 @@ export async function verifyReferenceProduct(input, authorize) {
           originalCookieAfterRelease: 401,
           freshCookie: 200,
           freshCookieOtherWorkspace: 403,
+          staleReactivationRejected: true,
+          secondCleanupConfirmed: true,
         },
       };
     }

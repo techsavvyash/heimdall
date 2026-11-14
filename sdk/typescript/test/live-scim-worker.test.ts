@@ -25,6 +25,10 @@ test.skipIf(!process.env.HEIMDALL_TEST_LIVE_SCIM)(
     try {
       const signal = AbortSignal.timeout(12000);
       const scope = { ...reader, productId: "ledger", environment: "verification", auditSinks: [] };
+      if (stage === "stale-reactivation") {
+        await rejectStaleReactivation(pool, scope, fixture, signal);
+        return;
+      }
       if (stage.startsWith("cleanup") || stage === "reenroll") {
         await verifyLiveSCIMReactivation(pool, fixture, signal);
         return;
@@ -96,6 +100,30 @@ type LiveSCIMFixture = {
   approvedRole: string;
   revision: string;
 };
+
+async function rejectStaleReactivation(
+  pool: Pool,
+  scope: Parameters<typeof createDirectoryDeactivation>[1] & { auditSinks: string[] },
+  { subject, revision, workspaceId }: LiveSCIMFixture,
+  signal: AbortSignal,
+) {
+  const prepare = createDirectoryReactivation(pool, scope);
+  const release = createDirectoryReactivationRelease(pool, scope);
+  const input = { subject, revision, enrollments: [{ workspaceId, ruleId: "browser-scim-v1" }] };
+  console.info("SCIM_STEP stale-provider-state");
+  await assert.rejects(prepare(subject, revision, signal), { code: "forbidden" });
+  await assert.rejects(release(input, signal), { code: "forbidden" });
+  const observe = createDirectoryDeactivation(pool, scope);
+  assert.deepEqual(await observe(subject, signal), { state: "inactive", sessionsInvalidated: 1 });
+  await assert.rejects(release(input, signal), { code: "forbidden" });
+  assert.equal(
+    await createPostgresStorage(pool, scope).identity.check(
+      { issuer: scope.issuer, subject },
+      signal,
+    ),
+    true,
+  );
+}
 
 async function verifyLiveSCIMReactivation(
   pool: Pool,

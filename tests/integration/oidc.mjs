@@ -848,7 +848,13 @@ try {
       clients.map(async (client, index) => {
         const entry = statusCases[index];
         const { issuer, organizationId, token } = directory;
-        entry.reference.scim = { issuer, organizationId, token, join: lifecycle.join };
+        entry.reference.scim = {
+          issuer,
+          organizationId,
+          token,
+          join: lifecycle.join,
+          replay: lifecycle.replay,
+        };
         try {
           await sdkRuntime(client, entry);
         } catch (error) {

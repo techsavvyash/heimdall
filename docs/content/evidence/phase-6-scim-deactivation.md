@@ -260,3 +260,26 @@ sequenceDiagram
 ```
 
 This outage starts after both workers observe the provider change. Requests already authorized before deactivation may finish. When a worker misses observation, the product runtime's authoritative identity freshness limit governs when subsequent requests fail closed.
+
+## Replay an older reactivation after a later disable
+
+The live browser probe keeps the original completed reactivation revision and approval set. After both products issue fresh cookies, the directory disables the same subject again. Both SDKs reject the previous preparation and release when their exact provider read reports inactive, including before the new deactivation worker runs. Each worker then records a newer revision and revokes the replacement session. The old release still fails. The product denies access while the previous grants are present, and the new cleanup removes them.
+
+```mermaid
+sequenceDiagram
+  participant Z as Railway ZITADEL
+  participant W as Product worker
+  participant D as Product PostgreSQL
+  participant F as Railway OpenFGA
+  Z-->>W: Subject disabled again
+  W->>Z: Recheck status while replaying older approval
+  Z-->>W: Inactive
+  W->>W: Reject preparation and release
+  W->>D: Persist a newer revision and revoke the replacement session
+  W->>F: Remove the grants from the newer revision
+  W->>D: Acknowledge and replay the newer cleanup
+```
+
+The replay is an old product reconciliation request carrying the original revision and approved enrollment set. The lifecycle worker uses current-state polling. It does not consume a provider activation event as authority to release a denial.
+
+PostgreSQL run `heimdall-records-ffbfe37e94514a9d87b06ce6f08ebed8` verified both SDKs against Railway ZITADEL and OpenFGA. The audit scan found exactly two completed membership removals and two grants per workspace across the two cycles, including the initial grant and the approved re-enrollment. It verified the request, dispatch, confirmation and completion records for each operation.

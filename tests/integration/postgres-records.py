@@ -220,7 +220,8 @@ try:
                             assert proof["cleanupResumedSameRevision"] and proof["deniedDuringCleanupOutage"]
                     scoped = [event for event in events if event["productId"] == product["product"]
                               and event.get("tenantId") == proof["workspaceId"]]
-                    for action, count in (("remove_member", 1), ("add_member", 2)):
+                    assert proof["staleReactivationRejected"] and proof["secondCleanupConfirmed"]
+                    for action, count in (("remove_member", 2), ("add_member", 2)):
                         operations = {event["operationId"] for event in scoped
                                       if event["action"] == action and event["outcome"] == "requested"}
                         assert len(operations) == count
