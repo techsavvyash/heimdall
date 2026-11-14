@@ -7,6 +7,39 @@ import { once } from "node:events";
 import { createRequire } from "node:module";
 import { promisify } from "node:util";
 
+export function coordinateSCIMDisable(directory) {
+  const ready = new Map();
+  const completed = Promise.withResolvers();
+  // One product can fail during setup before either product reaches the rendezvous.
+  void completed.promise.catch(() => {});
+  return {
+    fail: completed.reject,
+    async join(product, session) {
+      ready.set(product, session);
+      if (ready.size === 2) {
+        try {
+          const ledger = ready.get("ledger");
+          const support = ready.get("support");
+          const started = performance.now();
+          await directory.setActive(false);
+          await ledger.observeDisable(started);
+          await support.observeDisable(started);
+          await support.withCleanupOutage(async () => {
+            await ledger.confirmCleanup();
+            await support.assertStillDeniedWithGrants();
+          });
+          await support.confirmCleanup();
+          await directory.setActive(true);
+          completed.resolve();
+        } catch (error) {
+          completed.reject(error);
+        }
+      }
+      await completed.promise;
+    },
+  };
+}
+
 export async function verifyReferenceProduct(input, authorize) {
   const {
     config,
@@ -487,8 +520,6 @@ export async function verifyReferenceProduct(input, authorize) {
       const readRelations = () => readMemberRelations(recipient, workspace.workspaceId);
       const originalTuples = await readRelations();
       assert.deepEqual(originalTuples, ["member", roleAssignments[replacementRole].assignment]);
-      const start = performance.now();
-      await scim.setActive(false);
       const command = ledger
         ? [
             "pnpm",
@@ -535,16 +566,52 @@ export async function verifyReferenceProduct(input, authorize) {
         );
         return worker.stdout + worker.stderr;
       }
-      runWorker("browser");
-      await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 401);
-      const deniedInMs = Math.round(performance.now() - start);
-      assert(deniedInMs < 60000);
-      assert.deepEqual(await readRelations(), originalTuples);
-      const revision = /SCIM_REVISION ([1-9][0-9]*)/.exec(runWorker("cleanup"))?.[1];
-      assert(revision, "Live SCIM cleanup did not acknowledge a revision");
-      assert.deepEqual(await readRelations(), []);
-      await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 401);
-      await scim.setActive(true);
+      const readRevision = (output) => {
+        const revision = /SCIM_REVISION ([1-9][0-9]*)/.exec(output)?.[1];
+        assert(revision, "Live SCIM worker did not report a revision");
+        return revision;
+      };
+      let deniedInMs, revision, failedRevision;
+      const assertStillDeniedWithGrants = async () => {
+        await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 401);
+        assert.deepEqual(await readRelations(), originalTuples);
+      };
+      await scim.join(schema, {
+        async observeDisable(started) {
+          runWorker("browser");
+          await assertStillDeniedWithGrants();
+          deniedInMs = Math.round(performance.now() - started);
+          assert(deniedInMs < 60000);
+        },
+        async withCleanupOutage(whileBlocked) {
+          await executeSQL(`
+            CREATE FUNCTION public.fail_support_cleanup() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN RAISE EXCEPTION 'injected directory cleanup outage' USING ERRCODE = '57P01'; END;
+            $$;
+            CREATE TRIGGER fail_support_cleanup BEFORE UPDATE OF cleanup_plan
+            ON heimdall_directory.deactivations FOR EACH ROW
+            WHEN (NEW.product_id = 'support' AND NEW.environment = 'verification')
+            EXECUTE FUNCTION public.fail_support_cleanup();
+          `);
+          try {
+            failedRevision = readRevision(runWorker("cleanup-blocked"));
+            await whileBlocked();
+          } finally {
+            await executeSQL(`
+              DROP TRIGGER fail_support_cleanup ON heimdall_directory.deactivations;
+              DROP FUNCTION public.fail_support_cleanup();
+            `);
+          }
+        },
+        assertStillDeniedWithGrants,
+        async confirmCleanup() {
+          revision = readRevision(runWorker("cleanup"));
+          if (failedRevision) assert.equal(revision, failedRevision);
+          runWorker("cleanup-replay", revision);
+          assert.deepEqual(await readRelations(), []);
+          await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 401);
+        },
+      });
       await expectDenied(await request(resourcePath, { headers: recipientHeaders }), 401);
       runWorker("reenroll", revision);
       assert.deepEqual(await readRelations(), ["member", roleAssignments[initialRole].assignment]);
@@ -565,8 +632,13 @@ export async function verifyReferenceProduct(input, authorize) {
           workspaceId: workspace.workspaceId,
           deniedInMs,
           disabledSession: 401,
+          sharedProviderDisable: true,
           deniedWithTuplesPresent: true,
           cleanupAcknowledged: true,
+          cleanupReplayConfirmed: true,
+          ...(failedRevision
+            ? { cleanupResumedSameRevision: true, deniedDuringCleanupOutage: true }
+            : {}),
           removedTuples: originalTuples,
           releasedAfterApprovedEnrollment: true,
           approvedRole: initialRole,

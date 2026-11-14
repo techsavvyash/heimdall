@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -40,7 +41,7 @@ func TestLiveSCIMWorker(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
 	const product, environment, other = "support", "scim-live-go", "scim-live-other-go"
-	if c.Stage == "cleanup" || c.Stage == "reenroll" {
+	if strings.HasPrefix(c.Stage, "cleanup") || c.Stage == "reenroll" {
 		verifyLiveSCIMReactivation(t, ctx, db, c)
 		return
 	}
@@ -161,18 +162,39 @@ func verifyLiveSCIMReactivation(t *testing.T, ctx context.Context, db *sql.DB, c
 		}
 	}
 	checkDenial(true)
-	if c.Stage == "cleanup" {
+	if strings.HasPrefix(c.Stage, "cleanup") {
 		fmt.Println("SCIM_STEP cleanup")
 		cleanup, err := NewDirectoryCleanup(db, product, environment, c.Issuer, c.OrganizationID, "production")
 		if err != nil {
 			t.Fatal(err)
 		}
 		pending, err := cleanup.Pending(ctx, "", 2)
-		if err != nil || len(pending) != 1 || pending[0].Subject != c.Subject || pending[0].Reason != "inactive" {
+		if err != nil {
+			t.Fatal("cannot read pending cleanup", err)
+		}
+		revision := c.Revision
+		if c.Stage == "cleanup-replay" {
+			if len(pending) != 0 {
+				t.Fatal("acknowledged revision returned to pending")
+			}
+		} else if len(pending) == 1 && pending[0].Subject == c.Subject && pending[0].Reason == "inactive" {
+			revision = pending[0].Revision
+		} else {
 			t.Fatal("expected the subject's cleanup revision", err)
 		}
-		revision := pending[0].Revision
 		result, err := cleanup.Reconcile(ctx, client, actor, c.Subject, revision, []string{c.WorkspaceID})
+		if c.Stage == "cleanup-blocked" {
+			if !errors.Is(err, heimdall.ErrUnavailable) || result != nil {
+				t.Fatal("expected injected cleanup outage", result, err)
+			}
+			retry, err := cleanup.Pending(ctx, "", 2)
+			if err != nil || len(retry) != 1 || retry[0] != pending[0] {
+				t.Fatal("failed cleanup must leave the same revision pending", err)
+			}
+			checkDenial(true)
+			fmt.Println("SCIM_REVISION " + revision)
+			return
+		}
 		if err != nil || result != nil {
 			t.Fatal("expected confirmed cleanup", result, err)
 		}

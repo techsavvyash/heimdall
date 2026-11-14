@@ -231,4 +231,32 @@ sequenceDiagram
   P-->>P: Return HTTP 200 for the new cookie and HTTP 401 for the old cookie
 ```
 
-Run `tests/integration/postgres-records.py` with `HEIMDALL_PROBE_REFERENCE_PRODUCTS=1` and `HEIMDALL_PROBE_SCIM_BROWSER=1` plus the protected verification credentials. The probe drives cookies and callbacks through HTTP with local reference applications and disposable PostgreSQL. The remaining cross-product outage scenario requires both product sessions to be active at once while one worker fails.
+Run `tests/integration/postgres-records.py` with `HEIMDALL_PROBE_REFERENCE_PRODUCTS=1` and `HEIMDALL_PROBE_SCIM_BROWSER=1` plus the protected verification credentials. The probe drives cookies and callbacks through HTTP with local reference applications and disposable PostgreSQL.
+
+## One SCIM disable with a product cleanup outage
+
+PostgreSQL run `heimdall-records-9d60f5890000465bbac892e079351b02` measured 1,492 ms to denial in Ledger and 4,078 ms in Support from the same SCIM request. Both products passed the subsequent approved re-enrollment and fresh-session checks.
+
+Ledger and Support establish valid product sessions for the same directory subject before the probe sends a single SCIM disable. Each product commits its own denial and invalidates its session. A PostgreSQL trigger injects a failure on Support's cleanup-plan write while Ledger reconciles its membership. The trigger applies to Support's verification scope. Support's cleanup revision stays pending and its protected route returns HTTP 401 while the old OpenFGA grants remain. After the trigger is removed, a new worker process confirms the same revision. Both products replay their acknowledged revision and verify that each workspace has just one audited removal operation.
+
+```mermaid
+sequenceDiagram
+  participant Z as Railway ZITADEL
+  participant L as Ledger worker
+  participant S as Support worker
+  participant D as Product PostgreSQL
+  participant F as Railway OpenFGA
+  Z-->>L: Same directory subject disabled
+  Z-->>S: Same directory subject disabled
+  L->>D: Commit Ledger identity denial
+  S->>D: Commit Support identity denial
+  S->>D: Persist Support cleanup plan
+  D-->>S: Injected failure leaves revision pending
+  L->>F: Remove Ledger grants and confirm cleanup
+  Note over S,F: Support denies requests while its grants still exist
+  S->>D: Restart and reconcile the same pending revision
+  S->>F: Remove Support grants
+  S->>D: Acknowledge cleanup and replay the same revision
+```
+
+This outage starts after both workers observe the provider change. Requests already authorized before deactivation may finish. When a worker misses observation, the product runtime's authoritative identity freshness limit governs when subsequent requests fail closed.

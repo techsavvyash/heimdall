@@ -25,7 +25,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_LIVE_SCIM)(
     try {
       const signal = AbortSignal.timeout(12000);
       const scope = { ...reader, productId: "ledger", environment: "verification", auditSinks: [] };
-      if (stage === "cleanup" || stage === "reenroll") {
+      if (stage.startsWith("cleanup") || stage === "reenroll") {
         await verifyLiveSCIMReactivation(pool, fixture, signal);
         return;
       }
@@ -144,29 +144,31 @@ async function verifyLiveSCIMReactivation(
   const actor = await runtime.tokens.verify(operatorToken, { signal });
   const identity = { issuer, subject };
   assert.equal(await storage.identity.check(identity, signal), true);
-  if (stage === "cleanup") {
+  if (stage.startsWith("cleanup")) {
     console.info("SCIM_STEP cleanup");
     const cleanup = createDirectoryCleanup(pool, scope);
     const pending = await cleanup.pending(null, 2, signal);
-    assert.equal(pending.length, 1);
-    assert.equal(pending[0]?.subject, subject);
-    assert.equal(pending[0]?.reason, "inactive");
-    const item = pending[0]!;
-    assert.deepEqual(
-      await cleanup.reconcile(
-        runtime,
-        actor,
-        {
-          subject,
-          revision: item.revision,
-          workspaces: [workspaceId],
-        },
-        signal,
-      ),
-      { status: "confirmed" },
+    if (stage === "cleanup-replay") {
+      assert.deepEqual(pending, []);
+    } else {
+      assert.equal(pending.length, 1);
+      assert.equal(pending[0]?.subject, subject);
+      assert.equal(pending[0]?.reason, "inactive");
+    }
+    const cleanupRevision = pending[0]?.revision ?? revision;
+    const result = await cleanup.reconcile(
+      runtime,
+      actor,
+      {
+        subject,
+        revision: cleanupRevision,
+        workspaces: [workspaceId],
+      },
+      signal,
     );
+    assert.deepEqual(result, { status: "confirmed" });
     assert.deepEqual(await cleanup.pending(null, 2, signal), []);
-    process.stdout.write(`SCIM_REVISION ${item.revision}\n`);
+    process.stdout.write(`SCIM_REVISION ${cleanupRevision}\n`);
     return;
   }
   const ruleId = "browser-scim-v1";

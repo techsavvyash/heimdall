@@ -1,4 +1,4 @@
-import { verifyReferenceProduct } from "./reference-products.mjs";
+import { coordinateSCIMDisable, verifyReferenceProduct } from "./reference-products.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -658,7 +658,6 @@ try {
       statusCase.reference = {
         apiAudience: audiences[0],
         recipient: otherUser.id,
-        scim: directory,
         authorize: async (location, recipient = false) => {
           const selected = recipient ? otherSession : session;
           const login = await redirect(location);
@@ -683,8 +682,10 @@ try {
         },
       };
     }
-    await sdkRuntime(client, statusCase);
-    delete statusCase.reference;
+    if (!scimBrowser) {
+      await sdkRuntime(client, statusCase);
+      delete statusCase.reference;
+    }
     observations.push({
       product: client.product,
       selfServiceEvidence: {
@@ -837,6 +838,26 @@ try {
       otherProductIntrospectionActive: false,
       refreshBeforeDeactivation: "succeeded",
     });
+  }
+  if (scimBrowser) {
+    const lifecycle = coordinateSCIMDisable(directory);
+    const results = await Promise.allSettled(
+      clients.map(async (client, index) => {
+        const entry = statusCases[index];
+        const { issuer, organizationId, token } = directory;
+        entry.reference.scim = { issuer, organizationId, token, join: lifecycle.join };
+        try {
+          await sdkRuntime(client, entry);
+        } catch (error) {
+          lifecycle.fail(error);
+          throw error;
+        } finally {
+          delete entry.reference;
+        }
+      }),
+    );
+    const failure = results.find((result) => result.status === "rejected");
+    if (failure) throw failure.reason;
   }
   const badAuth = await authorize(clients[0]);
   const bad = await form("/oauth/v2/token", clients[0], {

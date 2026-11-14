@@ -211,6 +211,9 @@ try:
                 events = [json.loads(base64.urlsafe_b64decode(payload + "===")) for payload in audit_rows]
                 for product in products:
                     proof = product["scimBrowser"]
+                    assert proof["sharedProviderDisable"] and proof["cleanupReplayConfirmed"]
+                    if product["product"] == "support":
+                        assert proof["cleanupResumedSameRevision"] and proof["deniedDuringCleanupOutage"]
                     scoped = [event for event in events if event["productId"] == product["product"]
                               and event.get("tenantId") == proof["workspaceId"]]
                     for action, count in (("remove_member", 1), ("add_member", 2)):
