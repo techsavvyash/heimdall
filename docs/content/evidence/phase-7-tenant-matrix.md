@@ -34,3 +34,5 @@ The test harness creates explicit relationships in the disposable stores and ins
 Run the [[../reference-quickstart#verify-package-integration|package integration probe]] with `HEIMDALL_PROBE_TENANT_MATRIX=1` alongside the documented variables.
 
 The isolated app run `heimdall-records-3b19e97f77b741ebbd68afbfd1ec20ff` used the packed TypeScript SDK and Go module `v0.0.0-20261114050348-ca47f14b95e1`. It verified that each successful Acme write persisted the signed-in user as the actor and that both failed Globex writes left the fixture rows unchanged.
+
+The Railway repeat `a2ad2597-5b6c-4f64-a3a4-532b142d2b7d` passed with Ledger deployment `23cbcbd3-a4ce-4615-a9df-ddcf50c5a231` and Support deployment `f3b31ebf-6c1b-4dd9-8a68-a0b5231db355`. A preceding attempt reached the verification database's 10,000-event audit cap, and the Support write failed closed with HTTP 503. The verification operator increased the event cap to 25,000 in both the live policy and its matching preparation record in one transaction. No audit events were removed.

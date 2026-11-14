@@ -43,5 +43,48 @@
         "globexWrite": 403
       }
     ]
+  },
+  "railway": {
+    "runId": "a2ad2597-5b6c-4f64-a3a4-532b142d2b7d",
+    "products": [
+      {
+        "product": "ledger",
+        "deployment": "23cbcbd3-a4ce-4615-a9df-ddcf50c5a231",
+        "namedTenants": {
+          "acme": {
+            "role": "approver",
+            "scopedRead": 200,
+            "resourceId": "acme-invoice"
+          },
+          "globex": {
+            "role": "viewer",
+            "scopedRead": 200,
+            "resourceId": "globex-invoice"
+          }
+        },
+        "beforeExplicitGrant": 403,
+        "acmeWrite": 204,
+        "globexWrite": 403
+      },
+      {
+        "product": "support",
+        "deployment": "f3b31ebf-6c1b-4dd9-8a68-a0b5231db355",
+        "namedTenants": {
+          "acme": {
+            "role": "agent",
+            "scopedRead": 200,
+            "resourceId": "acme-ticket"
+          },
+          "globex": {
+            "role": "reader",
+            "scopedRead": 200,
+            "resourceId": "globex-ticket"
+          }
+        },
+        "beforeExplicitGrant": 403,
+        "acmeWrite": 204,
+        "globexWrite": 403
+      }
+    ]
   }
 }
