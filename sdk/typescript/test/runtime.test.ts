@@ -17,6 +17,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { createHeimdall, auditEventDigest as auditDigest } from "../src/index.js";
 import type { RuntimeOptions } from "../src/index.js";
 import { revokeDirectoryGrant } from "../src/index.js";
+import { encodeIdentity } from "../src/internal/identity-encoding.js";
 import { compileTenantModel } from "../src/internal/tenant-model.js";
 const read = (name: string) =>
   JSON.parse(readFileSync(new URL("../../../contracts/fixtures/" + name, import.meta.url), "utf8"));
@@ -1037,6 +1038,36 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
           (event) => event.actor.kind === "system" && event.actor.id === "operator",
         ),
       ).toBe(true);
+      const checkDirectoryTuples = async (roles: string[]) => {
+        if (!process.env.HEIMDALL_TEST_PINNED_OPENFGA) return;
+        const artifact = compileTenantModel(s.manifest, s.config);
+        const response = await fetch(
+          s.config.openfga.url + "/stores/" + s.config.openfga.storeId + "/read",
+          {
+            method: "POST",
+            signal: call.signal,
+            body: JSON.stringify({
+              tuple_key: {
+                user: encodeIdentity(target.issuer, target.subject),
+                object: "workspace:" + winner.workspaceId,
+              },
+              consistency: "HIGHER_CONSISTENCY",
+            }),
+          },
+        );
+        if (!response.ok) throw new Error("Pinned OpenFGA tuple read failed");
+        const { tuples } = await response.json();
+        return (
+          (tuples as { key: { relation: string } }[])
+            .map(({ key }) => key.relation)
+            .sort()
+            .join(",") ===
+          (roles.length
+            ? ["member", ...roles.map((role) => artifact.roles[role]!.assignment)].sort().join(",")
+            : "")
+        );
+      };
+      const tupleProof = process.env.HEIMDALL_TEST_PINNED_OPENFGA ? true : undefined;
       const directory = createDirectoryCleanup(pool, { ...s.config, organizationId: "org-a" });
       const queued = await admin.query(
         `INSERT INTO heimdall_directory.deactivations(product_id,environment,identity_hash,issuer,subject,organization_id,observed_at,reason)
@@ -1067,6 +1098,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       };
       const granted = await enroll(runtime, actor, enrollment, call.signal);
       expect(granted.status).toBe("confirmed");
+      expect(await checkDirectoryTuples(enrollment.roles)).toBe(tupleProof);
       await expect(enroll(runtime, actor, enrollment, call.signal)).resolves.toEqual(granted);
       await expect(
         enroll(runtime, actor, { ...enrollment, roles: [] }, call.signal),
@@ -1184,6 +1216,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       });
       expect(await directory.pending(null, 1, call.signal)).toEqual([]);
       expect(s.fga.writes - beforeCleanup).toBe(1);
+      expect(await checkDirectoryTuples([])).toBe(tupleProof);
       const readerOptions = { ...s.config, organizationId: "org-a", token: "viewer" };
       const reactivation = {
         subject: target.subject,
@@ -1207,6 +1240,7 @@ test.skipIf(!process.env.HEIMDALL_TEST_DATABASE_URL || !!process.env.HEIMDALL_TE
       );
       expect(restored.status).toBe("confirmed");
       expect(restored.operationId).not.toBe(granted.operationId);
+      expect(await checkDirectoryTuples(enrollment.roles)).toBe(tupleProof);
       await expect(release({ ...reactivation, enrollments: [] }, call.signal)).rejects.toThrow(
         "conflict",
       );

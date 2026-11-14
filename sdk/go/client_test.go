@@ -1229,6 +1229,57 @@ func TestPublicManagedOnboarding(t *testing.T) {
 	if err := admin.QueryRow("SELECT count(*) FROM heimdall.audit_deliveries WHERE environment='" + environment + "' AND sink_id='siem'").Scan(&count); err != nil || count <= 20 {
 		t.Fatal("audit routing", count, err)
 	}
+	checkDirectoryTuples := func(roles []string) {
+		if os.Getenv("HEIMDALL_TEST_PINNED_OPENFGA") == "" {
+			return
+		}
+		deployment, err := configuration.Parse(h.config, h.manifest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var cfg struct{ OpenFGA struct{ URL, StoreID string } }
+		if json.Unmarshal(h.config, &cfg) != nil {
+			t.Fatal("invalid runtime binding")
+		}
+		user, err := contract.EncodeIdentity(target.Issuer, target.Subject)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := json.Marshal(map[string]any{
+			"tuple_key":   map[string]string{"user": user, "object": "workspace:" + workspaceID},
+			"consistency": "HIGHER_CONSISTENCY",
+		})
+		req, err := http.NewRequestWithContext(ctx, "POST", cfg.OpenFGA.URL+"/stores/"+cfg.OpenFGA.StoreID+"/read", bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var result struct {
+			Tuples []struct{ Key struct{ Relation string } }
+		}
+		if resp.StatusCode != 200 || json.NewDecoder(resp.Body).Decode(&result) != nil {
+			t.Fatal("pinned OpenFGA tuple read failed")
+		}
+		var actual, expected []string
+		for _, tuple := range result.Tuples {
+			actual = append(actual, tuple.Key.Relation)
+		}
+		if len(roles) != 0 {
+			expected = append(expected, "member")
+		}
+		for _, role := range roles {
+			expected = append(expected, deployment.Artifact().Roles[role].Assignment)
+		}
+		slices.Sort(actual)
+		slices.Sort(expected)
+		if !slices.Equal(actual, expected) {
+			t.Fatal("unexpected directory tuples", actual, expected)
+		}
+	}
 	directory, err := postgres.NewDirectoryCleanup(db, "ledger", environment, target.Issuer, "org-a", "loopback")
 	if err != nil {
 		t.Fatal(err)
@@ -1252,6 +1303,7 @@ VALUES('ledger',$1,sha256(convert_to($2,'UTF8')),$3,$4,'org-a',1,'inactive') RET
 	if err != nil || granted.Status != "confirmed" {
 		t.Fatal("directory enrollment", granted, err)
 	}
+	checkDirectoryTuples(enrollment.Roles)
 	if again, err := enroll(ctx, client, actor, enrollment); err != nil || again != granted {
 		t.Fatal("directory enrollment retry", again, err)
 	}
@@ -1360,6 +1412,7 @@ VALUES('ledger',$1,sha256(convert_to($2,'UTF8')),$3,$4,'org-a',1,'inactive') RET
 	if h.writes.Load()-beforeCleanup != 1 {
 		t.Fatal("directory replay duplicated the remote removal")
 	}
+	checkDirectoryTuples(nil)
 	readerOptions := provisioning.DirectoryReaderOptions{Issuer: target.Issuer, OrganizationID: "org-a", Token: "viewer", TransportProfile: "loopback"}
 	prepare, err := postgres.NewDirectoryReactivation(db, "ledger", environment, readerOptions)
 	if err != nil {
@@ -1381,6 +1434,7 @@ VALUES('ledger',$1,sha256(convert_to($2,'UTF8')),$3,$4,'org-a',1,'inactive') RET
 	if err != nil || restored.Status != "confirmed" || restored.OperationID == granted.OperationID {
 		t.Fatal("new reactivation enrollment", restored, err)
 	}
+	checkDirectoryTuples(enrollment.Roles)
 	if err := release(ctx, target.Subject, revision, nil); !errors.Is(err, heimdall.ErrConflict) {
 		t.Fatal("release with incomplete approval set", err)
 	}

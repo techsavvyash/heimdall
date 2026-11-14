@@ -158,3 +158,24 @@ sequenceDiagram
 ```
 
 Set `HEIMDALL_PROBE_SCIM_WORKER=true` and supply the protected verification credentials when running `tests/integration/postgres-records.py`. The worker probe verifies durable session-row deletion and the identity gate. Live browser session issuance, permission enforcement, and managed cleanup against live OpenFGA remain separate acceptance checks.
+
+## Managed cleanup against pinned OpenFGA
+
+PostgreSQL run `heimdall-records-3286711d52a14756909a25b35eca7796` ran both SDK administration suites against the pinned OpenFGA 1.22.0 image with separate stores. The suites checked the subject’s direct tuples using higher-consistency reads before deactivation cleanup, after uncertain-write recovery, and after revision-bound re-enrollment. The initial membership and role existed, cleanup removed every direct tuple for that subject in the workspace, and only the approved roles and membership returned. The SDK also required confirmed enrollment before releasing the local denial.
+
+```mermaid
+sequenceDiagram
+  participant W as Product worker
+  participant D as PostgreSQL
+  participant F as Pinned OpenFGA
+  W->>F: Verify the original member and role tuples
+  W->>F: Remove the subject's membership
+  Note over W,F: Test proxy loses the reply after OpenFGA applies the removal
+  W->>D: Keep the cleanup revision pending
+  W->>F: Recover membership operation and verify no subject tuples
+  W->>F: Apply approved grants for the new revision
+  W->>F: Verify only approved membership and roles
+  W->>D: Release the matching identity denial
+```
+
+Reproduce with `HEIMDALL_PROBE_PINNED_ADMIN=1` and `tests/integration/postgres-records.py`. This test uses synthetic provider status and loss of the OpenFGA write response. The live SCIM verification above separately exercises the provider status and durable deny transaction. A single live run connecting browser login, SCIM mutation and OpenFGA enforcement remains open.
