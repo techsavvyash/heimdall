@@ -43,6 +43,12 @@ npm publish "$archive" --registry=https://registry.npmjs.org --access public --d
 
 During the authorized release, push the matching Go tag, wait for the paired workflow, and download its TypeScript archive and checksum. Verify the checksum and use that archive with `HEIMDALL_PROBE_CONSUMER_ARCHIVE` and `HEIMDALL_PROBE_CONSUMER_REVISION=v<version>` in the release integration probes. Publish the verified archive with `npm publish "$archive" --registry=https://registry.npmjs.org --access public`. If npm publication fails, verify whether that version exists with the expected integrity before retrying with the same file. Verify npm's `dist.integrity` against the SHA-512 of the archive. Verify both installs from fresh consumers and check that the Go tag resolves to the same release commit before announcing the pair. [npm publish](https://docs.npmjs.com/commands/npm-publish/)
 
+### Stable build rehearsal
+
+Commit `d24fe6e` on the [stable preparation branch](https://github.com/techsavvyash/heimdall/tree/codex/release-0.1.0) aligns the TypeScript package and both SDK runtime markers at `0.1.0`. The workspace suite and pinned-service fault run `heimdall-records-e94b481a42b145ae884878b5779e5ae9` passed. The local TypeScript archive passed clean-install verification and an npm publish dry run. Its SHA-256 was `88ed42a2f31320b49113964f7bf2cc3d62a407f86583a0b0cc5dfe053b2c8720`.
+
+Run `heimdall-records-d10e68c52a034cc7b28be611b8752dfd` exercised both source-built products with disposable PostgreSQL and the Railway verification providers. Both completed the authorization and onboarding journeys, passed the business write and audit-outage checks, and matched 48 authorization requests to terminal receipts per product. The checked audit events reported `0.1.0`. Stable tag and registry installs still require the paired publication step.
+
 
 ## Isolated consumer journeys
 
